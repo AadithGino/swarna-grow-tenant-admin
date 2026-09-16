@@ -141,3 +141,29 @@ button {
     background: white;
   }
 }
+
+.customer-theme {
+  --primary: #730321;
+  --accent: #f8e9c7;
+  --radius: 0.9rem;
+}
+
+.customer-theme input,
+.customer-theme textarea,
+.customer-theme button,
+.customer-theme a {
+  touch-action: manipulation;
+}
+
+@media (max-width: 639px) {
+  .customer-theme { font-size: 15px; }
+  .customer-theme [data-slot="dialog-content"] {
+    bottom: 0;
+    top: auto;
+    width: 100%;
+    max-width: none;
+    translate: -50% 0;
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+  }
+}

@@ -1,0 +1,312 @@
+export type MoneyRef = { amountPaise: number; amountDisplay: string };
+export type WeightRef = { weightMg: number; weightDisplay: string };
+
+export type CustomerDisplayMode =
+  | "FIXED"
+  | "FLEXIBLE_FREE_WINDOW"
+  | "FLEXIBLE_LOCK_WINDOW"
+  /** @deprecated use FLEXIBLE_LOCK_WINDOW */
+  | "FLEXIBLE_CAPPED_WINDOW";
+
+export type CustomerSchemeStatus =
+  | "ACTIVE"
+  | "FULLY_PAID"
+  | "MATURED"
+  | "REDEMPTION_REQUESTED"
+  | "CLOSED";
+
+export type CustomerProfile = {
+  id: string;
+  customerNumber: string;
+  passbookNumber: string;
+  name: string;
+  mobile: string;
+  email?: string;
+  dateOfBirth?: string;
+  address?: string;
+  mobileImmutable: true;
+  whatsappOptIn: boolean;
+  memberSince: string;
+  profileComplete: boolean;
+  branch: { id: string; name: string; code: string; address?: string; mobile?: string };
+  kyc?: {
+    status: "NOT_SUBMITTED" | "PENDING" | "SUBMITTED" | "VERIFIED" | "REJECTED";
+    statusLabel: string;
+    type?: string;
+    numberMasked?: string;
+    canUpdate: boolean;
+    verifiedAt?: string;
+    submittedAt?: string | null;
+    rejectionReason?: string | null;
+    documents?: Array<{
+      side: string;
+      label: string;
+      uploadId: string;
+      fileName?: string | null;
+      viewUrl?: string | null;
+    }>;
+  };
+  nominee?: {
+    name: string;
+    relationship: string;
+    relationshipLabel?: string;
+    mobile?: string;
+    notes?: string | null;
+  };
+  nomineeEditable?: boolean;
+  version?: number;
+  tenant: TenantBranding;
+};
+
+export type TenantBranding = {
+  tenantCode: string;
+  displayName: string;
+  appDisplayName: string;
+  logoUrl?: string;
+  primaryColor: string;
+  accentColor: string;
+  foregroundColor: string;
+  contrastColor: string;
+  supportNumber: string;
+  city: string;
+  kycMandatory?: boolean;
+  customerSelfRegistration?: boolean;
+  customerSelfEnrol?: boolean;
+  multiScheme?: boolean;
+};
+
+export type CustomerPastScheme = {
+  id: string;
+  schemeNumber: string;
+  planName: string;
+  closureType: string;
+  closedAt: string;
+  finalValue: MoneyRef;
+  benefitReceived: MoneyRef;
+  redemptionMode?: string | null;
+  billNumber?: string | null;
+  closureReceiptUrl?: string | null;
+  passbookAvailable: boolean;
+  displayMode?: CustomerDisplayMode;
+};
+
+export type SchemeCardRecentPayment = {
+  id: string;
+  amount: MoneyRef;
+  paidAt: string;
+  receiptNumber?: string;
+};
+
+export type SchemeCard = {
+  id: string;
+  schemeNumber: string;
+  passbookNumber?: string;
+  planName: string;
+  subtitle: string;
+  displayMode: CustomerDisplayMode;
+  valueBasis?: "CASH" | "GOLD_WEIGHT";
+  status: CustomerSchemeStatus;
+  statusLabel: string;
+  progressPhase?: "FIXED" | "FREE_WINDOW" | "CAPPED";
+  progressPercent: number;
+  progressLabel: string;
+  progressDetail?: string;
+  totalPaid: MoneyRef;
+  maturityDate: string;
+  nextActionLabel: string;
+  nextActionAmount?: MoneyRef;
+  canPay: boolean;
+  benefitLabel: string;
+  recentPayments?: SchemeCardRecentPayment[];
+};
+
+export type PayableRange = {
+  model: "FIXED" | "FLEXIBLE";
+  phase: "FIXED" | "FREE" | "CAPPED";
+  contributionIsOptional: boolean;
+  targetCycle?: string;
+  minPayable: MoneyRef;
+  maxPayable: MoneyRef;
+  cycleCap?: MoneyRef;
+  remainingThisCycle?: MoneyRef;
+  suggested: MoneyRef;
+  multipleOfPaise: number;
+  quickAmounts: MoneyRef[];
+  helperText: string;
+  positionVersion: number;
+  unusedAllowanceCarriesForward: false;
+  paidMoneyNeverExpires: true;
+};
+
+export type CustomerSchemeDetail = SchemeCard & {
+  passbookNumber?: string;
+  header: { eyebrow: string; title: string; description: string };
+  maturityBenefit?: CustomerMaturityBenefit;
+  planRules?: { sections: CustomerPlanRulesSection[] };
+  progressCard: {
+    type: CustomerDisplayMode;
+    installmentsPaid?: number;
+    installmentsTotal?: number;
+    freeWindowMonth?: number;
+    freeWindowMonths?: number;
+    /** Full free-window months elapsed; current month is not counted until it ends. */
+    freeWindowMonthsCompleted?: number;
+    cycleCap?: MoneyRef;
+    remainingThisCycle?: MoneyRef;
+    lockedAverage?: MoneyRef;
+  };
+  statCards: Array<{ label: string; value: string; caption: string }>;
+  payButton: { visible: boolean; enabled: boolean; label: string; reason?: string };
+  passbookSummary: { totalEntries: number; lastPaymentAt: string; totalPaid: MoneyRef };
+  redemption: { eligible: boolean; status: string; preferredModes: string[]; blocker?: string };
+  lifecycleActions: string[] | Record<string, boolean>;
+  planId?: string;
+  valueBasis?: "CASH" | "GOLD_WEIGHT";
+  uiStatus?: string;
+  version: number;
+  positionVersion: number;
+  helperText: string;
+  payableRange?: PayableRange;
+  payments: PaymentListItem[];
+};
+
+export type SchemePlan = {
+  id: string;
+  name: string;
+  code: string;
+  tagline: string;
+  model: "FIXED" | "FLEXIBLE";
+  durationMonths: number;
+  /** Short label for cards; use `contributionDetail` on detail when present. */
+  amountSummary: string;
+  contributionDetail?: string;
+  benefitSummary: string;
+  benefitType?: "CASH_BONUS" | "GOLD_BENEFIT" | "ONE_FREE_INSTALLMENT" | "FIXED_BONUS_AMOUNT" | string;
+  valueBasisLabel?: string;
+  paymentPatternLabel?: string;
+  rules: string[];
+  canEnrol: boolean;
+  blockedReason?: string;
+  featured?: boolean;
+  amountMinPaise?: number;
+  amountMaxPaise?: number;
+  multipleOfPaise?: number;
+  fixedAmountPaise?: number;
+  flexibleSummary?: {
+    freeWindowMonths?: number | null;
+    lockWindowMonths?: number | null;
+    explainer?: string | null;
+    minPerPayment?: MoneyRef | null;
+    maxPerPayment?: MoneyRef | null;
+  };
+};
+
+export type PaymentListItem = {
+  id: string;
+  amount: MoneyRef;
+  status: "PENDING" | "SUCCESS" | "FAILED" | "REVERSED" | "UNALLOCATED_PENDING_REVIEW";
+  statusLabel?: string;
+  paidAt?: string;
+  createdAt: string;
+  schemeId: string;
+  schemeNumber: string;
+  schemeName: string;
+  receiptNumber?: string;
+  receiptDownloadPath?: string;
+  channel: "PHONEPE" | "CASH" | "UPI" | "BANK_TRANSFER";
+  channelLabel?: string;
+  paymentPattern: "FIXED" | "FLEXIBLE";
+  targetCycle?: string;
+};
+
+export type CustomerPlanRulesSection = {
+  title: string;
+  items: string[];
+};
+
+export type CustomerMaturityBenefit = {
+  title: string;
+  summary: string;
+  type?: string;
+  details: string[];
+  eligibility: string[];
+};
+
+export type CustomerNotification = {
+  id: string;
+  type: "GENERAL" | "PAYMENT" | "SCHEME" | "GRIEVANCE";
+  title: string;
+  body: string;
+  read: boolean;
+  createdAt: string;
+  deepLink?: string;
+  cta?: string;
+};
+
+export type GrievanceMessage = {
+  id: string;
+  authorType: "CUSTOMER" | "STAFF";
+  body: string;
+  createdAt: string;
+};
+
+export type CustomerGrievance = {
+  id: string;
+  ticketNumber: string;
+  category: string;
+  status: "OPEN" | "IN_PROGRESS" | "RESOLVED" | "CLOSED";
+  statusLabel: string;
+  subject: string;
+  description: string;
+  createdAt: string;
+  updatedAt: string;
+  slaDueAt: string;
+  unreadForCustomer: boolean;
+  version: number;
+  messages: GrievanceMessage[];
+  allowedActions: string[];
+};
+
+export type CustomerHome = {
+  tenant: TenantBranding;
+  customer: { id: string; name: string; profileComplete: boolean; passbookNumber?: string | null };
+  recentPayments?: Array<
+    SchemeCardRecentPayment & { schemeId: string; schemeNumber: string; schemeName: string }
+  >;
+  greeting: { text: string; subtext: string };
+  /** At least one enrolled scheme uses gold-weight accumulation (value basis GOLD_WEIGHT). */
+  hasGoldAccumulationScheme?: boolean;
+  summary: {
+    activeSchemeCount: number;
+    pastSchemeCount: number;
+    totalPaid: MoneyRef;
+    goldAccumulated?: WeightRef;
+    currentValuation?: MoneyRef;
+  };
+  goldRate: {
+    ratePerGramPaise: number;
+    ratePerGramDisplay: string;
+    effectiveDate: string;
+    purity: string;
+    movement?: number | null;
+  } | null;
+  actionCard: {
+    type: "PAY_DUE" | "REDEEM";
+    schemeId: string;
+    title: string;
+    priority: number | string;
+    planName?: string;
+    subtitle?: string | null;
+  } | null;
+  activeSchemes: SchemeCard[];
+  quickActions: Array<{ key: "PAY" | "ENROL" | "PASSBOOK"; label: string; enabled?: boolean }>;
+  emptyState?: { message: string; cta: string } | null;
+  cacheTtlSeconds?: number;
+  pastSchemesPreview?: Array<{ id: string; schemeNumber: string; status: string }>;
+  unreadNotificationCount: number;
+  contributionTrend?: Array<
+    | { month: string; amountPaise: number }
+    | { month: string; amount: MoneyRef }
+  >;
+  goldAccumulationTrend?: Array<{ month: string; weight: WeightRef }>;
+};

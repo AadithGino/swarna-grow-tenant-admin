@@ -1,6 +1,10 @@
-# Swarna Grow Admin Portals
+# SwarnaGrow Portals
 
-Production-oriented React tenant and platform-super-admin portals built from the Swarna Grow API contracts and supplied UI references. The customer mobile app is intentionally excluded.
+Production-oriented React tenant-admin, platform-super-admin, and mobile-first customer web portals built from the SwarnaGrow API contracts and supplied UI references.
+
+## Customer portal
+
+Open `/customer` to browse the authenticated mock experience or `/customer/login` to test OTP login (`123456`). It includes the customer home, fixed/flexible scheme displays, plan enrolment, PhonePe redirect/poll simulation, payments and receipts, notifications, profile/KYC, devices, branches, gold rates, and grievance support.
 
 ## Platform super-admin console
 

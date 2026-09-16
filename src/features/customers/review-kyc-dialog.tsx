@@ -371,14 +371,23 @@ export function ReviewKycDialog({
               </div>
             ) : null}
 
-            {kyc?.documents.length && !showUpload ? (
+            {(kyc?.documents?.length ?? 0) > 0 && !showUpload ? (
               <div className="grid gap-3 sm:grid-cols-2">
-                {kyc.documents.map((doc) => (
+                {kyc!.documents.map((doc) => (
                   <div
                     key={doc.side}
-                    className="flex min-h-40 flex-col items-center justify-center gap-2 rounded-xl border bg-muted/40 p-4"
+                    className="flex min-h-40 flex-col items-center justify-center gap-2 overflow-hidden rounded-xl border bg-muted/40 p-4"
                   >
-                    <FileImage className="size-10 text-[#730321]" />
+                    {doc.previewUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={doc.previewUrl}
+                        alt={doc.label}
+                        className="max-h-48 w-full rounded-lg object-contain"
+                      />
+                    ) : (
+                      <FileImage className="size-10 text-[#730321]" />
+                    )}
                     <span className="text-sm font-medium">{doc.label}</span>
                     {doc.previewUrl ? (
                       <a
@@ -387,12 +396,10 @@ export function ReviewKycDialog({
                         rel="noreferrer"
                         className="text-xs text-[#730321] underline"
                       >
-                        View document
+                        Open full size
                       </a>
                     ) : (
-                      <span className="text-xs text-muted-foreground">
-                        On file
-                      </span>
+                      <span className="text-xs text-muted-foreground">On file</span>
                     )}
                   </div>
                 ))}

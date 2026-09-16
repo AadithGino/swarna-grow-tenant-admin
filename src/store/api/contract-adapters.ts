@@ -149,6 +149,34 @@ const dateTime = (value?: string | null) =>
       }).format(new Date(value))
     : "—";
 
+function kycDocumentLabel(side: string, type?: string) {
+  if (side === "BACK") return "Aadhaar — back";
+  if (side === "FRONT") return type === "PAN" ? "PAN card" : "Aadhaar — front";
+  return "Identity document";
+}
+
+function buildAdminKycDocuments(kyc: Record<string, unknown>) {
+  const fromApi = (kyc.documents as Array<Record<string, unknown>> | undefined) ?? [];
+  if (fromApi.length) {
+    return fromApi.map((doc) => ({
+      side: (doc.side as string) ?? "SINGLE",
+      label: String(doc.label ?? kycDocumentLabel(String(doc.side ?? "SINGLE"), kyc.type as string)),
+      previewUrl: (doc.previewUrl ?? doc.viewUrl) as string | undefined,
+    }));
+  }
+  const docs: Array<{ side: string; label: string; previewUrl?: string }> = [];
+  if (kyc.frontUploadId) {
+    docs.push({
+      side: "FRONT",
+      label: kycDocumentLabel("FRONT", kyc.type as string),
+    });
+  }
+  if (kyc.backUploadId) {
+    docs.push({ side: "BACK", label: kycDocumentLabel("BACK", kyc.type as string) });
+  }
+  return docs;
+}
+
 export function adaptCustomerList(raw: any): {
   items: Customer[];
   total: number;
@@ -223,16 +251,8 @@ export function adaptCustomer(raw: any): Customer {
           submittedAt: date(item.kyc.submittedAt),
           verifiedAt: date(item.kyc.verifiedAt),
           verifiedBy: item.kyc.verifiedBy?.name,
-          rejectionRemarks: item.kyc.rejectionRemarks,
-          documents: (item.kyc.documents ?? []).map((doc: any) => ({
-            side: doc.side ?? "SINGLE",
-            label:
-              doc.side === "BACK"
-                ? "Aadhaar — back"
-                : doc.side === "FRONT"
-                  ? "Aadhaar — front"
-                  : "Identity document",
-          })),
+          rejectionRemarks: item.kyc.rejectionRemarks ?? item.kyc.rejectionReason,
+          documents: buildAdminKycDocuments(item.kyc),
         }
       : undefined);
   const nomineeDetail =

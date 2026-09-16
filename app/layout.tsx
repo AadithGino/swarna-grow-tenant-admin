@@ -7,8 +7,8 @@ import "./globals.css";
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 
 export const metadata: Metadata = {
-  title: "Swarna Grow Admin",
-  description: "Jewellery gold-scheme operations portal",
+  title: "SwarnaGrow — Gold Savings",
+  description: "Secure jewellery savings and customer servicing portal",
   icons: { icon: "/favicon.svg", shortcut: "/favicon.svg" },
 };
 
