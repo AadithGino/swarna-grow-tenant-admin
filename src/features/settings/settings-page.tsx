@@ -36,6 +36,26 @@ import {
 import { PageSkeleton, QueryError } from "@/src/components/common/query-state";
 import { StatusBadge } from "@/src/components/common/status-badge";
 import { ACTION } from "@/src/lib/action-permissions";
+import { FormFieldError } from "@/src/components/common/form-field-error";
+import { handleFormApiError } from "@/src/lib/form-api-error";
+import { sanitizeIndianPhoneDigits } from "@/src/lib/customer-form";
+import { sanitizeBranchPincodeInput } from "@/src/lib/access-form-validation";
+import {
+  liveSettingsBrandingFieldErrors,
+  liveSettingsOperationsFieldErrors,
+  liveSettingsProfileFieldErrors,
+  profileMobileForApi,
+  profilePincodeForApi,
+  settingsBrandingFormReady,
+  settingsOperationsFormReady,
+  settingsProfileFormReady,
+  validatePlanRequestNote,
+  validateSettingsBrandingForm,
+  validateSettingsOperationsForm,
+  validateSettingsProfileForm,
+  validateTenantLogoFile,
+} from "@/src/lib/settings-form-validation";
+import { toastApiError } from "@/src/lib/api-error";
 import { cn } from "@/lib/utils";
 import { env } from "@/src/config/env";
 import { SubscriptionInvoicesPanel } from "@/src/features/settings/subscription-invoices-panel";
@@ -207,6 +227,63 @@ export function SettingsPage({
   });
 
   const [planRequestNote, setPlanRequestNote] = useState("");
+  const [planNoteTouched, setPlanNoteTouched] = useState(false);
+
+  const [profileFieldErrors, setProfileFieldErrors] = useState<
+    Record<string, string>
+  >({});
+  const [profileTouched, setProfileTouched] = useState<
+    Record<string, boolean>
+  >({});
+  const [brandingFieldErrors, setBrandingFieldErrors] = useState<
+    Record<string, string>
+  >({});
+  const [brandingTouched, setBrandingTouched] = useState<
+    Record<string, boolean>
+  >({});
+  const [opsFieldErrors, setOpsFieldErrors] = useState<Record<string, string>>(
+    {},
+  );
+  const [opsTouched, setOpsTouched] = useState<Record<string, boolean>>({});
+  const [logoFieldError, setLogoFieldError] = useState<string | undefined>();
+
+  const profileLiveErrors = useMemo(
+    () => liveSettingsProfileFieldErrors(profileForm),
+    [profileForm],
+  );
+  const brandingLiveErrors = useMemo(
+    () => liveSettingsBrandingFieldErrors(brandingForm),
+    [brandingForm],
+  );
+  const opsLiveErrors = useMemo(
+    () => liveSettingsOperationsFieldErrors(opsForm),
+    [opsForm],
+  );
+
+  const profileDisplayError = (field: keyof typeof profileForm) => {
+    const show =
+      profileTouched[field] ||
+      (field === "businessName" && profileForm.businessName.trim()) ||
+      (field === "ownerMobile" &&
+        profileForm.ownerMobile.replace(/\D/g, "").length > 0);
+    return (
+      profileFieldErrors[field] ??
+      (show ? profileLiveErrors[field] : undefined)
+    );
+  };
+
+  const brandingDisplayError = (field: keyof typeof brandingForm) =>
+    brandingFieldErrors[field] ??
+    (brandingTouched[field] ? brandingLiveErrors[field] : undefined);
+
+  const opsDisplayError = (field: keyof typeof opsForm) =>
+    opsFieldErrors[field] ??
+    (opsTouched[field] ? opsLiveErrors[field] : undefined);
+
+  const planNoteError =
+    planNoteTouched || planRequestNote
+      ? validatePlanRequestNote(planRequestNote)
+      : undefined;
 
   useEffect(() => {
     const p = profileQuery.data;
@@ -298,6 +375,12 @@ export function SettingsPage({
           subscriptionQuery.refetch();
         }}
         title="Settings could not be loaded"
+        error={
+          profileQuery.error ??
+          brandingQuery.error ??
+          operationsQuery.error ??
+          subscriptionQuery.error
+        }
       />
     );
   }
@@ -430,34 +513,67 @@ export function SettingsPage({
                 <FieldLabel>Business name</FieldLabel>
                 <Input
                   value={profileForm.businessName}
-                  onChange={(e) =>
+                  onChange={(e) => {
+                    setProfileTouched((p) => ({ ...p, businessName: true }));
+                    setProfileFieldErrors((p) => {
+                      const next = { ...p };
+                      delete next.businessName;
+                      return next;
+                    });
                     setProfileForm({
                       ...profileForm,
                       businessName: e.target.value,
-                    })
-                  }
+                    });
+                  }}
+                  className={cn(
+                    profileDisplayError("businessName") && "border-red-600",
+                  )}
+                  aria-invalid={Boolean(profileDisplayError("businessName"))}
                 />
+                <FormFieldError message={profileDisplayError("businessName")} />
               </div>
               <div>
                 <FieldLabel>Display name</FieldLabel>
                 <Input
                   value={profileForm.displayName}
-                  onChange={(e) =>
+                  onChange={(e) => {
+                    setProfileTouched((p) => ({ ...p, displayName: true }));
+                    setProfileFieldErrors((p) => {
+                      const next = { ...p };
+                      delete next.displayName;
+                      return next;
+                    });
                     setProfileForm({
                       ...profileForm,
                       displayName: e.target.value,
-                    })
-                  }
+                    });
+                  }}
+                  className={cn(
+                    profileDisplayError("displayName") && "border-red-600",
+                  )}
+                  aria-invalid={Boolean(profileDisplayError("displayName"))}
                 />
+                <FormFieldError message={profileDisplayError("displayName")} />
               </div>
               <div>
                 <FieldLabel>Owner name</FieldLabel>
                 <Input
                   value={profileForm.ownerName}
-                  onChange={(e) =>
-                    setProfileForm({ ...profileForm, ownerName: e.target.value })
-                  }
+                  onChange={(e) => {
+                    setProfileTouched((p) => ({ ...p, ownerName: true }));
+                    setProfileFieldErrors((p) => {
+                      const next = { ...p };
+                      delete next.ownerName;
+                      return next;
+                    });
+                    setProfileForm({ ...profileForm, ownerName: e.target.value });
+                  }}
+                  className={cn(
+                    profileDisplayError("ownerName") && "border-red-600",
+                  )}
+                  aria-invalid={Boolean(profileDisplayError("ownerName"))}
                 />
+                <FormFieldError message={profileDisplayError("ownerName")} />
               </div>
               <div>
                 <FieldLabel>Tenant code</FieldLabel>
@@ -466,107 +582,227 @@ export function SettingsPage({
               <div>
                 <FieldLabel>Owner mobile</FieldLabel>
                 <Input
+                  inputMode="tel"
                   value={profileForm.ownerMobile}
-                  onChange={(e) =>
+                  onChange={(e) => {
+                    setProfileTouched((p) => ({ ...p, ownerMobile: true }));
+                    setProfileFieldErrors((p) => {
+                      const next = { ...p };
+                      delete next.ownerMobile;
+                      return next;
+                    });
                     setProfileForm({
                       ...profileForm,
-                      ownerMobile: e.target.value,
-                    })
-                  }
+                      ownerMobile: sanitizeIndianPhoneDigits(e.target.value),
+                    });
+                  }}
+                  className={cn(
+                    profileDisplayError("ownerMobile") && "border-red-600",
+                  )}
+                  aria-invalid={Boolean(profileDisplayError("ownerMobile"))}
                 />
+                <FormFieldError message={profileDisplayError("ownerMobile")} />
               </div>
               <div>
                 <FieldLabel>Owner email</FieldLabel>
                 <Input
+                  type="email"
                   value={profileForm.ownerEmail}
-                  onChange={(e) =>
+                  onChange={(e) => {
+                    setProfileTouched((p) => ({ ...p, ownerEmail: true }));
+                    setProfileFieldErrors((p) => {
+                      const next = { ...p };
+                      delete next.ownerEmail;
+                      return next;
+                    });
                     setProfileForm({
                       ...profileForm,
                       ownerEmail: e.target.value,
-                    })
-                  }
+                    });
+                  }}
+                  className={cn(
+                    profileDisplayError("ownerEmail") && "border-red-600",
+                  )}
+                  aria-invalid={Boolean(profileDisplayError("ownerEmail"))}
                 />
+                <FormFieldError message={profileDisplayError("ownerEmail")} />
               </div>
               <div>
                 <FieldLabel>Support number</FieldLabel>
                 <Input
+                  inputMode="tel"
                   value={profileForm.supportNumber}
-                  onChange={(e) =>
+                  onChange={(e) => {
+                    setProfileTouched((p) => ({ ...p, supportNumber: true }));
+                    setProfileFieldErrors((p) => {
+                      const next = { ...p };
+                      delete next.supportNumber;
+                      return next;
+                    });
                     setProfileForm({
                       ...profileForm,
-                      supportNumber: e.target.value,
-                    })
-                  }
+                      supportNumber: sanitizeIndianPhoneDigits(e.target.value),
+                    });
+                  }}
+                  className={cn(
+                    profileDisplayError("supportNumber") && "border-red-600",
+                  )}
+                  aria-invalid={Boolean(profileDisplayError("supportNumber"))}
                 />
+                <FormFieldError message={profileDisplayError("supportNumber")} />
               </div>
               <div>
                 <FieldLabel>GSTIN (optional)</FieldLabel>
                 <Input
                   value={profileForm.gstin}
-                  onChange={(e) =>
-                    setProfileForm({ ...profileForm, gstin: e.target.value })
-                  }
+                  onChange={(e) => {
+                    setProfileTouched((p) => ({ ...p, gstin: true }));
+                    setProfileFieldErrors((p) => {
+                      const next = { ...p };
+                      delete next.gstin;
+                      return next;
+                    });
+                    setProfileForm({
+                      ...profileForm,
+                      gstin: e.target.value.toUpperCase().slice(0, 15),
+                    });
+                  }}
                   placeholder="Printed on receipts only"
+                  className={cn(profileDisplayError("gstin") && "border-red-600")}
+                  aria-invalid={Boolean(profileDisplayError("gstin"))}
                 />
+                <FormFieldError message={profileDisplayError("gstin")} />
               </div>
               <div className="md:col-span-2">
                 <FieldLabel>Address line</FieldLabel>
                 <Input
                   value={profileForm.line1}
-                  onChange={(e) =>
-                    setProfileForm({ ...profileForm, line1: e.target.value })
-                  }
+                  onChange={(e) => {
+                    setProfileTouched((p) => ({ ...p, line1: true }));
+                    setProfileFieldErrors((p) => {
+                      const next = { ...p };
+                      delete next.line1;
+                      return next;
+                    });
+                    setProfileForm({ ...profileForm, line1: e.target.value });
+                  }}
+                  className={cn(profileDisplayError("line1") && "border-red-600")}
+                  aria-invalid={Boolean(profileDisplayError("line1"))}
                 />
+                <FormFieldError message={profileDisplayError("line1")} />
               </div>
               <div>
                 <FieldLabel>City</FieldLabel>
                 <Input
                   value={profileForm.city}
-                  onChange={(e) =>
-                    setProfileForm({ ...profileForm, city: e.target.value })
-                  }
+                  onChange={(e) => {
+                    setProfileTouched((p) => ({ ...p, city: true }));
+                    setProfileFieldErrors((p) => {
+                      const next = { ...p };
+                      delete next.city;
+                      return next;
+                    });
+                    setProfileForm({ ...profileForm, city: e.target.value });
+                  }}
+                  className={cn(profileDisplayError("city") && "border-red-600")}
+                  aria-invalid={Boolean(profileDisplayError("city"))}
                 />
+                <FormFieldError message={profileDisplayError("city")} />
               </div>
               <div>
                 <FieldLabel>State</FieldLabel>
                 <Input
                   value={profileForm.state}
-                  onChange={(e) =>
-                    setProfileForm({ ...profileForm, state: e.target.value })
-                  }
+                  onChange={(e) => {
+                    setProfileTouched((p) => ({ ...p, state: true }));
+                    setProfileFieldErrors((p) => {
+                      const next = { ...p };
+                      delete next.state;
+                      return next;
+                    });
+                    setProfileForm({ ...profileForm, state: e.target.value });
+                  }}
+                  className={cn(profileDisplayError("state") && "border-red-600")}
+                  aria-invalid={Boolean(profileDisplayError("state"))}
                 />
+                <FormFieldError message={profileDisplayError("state")} />
               </div>
               <div>
                 <FieldLabel>Pincode</FieldLabel>
                 <Input
+                  inputMode="numeric"
                   value={profileForm.pincode}
-                  onChange={(e) =>
-                    setProfileForm({ ...profileForm, pincode: e.target.value })
-                  }
+                  onChange={(e) => {
+                    setProfileTouched((p) => ({ ...p, pincode: true }));
+                    setProfileFieldErrors((p) => {
+                      const next = { ...p };
+                      delete next.pincode;
+                      return next;
+                    });
+                    setProfileForm({
+                      ...profileForm,
+                      pincode: sanitizeBranchPincodeInput(e.target.value),
+                    });
+                  }}
+                  className={cn(
+                    profileDisplayError("pincode") && "border-red-600",
+                  )}
+                  aria-invalid={Boolean(profileDisplayError("pincode"))}
                 />
+                <FormFieldError message={profileDisplayError("pincode")} />
               </div>
             </div>
             <div className="flex justify-end border-t border-[#eaded9] px-6 py-4">
               <PermissionGate permission={ACTION.tenantSettingsWrite}>
                 <Button
+                  disabled={!settingsProfileFormReady(profileForm)}
                   onClick={async () => {
-                    await patchProfile({
-                      businessName: profileForm.businessName,
-                      displayName: profileForm.displayName,
-                      ownerName: profileForm.ownerName,
-                      ownerMobile: profileForm.ownerMobile,
-                      ownerEmail: profileForm.ownerEmail,
-                      supportNumber: profileForm.supportNumber,
-                      gstin: profileForm.gstin || null,
-                      address: {
-                        line1: profileForm.line1,
-                        city: profileForm.city,
-                        state: profileForm.state,
-                        pincode: profileForm.pincode,
-                      },
-                      expectedVersion: profile.audit?.version,
-                    }).unwrap();
-                    toast.success("Business profile saved");
+                    setProfileTouched({
+                      businessName: true,
+                      displayName: true,
+                      ownerName: true,
+                      ownerMobile: true,
+                      ownerEmail: true,
+                      supportNumber: true,
+                      gstin: true,
+                      line1: true,
+                      city: true,
+                      state: true,
+                      pincode: true,
+                    });
+                    const clientErrors = validateSettingsProfileForm(profileForm);
+                    if (Object.keys(clientErrors).length) {
+                      setProfileFieldErrors(clientErrors);
+                      toast.error("Fix the highlighted fields.");
+                      return;
+                    }
+                    try {
+                      await patchProfile({
+                        businessName: profileForm.businessName.trim(),
+                        displayName: profileForm.displayName.trim(),
+                        ownerName: profileForm.ownerName.trim(),
+                        ownerMobile: profileMobileForApi(profileForm.ownerMobile),
+                        ownerEmail: profileForm.ownerEmail.trim() || undefined,
+                        supportNumber:
+                          profileMobileForApi(profileForm.supportNumber) ||
+                          undefined,
+                        gstin: profileForm.gstin.trim().toUpperCase() || null,
+                        address: {
+                          line1: profileForm.line1.trim(),
+                          city: profileForm.city.trim(),
+                          state: profileForm.state.trim(),
+                          pincode: profilePincodeForApi(profileForm.pincode),
+                        },
+                        expectedVersion: profile.audit?.version,
+                      }).unwrap();
+                      toast.success("Business profile saved");
+                      setProfileFieldErrors({});
+                    } catch (err) {
+                      handleFormApiError(err, {
+                        setFieldErrors: setProfileFieldErrors,
+                        fallback: "Could not save profile",
+                      });
+                    }
                   }}
                 >
                   <Save />
@@ -598,12 +834,31 @@ export function SettingsPage({
                     <FieldLabel>App display name</FieldLabel>
                     <Input
                       value={brandingForm.appDisplayName}
-                      onChange={(e) =>
+                      onChange={(e) => {
+                        setBrandingTouched((p) => ({
+                          ...p,
+                          appDisplayName: true,
+                        }));
+                        setBrandingFieldErrors((p) => {
+                          const next = { ...p };
+                          delete next.appDisplayName;
+                          return next;
+                        });
                         setBrandingForm({
                           ...brandingForm,
                           appDisplayName: e.target.value,
-                        })
-                      }
+                        });
+                      }}
+                      className={cn(
+                        brandingDisplayError("appDisplayName") &&
+                          "border-red-600",
+                      )}
+                      aria-invalid={Boolean(
+                        brandingDisplayError("appDisplayName"),
+                      )}
+                    />
+                    <FormFieldError
+                      message={brandingDisplayError("appDisplayName")}
                     />
                   </div>
                   <div className="grid gap-4 sm:grid-cols-2">
@@ -613,24 +868,52 @@ export function SettingsPage({
                         <Input
                           type="color"
                           value={brandingForm.primaryColor}
-                          onChange={(e) =>
+                          onChange={(e) => {
+                            setBrandingTouched((p) => ({
+                              ...p,
+                              primaryColor: true,
+                            }));
+                            setBrandingFieldErrors((p) => {
+                              const next = { ...p };
+                              delete next.primaryColor;
+                              return next;
+                            });
                             setBrandingForm({
                               ...brandingForm,
                               primaryColor: e.target.value,
-                            })
-                          }
+                            });
+                          }}
                           className="h-11 w-16 p-1"
                         />
                         <Input
                           value={brandingForm.primaryColor}
-                          onChange={(e) =>
+                          onChange={(e) => {
+                            setBrandingTouched((p) => ({
+                              ...p,
+                              primaryColor: true,
+                            }));
+                            setBrandingFieldErrors((p) => {
+                              const next = { ...p };
+                              delete next.primaryColor;
+                              return next;
+                            });
                             setBrandingForm({
                               ...brandingForm,
                               primaryColor: e.target.value,
-                            })
-                          }
+                            });
+                          }}
+                          className={cn(
+                            brandingDisplayError("primaryColor") &&
+                              "border-red-600",
+                          )}
+                          aria-invalid={Boolean(
+                            brandingDisplayError("primaryColor"),
+                          )}
                         />
                       </div>
+                      <FormFieldError
+                        message={brandingDisplayError("primaryColor")}
+                      />
                     </div>
                     <div>
                       <FieldLabel>Secondary colour</FieldLabel>
@@ -638,24 +921,52 @@ export function SettingsPage({
                         <Input
                           type="color"
                           value={brandingForm.secondaryColor}
-                          onChange={(e) =>
+                          onChange={(e) => {
+                            setBrandingTouched((p) => ({
+                              ...p,
+                              secondaryColor: true,
+                            }));
+                            setBrandingFieldErrors((p) => {
+                              const next = { ...p };
+                              delete next.secondaryColor;
+                              return next;
+                            });
                             setBrandingForm({
                               ...brandingForm,
                               secondaryColor: e.target.value,
-                            })
-                          }
+                            });
+                          }}
                           className="h-11 w-16 p-1"
                         />
                         <Input
                           value={brandingForm.secondaryColor}
-                          onChange={(e) =>
+                          onChange={(e) => {
+                            setBrandingTouched((p) => ({
+                              ...p,
+                              secondaryColor: true,
+                            }));
+                            setBrandingFieldErrors((p) => {
+                              const next = { ...p };
+                              delete next.secondaryColor;
+                              return next;
+                            });
                             setBrandingForm({
                               ...brandingForm,
                               secondaryColor: e.target.value,
-                            })
-                          }
+                            });
+                          }}
+                          className={cn(
+                            brandingDisplayError("secondaryColor") &&
+                              "border-red-600",
+                          )}
+                          aria-invalid={Boolean(
+                            brandingDisplayError("secondaryColor"),
+                          )}
                         />
                       </div>
+                      <FormFieldError
+                        message={brandingDisplayError("secondaryColor")}
+                      />
                     </div>
                   </div>
                   <div>
@@ -668,6 +979,13 @@ export function SettingsPage({
                         const file = e.target.files?.[0];
                         e.target.value = "";
                         if (!file) return;
+                        const fileErr = validateTenantLogoFile(file);
+                        if (fileErr) {
+                          setLogoFieldError(fileErr);
+                          toast.error(fileErr);
+                          return;
+                        }
+                        setLogoFieldError(undefined);
                         setLogoBusy(true);
                         try {
                           const presign = await presignUpload({
@@ -699,13 +1017,14 @@ export function SettingsPage({
                           }).unwrap();
                           if (res?.previewUrls) setPreviewUrls(res.previewUrls);
                           toast.success("Logo uploaded");
-                        } catch {
-                          toast.error("Could not upload logo");
+                        } catch (err) {
+                          toastApiError(err, "Could not upload logo");
                         } finally {
                           setLogoBusy(false);
                         }
                       }}
                     />
+                    <FormFieldError message={logoFieldError} />
                     <p className="mt-1 text-xs text-muted-foreground">
                       {logoBusy
                         ? "Uploading logo…"
@@ -727,16 +1046,39 @@ export function SettingsPage({
                   </div>
                   <div className="flex justify-end">
                     <Button
+                      disabled={!settingsBrandingFormReady(brandingForm)}
                       onClick={async () => {
-                        const res = await patchBranding({
-                          primaryColor: brandingForm.primaryColor,
-                          secondaryColor: brandingForm.secondaryColor,
-                          appDisplayName: brandingForm.appDisplayName,
-                          expectedVersion:
-                            brandingQuery.data?.audit?.version,
-                        }).unwrap();
-                        if (res?.previewUrls) setPreviewUrls(res.previewUrls);
-                        toast.success("Branding saved — previews refreshed");
+                        setBrandingTouched({
+                          primaryColor: true,
+                          secondaryColor: true,
+                          appDisplayName: true,
+                        });
+                        const clientErrors =
+                          validateSettingsBrandingForm(brandingForm);
+                        if (Object.keys(clientErrors).length) {
+                          setBrandingFieldErrors(clientErrors);
+                          toast.error("Fix the highlighted fields.");
+                          return;
+                        }
+                        try {
+                          const res = await patchBranding({
+                            primaryColor: brandingForm.primaryColor.trim(),
+                            secondaryColor:
+                              brandingForm.secondaryColor.trim(),
+                            appDisplayName:
+                              brandingForm.appDisplayName.trim(),
+                            expectedVersion:
+                              brandingQuery.data?.audit?.version,
+                          }).unwrap();
+                          if (res?.previewUrls) setPreviewUrls(res.previewUrls);
+                          toast.success("Branding saved — previews refreshed");
+                          setBrandingFieldErrors({});
+                        } catch (err) {
+                          handleFormApiError(err, {
+                            setFieldErrors: setBrandingFieldErrors,
+                            fallback: "Could not save branding",
+                          });
+                        }
                       }}
                     >
                       <Save />
@@ -856,82 +1198,198 @@ export function SettingsPage({
                 <FieldLabel>Receipt prefix</FieldLabel>
                 <Input
                   value={opsForm.receiptPrefix}
-                  onChange={(e) =>
-                    setOpsForm({ ...opsForm, receiptPrefix: e.target.value })
-                  }
+                  onChange={(e) => {
+                    setOpsTouched((p) => ({ ...p, receiptPrefix: true }));
+                    setOpsFieldErrors((p) => {
+                      const next = { ...p };
+                      delete next.receiptPrefix;
+                      return next;
+                    });
+                    setOpsForm({ ...opsForm, receiptPrefix: e.target.value });
+                  }}
+                  className={cn(
+                    opsDisplayError("receiptPrefix") && "border-red-600",
+                  )}
+                  aria-invalid={Boolean(opsDisplayError("receiptPrefix"))}
                 />
+                <FormFieldError message={opsDisplayError("receiptPrefix")} />
               </div>
               <div>
                 <FieldLabel>Gold purity</FieldLabel>
                 <Input
                   value={opsForm.goldPurity}
-                  onChange={(e) =>
-                    setOpsForm({ ...opsForm, goldPurity: e.target.value })
-                  }
+                  onChange={(e) => {
+                    setOpsTouched((p) => ({ ...p, goldPurity: true }));
+                    setOpsFieldErrors((p) => {
+                      const next = { ...p };
+                      delete next.goldPurity;
+                      return next;
+                    });
+                    setOpsForm({ ...opsForm, goldPurity: e.target.value });
+                  }}
+                  className={cn(
+                    opsDisplayError("goldPurity") && "border-red-600",
+                  )}
+                  aria-invalid={Boolean(opsDisplayError("goldPurity"))}
                 />
+                <FormFieldError message={opsDisplayError("goldPurity")} />
               </div>
               <div>
                 <FieldLabel>Receipt number format</FieldLabel>
                 <Input
                   value={opsForm.receiptNumberFormat}
-                  onChange={(e) =>
+                  onChange={(e) => {
+                    setOpsTouched((p) => ({
+                      ...p,
+                      receiptNumberFormat: true,
+                    }));
+                    setOpsFieldErrors((p) => {
+                      const next = { ...p };
+                      delete next.receiptNumberFormat;
+                      return next;
+                    });
                     setOpsForm({
                       ...opsForm,
                       receiptNumberFormat: e.target.value,
-                    })
-                  }
-                  className="font-mono text-sm"
+                    });
+                  }}
+                  className={cn(
+                    "font-mono text-sm",
+                    opsDisplayError("receiptNumberFormat") && "border-red-600",
+                  )}
+                  aria-invalid={Boolean(
+                    opsDisplayError("receiptNumberFormat"),
+                  )}
+                />
+                <FormFieldError
+                  message={opsDisplayError("receiptNumberFormat")}
                 />
               </div>
               <div>
                 <FieldLabel>Passbook number format</FieldLabel>
                 <Input
                   value={opsForm.passbookNumberFormat}
-                  onChange={(e) =>
+                  onChange={(e) => {
+                    setOpsTouched((p) => ({
+                      ...p,
+                      passbookNumberFormat: true,
+                    }));
+                    setOpsFieldErrors((p) => {
+                      const next = { ...p };
+                      delete next.passbookNumberFormat;
+                      return next;
+                    });
                     setOpsForm({
                       ...opsForm,
                       passbookNumberFormat: e.target.value,
-                    })
-                  }
-                  className="font-mono text-sm"
+                    });
+                  }}
+                  className={cn(
+                    "font-mono text-sm",
+                    opsDisplayError("passbookNumberFormat") && "border-red-600",
+                  )}
+                  aria-invalid={Boolean(
+                    opsDisplayError("passbookNumberFormat"),
+                  )}
+                />
+                <FormFieldError
+                  message={opsDisplayError("passbookNumberFormat")}
                 />
               </div>
               <div>
                 <FieldLabel>Scheme number format</FieldLabel>
                 <Input
                   value={opsForm.schemeNumberFormat}
-                  onChange={(e) =>
+                  onChange={(e) => {
+                    setOpsTouched((p) => ({
+                      ...p,
+                      schemeNumberFormat: true,
+                    }));
+                    setOpsFieldErrors((p) => {
+                      const next = { ...p };
+                      delete next.schemeNumberFormat;
+                      return next;
+                    });
                     setOpsForm({
                       ...opsForm,
                       schemeNumberFormat: e.target.value,
-                    })
-                  }
-                  className="font-mono text-sm"
+                    });
+                  }}
+                  className={cn(
+                    "font-mono text-sm",
+                    opsDisplayError("schemeNumberFormat") && "border-red-600",
+                  )}
+                  aria-invalid={Boolean(
+                    opsDisplayError("schemeNumberFormat"),
+                  )}
+                />
+                <FormFieldError
+                  message={opsDisplayError("schemeNumberFormat")}
                 />
               </div>
               <div>
                 <FieldLabel>Payment reversal window (hours)</FieldLabel>
                 <Input
                   type="number"
+                  min={0}
+                  max={168}
+                  step={1}
                   value={opsForm.paymentReversalWindowHours}
-                  onChange={(e) =>
+                  onChange={(e) => {
+                    setOpsTouched((p) => ({
+                      ...p,
+                      paymentReversalWindowHours: true,
+                    }));
+                    setOpsFieldErrors((p) => {
+                      const next = { ...p };
+                      delete next.paymentReversalWindowHours;
+                      return next;
+                    });
                     setOpsForm({
                       ...opsForm,
                       paymentReversalWindowHours: Number(e.target.value),
-                    })
-                  }
+                    });
+                  }}
+                  className={cn(
+                    opsDisplayError("paymentReversalWindowHours") &&
+                      "border-red-600",
+                  )}
+                  aria-invalid={Boolean(
+                    opsDisplayError("paymentReversalWindowHours"),
+                  )}
+                />
+                <FormFieldError
+                  message={opsDisplayError("paymentReversalWindowHours")}
                 />
               </div>
               <div>
                 <FieldLabel>Weight rounding mode</FieldLabel>
                 <Input
                   value={opsForm.weightRoundingMode}
-                  onChange={(e) =>
+                  onChange={(e) => {
+                    setOpsTouched((p) => ({
+                      ...p,
+                      weightRoundingMode: true,
+                    }));
+                    setOpsFieldErrors((p) => {
+                      const next = { ...p };
+                      delete next.weightRoundingMode;
+                      return next;
+                    });
                     setOpsForm({
                       ...opsForm,
                       weightRoundingMode: e.target.value,
-                    })
-                  }
+                    });
+                  }}
+                  className={cn(
+                    opsDisplayError("weightRoundingMode") && "border-red-600",
+                  )}
+                  aria-invalid={Boolean(
+                    opsDisplayError("weightRoundingMode"),
+                  )}
+                />
+                <FormFieldError
+                  message={opsDisplayError("weightRoundingMode")}
                 />
               </div>
               <div className="md:col-span-2">
@@ -939,12 +1397,30 @@ export function SettingsPage({
                 <Textarea
                   rows={4}
                   value={opsForm.termsAndConditions}
-                  onChange={(e) =>
+                  onChange={(e) => {
+                    setOpsTouched((p) => ({
+                      ...p,
+                      termsAndConditions: true,
+                    }));
+                    setOpsFieldErrors((p) => {
+                      const next = { ...p };
+                      delete next.termsAndConditions;
+                      return next;
+                    });
                     setOpsForm({
                       ...opsForm,
                       termsAndConditions: e.target.value,
-                    })
-                  }
+                    });
+                  }}
+                  className={cn(
+                    opsDisplayError("termsAndConditions") && "border-red-600",
+                  )}
+                  aria-invalid={Boolean(
+                    opsDisplayError("termsAndConditions"),
+                  )}
+                />
+                <FormFieldError
+                  message={opsDisplayError("termsAndConditions")}
                 />
                 <p className="mt-2 text-xs text-muted-foreground">
                   Sequence formats lock after the first document of that type is
@@ -955,17 +1431,42 @@ export function SettingsPage({
             <div className="flex justify-end border-t border-[#eaded9] px-6 py-4">
               <PermissionGate permission={ACTION.tenantSettingsWrite}>
                 <Button
+                  disabled={!settingsOperationsFormReady(opsForm)}
                   onClick={async () => {
-                    await patchOperations({
-                      ...opsForm,
-                      kycAllowedTypes:
-                        operationsQuery.data?.kycAllowedTypes ?? [
-                          "AADHAAR",
-                          "PAN",
-                        ],
-                      expectedVersion: operationsQuery.data?.audit?.version,
-                    }).unwrap();
-                    toast.success("Operations saved");
+                    setOpsTouched({
+                      receiptPrefix: true,
+                      receiptNumberFormat: true,
+                      passbookNumberFormat: true,
+                      schemeNumberFormat: true,
+                      goldPurity: true,
+                      weightRoundingMode: true,
+                      paymentReversalWindowHours: true,
+                      termsAndConditions: true,
+                    });
+                    const clientErrors = validateSettingsOperationsForm(opsForm);
+                    if (Object.keys(clientErrors).length) {
+                      setOpsFieldErrors(clientErrors);
+                      toast.error("Fix the highlighted fields.");
+                      return;
+                    }
+                    try {
+                      await patchOperations({
+                        ...opsForm,
+                        kycAllowedTypes:
+                          operationsQuery.data?.kycAllowedTypes ?? [
+                            "AADHAAR",
+                            "PAN",
+                          ],
+                        expectedVersion: operationsQuery.data?.audit?.version,
+                      }).unwrap();
+                      toast.success("Operations saved");
+                      setOpsFieldErrors({});
+                    } catch (err) {
+                      handleFormApiError(err, {
+                        setFieldErrors: setOpsFieldErrors,
+                        fallback: "Could not save operations",
+                      });
+                    }
                   }}
                 >
                   <Save />
@@ -1147,17 +1648,33 @@ export function SettingsPage({
                           title={`Upgrade to ${plan.name}`}
                           description="Creates a request for the platform team. Plan change is not self-serve in V1."
                           actionLabel="Submit request"
+                          submitDisabled={Boolean(planNoteError)}
                           onOpenChange={(open) => {
-                            if (open) setPlanRequestNote("");
+                            if (open) {
+                              setPlanRequestNote("");
+                              setPlanNoteTouched(false);
+                            }
                           }}
                           onSubmit={async () => {
-                            await requestUpgrade({
-                              targetTier: plan.tier,
-                              billingCycle: "MONTHLY",
-                              note: planRequestNote || undefined,
-                            }).unwrap();
-                            toast.success("Upgrade request submitted");
-                            subscriptionQuery.refetch();
+                            setPlanNoteTouched(true);
+                            const noteErr =
+                              validatePlanRequestNote(planRequestNote);
+                            if (noteErr) {
+                              toast.error(noteErr);
+                              return false;
+                            }
+                            try {
+                              await requestUpgrade({
+                                targetTier: plan.tier,
+                                billingCycle: "MONTHLY",
+                                note: planRequestNote.trim() || undefined,
+                              }).unwrap();
+                              toast.success("Upgrade request submitted");
+                              subscriptionQuery.refetch();
+                            } catch (err) {
+                              toastApiError(err, "Could not submit request");
+                              return false;
+                            }
                           }}
                         >
                           <div>
@@ -1165,11 +1682,15 @@ export function SettingsPage({
                             <Textarea
                               rows={3}
                               value={planRequestNote}
-                              onChange={(e) =>
-                                setPlanRequestNote(e.target.value)
-                              }
+                              onChange={(e) => {
+                                setPlanNoteTouched(true);
+                                setPlanRequestNote(e.target.value);
+                              }}
                               placeholder="Need 5 showrooms before Diwali"
+                              className={cn(planNoteError && "border-red-600")}
+                              aria-invalid={Boolean(planNoteError)}
                             />
+                            <FormFieldError message={planNoteError} />
                           </div>
                         </ActionDialog>
                       ) : plan.blockedReasons?.length ? (
@@ -1190,17 +1711,33 @@ export function SettingsPage({
                           title={`Downgrade to ${plan.name}`}
                           description="Creates a request for the platform team. Your plan will not change until it is approved."
                           actionLabel="Submit request"
+                          submitDisabled={Boolean(planNoteError)}
                           onOpenChange={(open) => {
-                            if (open) setPlanRequestNote("");
+                            if (open) {
+                              setPlanRequestNote("");
+                              setPlanNoteTouched(false);
+                            }
                           }}
                           onSubmit={async () => {
-                            await requestUpgrade({
-                              targetTier: plan.tier,
-                              billingCycle: "MONTHLY",
-                              note: planRequestNote || undefined,
-                            }).unwrap();
-                            toast.success("Downgrade request submitted");
-                            subscriptionQuery.refetch();
+                            setPlanNoteTouched(true);
+                            const noteErr =
+                              validatePlanRequestNote(planRequestNote);
+                            if (noteErr) {
+                              toast.error(noteErr);
+                              return false;
+                            }
+                            try {
+                              await requestUpgrade({
+                                targetTier: plan.tier,
+                                billingCycle: "MONTHLY",
+                                note: planRequestNote.trim() || undefined,
+                              }).unwrap();
+                              toast.success("Downgrade request submitted");
+                              subscriptionQuery.refetch();
+                            } catch (err) {
+                              toastApiError(err, "Could not submit request");
+                              return false;
+                            }
                           }}
                         >
                           <div>
@@ -1208,11 +1745,15 @@ export function SettingsPage({
                             <Textarea
                               rows={3}
                               value={planRequestNote}
-                              onChange={(e) =>
-                                setPlanRequestNote(e.target.value)
-                              }
+                              onChange={(e) => {
+                                setPlanNoteTouched(true);
+                                setPlanRequestNote(e.target.value);
+                              }}
                               placeholder="Reason for moving to a lower tier"
+                              className={cn(planNoteError && "border-red-600")}
+                              aria-invalid={Boolean(planNoteError)}
                             />
+                            <FormFieldError message={planNoteError} />
                           </div>
                         </ActionDialog>
                       )}

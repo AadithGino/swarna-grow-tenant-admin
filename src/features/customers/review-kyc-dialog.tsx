@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { FileImage, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -23,8 +23,21 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { FormFieldError } from "@/src/components/common/form-field-error";
 import { FieldLabel } from "@/src/components/common/page-parts";
 import { StatusBadge } from "@/src/components/common/status-badge";
+import { toastApiError } from "@/src/lib/api-error";
+import {
+  KYC_REJECT_REMARKS_MAX,
+  kycRejectRemarksReady,
+  kycSubmitReadyForSubmit,
+  liveKycRejectRemarksError,
+  liveKycSubmitFieldErrors,
+  sanitizePanInput,
+  validateKycRejectRemarks,
+  validateKycSubmit,
+  type KycSubmitFormState,
+} from "@/src/lib/kyc-form";
 import type { Customer } from "@/src/types/domain";
 import {
   usePresignUploadMutation,
@@ -33,6 +46,13 @@ import {
 } from "@/src/store/api/admin-api";
 import { uploadFileViaPresign } from "@/src/lib/upload-via-presign";
 import { cn } from "@/lib/utils";
+
+function mergeMessage(
+  apiOrSubmit: string | undefined,
+  live: string | undefined,
+): string | undefined {
+  return apiOrSubmit ?? live;
+}
 
 export function ReviewKycDialog({
   customer,
@@ -55,6 +75,11 @@ export function ReviewKycDialog({
   const [backUploadId, setBackUploadId] = useState<string | null>(null);
   const [panUploadId, setPanUploadId] = useState<string | null>(null);
   const [uploadBusy, setUploadBusy] = useState(false);
+  const [submitFieldErrors, setSubmitFieldErrors] = useState<
+    Record<string, string>
+  >({});
+  const [submitAttempted, setSubmitAttempted] = useState(false);
+  const [rejectFieldError, setRejectFieldError] = useState<string | undefined>();
   const frontRef = useRef<HTMLInputElement>(null);
   const backRef = useRef<HTMLInputElement>(null);
   const panRef = useRef<HTMLInputElement>(null);
@@ -66,6 +91,9 @@ export function ReviewKycDialog({
     setFrontUploadId(null);
     setBackUploadId(null);
     setPanUploadId(null);
+    setSubmitFieldErrors({});
+    setSubmitAttempted(false);
+    setRejectFieldError(undefined);
   }, [open, customer.id]);
 
   const busy = verifyState.isLoading || submitState.isLoading || uploadBusy;
@@ -74,6 +102,41 @@ export function ReviewKycDialog({
   const isRejected = status === "REJECTED";
   const showUpload =
     !isVerified && (status === "NOT_SUBMITTED" || isRejected);
+
+  const submitFormState: KycSubmitFormState = useMemo(
+    () => ({
+      type: uploadType,
+      panNumber,
+      frontUploadId,
+      backUploadId,
+      panUploadId,
+    }),
+    [uploadType, panNumber, frontUploadId, backUploadId, panUploadId],
+  );
+
+  const liveSubmitErrors = useMemo(
+    () => liveKycSubmitFieldErrors(submitFormState),
+    [submitFormState],
+  );
+
+  const submitValidation = useMemo(
+    () => validateKycSubmit(submitFormState),
+    [submitFormState],
+  );
+
+  const displaySubmitError = (field: string) => {
+    const fromValidate = submitAttempted ? submitValidation[field] : undefined;
+    return mergeMessage(
+      submitFieldErrors[field],
+      fromValidate ?? liveSubmitErrors[field],
+    );
+  };
+
+  const rejectLiveError = liveKycRejectRemarksError(rejectRemarks);
+  const displayRejectError = rejectFieldError ?? rejectLiveError;
+
+  const submitReady = kycSubmitReadyForSubmit(submitFormState);
+  const rejectReady = kycRejectRemarksReady(rejectRemarks);
 
   async function handleUpload(
     file: File,
@@ -86,9 +149,30 @@ export function ReviewKycDialog({
         (input) => presignUpload(input).unwrap(),
         "KYC_DOCUMENT",
       );
-      if (target === "front") setFrontUploadId(uploadId);
-      if (target === "back") setBackUploadId(uploadId);
-      if (target === "pan") setPanUploadId(uploadId);
+      if (target === "front") {
+        setFrontUploadId(uploadId);
+        setSubmitFieldErrors((prev) => {
+          const next = { ...prev };
+          delete next.front;
+          return next;
+        });
+      }
+      if (target === "back") {
+        setBackUploadId(uploadId);
+        setSubmitFieldErrors((prev) => {
+          const next = { ...prev };
+          delete next.back;
+          return next;
+        });
+      }
+      if (target === "pan") {
+        setPanUploadId(uploadId);
+        setSubmitFieldErrors((prev) => {
+          const next = { ...prev };
+          delete next.panUpload;
+          return next;
+        });
+      }
       toast.success("Document uploaded");
     } catch {
       toast.error("Upload failed");
@@ -142,9 +226,11 @@ export function ReviewKycDialog({
                     <FieldLabel>Document type</FieldLabel>
                     <Select
                       value={uploadType}
-                      onValueChange={(v) =>
-                        setUploadType(v as "AADHAAR" | "PAN")
-                      }
+                      onValueChange={(v) => {
+                        setUploadType(v as "AADHAAR" | "PAN");
+                        setSubmitFieldErrors({});
+                        setSubmitAttempted(false);
+                      }}
                     >
                       <SelectTrigger className="w-full">
                         <SelectValue />
@@ -160,11 +246,22 @@ export function ReviewKycDialog({
                       <FieldLabel>PAN number</FieldLabel>
                       <Input
                         value={panNumber}
-                        onChange={(e) =>
-                          setPanNumber(e.target.value.toUpperCase())
-                        }
+                        onChange={(e) => {
+                          setPanNumber(sanitizePanInput(e.target.value));
+                          setSubmitFieldErrors((prev) => {
+                            const next = { ...prev };
+                            delete next.panNumber;
+                            return next;
+                          });
+                        }}
                         placeholder="ABCDE1234F"
+                        maxLength={10}
+                        className={cn(
+                          displaySubmitError("panNumber") && "border-red-600",
+                        )}
+                        aria-invalid={Boolean(displaySubmitError("panNumber"))}
                       />
+                      <FormFieldError message={displaySubmitError("panNumber")} />
                     </div>
                   ) : null}
                 </div>
@@ -175,32 +272,39 @@ export function ReviewKycDialog({
                         ["front", frontUploadId, frontRef],
                         ["back", backUploadId, backRef],
                       ] as const
-                    ).map(([side, uploadId, ref]) => (
-                      <div key={side}>
-                        <input
-                          ref={ref}
-                          type="file"
-                          accept="image/*,application/pdf"
-                          className="hidden"
-                          onChange={(e) => {
-                            const file = e.target.files?.[0];
-                            e.target.value = "";
-                            if (file) void handleUpload(file, side);
-                          }}
-                        />
-                        <button
-                          type="button"
-                          disabled={busy}
-                          onClick={() => ref.current?.click()}
-                          className="flex min-h-32 w-full flex-col items-center justify-center gap-2 rounded-xl border border-dashed p-4 text-sm hover:border-[#730321]"
-                        >
-                          <FileImage className="size-8 text-[#730321]" />
-                          {uploadId
-                            ? `Aadhaar ${side} uploaded`
-                            : `Upload ${side}`}
-                        </button>
-                      </div>
-                    ))}
+                    ).map(([side, uploadId, ref]) => {
+                      const err = displaySubmitError(side);
+                      return (
+                        <div key={side}>
+                          <input
+                            ref={ref}
+                            type="file"
+                            accept="image/*,application/pdf"
+                            className="hidden"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              e.target.value = "";
+                              if (file) void handleUpload(file, side);
+                            }}
+                          />
+                          <button
+                            type="button"
+                            disabled={busy}
+                            onClick={() => ref.current?.click()}
+                            className={cn(
+                              "flex min-h-32 w-full flex-col items-center justify-center gap-2 rounded-xl border border-dashed p-4 text-sm hover:border-[#730321]",
+                              err && "border-red-600 bg-red-50/50",
+                            )}
+                          >
+                            <FileImage className="size-8 text-[#730321]" />
+                            {uploadId
+                              ? `Aadhaar ${side} uploaded`
+                              : `Upload ${side}`}
+                          </button>
+                          <FormFieldError message={err} />
+                        </div>
+                      );
+                    })}
                   </div>
                 ) : (
                   <div>
@@ -219,45 +323,46 @@ export function ReviewKycDialog({
                       type="button"
                       disabled={busy}
                       onClick={() => panRef.current?.click()}
-                      className="flex min-h-32 w-full flex-col items-center justify-center gap-2 rounded-xl border border-dashed p-4 text-sm hover:border-[#730321]"
+                      className={cn(
+                        "flex min-h-32 w-full flex-col items-center justify-center gap-2 rounded-xl border border-dashed p-4 text-sm hover:border-[#730321]",
+                        displaySubmitError("panUpload") &&
+                          "border-red-600 bg-red-50/50",
+                      )}
                     >
                       <FileImage className="size-8 text-[#730321]" />
                       {panUploadId ? "PAN image uploaded" : "Upload PAN card"}
                     </button>
+                    <FormFieldError message={displaySubmitError("panUpload")} />
                   </div>
                 )}
                 <Button
-                  disabled={busy}
+                  disabled={busy || !submitReady}
                   onClick={async () => {
-                    if (
-                      uploadType === "AADHAAR" &&
-                      (!frontUploadId || !backUploadId)
-                    ) {
-                      toast.error("Upload both sides of Aadhaar");
+                    setSubmitAttempted(true);
+                    const clientErrors = validateKycSubmit(submitFormState);
+                    if (Object.keys(clientErrors).length) {
+                      setSubmitFieldErrors(clientErrors);
+                      toast.error("Fix the highlighted fields.");
                       return;
                     }
-                    if (uploadType === "PAN" && !panNumber.trim()) {
-                      toast.error("Enter PAN number");
-                      return;
+                    try {
+                      await submitKycMutation({
+                        id: customer.id,
+                        type: uploadType,
+                        number: uploadType === "PAN" ? panNumber.trim() : undefined,
+                        frontUploadId:
+                          uploadType === "AADHAAR"
+                            ? (frontUploadId ?? undefined)
+                            : (panUploadId ?? undefined),
+                        backUploadId:
+                          uploadType === "AADHAAR"
+                            ? (backUploadId ?? undefined)
+                            : undefined,
+                      }).unwrap();
+                      toast.success("KYC submitted for review");
+                    } catch (err) {
+                      toastApiError(err, "Could not submit KYC");
                     }
-                    if (uploadType === "PAN" && !panUploadId) {
-                      toast.error("Upload PAN image");
-                      return;
-                    }
-                    await submitKycMutation({
-                      id: customer.id,
-                      type: uploadType,
-                      number: uploadType === "PAN" ? panNumber : undefined,
-                      frontUploadId:
-                        uploadType === "AADHAAR"
-                          ? (frontUploadId ?? undefined)
-                          : (panUploadId ?? undefined),
-                      backUploadId:
-                        uploadType === "AADHAAR"
-                          ? (backUploadId ?? undefined)
-                          : undefined,
-                    }).unwrap();
-                    toast.success("KYC submitted for review");
                   }}
                 >
                   {busy && <Loader2 className="animate-spin" />}
@@ -299,10 +404,17 @@ export function ReviewKycDialog({
                 <FieldLabel>Rejection remarks (required if rejecting)</FieldLabel>
                 <Textarea
                   value={rejectRemarks}
-                  onChange={(e) => setRejectRemarks(e.target.value)}
+                  onChange={(e) => {
+                    setRejectRemarks(e.target.value);
+                    setRejectFieldError(undefined);
+                  }}
                   placeholder="Explain what is wrong with the document"
                   rows={3}
+                  maxLength={KYC_REJECT_REMARKS_MAX}
+                  className={cn(displayRejectError && "border-red-600")}
+                  aria-invalid={Boolean(displayRejectError)}
                 />
+                <FormFieldError message={displayRejectError} />
               </div>
             ) : null}
 
@@ -324,19 +436,25 @@ export function ReviewKycDialog({
               <Button
                 variant="outline"
                 className="text-red-600"
-                disabled={busy}
+                disabled={busy || !rejectReady}
                 onClick={async () => {
-                  if (!rejectRemarks.trim()) {
-                    toast.error("Rejection remarks are required");
+                  const err = validateKycRejectRemarks(rejectRemarks);
+                  if (err) {
+                    setRejectFieldError(err);
+                    toast.error("Fix the highlighted fields.");
                     return;
                   }
-                  await verifyKyc({
-                    id: customer.id,
-                    decision: "REJECTED",
-                    remarks: rejectRemarks,
-                  }).unwrap();
-                  toast.success("KYC rejected");
-                  onOpenChange(false);
+                  try {
+                    await verifyKyc({
+                      id: customer.id,
+                      decision: "REJECTED",
+                      remarks: rejectRemarks.trim(),
+                    }).unwrap();
+                    toast.success("KYC rejected");
+                    onOpenChange(false);
+                  } catch (e) {
+                    toastApiError(e, "Could not reject KYC");
+                  }
                 }}
               >
                 Reject
@@ -344,12 +462,16 @@ export function ReviewKycDialog({
               <Button
                 disabled={busy}
                 onClick={async () => {
-                  await verifyKyc({
-                    id: customer.id,
-                    decision: "VERIFIED",
-                  }).unwrap();
-                  toast.success("KYC verified");
-                  onOpenChange(false);
+                  try {
+                    await verifyKyc({
+                      id: customer.id,
+                      decision: "VERIFIED",
+                    }).unwrap();
+                    toast.success("KYC verified");
+                    onOpenChange(false);
+                  } catch (e) {
+                    toastApiError(e, "Could not verify KYC");
+                  }
                 }}
               >
                 {busy && <Loader2 className="animate-spin" />}

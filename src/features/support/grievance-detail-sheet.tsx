@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { cn } from "@/lib/utils";
 import Link from "next/link";
 import { MessageSquareReply } from "lucide-react";
 import { toast } from "sonner";
@@ -21,7 +22,15 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { Textarea } from "@/components/ui/textarea";
+import { FormFieldError } from "@/src/components/common/form-field-error";
 import { PageSkeleton, QueryError } from "@/src/components/common/query-state";
+import { toastApiError } from "@/src/lib/api-error";
+import { handleFormApiError } from "@/src/lib/form-api-error";
+import {
+  grievanceMessageBodyReady,
+  liveGrievanceMessageBodyError,
+  validateGrievanceMessageBody,
+} from "@/src/lib/grievance-form-validation";
 import { StatusBadge } from "@/src/components/common/status-badge";
 import { portalPathFromContract } from "@/src/lib/contract-paths";
 import {
@@ -56,16 +65,50 @@ export function GrievanceDetailSheet({
   const [messageMode, setMessageMode] = useState<"PUBLIC_REPLY" | "INTERNAL_NOTE">(
     "PUBLIC_REPLY",
   );
+  const [replyTouched, setReplyTouched] = useState(false);
+  const [noteTouched, setNoteTouched] = useState(false);
+  const [messageFieldErrors, setMessageFieldErrors] = useState<
+    Record<string, string>
+  >({});
+
+  const replyError = useMemo(() => {
+    if (!replyTouched && !reply.trim()) return undefined;
+    return liveGrievanceMessageBodyError(reply);
+  }, [reply, replyTouched]);
+
+  const noteError = useMemo(() => {
+    if (!noteTouched && !note.trim()) return undefined;
+    return liveGrievanceMessageBodyError(note);
+  }, [note, noteTouched]);
+
+  const activeComposeError =
+    messageMode === "INTERNAL_NOTE" ? noteError : replyError;
 
   const open = Boolean(grievanceId);
 
+  function resetComposeState() {
+    setReply("");
+    setNote("");
+    setReplyTouched(false);
+    setNoteTouched(false);
+    setMessageFieldErrors({});
+  }
+
   return (
-    <Sheet open={open} onOpenChange={(v) => !v && onClose()}>
+    <Sheet
+      open={open}
+      onOpenChange={(v) => {
+        if (!v) {
+          resetComposeState();
+          onClose();
+        }
+      }}
+    >
       <SheetContent className="w-full overflow-y-auto sm:max-w-xl">
         {!grievanceId ? null : detailQuery.isLoading ? (
           <PageSkeleton />
         ) : detailQuery.isError || !detailQuery.data ? (
-          <QueryError onRetry={detailQuery.refetch} />
+          <QueryError error={detailQuery.error} onRetry={detailQuery.refetch} />
         ) : (
           <>
             <SheetHeader>
@@ -201,17 +244,35 @@ export function GrievanceDetailSheet({
                 <Textarea
                   rows={4}
                   value={messageMode === "INTERNAL_NOTE" ? note : reply}
-                  onChange={(e) =>
-                    messageMode === "INTERNAL_NOTE"
-                      ? setNote(e.target.value)
-                      : setReply(e.target.value)
-                  }
+                  onChange={(e) => {
+                    setMessageFieldErrors({});
+                    if (messageMode === "INTERNAL_NOTE") {
+                      setNoteTouched(true);
+                      setNote(e.target.value);
+                    } else {
+                      setReplyTouched(true);
+                      setReply(e.target.value);
+                    }
+                  }}
                   placeholder={
                     messageMode === "INTERNAL_NOTE"
                       ? "Team-only note…"
                       : "Write a clear response…"
                   }
+                  className={cn(
+                    activeComposeError && "border-red-600",
+                  )}
+                  aria-invalid={Boolean(activeComposeError)}
                 />
+                <FormFieldError
+                  message={
+                    messageFieldErrors.body ??
+                    activeComposeError
+                  }
+                />
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Up to 4,000 characters per message.
+                </p>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <Button
@@ -229,50 +290,80 @@ export function GrievanceDetailSheet({
                 </Button>
                 <Button
                   variant="outline"
+                  disabled={
+                    messageMode === "INTERNAL_NOTE"
+                      ? !grievanceMessageBodyReady(note)
+                      : !grievanceMessageBodyReady(reply)
+                  }
                   onClick={async () => {
-                    const body =
-                      messageMode === "INTERNAL_NOTE" ? note.trim() : reply.trim();
-                    if (!body) {
-                      toast.error("Enter a message");
+                    const raw =
+                      messageMode === "INTERNAL_NOTE" ? note : reply;
+                    if (messageMode === "INTERNAL_NOTE") setNoteTouched(true);
+                    else setReplyTouched(true);
+                    const bodyErr = validateGrievanceMessageBody(raw);
+                    if (bodyErr) {
+                      setMessageFieldErrors({ body: bodyErr });
+                      toast.error(bodyErr);
                       return;
                     }
-                    await postMessage({
-                      id: detailQuery.data!.id,
-                      messageType: messageMode,
-                      body,
-                      expectedVersion: detailQuery.data!.version,
-                    }).unwrap();
-                    if (messageMode === "INTERNAL_NOTE") setNote("");
-                    else setReply("");
-                    toast.success("Message posted");
+                    const body = raw.trim();
+                    try {
+                      await postMessage({
+                        id: detailQuery.data!.id,
+                        messageType: messageMode,
+                        body,
+                        expectedVersion: detailQuery.data!.version,
+                      }).unwrap();
+                      if (messageMode === "INTERNAL_NOTE") setNote("");
+                      else setReply("");
+                      setMessageFieldErrors({});
+                      toast.success("Message posted");
+                      await detailQuery.refetch();
+                    } catch (err) {
+                      handleFormApiError(err, {
+                        setFieldErrors: setMessageFieldErrors,
+                        fallback: "Could not post message",
+                      });
+                    }
                   }}
                 >
                   Post message
                 </Button>
                 <Button
                   className="col-span-2"
+                  disabled={!grievanceMessageBodyReady(reply)}
                   onClick={async () => {
-                    const body = reply.trim();
-                    if (!body) {
-                      toast.error("Enter a reply before resolving");
+                    setReplyTouched(true);
+                    const bodyErr = validateGrievanceMessageBody(reply);
+                    if (bodyErr) {
+                      setMessageFieldErrors({ body: bodyErr });
+                      toast.error(bodyErr);
                       return;
                     }
-                    await postMessage({
-                      id: detailQuery.data!.id,
-                      messageType: "PUBLIC_REPLY",
-                      body,
-                      expectedVersion: detailQuery.data!.version,
-                    }).unwrap();
-                    await updateStatus({
-                      id: detailQuery.data!.id,
-                      status: "RESOLVED",
-                      resolutionCode,
-                      resolutionSummary: body,
-                      expectedVersion: detailQuery.data!.version + 1,
-                    }).unwrap();
-                    toast.success("Reply sent and request resolved");
-                    setReply("");
-                    onClose();
+                    const body = reply.trim();
+                    try {
+                      await postMessage({
+                        id: detailQuery.data!.id,
+                        messageType: "PUBLIC_REPLY",
+                        body,
+                        expectedVersion: detailQuery.data!.version,
+                      }).unwrap();
+                      await updateStatus({
+                        id: detailQuery.data!.id,
+                        status: "RESOLVED",
+                        resolutionCode,
+                        resolutionSummary: body,
+                        expectedVersion: detailQuery.data!.version + 1,
+                      }).unwrap();
+                      toast.success("Reply sent and request resolved");
+                      resetComposeState();
+                      onClose();
+                    } catch (err) {
+                      handleFormApiError(err, {
+                        setFieldErrors: setMessageFieldErrors,
+                        fallback: "Could not resolve grievance",
+                      });
+                    }
                   }}
                 >
                   <MessageSquareReply />

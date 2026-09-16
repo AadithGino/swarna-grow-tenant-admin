@@ -81,6 +81,7 @@ export function EnrollmentDetailPage({ id }: { id: string }) {
       <QueryError
         onRetry={query.refetch}
         title="Enrollment could not be loaded"
+        error={query.error}
       />
     );
   const row = query.data;

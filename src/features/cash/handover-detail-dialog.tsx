@@ -52,7 +52,7 @@ export function HandoverDetailDialog({
         )}
         {query.isError && (
           <DialogBody className="p-6">
-            <QueryError onRetry={query.refetch} />
+            <QueryError error={query.error} onRetry={query.refetch} />
           </DialogBody>
         )}
         {d && (

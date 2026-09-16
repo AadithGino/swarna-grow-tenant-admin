@@ -15,6 +15,8 @@ import {
   dialogScrollShellClass,
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
+import { ApiErrorCallout } from "@/src/components/common/api-error-callout";
+import { parseApiError, toastApiError } from "@/src/lib/api-error";
 
 export function ActionDialog({
   trigger,
@@ -27,6 +29,8 @@ export function ActionDialog({
   onOpenChange,
   submitDisabled,
   className,
+  onError,
+  suppressDefaultErrorToast,
 }: {
   trigger?: React.ReactNode;
   title: string;
@@ -38,14 +42,20 @@ export function ActionDialog({
   onOpenChange?: (open: boolean) => void;
   submitDisabled?: boolean;
   className?: string;
+  /** When set, called on submit failure; dialog stays open. */
+  onError?: (err: unknown) => void;
+  /** Skip default toast when `onError` handles messaging. */
+  suppressDefaultErrorToast?: boolean;
 }) {
   const [internalOpen, setInternalOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [submitError, setSubmitError] = useState<unknown>(null);
   const isControlled = controlledOpen !== undefined;
   const open = isControlled ? controlledOpen : internalOpen;
   const setOpen = (next: boolean) => {
     if (!isControlled) setInternalOpen(next);
     onOpenChange?.(next);
+    if (!next) setSubmitError(null);
   };
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -62,7 +72,13 @@ export function ActionDialog({
               </DialogDescription>
             )}
           </DialogHeader>
-          <div className="py-4">{children}</div>
+          <div className="py-4">
+            {children}
+            {submitError &&
+            Object.keys(parseApiError(submitError).fieldErrors).length === 0 ? (
+              <ApiErrorCallout error={submitError} className="mt-4" />
+            ) : null}
+          </div>
         </DialogBody>
         <DialogFooter>
           <Button
@@ -77,9 +93,17 @@ export function ActionDialog({
             disabled={busy || submitDisabled}
             onClick={async () => {
               setBusy(true);
+              setSubmitError(null);
               try {
                 const keepOpen = await onSubmit();
                 if (keepOpen !== false) setOpen(false);
+              } catch (err) {
+                setSubmitError(err);
+                if (onError) {
+                  onError(err);
+                } else if (!suppressDefaultErrorToast) {
+                  toastApiError(err);
+                }
               } finally {
                 setBusy(false);
               }

@@ -14,6 +14,7 @@ import {
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { toastApiError } from "@/src/lib/api-error";
+import { validatePaymentLinkAmount } from "@/src/lib/payment-form-validation";
 import { Button } from "@/components/ui/button";
 import {
   WorkboardDateRangeFilter,
@@ -31,7 +32,11 @@ import {
   StatCard,
   Surface,
 } from "@/src/components/common/page-parts";
-import { PageSkeleton, QueryError } from "@/src/components/common/query-state";
+import {
+  EmptyState,
+  PageSkeleton,
+  QueryError,
+} from "@/src/components/common/query-state";
 import { StatusBadge } from "@/src/components/common/status-badge";
 import { ChartSeriesView } from "@/src/components/common/chart-series-view";
 import {
@@ -45,14 +50,17 @@ import { emptyPageMeta } from "@/src/lib/cursor-pagination";
 import {
   defaultListRangeFrom,
   defaultListRangeTo,
+  listSearchQueryForApi,
+  shouldSkipListSearchQuery,
 } from "@/src/lib/list-date-range";
+import { FormFieldError } from "@/src/components/common/form-field-error";
+import { useValidatedListDateRange } from "@/src/hooks/use-validated-list-date-range";
 import {
   useActingBranchId,
   useActingBranchKey,
 } from "@/src/hooks/use-acting-branch-id";
 import { useCursorPagination } from "@/src/hooks/use-cursor-pagination";
 import { useDebouncedValue } from "@/src/hooks/use-debounced-value";
-import { useThrottledValue } from "@/src/hooks/use-throttled-value";
 import {
   PageTab,
   PageTabs,
@@ -63,6 +71,7 @@ import {
   useBulkSendDueLinksMutation,
   useBulkSendOverdueRemindersMutation,
   useCreatePaymentLinkMutation,
+  useGetDefaultersQuery,
   useGetDuesQuery,
   useGetOverduesQuery,
 } from "@/src/store/api/admin-api";
@@ -78,7 +87,9 @@ const DUE_KIND_FILTERS: FilterOption[] = [
 
 export function DuesPage() {
   const router = useRouter();
-  const [board, setBoard] = useState<"dues" | "overdues">("dues");
+  const [board, setBoard] = useState<"dues" | "overdues" | "defaulters">(
+    "dues",
+  );
   const [rangeMode, setRangeMode] = useState<WorkboardDatePreset>("CUSTOM");
   const preset = rangeMode === "CUSTOM" ? undefined : rangeMode;
   const [kind, setKind] = useState("ALL");
@@ -88,19 +99,17 @@ export function DuesPage() {
   const [createPaymentLink] = useCreatePaymentLinkMutation();
   const [q, setQ] = useState("");
   const debouncedQ = useDebouncedValue(q, 350);
-  const [from, setFrom] = useState(() => defaultListRangeFrom());
-  const [to, setTo] = useState(() => defaultListRangeTo());
-  const throttledFrom = useThrottledValue(from, 400);
-  const throttledTo = useThrottledValue(to, 400);
+  const { from, setFrom, to, setTo, dateRangeError, skipForBadDates } =
+    useValidatedListDateRange();
   const branchId = useActingBranchId();
   const branchKey = useActingBranchKey();
   const pager = useCursorPagination(
     8,
-    `${board}|${kind}|${rangeMode}|${debouncedQ}|${throttledFrom}|${throttledTo}|${branchKey}`,
+    `${board}|${kind}|${rangeMode}|${debouncedQ}|${from}|${to}|${branchKey}`,
   );
   const listQueryParams = useMemo(() => {
     const base = {
-      q: debouncedQ || undefined,
+      q: listSearchQueryForApi(debouncedQ),
       branchId,
       ...pager.queryParams,
     };
@@ -110,8 +119,8 @@ export function DuesPage() {
     return {
       ...base,
       kind,
-      from: throttledFrom,
-      to: throttledTo,
+      from,
+      to,
     };
   }, [
     branchId,
@@ -119,8 +128,8 @@ export function DuesPage() {
     kind,
     pager.queryParams,
     preset,
-    throttledFrom,
-    throttledTo,
+    from,
+    to,
   ]);
 
   const overduesListParams = useMemo(() => {
@@ -128,20 +137,83 @@ export function DuesPage() {
     return rest;
   }, [listQueryParams]);
 
+  const skipForSearch = shouldSkipListSearchQuery(debouncedQ);
+  const skipList = skipForSearch || (rangeMode === "CUSTOM" && skipForBadDates);
+  const defaultersQuery = useGetDefaultersQuery(
+    {
+      q: listSearchQueryForApi(debouncedQ),
+      branchId,
+      ...pager.queryParams,
+    },
+    { skip: board !== "defaulters" || skipForSearch },
+  );
   const duesQuery = useGetDuesQuery(listQueryParams, {
-    skip: board === "overdues",
+    skip: board !== "dues" || skipList,
   });
   const overduesQuery = useGetOverduesQuery(overduesListParams, {
-    skip: board === "dues",
+    skip: board !== "overdues" || skipList,
   });
-  const query = board === "overdues" ? overduesQuery : duesQuery;
+  const query =
+    board === "overdues"
+      ? overduesQuery
+      : board === "defaulters"
+        ? defaultersQuery
+        : duesQuery;
   const [bulkReminders] = useBulkSendOverdueRemindersMutation();
   const [bulkLinks] = useBulkSendDueLinksMutation();
+  const invalidCustomRange = rangeMode === "CUSTOM" && skipForBadDates;
+  if (invalidCustomRange) {
+    return (
+      <>
+        <PageHeader
+          eyebrow="Customer operations"
+          title="Dues & overdue"
+          description="Work through current dues, grace-period accounts, overdue cycles and default risk."
+        />
+        <Surface title="Invalid period">
+          <EmptyState title="Fix the date range" detail={dateRangeError ?? ""} />
+        </Surface>
+      </>
+    );
+  }
   if (query.isLoading) return <PageSkeleton />;
   if (query.isError || !query.data)
-    return <QueryError onRetry={query.refetch} />;
-  const rows = query.data.items;
+    return <QueryError error={query.error} onRetry={query.refetch} />;
   const s = query.data.summary ?? {};
+  const rows =
+    board === "defaulters"
+      ? query.data.items.map((r: Record<string, unknown>) => ({
+          id: String(r.id ?? r._id ?? ""),
+          schemeId: String(r.id ?? r._id ?? ""),
+          customerId: String(
+            r.customerId ??
+              (r.customer as { id?: string })?.id ??
+              "",
+          ),
+          customer:
+            typeof r.customer === "string"
+              ? r.customer
+              : ((r.customer as { name?: string })?.name ?? "—"),
+          phone:
+            (r.customer as { mobile?: string })?.mobile ??
+            String(r.phone ?? "—"),
+          enrollmentNo: String(
+            r.enrollmentNumber ?? r.enrollmentNo ?? "—",
+          ),
+          plan:
+            (r.plan as { name?: string })?.name ??
+            (r.planSnapshot as { name?: string })?.name ??
+            String(r.plan ?? "—"),
+          branch:
+            typeof r.branch === "string"
+              ? r.branch
+              : ((r.branch as { name?: string })?.name ?? "—"),
+          dueDate: "—",
+          amount: 0,
+          overdueDays: 0,
+          status: "DEFAULTED",
+        }))
+      : query.data.items;
   const ageingChart =
     board === "overdues" ? (s as { chart?: unknown })?.chart : undefined;
   const page = query.data.page ?? emptyPageMeta();
@@ -158,15 +230,20 @@ export function DuesPage() {
         description="Work through current dues, grace-period accounts, overdue cycles and default risk."
         actions={
           <>
-            <WorkboardDateRangeFilter
-              label="Due"
-              mode={rangeMode}
-              onModeChange={setRangeMode}
-              from={from}
-              to={to}
-              onFromChange={setFrom}
-              onToChange={setTo}
-            />
+            <div className="space-y-1">
+              <WorkboardDateRangeFilter
+                label="Due"
+                mode={rangeMode}
+                onModeChange={setRangeMode}
+                from={from}
+                to={to}
+                onFromChange={setFrom}
+                onToChange={setTo}
+              />
+              {rangeMode === "CUSTOM" ? (
+                <FormFieldError message={dateRangeError} />
+              ) : null}
+            </div>
             <Button
               variant="outline"
               onClick={() =>
@@ -227,11 +304,14 @@ export function DuesPage() {
       </div>
       <PageTabs
         value={board}
-        onValueChange={(v) => setBoard(v as "dues" | "overdues")}
+        onValueChange={(v) =>
+          setBoard(v as "dues" | "overdues" | "defaulters")
+        }
       >
         <PageTabsBar sectionLabel="Workboard">
           <PageTab value="dues">Dues</PageTab>
           <PageTab value="overdues">Overdue</PageTab>
+          <PageTab value="defaulters">Defaulters registry</PageTab>
         </PageTabsBar>
       </PageTabs>
       {ageingChart ? (
@@ -245,20 +325,40 @@ export function DuesPage() {
           </div>
         </Surface>
       ) : null}
-      <ListToolbar>
-        <SearchFilterBar
-          searchValue={q}
-          onSearchChange={setQ}
-          searchPlaceholder="Search customer, phone or enrollment"
-          filterValue={kind}
-          onFilterChange={setKind}
-          filterOptions={DUE_KIND_FILTERS}
-          filterLabel="View"
-        />
-      </ListToolbar>
+      {board !== "defaulters" ? (
+        <ListToolbar>
+          <SearchFilterBar
+            searchValue={q}
+            onSearchChange={setQ}
+            searchPlaceholder="Search customer, phone or enrollment"
+            filterValue={kind}
+            onFilterChange={setKind}
+            filterOptions={DUE_KIND_FILTERS}
+            filterLabel="View"
+          />
+        </ListToolbar>
+      ) : (
+        <ListToolbar>
+          <SearchFilterBar
+            searchValue={q}
+            onSearchChange={setQ}
+            searchPlaceholder="Search customer, phone or enrollment"
+            filterValue="ALL"
+            onFilterChange={() => {}}
+            filterOptions={[{ value: "ALL", label: "All" }]}
+            filterLabel="View"
+          />
+        </ListToolbar>
+      )}
       <Surface
-        title="Due workboard"
-        description="Collect at counter · Link creates an online pay URL · Bell queues WhatsApp reminder"
+        title={
+          board === "defaulters" ? "Defaulters registry" : "Due workboard"
+        }
+        description={
+          board === "defaulters"
+            ? "All schemes in DEFAULTED status · open enrollment for recovery actions"
+            : "Collect at counter · Link creates an online pay URL · Bell queues WhatsApp reminder"
+        }
       >
         <div className="overflow-x-auto">
           <PaginatedDataTable
@@ -342,6 +442,13 @@ export function DuesPage() {
                         title="Create online payment link for this due amount"
                         onClick={async () => {
                           try {
+                            const linkErr = validatePaymentLinkAmount(
+                              Number(r.amount),
+                            );
+                            if (linkErr) {
+                              toast.error(linkErr);
+                              return;
+                            }
                             const link = await createPaymentLink({
                               schemeId: r.schemeId,
                               amount: r.amount,

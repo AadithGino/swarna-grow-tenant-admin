@@ -30,7 +30,7 @@ export function EntityAuditTab({
   const [expanded, setExpanded] = useState<string | null>(null);
   if (query.isLoading) return <PageSkeleton />;
   if (query.isError || !query.data)
-    return <QueryError onRetry={query.refetch} />;
+    return <QueryError error={query.error} onRetry={query.refetch} />;
   const page = query.data.page ?? emptyPageMeta();
   return (
     <Surface title="Activity & audit" description="Immutable audit trail for this record">

@@ -30,6 +30,7 @@ import {
   permissionSummaryStats,
 } from "@/src/lib/permission-catalog";
 import { cn } from "@/lib/utils";
+import { sanitizeListSearchQueryInput } from "@/src/lib/list-date-range";
 
 function SummaryPill({
   icon: Icon,
@@ -906,7 +907,9 @@ export function StaffPermissionsSurface({
             <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               value={query}
-              onChange={(e) => setQuery(e.target.value)}
+              onChange={(e) =>
+                setQuery(sanitizeListSearchQueryInput(e.target.value))
+              }
               placeholder="Search by name or key…"
               className="h-10 pl-9"
             />

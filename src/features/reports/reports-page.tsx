@@ -15,6 +15,19 @@ import {
   PageHeader,
   Surface,
 } from "@/src/components/common/page-parts";
+import { FormFieldError } from "@/src/components/common/form-field-error";
+import { toastApiError } from "@/src/lib/api-error";
+import {
+  listSearchQueryForApi,
+  sanitizeListSearchQueryInput,
+  shouldSkipListSearchQuery,
+  validateListDateRange,
+  validateListSearchQuery,
+} from "@/src/lib/list-date-range";
+import {
+  reportExportReady,
+  validateReportExportRequest,
+} from "@/src/lib/report-export-validation";
 import {
   EmptyState,
   PageSkeleton,
@@ -82,8 +95,6 @@ export function ReportsPage() {
   const [reportKey, setReportKey] = useState<AdminReportKey>("COLLECTION");
   const [from, setFrom] = useState(() => defaultListRangeFrom());
   const [to, setTo] = useState(() => defaultListRangeTo());
-  const throttledFrom = useThrottledValue(from, 400);
-  const throttledTo = useThrottledValue(to, 400);
   const globalBranchKey = useAppSelector((s) => s.ui.branchId);
   const actingBranchId =
     globalBranchKey && globalBranchKey !== "ALL" ? globalBranchKey : undefined;
@@ -96,6 +107,15 @@ export function ReportsPage() {
   const isCustomerLedger = reportKey === "CUSTOMER_LEDGER";
   const selectedCustomerId = throttledCustomerId.trim();
   const skipReportQuery = isCustomerLedger && !selectedCustomerId;
+  const dateRangeError = useMemo(
+    () => validateListDateRange(from, to),
+    [from, to],
+  );
+  const skipReportForBadDates = Boolean(dateRangeError);
+  const customerLedgerError =
+    isCustomerLedger && !selectedCustomerId
+      ? "Select a customer for the ledger report."
+      : undefined;
   const multiBranch = useAppSelector(
     (s) => s.session.session?.capabilities?.multiBranch !== false,
   );
@@ -113,22 +133,28 @@ export function ReportsPage() {
     setCustomerSearch("");
   }, [isCustomerLedger]);
 
+  const customerSearchError = validateListSearchQuery(customerSearch);
   const customersQuery = useGetCustomersQuery(
-    { q: debouncedCustomerSearch.trim() || undefined, limit: 40 },
-    { skip: !isCustomerLedger },
+    { q: listSearchQueryForApi(debouncedCustomerSearch), limit: 40 },
+    {
+      skip:
+        !isCustomerLedger ||
+        shouldSkipListSearchQuery(debouncedCustomerSearch),
+    },
   );
   const customerOptions = customersQuery.data?.items ?? [];
 
   const pager = useCursorPagination(
     8,
-    `${reportKey}|${throttledFrom}|${throttledTo}|${globalBranchKey}|${planId}|${groupBy}|${throttledCustomerId}`,
+    `${reportKey}|${from}|${to}|${globalBranchKey}|${planId}|${groupBy}|${throttledCustomerId}`,
   );
 
   const queryArgs = useMemo(
     () => ({
       reportKey,
-      from: throttledFrom,
-      to: throttledTo,
+      period: "CUSTOM",
+      from,
+      to,
       groupBy: reportKey === "COLLECTION" ? groupBy : undefined,
       branchId: showBranchFilter ? actingBranchId : undefined,
       planId: showPlanFilter && planId !== "ALL" ? planId : undefined,
@@ -138,8 +164,8 @@ export function ReportsPage() {
     }),
     [
       reportKey,
-      throttledFrom,
-      throttledTo,
+      from,
+      to,
       groupBy,
       actingBranchId,
       planId,
@@ -151,7 +177,9 @@ export function ReportsPage() {
     ],
   );
 
-  const query = useGetReportsQuery(queryArgs, { skip: skipReportQuery });
+  const query = useGetReportsQuery(queryArgs, {
+    skip: skipReportQuery || skipReportForBadDates,
+  });
   const report = skipReportQuery ? undefined : query.data;
   const page = report?.page ?? emptyPageMeta();
   const chartEntries = Object.entries(report?.charts ?? {});
@@ -221,8 +249,17 @@ export function ReportsPage() {
   };
 
   const exportAsync = () => {
-    if (isCustomerLedger && !customerId.trim()) {
-      toast.error("Select a customer before exporting the ledger");
+    const clientErrors = validateReportExportRequest({
+      reportKey,
+      format: exportFormat,
+      from,
+      to,
+      customerId: customerId.trim(),
+      requireCustomer: isCustomerLedger,
+    });
+    if (Object.keys(clientErrors).length) {
+      const first = Object.values(clientErrors)[0];
+      toast.error(first ?? "Fix export filters.");
       return;
     }
     void createExport({
@@ -245,8 +282,18 @@ export function ReportsPage() {
         toast.info(`Export ${job.exportId} queued…`);
         void pollExport(job.exportId);
       })
-      .catch(() => toast.error("Export failed"));
+      .catch((err) => toastApiError(err, "Export failed"));
   };
+
+  const exportAsyncDisabled =
+    !reportExportReady({
+      reportKey,
+      format: exportFormat,
+      from,
+      to,
+      customerId: customerId.trim(),
+      requireCustomer: isCustomerLedger,
+    }) || skipReportQuery;
 
   return (
     <>
@@ -284,7 +331,11 @@ export function ReportsPage() {
                   <SelectItem value="PDF">PDF</SelectItem>
                 </SelectContent>
               </Select>
-              <Button variant="outline" onClick={exportAsync}>
+              <Button
+                variant="outline"
+                disabled={exportAsyncDisabled}
+                onClick={exportAsync}
+              >
                 <FileText />
                 Export async
               </Button>
@@ -360,8 +411,14 @@ export function ReportsPage() {
                   className="h-11"
                   placeholder="Search by name, mobile, or passbook no."
                   value={customerSearch}
-                  onChange={(e) => setCustomerSearch(e.target.value)}
+                  onChange={(e) =>
+                    setCustomerSearch(
+                      sanitizeListSearchQueryInput(e.target.value),
+                    )
+                  }
+                  aria-invalid={Boolean(customerSearchError)}
                 />
+                <FormFieldError message={customerSearchError} />
                 <Select
                   value={customerId || undefined}
                   onValueChange={setCustomerId}
@@ -378,6 +435,7 @@ export function ReportsPage() {
                     ))}
                   </SelectContent>
                 </Select>
+                <FormFieldError message={customerLedgerError} />
                 <p className="text-xs text-muted-foreground">
                   {customersQuery.isLoading
                     ? "Loading customers…"
@@ -390,17 +448,22 @@ export function ReportsPage() {
           )}
 
           <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[#efe6ea] pt-4">
-            <DateRangeFilter
-              label="Period"
-              from={from}
-              to={to}
-              onFromChange={setFrom}
-              onToChange={setTo}
-            />
+            <div className="min-w-0 flex-1">
+              <DateRangeFilter
+                label="Period"
+                from={from}
+                to={to}
+                onFromChange={setFrom}
+                onToChange={setTo}
+              />
+              <div className="mt-2">
+                <FormFieldError message={dateRangeError} />
+              </div>
+            </div>
             <Button
               className="h-10 shrink-0"
               variant="outline"
-              disabled={skipReportQuery}
+              disabled={skipReportQuery || Boolean(dateRangeError)}
               onClick={() => query.refetch()}
             >
               <SlidersHorizontal />
@@ -410,6 +473,14 @@ export function ReportsPage() {
         </div>
       </Surface>
 
+      {skipReportForBadDates && !skipReportQuery ? (
+        <Surface title="Invalid period">
+          <EmptyState
+            title="Fix the date range"
+            detail={dateRangeError ?? ""}
+          />
+        </Surface>
+      ) : null}
       {skipReportQuery ? (
         <Surface title="Customer ledger">
           <EmptyState
@@ -425,7 +496,7 @@ export function ReportsPage() {
       ) : query.isLoading ? (
         <PageSkeleton cards={2} />
       ) : query.isError || !report ? (
-        <QueryError onRetry={query.refetch} />
+        <QueryError error={query.error} onRetry={query.refetch} />
       ) : (
         <>
           <ReportSummaryStrip items={report.summary} />

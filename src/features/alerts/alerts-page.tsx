@@ -25,7 +25,7 @@ export function AlertsPage() {
 
   if (alertsQuery.isLoading) return <PageSkeleton cards={2} />;
   if (alertsQuery.isError)
-    return <QueryError onRetry={alertsQuery.refetch} title="Alerts could not be loaded" />;
+    return <QueryError error={alertsQuery.error} onRetry={alertsQuery.refetch} title="Alerts could not be loaded" />;
 
   const alerts = alertsQuery.data ?? [];
   const goldRate = dashboardQuery.data?.goldRate;

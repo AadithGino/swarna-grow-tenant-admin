@@ -23,7 +23,15 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { FormFieldError } from "@/src/components/common/form-field-error";
 import { FieldLabel } from "@/src/components/common/page-parts";
+import {
+  liveSettlementRemarksError,
+  prematureClosureRemarksReady,
+  redeemRemarksReady,
+  SETTLEMENT_REMARKS_MAX,
+  validateSettlementRemarks,
+} from "@/src/lib/settlement-form-validation";
 import { PageSkeleton } from "@/src/components/common/query-state";
 import { SettlementLinesPanel } from "@/src/features/enrollments/settlement-lines-panel";
 import {
@@ -135,14 +143,21 @@ export function RedeemEnrollmentDialog({
   const [redeem, redeemState] = useRedeemEnrollmentMutation();
   const [mode, setMode] = useState("CASH");
   const [remarks, setRemarks] = useState("");
+  const [remarksTouched, setRemarksTouched] = useState(false);
   const preview = previewQuery.data;
   const expectedVersion = enrollmentQuery.data?.version ?? 1;
   const [submitError, setSubmitError] = useState<string | null>(null);
+
+  const remarksDisplayError =
+    submitError && submitError.includes("Remarks")
+      ? undefined
+      : liveSettlementRemarksError(remarks, { required: false });
 
   useEffect(() => {
     if (!open) return;
     setMode("CASH");
     setRemarks("");
+    setRemarksTouched(false);
     setSubmitError(null);
   }, [open, schemeId]);
 
@@ -204,7 +219,16 @@ export function RedeemEnrollmentDialog({
                 <Textarea
                   value={remarks}
                   onChange={(e) => setRemarks(e.target.value)}
+                  onBlur={() => setRemarksTouched(true)}
                   rows={2}
+                  maxLength={SETTLEMENT_REMARKS_MAX}
+                  className={cn(
+                    remarksTouched && remarksDisplayError && "border-red-600",
+                  )}
+                  aria-invalid={Boolean(remarksTouched && remarksDisplayError)}
+                />
+                <FormFieldError
+                  message={remarksTouched ? remarksDisplayError : undefined}
                 />
               </div>
             </div>
@@ -215,9 +239,23 @@ export function RedeemEnrollmentDialog({
             Cancel
           </Button>
           <Button
-            disabled={!preview?.eligible || redeemState.isLoading || !mode}
+            disabled={
+              !preview?.eligible ||
+              redeemState.isLoading ||
+              !mode ||
+              !redeemRemarksReady(remarks)
+            }
             onClick={async () => {
               if (!preview) return;
+              setRemarksTouched(true);
+              const remarksErr = validateSettlementRemarks(remarks, {
+                required: false,
+              });
+              if (remarksErr) {
+                setSubmitError(remarksErr);
+                toast.error("Fix the highlighted fields.");
+                return;
+              }
               setSubmitError(null);
               try {
                 await redeem({
@@ -274,6 +312,7 @@ export function PrematureClosureDialog({
   const [mode, setMode] = useState("CASH");
   const [reason, setReason] = useState("CUSTOMER_REQUEST");
   const [remarks, setRemarks] = useState("");
+  const [remarksTouched, setRemarksTouched] = useState(false);
   const [ackPenalty, setAckPenalty] = useState(false);
   const [ackForfeit, setAckForfeit] = useState(false);
   const preview = previewQuery.data;
@@ -287,6 +326,7 @@ export function PrematureClosureDialog({
     setAckForfeit(false);
     setReason("CUSTOMER_REQUEST");
     setRemarks("");
+    setRemarksTouched(false);
     setMode("CASH");
   }, [open, schemeId]);
 
@@ -294,6 +334,10 @@ export function PrematureClosureDialog({
     const first = preview?.allowedModes.find((m) => m.available);
     if (first) setMode(first.mode);
   }, [preview]);
+
+  const remarksDisplayError = liveSettlementRemarksError(remarks, {
+    required: true,
+  });
 
   const needsPenaltyAck =
     preview?.eligible &&
@@ -366,8 +410,26 @@ export function PrematureClosureDialog({
                     <Textarea
                       value={remarks}
                       onChange={(e) => setRemarks(e.target.value)}
+                      onBlur={() => setRemarksTouched(true)}
                       rows={2}
+                      maxLength={SETTLEMENT_REMARKS_MAX}
                       placeholder="Why is this scheme being closed early?"
+                      className={cn(
+                        remarksTouched && remarksDisplayError && "border-red-600",
+                      )}
+                      aria-invalid={Boolean(
+                        remarksTouched && remarksDisplayError,
+                      )}
+                    />
+                    <FormFieldError
+                      message={
+                        remarksTouched || remarks.trim()
+                          ? remarksDisplayError ??
+                            (remarks.trim()
+                              ? undefined
+                              : "Remarks are required.")
+                          : undefined
+                      }
                     />
                   </div>
                   {needsForfeitAck ? (
@@ -418,10 +480,20 @@ export function PrematureClosureDialog({
               !preview?.eligible ||
               closeState.isLoading ||
               (needsPenaltyAck && !ackPenalty) ||
-              (needsForfeitAck && !ackForfeit)
+              (needsForfeitAck && !ackForfeit) ||
+              !prematureClosureRemarksReady(remarks)
             }
             onClick={async () => {
               if (!preview) return;
+              setRemarksTouched(true);
+              const remarksErr = validateSettlementRemarks(remarks, {
+                required: true,
+              });
+              if (remarksErr) {
+                setSubmitError(remarksErr);
+                toast.error("Fix the highlighted fields.");
+                return;
+              }
               setSubmitError(null);
               try {
                 const result = await closePremature({

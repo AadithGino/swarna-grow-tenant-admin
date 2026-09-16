@@ -20,6 +20,11 @@ import {
 } from "@/components/ui/command";
 import { useActingBranchId } from "@/src/hooks/use-acting-branch-id";
 import { useDebouncedValue } from "@/src/hooks/use-debounced-value";
+import {
+  listSearchQueryForApi,
+  sanitizeListSearchQueryInput,
+  shouldSkipListSearchQuery,
+} from "@/src/lib/list-date-range";
 import { useGetGlobalSearchQuery } from "@/src/store/api/admin-api";
 import type { GlobalSearchKind } from "@/src/types/domain";
 import { useAppSelector } from "@/src/store/hooks";
@@ -47,11 +52,16 @@ export function GlobalSearchDialog({
   const debouncedQ = useDebouncedValue(query.trim(), 280);
   const searchQuery = useGetGlobalSearchQuery(
     {
-      q: debouncedQ,
+      q: listSearchQueryForApi(debouncedQ) || debouncedQ,
       branchId,
       limit: 6,
     },
-    { skip: !open || debouncedQ.length < 2 },
+    {
+      skip:
+        !open ||
+        debouncedQ.length < 2 ||
+        shouldSkipListSearchQuery(debouncedQ),
+    },
   );
 
   const groups = searchQuery.data?.groups ?? [];
@@ -80,7 +90,9 @@ export function GlobalSearchDialog({
       <CommandInput
         placeholder="Fuzzy search — name, phone, enrollment, receipt…"
         value={query}
-        onValueChange={onQueryChange}
+        onValueChange={(value) =>
+          onQueryChange(sanitizeListSearchQueryInput(value))
+        }
       />
       <CommandList>
         {!hasQuery ? (

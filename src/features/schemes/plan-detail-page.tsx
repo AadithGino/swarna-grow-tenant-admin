@@ -187,6 +187,7 @@ export function PlanDetailPage({ planId }: { planId: string }) {
       <QueryError
         onRetry={planQuery.refetch}
         title="Scheme plan could not be loaded"
+        error={planQuery.error}
       />
     );
 
@@ -603,7 +604,7 @@ export function PlanDetailPage({ planId }: { planId: string }) {
           {statsQuery.isLoading ? (
             <PageSkeleton />
           ) : statsQuery.isError || !statsQuery.data ? (
-            <QueryError onRetry={statsQuery.refetch} />
+            <QueryError error={statsQuery.error} onRetry={statsQuery.refetch} />
           ) : (
             <PlanPerformanceTab
               enrolments={statsData?.enrolments}

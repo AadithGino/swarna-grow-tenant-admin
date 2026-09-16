@@ -22,6 +22,10 @@ import { money } from "@/src/lib/format";
 import { emptyPageMeta } from "@/src/lib/cursor-pagination";
 import { useCursorPagination } from "@/src/hooks/use-cursor-pagination";
 import { useDebouncedValue } from "@/src/hooks/use-debounced-value";
+import {
+  listSearchQueryForApi,
+  shouldSkipListSearchQuery,
+} from "@/src/lib/list-date-range";
 import { EnrollmentsCreateDialog } from "@/src/features/enrollments/enrollments-create-dialog";
 import { useGetEnrollmentsQuery } from "@/src/store/api/admin-api";
 import {
@@ -50,17 +54,20 @@ export function EnrollmentsPage() {
     8,
     `${debouncedQ}|${status}|${branchKey}`,
   );
-  const query = useGetEnrollmentsQuery({
-    q: debouncedQ || undefined,
-    status: status === "PAST" ? undefined : status,
-    group: status === "PAST" ? "PAST" : undefined,
-    branchId,
-    ...pager.queryParams,
-  });
+  const query = useGetEnrollmentsQuery(
+    {
+      q: listSearchQueryForApi(debouncedQ),
+      status: status === "PAST" ? undefined : status,
+      group: status === "PAST" ? "PAST" : undefined,
+      branchId,
+      ...pager.queryParams,
+    },
+    { skip: shouldSkipListSearchQuery(debouncedQ) },
+  );
 
   if (query.isLoading) return <PageSkeleton />;
   if (query.isError || !query.data)
-    return <QueryError onRetry={query.refetch} />;
+    return <QueryError error={query.error} onRetry={query.refetch} />;
   const summary = query.data.summary;
   const page = query.data.page ?? emptyPageMeta();
   return (

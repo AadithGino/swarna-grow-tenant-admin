@@ -14,9 +14,25 @@ import {
 } from "@/components/ui/select";
 import { ActionDialog } from "@/src/components/common/action-dialog";
 import { PositionChangedDialog } from "@/src/components/common/position-changed-dialog";
+import { FormFieldError } from "@/src/components/common/form-field-error";
 import { FieldLabel } from "@/src/components/common/page-parts";
+import { handleFormApiError } from "@/src/lib/form-api-error";
+import { apiErrorCode, toastApiError } from "@/src/lib/api-error";
 import { idempotencyKey, money } from "@/src/lib/format";
-import { amountWithinPayableQuote } from "@/src/lib/payment-limits";
+import {
+  livePayableAmountError,
+  livePaymentReferenceError,
+  livePaymentRemarksError,
+  PAYMENT_REFERENCE_MAX,
+  PAYMENT_REMARKS_MAX,
+  paymentAmountReady,
+  validatePayableAmount,
+  validatePaymentEnrollmentId,
+  validatePaymentReference,
+  validatePaymentRemarks,
+  type PayableQuoteBounds,
+} from "@/src/lib/payment-form-validation";
+import { cn } from "@/lib/utils";
 import { PermissionGate } from "@/src/components/common/permission-gate";
 import { ACTION } from "@/src/lib/action-permissions";
 import {
@@ -123,9 +139,26 @@ function PaymentDialogInner({
   const [positionOpen, setPositionOpen] = useState(false);
   const [pendingRetry, setPendingRetry] = useState<(() => void) | null>(null);
   const [positionAmounts, setPositionAmounts] = useState({ old: 0, new: 0 });
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [enrollmentTouched, setEnrollmentTouched] = useState(false);
+  const [amountTouched, setAmountTouched] = useState(false);
+
+  const quoteBounds: PayableQuoteBounds | undefined = quote
+    ? {
+        min: quote.min,
+        max: quote.max,
+        multipleOf: quote.multipleOf,
+        eligible: quote.eligible,
+      }
+    : undefined;
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      setFieldErrors({});
+      setEnrollmentTouched(false);
+      setAmountTouched(false);
+      return;
+    }
     if (lockScheme && schemeId) {
       setSelected(schemeId);
       return;
@@ -145,15 +178,29 @@ function PaymentDialogInner({
   }, [quote?.schemeId, quote?.positionVersion, quote?.suggested]);
 
   const numericAmount = typeof amount === "number" ? amount : 0;
-  const outOfRange =
-    !quote?.eligible ||
-    !amount ||
-    !amountWithinPayableQuote(numericAmount, {
-      min: quote?.min ?? 0,
-      max: quote?.max ?? 0,
-      multipleOf: quote?.multipleOf,
-      eligible: quote?.eligible,
-    });
+
+  const enrollmentError =
+    fieldErrors.schemeId ??
+    (enrollmentTouched && showEnrollmentPicker
+      ? validatePaymentEnrollmentId(selectedId)
+      : undefined);
+
+  const amountError =
+    fieldErrors.amount ??
+    (amountTouched || amount !== ""
+      ? livePayableAmountError(amount, quoteBounds)
+      : undefined);
+
+  const referenceError =
+    fieldErrors.reference ?? livePaymentReferenceError(reference);
+  const remarksError =
+    fieldErrors.remarks ?? livePaymentRemarksError(remarks);
+
+  const formReady =
+    paymentAmountReady(amount, quoteBounds) &&
+    validatePaymentEnrollmentId(selectedId) === undefined &&
+    validatePaymentReference(reference) === undefined &&
+    validatePaymentRemarks(remarks) === undefined;
   const cappedChipAmounts = useMemo(() => {
     if (displayMode !== "FLEXIBLE_LOCK_WINDOW" || !quote?.eligible) return [];
     const max = quote.remainingThisCycle ?? quote.max ?? 0;
@@ -218,8 +265,33 @@ function PaymentDialogInner({
       actionLabel={
         quote?.eligible ? `Collect ${money(numericAmount || 0)}` : "Not payable"
       }
-      submitDisabled={!selectedId || !quote?.eligible || !!outOfRange}
+      submitDisabled={!formReady}
+      suppressDefaultErrorToast
+      onError={(err) => {
+        handleFormApiError(err, {
+          setFieldErrors,
+          fieldAliases: { amountPaise: "amount", schemeId: "schemeId" },
+          fallback: "Could not record payment",
+        });
+      }}
       onSubmit={async () => {
+        setEnrollmentTouched(true);
+        setAmountTouched(true);
+        const clientErrors: Record<string, string> = {};
+        const enrollErr = validatePaymentEnrollmentId(selectedId);
+        if (enrollErr) clientErrors.schemeId = enrollErr;
+        const amtErr = validatePayableAmount(amount, quoteBounds);
+        if (amtErr) clientErrors.amount = amtErr;
+        const refErr = validatePaymentReference(reference);
+        if (refErr) clientErrors.reference = refErr;
+        const remErr = validatePaymentRemarks(remarks);
+        if (remErr) clientErrors.remarks = remErr;
+        if (Object.keys(clientErrors).length) {
+          setFieldErrors(clientErrors);
+          toast.error("Fix the highlighted fields.");
+          return false;
+        }
+
         const submit = async () => {
           const row = await recordPayment({
             schemeId: selectedId,
@@ -254,8 +326,8 @@ function PaymentDialogInner({
         };
         try {
           await submit();
-        } catch (err: any) {
-          const code = err?.data?.code ?? err?.data?.data?.code;
+        } catch (err: unknown) {
+          const code = apiErrorCode(err);
           if (
             code === "SCHEME_POSITION_CHANGED" ||
             code === "PAYMENT_POSITION_CHANGED"
@@ -268,9 +340,10 @@ function PaymentDialogInner({
               void submit();
             });
             setPositionOpen(true);
-            return;
+            return false;
           }
-          throw err;
+          toastApiError(err, "Could not record payment");
+          return false;
         }
       }}
     >
@@ -287,9 +360,21 @@ function PaymentDialogInner({
             ) : (
               <Select
                 value={selectedId || undefined}
-                onValueChange={(value) => setSelected(value)}
+                onValueChange={(value) => {
+                  setSelected(value);
+                  setEnrollmentTouched(true);
+                  setFieldErrors((prev) => {
+                    const next = { ...prev };
+                    delete next.schemeId;
+                    return next;
+                  });
+                }}
               >
-                <SelectTrigger className="h-11 w-full">
+                <SelectTrigger
+                  className={cn("h-11 w-full", enrollmentError && "border-red-600")}
+                  aria-invalid={Boolean(enrollmentError)}
+                  onBlur={() => setEnrollmentTouched(true)}
+                >
                   <SelectValue
                     placeholder={
                       customer
@@ -309,6 +394,7 @@ function PaymentDialogInner({
                 </SelectContent>
               </Select>
             )}
+            <FormFieldError message={enrollmentError} />
           </div>
         )}
 
@@ -374,15 +460,24 @@ function PaymentDialogInner({
           <div>
             <FieldLabel>Amount</FieldLabel>
             <Input
-              className="h-11"
+              className={cn("h-11", amountError && "border-red-600")}
               type="number"
               min={quote?.min ?? 0}
               max={quote?.max ?? undefined}
               value={amount}
               disabled={!quote?.eligible}
-              onChange={(e) =>
-                setAmount(e.target.value === "" ? "" : Number(e.target.value))
-              }
+              aria-invalid={Boolean(amountError)}
+              onChange={(e) => {
+                setAmountTouched(true);
+                setAmount(
+                  e.target.value === "" ? "" : Number(e.target.value),
+                );
+                setFieldErrors((prev) => {
+                  const next = { ...prev };
+                  delete next.amount;
+                  return next;
+                });
+              }}
             />
             <div className="mt-2 flex flex-wrap gap-2">
               {chips.map((value) => (
@@ -397,13 +492,7 @@ function PaymentDialogInner({
                 </Button>
               ))}
             </div>
-            {outOfRange && quote?.eligible && (
-              <p className="mt-2 text-xs text-red-600">
-                Enter an amount between {money(quote.min)} and {money(quote.max)}
-                {quote.multipleOf ? ` (multiples of ${money(quote.multipleOf)})` : ""}
-                .
-              </p>
-            )}
+            <FormFieldError message={amountError} />
           </div>
           <div>
             <FieldLabel>Payment mode</FieldLabel>
@@ -429,21 +518,41 @@ function PaymentDialogInner({
           <div>
             <FieldLabel>Reference (optional)</FieldLabel>
             <Input
-              className="h-11"
+              className={cn("h-11", referenceError && "border-red-600")}
               value={reference}
-              onChange={(e) => setReference(e.target.value)}
+              maxLength={PAYMENT_REFERENCE_MAX}
+              aria-invalid={Boolean(referenceError)}
+              onChange={(e) => {
+                setReference(e.target.value);
+                setFieldErrors((prev) => {
+                  const next = { ...prev };
+                  delete next.reference;
+                  return next;
+                });
+              }}
               placeholder="UTR, cheque no., or approval code"
             />
+            <FormFieldError message={referenceError} />
           </div>
         )}
         <div>
           <FieldLabel>Remarks (optional)</FieldLabel>
           <Input
-            className="h-11"
+            className={cn("h-11", remarksError && "border-red-600")}
             value={remarks}
-            onChange={(e) => setRemarks(e.target.value)}
+            maxLength={PAYMENT_REMARKS_MAX}
+            aria-invalid={Boolean(remarksError)}
+            onChange={(e) => {
+              setRemarks(e.target.value);
+              setFieldErrors((prev) => {
+                const next = { ...prev };
+                delete next.remarks;
+                return next;
+              });
+            }}
             placeholder="Counter note"
           />
+          <FormFieldError message={remarksError} />
         </div>
         {quote?.nextCycleAction?.available ? (
           <Button
@@ -463,20 +572,31 @@ function PaymentDialogInner({
             type="button"
             variant="outline"
             className="w-full"
-            disabled={!selectedId || !quote?.eligible || outOfRange}
+            disabled={!formReady}
             onClick={async () => {
-              const link = await createPaymentLink({
-                schemeId: selectedId,
-                amount: numericAmount,
-                targetCycle: isFlexiblePayment
-                  ? quote?.targetCycle || undefined
-                  : undefined,
-                expectedPositionVersion: isFlexiblePayment
-                  ? (quote?.positionVersion ?? 0)
-                  : undefined,
-                idempotencyKey: idempotencyKey(),
-              }).unwrap();
-              toast.success(`Payment link sent · expires ${link.expiresAt}`);
+              setAmountTouched(true);
+              const amtErr = validatePayableAmount(amount, quoteBounds);
+              if (amtErr) {
+                setFieldErrors((prev) => ({ ...prev, amount: amtErr }));
+                toast.error(amtErr);
+                return;
+              }
+              try {
+                const link = await createPaymentLink({
+                  schemeId: selectedId,
+                  amount: numericAmount,
+                  targetCycle: isFlexiblePayment
+                    ? quote?.targetCycle || undefined
+                    : undefined,
+                  expectedPositionVersion: isFlexiblePayment
+                    ? (quote?.positionVersion ?? 0)
+                    : undefined,
+                  idempotencyKey: idempotencyKey(),
+                }).unwrap();
+                toast.success(`Payment link sent · expires ${link.expiresAt}`);
+              } catch (err) {
+                toastApiError(err, "Could not create payment link");
+              }
             }}
           >
             Send payment link (WhatsApp)

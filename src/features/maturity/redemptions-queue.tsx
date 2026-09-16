@@ -15,11 +15,12 @@ import { Surface } from "@/src/components/common/page-parts";
 import { PageSkeleton, QueryError } from "@/src/components/common/query-state";
 import { StatusBadge } from "@/src/components/common/status-badge";
 import { DateRangeFilter } from "@/src/components/common/date-range-filter";
+import { FormFieldError } from "@/src/components/common/form-field-error";
 import { RedemptionDetailSheet } from "@/src/features/maturity/redemption-detail-sheet";
 import { emptyPageMeta } from "@/src/lib/cursor-pagination";
 import { useCursorPagination } from "@/src/hooks/use-cursor-pagination";
-import { useThrottledValue } from "@/src/hooks/use-throttled-value";
 import { apiErrorMessage } from "@/src/lib/api-error";
+import { validateListDateRange } from "@/src/lib/list-date-range";
 import { money } from "@/src/lib/format";
 import { useActingBranchId } from "@/src/hooks/use-acting-branch-id";
 import { useGetRedemptionsQuery } from "@/src/store/api/admin-api";
@@ -32,7 +33,6 @@ export function RedemptionsQueue({
   const branchId = useActingBranchId();
   const searchParams = useSearchParams();
   const reviewFromUrl = searchParams.get("review");
-  /** Default: no date filter so open requests always appear (incl. created “today”). */
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [status, setStatus] = useState("OPEN");
@@ -44,11 +44,20 @@ export function RedemptionsQueue({
     const id = initialReviewId ?? reviewFromUrl;
     if (id) setSelectedId(id);
   }, [initialReviewId, reviewFromUrl]);
-  const throttledFrom = useThrottledValue(from, 400);
-  const throttledTo = useThrottledValue(to, 400);
+
+  const dateRangeError = useMemo(() => {
+    if (!from.trim() && !to.trim()) return undefined;
+    if (!from.trim() || !to.trim()) {
+      return "Choose both start and end dates, or clear the range.";
+    }
+    return validateListDateRange(from, to);
+  }, [from, to]);
+
+  const skipForBadDates = Boolean(dateRangeError);
+
   const pager = useCursorPagination(
     8,
-    `redemptions|${branchId ?? "all"}|${status}|${throttledFrom}|${throttledTo}`,
+    `redemptions|${branchId ?? "all"}|${status}|${from}|${to}`,
   );
 
   const queryParams = useMemo(() => {
@@ -57,16 +66,28 @@ export function RedemptionsQueue({
       limit: status === "OPEN" ? 50 : pager.queryParams.limit,
       branchId,
     };
-    if (throttledFrom) params.from = throttledFrom;
-    if (throttledTo) params.to = throttledTo;
+    if (from && to && !dateRangeError) {
+      params.from = from;
+      params.to = to;
+    }
     if (status === "OPEN") params.open = "true";
     else if (status !== "ALL") params.status = status;
     return params;
-  }, [branchId, pager.queryParams, status, throttledFrom, throttledTo]);
+  }, [branchId, dateRangeError, from, pager.queryParams, status, to]);
 
-  const query = useGetRedemptionsQuery(queryParams);
+  const query = useGetRedemptionsQuery(queryParams, { skip: skipForBadDates });
 
   const rows = query.data?.items ?? [];
+
+  if (skipForBadDates) {
+    return (
+      <Surface title="Redemption queue" description="Fix the date range to load results.">
+        <div className="p-4">
+          <FormFieldError message={dateRangeError} />
+        </div>
+      </Surface>
+    );
+  }
 
   if (query.isLoading) return <PageSkeleton />;
   if (query.isError) {
@@ -141,30 +162,29 @@ export function RedemptionsQueue({
             {
               key: "customer",
               header: "Customer",
-              render: (r: { customer?: string; id: string }) =>
-                r.customer ?? "—",
+              render: (r: any) => r.customer ?? "—",
             },
             {
               key: "scheme",
               header: "Scheme",
-              render: (r: { scheme?: string }) => r.scheme ?? "—",
+              render: (r: any) => r.scheme ?? "—",
             },
             {
               key: "amount",
               header: "Value",
-              render: (r: { amount?: number }) => money(r.amount ?? 0),
+              render: (r: any) => money(r.amount ?? 0),
             },
             {
               key: "status",
               header: "Status",
-              render: (r: { status?: string }) => (
+              render: (r: any) => (
                 <StatusBadge status={String(r.status ?? "—")} />
               ),
             },
             {
               key: "submitted",
               header: "Requested",
-              render: (r: { submittedAt?: string }) => r.submittedAt ?? "—",
+              render: (r: any) => r.submittedAt ?? "—",
             },
             {
               key: "action",

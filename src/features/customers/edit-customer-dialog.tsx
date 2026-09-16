@@ -1,8 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -11,12 +10,38 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { ActionDialog } from "@/src/components/common/action-dialog";
+import { FormFieldError } from "@/src/components/common/form-field-error";
 import { FieldLabel } from "@/src/components/common/page-parts";
+import {
+  CustomerAddressInput,
+  CustomerEmailInput,
+  CustomerNameInput,
+  CustomerPhoneInput,
+} from "@/src/components/form/customer-form-inputs";
+import {
+  clearCustomerFieldError,
+  customerFormFieldsFromCustomer,
+  customerFormReadyForSubmit,
+  customerFormUnchanged,
+  liveCustomerFieldErrors,
+  normalizeCustomerMobileInput,
+  validateCustomerForm,
+  type CustomerFormFields,
+} from "@/src/lib/customer-form";
+import { handleFormApiError } from "@/src/lib/form-api-error";
+import { cn } from "@/lib/utils";
 import type { Customer } from "@/src/types/domain";
 import {
   useGetBranchesQuery,
   useUpdateCustomerMutation,
 } from "@/src/store/api/admin-api";
+
+function mergeFieldMessage(
+  apiOrSubmit: string | undefined,
+  live: string | undefined,
+): string | undefined {
+  return apiOrSubmit ?? live;
+}
 
 export function EditCustomerDialog({
   customer,
@@ -32,23 +57,48 @@ export function EditCustomerDialog({
   const [updateCustomer] = useUpdateCustomerMutation();
   const { data: branchesData } = useGetBranchesQuery({ limit: 100 });
   const branches = branchesData?.items ?? [];
-  const [form, setForm] = useState({
-    name: customer.name,
-    phone: customer.phone,
-    email: customer.email,
-    branchId: customer.branchId || "",
-    address: customer.address,
-  });
+  const [baseline, setBaseline] = useState<CustomerFormFields>(() =>
+    customerFormFieldsFromCustomer(customer),
+  );
+  const [form, setForm] = useState<CustomerFormFields>(() =>
+    customerFormFieldsFromCustomer(customer),
+  );
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [branchTouched, setBranchTouched] = useState(false);
 
   useEffect(() => {
-    setForm({
-      name: customer.name,
-      phone: customer.phone,
-      email: customer.email,
-      branchId: customer.branchId || "",
-      address: customer.address,
-    });
+    const next = customerFormFieldsFromCustomer(customer);
+    setBaseline(next);
+    setForm(next);
+    setFieldErrors({});
+    setBranchTouched(false);
   }, [customer]);
+
+  const requireBranch = branches.length > 0;
+
+  const liveErrors = useMemo(
+    () =>
+      liveCustomerFieldErrors(form, {
+        requireBranch,
+        branchTouched,
+      }),
+    [form, requireBranch, branchTouched],
+  );
+
+  const displayError = (field: keyof CustomerFormFields) =>
+    mergeFieldMessage(fieldErrors[field], liveErrors[field]);
+
+  const setField = <K extends keyof CustomerFormFields>(
+    key: K,
+    value: CustomerFormFields[K],
+  ) => {
+    setForm((prev) => ({ ...prev, [key]: value }));
+    setFieldErrors((prev) => clearCustomerFieldError(prev, key));
+  };
+
+  const submitDisabled =
+    !customerFormReadyForSubmit(form, { requireBranch }) ||
+    customerFormUnchanged(form, baseline);
 
   return (
     <ActionDialog
@@ -58,19 +108,35 @@ export function EditCustomerDialog({
       title="Edit customer"
       description={`Update profile for ${customer.customerNo}.`}
       actionLabel="Save changes"
+      submitDisabled={submitDisabled}
+      suppressDefaultErrorToast
+      onError={(err) => {
+        handleFormApiError(err, {
+          setFieldErrors,
+          fieldAliases: { mobile: "phone" },
+          fallback: "Could not update customer",
+        });
+      }}
       onSubmit={async () => {
-        if (!form.name.trim() || !form.phone.trim()) {
-          toast.error("Name and mobile number are required");
-          throw new Error("validation");
+        setBranchTouched(true);
+        const clientErrors = validateCustomerForm(form, { requireBranch });
+        if (Object.keys(clientErrors).length) {
+          setFieldErrors(clientErrors);
+          toast.error("Fix the highlighted fields.");
+          return false;
         }
+
+        const phone = normalizeCustomerMobileInput(form.phone);
+        const email = form.email.trim();
+
         await updateCustomer({
           id: customer.id,
           patch: {
-            name: form.name,
-            phone: form.phone,
-            email: form.email,
-            branchId: form.branchId || undefined,
-            address: form.address,
+            name: form.name.trim(),
+            phone,
+            email: email || undefined,
+            branchId: form.branchId.trim() || undefined,
+            address: form.address.trim() || undefined,
             version: customer.version,
           },
         }).unwrap();
@@ -79,38 +145,42 @@ export function EditCustomerDialog({
     >
       <div className="grid gap-4">
         <div className="grid gap-4 sm:grid-cols-2">
-          <div>
-            <FieldLabel>Full name</FieldLabel>
-            <Input
-              value={form.name}
-              onChange={(e) => setForm({ ...form, name: e.target.value })}
-            />
-          </div>
-          <div>
-            <FieldLabel>Mobile number</FieldLabel>
-            <Input
-              value={form.phone}
-              onChange={(e) => setForm({ ...form, phone: e.target.value })}
-              inputMode="tel"
-            />
-          </div>
+          <CustomerNameInput
+            value={form.name}
+            onChange={(value) => setField("name", value)}
+            error={displayError("name")}
+          />
+          <CustomerPhoneInput
+            value={form.phone}
+            onChange={(value) => setField("phone", value)}
+            error={displayError("phone")}
+          />
         </div>
         <div className="grid gap-4 sm:grid-cols-2">
+          <CustomerEmailInput
+            value={form.email}
+            onChange={(value) => setField("email", value)}
+            error={displayError("email")}
+          />
           <div>
-            <FieldLabel>Email</FieldLabel>
-            <Input
-              type="email"
-              value={form.email}
-              onChange={(e) => setForm({ ...form, email: e.target.value })}
-            />
-          </div>
-          <div>
-            <FieldLabel>Primary branch</FieldLabel>
+            <FieldLabel>
+              Primary branch{requireBranch ? "" : " (optional)"}
+            </FieldLabel>
             <Select
               value={form.branchId || undefined}
-              onValueChange={(value) => setForm({ ...form, branchId: value })}
+              onValueChange={(value) => {
+                setField("branchId", value);
+                setBranchTouched(true);
+              }}
             >
-              <SelectTrigger className="w-full">
+              <SelectTrigger
+                className={cn(
+                  "w-full",
+                  displayError("branchId") && "border-red-600",
+                )}
+                aria-invalid={Boolean(displayError("branchId"))}
+                onBlur={() => setBranchTouched(true)}
+              >
                 <SelectValue placeholder="Select branch" />
               </SelectTrigger>
               <SelectContent>
@@ -121,15 +191,14 @@ export function EditCustomerDialog({
                 ))}
               </SelectContent>
             </Select>
+            <FormFieldError message={displayError("branchId")} />
           </div>
         </div>
-        <div>
-          <FieldLabel>Address</FieldLabel>
-          <Input
-            value={form.address}
-            onChange={(e) => setForm({ ...form, address: e.target.value })}
-          />
-        </div>
+        <CustomerAddressInput
+          value={form.address}
+          onChange={(value) => setField("address", value)}
+          error={displayError("address")}
+        />
       </div>
     </ActionDialog>
   );

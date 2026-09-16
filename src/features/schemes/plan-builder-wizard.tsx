@@ -16,11 +16,18 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { FormFieldError } from "@/src/components/common/form-field-error";
 import {
   FieldLabel,
   PageHeader,
   Surface,
 } from "@/src/components/common/page-parts";
+import { parseApiError } from "@/src/lib/api-error";
+import {
+  validatePlanBuilderFull,
+  validatePlanBuilderStep,
+} from "@/src/lib/plan-builder-validation";
+import { cn } from "@/lib/utils";
 import { PermissionGate } from "@/src/components/common/permission-gate";
 import { PageSkeleton, QueryError } from "@/src/components/common/query-state";
 import {
@@ -151,6 +158,8 @@ export function PlanBuilderWizard({
   const caps = useAppSelector((s) => s.session.session?.capabilities);
   const [form, setForm] = useState<PlanBuilderFormState>(defaultPlanBuilderForm);
   const [hydrated, setHydrated] = useState(!loadPlanId);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [previewError, setPreviewError] = useState<string | undefined>();
 
   useEffect(() => {
     if (!planQuery.data || hydrated) return;
@@ -163,8 +172,17 @@ export function PlanBuilderWizard({
     setHydrated(true);
   }, [planQuery.data, hydrated, isDuplicate]);
 
-  const set = (patch: Partial<PlanBuilderFormState>) =>
+  const set = (patch: Partial<PlanBuilderFormState>) => {
     setForm((prev) => ({ ...prev, ...patch }));
+    const keys = Object.keys(patch);
+    if (keys.length) {
+      setFieldErrors((prev) => {
+        const next = { ...prev };
+        for (const key of keys) delete next[key];
+        return next;
+      });
+    }
+  };
 
   const steps = useMemo(
     () => buildSteps(form.paymentPattern),
@@ -200,9 +218,15 @@ export function PlanBuilderWizard({
       await previewSchedule(
         buildPreviewScheduleBody(form, { planId: isEdit ? planId : undefined }),
       ).unwrap();
-    } catch {
+      setPreviewError(undefined);
+    } catch (err) {
+      const message = parseApiError(
+        err,
+        "Could not load schedule preview. Check amount and duration.",
+      ).message;
+      setPreviewError(message);
       if (!opts?.silent) {
-        toast.error("Could not load schedule preview. Check amount and duration.");
+        toast.error(message);
       }
     }
   };
@@ -229,7 +253,7 @@ export function PlanBuilderWizard({
 
   if (loadPlanId && planQuery.isLoading) return <PageSkeleton />;
   if (loadPlanId && (planQuery.isError || !planQuery.data))
-    return <QueryError onRetry={planQuery.refetch} />;
+    return <QueryError error={planQuery.error} onRetry={planQuery.refetch} />;
 
   const financialLocked =
     form.editLocked &&
@@ -325,7 +349,10 @@ export function PlanBuilderWizard({
                 <Input
                   value={form.name}
                   onChange={(e) => set({ name: e.target.value })}
+                  className={cn(fieldErrors.name && "border-red-600")}
+                  aria-invalid={Boolean(fieldErrors.name)}
                 />
+                <FormFieldError message={fieldErrors.name} />
                 <FieldLabel>Plan code</FieldLabel>
                 <FieldHint>Short unique code (e.g. DH11). Cannot change after save.</FieldHint>
                 <Input
@@ -334,7 +361,10 @@ export function PlanBuilderWizard({
                   onChange={(e) =>
                     set({ code: e.target.value.toUpperCase() })
                   }
+                  className={cn(fieldErrors.code && "border-red-600")}
+                  aria-invalid={Boolean(fieldErrors.code)}
                 />
+                <FormFieldError message={fieldErrors.code} />
                 <FieldLabel>Display name</FieldLabel>
                 <FieldHint>Title on the customer app scheme card.</FieldHint>
                 <Input
@@ -1398,12 +1428,17 @@ export function PlanBuilderWizard({
                     },
                   ]}
                 />
-                <Button type="button" variant="outline" onClick={onPreview}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => void onPreview()}
+                >
                   Refresh preview
                 </Button>
                 <PlanSchedulePreviewPanel
                   data={previewState.data}
                   loading={previewState.isLoading}
+                  error={previewError}
                 />
               </div>
             )}
@@ -1419,6 +1454,15 @@ export function PlanBuilderWizard({
             {stepIndex < steps.length - 1 ? (
               <Button
                 onClick={() => {
+                  const stepErrors = validatePlanBuilderStep(current.id, form, {
+                    isEdit,
+                  });
+                  if (Object.keys(stepErrors).length) {
+                    setFieldErrors(stepErrors);
+                    toast.error("Fix the highlighted fields on this step.");
+                    return;
+                  }
+                  setFieldErrors({});
                   go(1);
                   if (
                     ["duration", "amount", "schedule", "flexible"].includes(
@@ -1433,8 +1477,13 @@ export function PlanBuilderWizard({
               </Button>
             ) : (
               <Button
-                disabled={!form.name || !form.code}
                 onClick={async () => {
+                  const allErrors = validatePlanBuilderFull(form, { isEdit });
+                  if (Object.keys(allErrors).length) {
+                    setFieldErrors(allErrors);
+                    toast.error("Fix validation errors before saving.");
+                    return;
+                  }
                   try {
                     if (isEdit && planId) {
                       await patchPlan({
@@ -1452,16 +1501,12 @@ export function PlanBuilderWizard({
                       router.push(newId ? `/schemes/${newId}` : "/schemes");
                     }
                   } catch (err: unknown) {
-                    const message =
-                      err &&
-                      typeof err === "object" &&
-                      "data" in err &&
-                      err.data &&
-                      typeof err.data === "object" &&
-                      "message" in err.data
-                        ? String((err.data as { message?: string }).message)
-                        : "Could not save plan. Check required fields and try again.";
-                    toast.error(message);
+                    toast.error(
+                      parseApiError(
+                        err,
+                        "Could not save plan. Check required fields and try again.",
+                      ).message,
+                    );
                   }
                 }}
               >

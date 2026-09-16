@@ -17,6 +17,13 @@ import { EnrolFirstInstallmentControl } from "@/src/components/common/enrol-firs
 import { EnrolFormShell } from "@/src/components/common/enrol-form-shell";
 import { FieldLabel } from "@/src/components/common/page-parts";
 import { useDebouncedValue } from "@/src/hooks/use-debounced-value";
+import { Input } from "@/components/ui/input";
+import {
+  listSearchQueryForApi,
+  sanitizeListSearchQueryInput,
+  shouldSkipListSearchQuery,
+  validateListSearchQuery,
+} from "@/src/lib/list-date-range";
 import {
   defaultAmountForPlan,
   resolvedFirstInstallmentMode,
@@ -28,6 +35,16 @@ import {
   useGetPlansQuery,
   useValidateEnrolmentMutation,
 } from "@/src/store/api/admin-api";
+import { FormFieldError } from "@/src/components/common/form-field-error";
+import {
+  enrolSubmitReady,
+  liveEnrolAmountError,
+  validateEnrolAmount,
+  validateEnrolCustomerId,
+  validateEnrolPlanId,
+} from "@/src/lib/enrol-form-validation";
+import { handleFormApiError } from "@/src/lib/form-api-error";
+import { cn } from "@/lib/utils";
 import type { SchemePlan } from "@/src/types/domain";
 
 export function EnrollmentsCreateDialog({
@@ -37,7 +54,15 @@ export function EnrollmentsCreateDialog({
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
-  const customers = useGetCustomersQuery({}, { skip: !open });
+  const [customerSearch, setCustomerSearch] = useState("");
+  const debouncedCustomerSearch = useDebouncedValue(customerSearch, 350);
+  const customerSearchError = validateListSearchQuery(customerSearch);
+  const customers = useGetCustomersQuery(
+    { q: listSearchQueryForApi(debouncedCustomerSearch), limit: 40 },
+    {
+      skip: !open || shouldSkipListSearchQuery(debouncedCustomerSearch),
+    },
+  );
   const plans = useGetPlansQuery(undefined, { skip: !open });
   const [createEnrollment] = useCreateEnrollmentMutation();
   const [validateEnrolment, validateState] = useValidateEnrolmentMutation();
@@ -50,6 +75,10 @@ export function EnrollmentsCreateDialog({
     [plans.data?.items],
   );
 
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [customerTouched, setCustomerTouched] = useState(false);
+  const [planTouched, setPlanTouched] = useState(false);
+  const [amountTouched, setAmountTouched] = useState(false);
   const [form, setForm] = useState({
     customerId: "",
     planId: "",
@@ -57,7 +86,9 @@ export function EnrollmentsCreateDialog({
     firstInstallmentMode: "COLLECT_NOW" as "COLLECT_NOW" | "START_NEXT_CYCLE",
   });
 
-  const selectedPlan = activePlans.find((x) => x.id === form.planId);
+  const selectedPlan = activePlans.find(
+    (x: SchemePlan) => x.id === form.planId,
+  );
   const effectiveFirstMode = resolvedFirstInstallmentMode(
     selectedPlan,
     form.firstInstallmentMode,
@@ -72,6 +103,10 @@ export function EnrollmentsCreateDialog({
         amount: 0,
         firstInstallmentMode: "COLLECT_NOW",
       });
+      setFieldErrors({});
+      setCustomerTouched(false);
+      setPlanTouched(false);
+      setAmountTouched(false);
     }
   }, [open]);
 
@@ -98,22 +133,74 @@ export function EnrollmentsCreateDialog({
 
   const enrolBlockers = validateState.data?.blockers ?? [];
 
+  const displayCustomerError = () =>
+    fieldErrors.customerId ??
+    (customerTouched ? validateEnrolCustomerId(form.customerId) : undefined);
+
+  const displayPlanError = () =>
+    fieldErrors.planId ??
+    (planTouched ? validateEnrolPlanId(form.planId) : undefined);
+
+  const displayAmountError = () =>
+    fieldErrors.amount ??
+    (amountTouched || form.amount > 0
+      ? liveEnrolAmountError(selectedPlan, form.amount)
+      : undefined);
+
   return (
     <ActionDialog
       open={open}
-      onOpenChange={setOpen}
+      onOpenChange={(next) => {
+        setOpen(next);
+        if (!next) setCustomerSearch("");
+      }}
       className="max-h-[min(90vh,880px)] w-[calc(100vw-1.5rem)] sm:max-w-[920px]"
       trigger={trigger}
       title="Create enrollment"
       description="Customer, plan and first-installment rules are validated before submission."
       actionLabel="Create enrollment"
+      suppressDefaultErrorToast
+      onError={(err) => {
+        handleFormApiError(err, {
+          setFieldErrors,
+          fieldAliases: {
+            installmentAmountPaise: "amount",
+            customerId: "customerId",
+            planId: "planId",
+          },
+          fallback: "Could not create enrollment",
+        });
+      }}
       submitDisabled={
-        !form.customerId ||
-        !form.planId ||
-        validateState.isLoading ||
-        enrolBlockers.length > 0
+        !enrolSubmitReady({
+          customerId: form.customerId,
+          planId: form.planId,
+          plan: selectedPlan,
+          amount: debouncedAmount,
+          apiBlockers: enrolBlockers,
+          validateLoading: validateState.isLoading,
+        })
       }
       onSubmit={async () => {
+        setCustomerTouched(true);
+        setPlanTouched(true);
+        setAmountTouched(true);
+        const clientErrors: Record<string, string> = {};
+        const customerErr = validateEnrolCustomerId(form.customerId);
+        if (customerErr) clientErrors.customerId = customerErr;
+        const planErr = validateEnrolPlanId(form.planId);
+        if (planErr) clientErrors.planId = planErr;
+        const amountErr = validateEnrolAmount(selectedPlan, debouncedAmount);
+        if (amountErr) clientErrors.amount = amountErr;
+        if (Object.keys(clientErrors).length) {
+          setFieldErrors(clientErrors);
+          toast.error("Fix the highlighted fields.");
+          return false;
+        }
+        if (enrolBlockers.length) {
+          toast.error(enrolBlockers[0]?.message ?? "Enrolment is blocked.");
+          return false;
+        }
         const row = await createEnrollment({
           customerId: form.customerId,
           planId: form.planId,
@@ -131,13 +218,36 @@ export function EnrollmentsCreateDialog({
       >
         <div>
           <FieldLabel>Customer</FieldLabel>
+          <Input
+            className="mb-2 h-11"
+            placeholder="Search name, phone, or passbook no."
+            value={customerSearch}
+            onChange={(e) =>
+              setCustomerSearch(sanitizeListSearchQueryInput(e.target.value))
+            }
+            aria-invalid={Boolean(customerSearchError)}
+          />
+          <FormFieldError message={customerSearchError} />
           <Select
             value={form.customerId}
-            onValueChange={(value) =>
-              setForm({ ...form, customerId: value })
-            }
+            onValueChange={(value) => {
+              setForm({ ...form, customerId: value });
+              setCustomerTouched(true);
+              setFieldErrors((prev) => {
+                const next = { ...prev };
+                delete next.customerId;
+                return next;
+              });
+            }}
           >
-            <SelectTrigger className="h-11 w-full rounded-xl bg-[#faf7f5]">
+            <SelectTrigger
+              className={cn(
+                "h-11 w-full rounded-xl bg-[#faf7f5]",
+                displayCustomerError() && "border-red-600",
+              )}
+              aria-invalid={Boolean(displayCustomerError())}
+              onBlur={() => setCustomerTouched(true)}
+            >
               <SelectValue placeholder="Select customer" />
             </SelectTrigger>
             <SelectContent>
@@ -148,13 +258,14 @@ export function EnrollmentsCreateDialog({
               ))}
             </SelectContent>
           </Select>
+          <FormFieldError message={displayCustomerError()} />
         </div>
         <div>
           <FieldLabel>Scheme plan</FieldLabel>
           <Select
             value={form.planId}
             onValueChange={(value) => {
-              const plan = activePlans.find((x) => x.id === value);
+              const plan = activePlans.find((x: SchemePlan) => x.id === value);
               if (!plan) return;
               setForm({
                 ...form,
@@ -163,13 +274,27 @@ export function EnrollmentsCreateDialog({
                 firstInstallmentMode:
                   plan.firstInstallmentModeDefault ?? "COLLECT_NOW",
               });
+              setPlanTouched(true);
+              setFieldErrors((prev) => {
+                const next = { ...prev };
+                delete next.planId;
+                delete next.amount;
+                return next;
+              });
             }}
           >
-            <SelectTrigger className="h-11 w-full rounded-xl bg-[#faf7f5]">
+            <SelectTrigger
+              className={cn(
+                "h-11 w-full rounded-xl bg-[#faf7f5]",
+                displayPlanError() && "border-red-600",
+              )}
+              aria-invalid={Boolean(displayPlanError())}
+              onBlur={() => setPlanTouched(true)}
+            >
               <SelectValue placeholder="Select plan" />
             </SelectTrigger>
             <SelectContent>
-              {activePlans.map((x) => (
+              {activePlans.map((x: SchemePlan) => (
                 <SelectItem key={x.id} value={x.id}>
                   {x.name} · {x.tenure} months
                   {x.amountMode === "JEWELLER_FIXED"
@@ -179,12 +304,23 @@ export function EnrollmentsCreateDialog({
               ))}
             </SelectContent>
           </Select>
+          <FormFieldError message={displayPlanError()} />
         </div>
         <EnrolAmountControl
           plan={selectedPlan}
           amount={form.amount}
-          onAmountChange={(amount) => setForm({ ...form, amount })}
+          invalid={Boolean(displayAmountError())}
+          onAmountChange={(amount) => {
+            setForm({ ...form, amount });
+            setAmountTouched(true);
+            setFieldErrors((prev) => {
+              const next = { ...prev };
+              delete next.amount;
+              return next;
+            });
+          }}
         />
+        <FormFieldError message={displayAmountError()} />
         <EnrolFirstInstallmentControl
           plan={selectedPlan}
           value={form.firstInstallmentMode}

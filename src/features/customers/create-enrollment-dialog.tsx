@@ -14,6 +14,7 @@ import { ActionDialog } from "@/src/components/common/action-dialog";
 import { EnrolAmountControl } from "@/src/components/common/enrol-amount-control";
 import { EnrolFirstInstallmentControl } from "@/src/components/common/enrol-first-installment-control";
 import { EnrolFormShell } from "@/src/components/common/enrol-form-shell";
+import { FormFieldError } from "@/src/components/common/form-field-error";
 import { FieldLabel } from "@/src/components/common/page-parts";
 import { PageSkeleton } from "@/src/components/common/query-state";
 import { money } from "@/src/lib/format";
@@ -24,6 +25,13 @@ import {
   defaultAmountForPlan,
   resolvedFirstInstallmentMode,
 } from "@/src/lib/enrol-plan-rules";
+import {
+  enrolSubmitReady,
+  liveEnrolAmountError,
+  validateEnrolAmount,
+  validateEnrolPlanId,
+} from "@/src/lib/enrol-form-validation";
+import { handleFormApiError } from "@/src/lib/form-api-error";
 import { useDebouncedValue } from "@/src/hooks/use-debounced-value";
 import {
   useCreateEnrollmentMutation,
@@ -33,6 +41,13 @@ import {
 import { useAppSelector } from "@/src/store/hooks";
 import type { Customer, SchemePlan } from "@/src/types/domain";
 import { cn } from "@/lib/utils";
+
+function mergeFieldMessage(
+  apiOrSubmit: string | undefined,
+  live: string | undefined,
+): string | undefined {
+  return apiOrSubmit ?? live;
+}
 
 function CreateEnrollmentDialogInner({
   customer,
@@ -78,7 +93,13 @@ function CreateEnrollmentDialogInner({
       | "RECORD_MANUAL_PAYMENT"
       | "CREATE_PAYMENT_LINK",
   });
-  const selectedPlan = activePlans.find((x) => x.id === form.planId);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [planTouched, setPlanTouched] = useState(false);
+  const [amountTouched, setAmountTouched] = useState(false);
+
+  const selectedPlan = activePlans.find(
+    (x: SchemePlan) => x.id === form.planId,
+  );
   const effectiveFirstMode = resolvedFirstInstallmentMode(
     selectedPlan,
     form.firstInstallmentMode,
@@ -111,12 +132,38 @@ function CreateEnrollmentDialogInner({
         firstInstallmentMode: "COLLECT_NOW",
         firstInstallmentAction: "RECORD_MANUAL_PAYMENT",
       });
+      setFieldErrors({});
+      setPlanTouched(false);
+      setAmountTouched(false);
       return;
     }
     runValidate();
   }, [open, form.planId, debouncedAmount, effectiveFirstMode, runValidate]);
 
   const blockers = validateState.data?.blockers ?? [];
+
+  const displayPlanError = () =>
+    mergeFieldMessage(
+      fieldErrors.planId,
+      planTouched ? validateEnrolPlanId(form.planId) : undefined,
+    );
+
+  const displayAmountError = () =>
+    mergeFieldMessage(
+      fieldErrors.amount,
+      amountTouched || form.amount > 0
+        ? liveEnrolAmountError(selectedPlan, form.amount)
+        : undefined,
+    );
+
+  const submitDisabled = !enrolSubmitReady({
+    planId: form.planId,
+    plan: selectedPlan,
+    amount: debouncedAmount,
+    apiBlockers: blockers,
+    validateLoading: validateState.isLoading,
+    plansLoading: plansQuery.isLoading,
+  });
 
   return (
     <ActionDialog
@@ -127,14 +174,37 @@ function CreateEnrollmentDialogInner({
       title="Create enrollment"
       description={`Enrol ${customer.name} (${customer.customerNo}) into a scheme plan.`}
       actionLabel="Confirm enrolment"
-      submitDisabled={
-        !selectedPlan ||
-        plansQuery.isLoading ||
-        validateState.isLoading ||
-        blockers.length > 0
-      }
+      submitDisabled={submitDisabled}
+      suppressDefaultErrorToast
+      onError={(err) => {
+        handleFormApiError(err, {
+          setFieldErrors,
+          fieldAliases: {
+            installmentAmountPaise: "amount",
+            planId: "planId",
+          },
+          fallback: "Could not create enrollment",
+        });
+      }}
       onSubmit={async () => {
-        if (!selectedPlan) return;
+        setPlanTouched(true);
+        setAmountTouched(true);
+        const clientErrors: Record<string, string> = {};
+        const planErr = validateEnrolPlanId(form.planId);
+        if (planErr) clientErrors.planId = planErr;
+        const amountErr = validateEnrolAmount(selectedPlan, debouncedAmount);
+        if (amountErr) clientErrors.amount = amountErr;
+        if (Object.keys(clientErrors).length) {
+          setFieldErrors(clientErrors);
+          toast.error("Fix the highlighted fields.");
+          return false;
+        }
+        if (blockers.length) {
+          toast.error(blockers[0]?.message ?? "Enrolment is blocked.");
+          return false;
+        }
+        if (!selectedPlan) return false;
+
         const row = await createEnrollment({
           customerId: customer.id,
           planId: form.planId,
@@ -169,7 +239,7 @@ function CreateEnrollmentDialogInner({
             <Select
               value={form.planId}
               onValueChange={(value) => {
-                const plan = activePlans.find((x) => x.id === value);
+                const plan = activePlans.find((x: SchemePlan) => x.id === value);
                 if (!plan) return;
                 setForm({
                   ...form,
@@ -178,13 +248,27 @@ function CreateEnrollmentDialogInner({
                   firstInstallmentMode:
                     plan.firstInstallmentModeDefault ?? "COLLECT_NOW",
                 });
+                setPlanTouched(true);
+                setFieldErrors((prev) => {
+                  const next = { ...prev };
+                  delete next.planId;
+                  delete next.amount;
+                  return next;
+                });
               }}
             >
-              <SelectTrigger className="h-11 w-full rounded-xl bg-[#faf7f5]">
+              <SelectTrigger
+                className={cn(
+                  "h-11 w-full rounded-xl bg-[#faf7f5]",
+                  displayPlanError() && "border-red-600",
+                )}
+                aria-invalid={Boolean(displayPlanError())}
+                onBlur={() => setPlanTouched(true)}
+              >
                 <SelectValue placeholder="Choose a plan" />
               </SelectTrigger>
               <SelectContent>
-                {activePlans.map((x) => (
+                {activePlans.map((x: SchemePlan) => (
                   <SelectItem key={x.id} value={x.id}>
                     {x.name} · {x.tenure} months
                     {x.amountMode === "JEWELLER_FIXED"
@@ -194,12 +278,23 @@ function CreateEnrollmentDialogInner({
                 ))}
               </SelectContent>
             </Select>
+            <FormFieldError message={displayPlanError()} />
           </div>
           <EnrolAmountControl
             plan={selectedPlan}
             amount={form.amount}
-            onAmountChange={(amount) => setForm({ ...form, amount })}
+            invalid={Boolean(displayAmountError())}
+            onAmountChange={(amount) => {
+              setForm({ ...form, amount });
+              setAmountTouched(true);
+              setFieldErrors((prev) => {
+                const next = { ...prev };
+                delete next.amount;
+                return next;
+              });
+            }}
           />
+          <FormFieldError message={displayAmountError()} />
           {selectedPlan?.paymentPattern === "FIXED_DATE" ? (
             <EnrolFirstInstallmentControl
               plan={selectedPlan}

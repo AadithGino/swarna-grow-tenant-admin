@@ -60,7 +60,7 @@ export function ExportsPanel() {
   return (
     <Surface
       title="Async export jobs"
-      description="Large report exports run in the background"
+      description="Large report exports run in the background. Local dev: npm run dev in the API repo starts the worker with the server."
       action={
         <Button
           size="sm"

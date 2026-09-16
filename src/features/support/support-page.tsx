@@ -34,6 +34,13 @@ import {
   useActingBranchKey,
 } from "@/src/hooks/use-acting-branch-id";
 import { useDebouncedValue } from "@/src/hooks/use-debounced-value";
+import { FormFieldError } from "@/src/components/common/form-field-error";
+import {
+  LIST_SEARCH_QUERY_MAX,
+  listSearchQueryForApi,
+  shouldSkipListSearchQuery,
+  validateListSearchQuery,
+} from "@/src/lib/list-date-range";
 import { useGetGrievancesQuery } from "@/src/store/api/admin-api";
 import type { Grievance } from "@/src/types/domain";
 
@@ -52,7 +59,7 @@ export function SupportPage() {
   );
   const queryArgs = useMemo(
     () => ({
-      q: debouncedQ || undefined,
+      q: listSearchQueryForApi(debouncedQ),
       status: status === "ALL" ? undefined : status,
       priority: priority === "ALL" ? undefined : priority,
       overdueOnly: overdueOnly || undefined,
@@ -61,10 +68,13 @@ export function SupportPage() {
     }),
     [debouncedQ, status, priority, overdueOnly, branchId, pager.queryParams],
   );
-  const query = useGetGrievancesQuery(queryArgs);
+  const searchError = validateListSearchQuery(q);
+  const query = useGetGrievancesQuery(queryArgs, {
+    skip: shouldSkipListSearchQuery(debouncedQ),
+  });
   if (query.isLoading) return <PageSkeleton />;
   if (query.isError || !query.data)
-    return <QueryError onRetry={query.refetch} />;
+    return <QueryError error={query.error} onRetry={query.refetch} />;
   const s = query.data.summary;
   const rows = query.data.items;
   const page = query.data.page ?? emptyPageMeta();
@@ -156,10 +166,16 @@ export function SupportPage() {
             <Search className="absolute left-3 top-1/2 size-5 -translate-y-1/2 text-muted-foreground" />
             <Input
               value={q}
-              onChange={(e) => setQ(e.target.value)}
+              onChange={(e) =>
+                setQ(e.target.value.slice(0, LIST_SEARCH_QUERY_MAX))
+              }
               placeholder="Ticket, customer or subject"
               className="h-11 pl-11"
+              aria-invalid={Boolean(searchError)}
             />
+            <div className="mt-1 pl-11">
+              <FormFieldError message={searchError} />
+            </div>
           </div>
         </div>
         <PaginatedDataTable

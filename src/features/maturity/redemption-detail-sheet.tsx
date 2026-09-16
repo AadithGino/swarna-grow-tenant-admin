@@ -32,10 +32,18 @@ import {
 } from "@/components/ui/sheet";
 import { Textarea } from "@/components/ui/textarea";
 import { PageSkeleton, QueryError } from "@/src/components/common/query-state";
+import { FormFieldError } from "@/src/components/common/form-field-error";
 import { FieldLabel } from "@/src/components/common/page-parts";
 import { StatusBadge } from "@/src/components/common/status-badge";
 import { SettlementLinesPanel } from "@/src/features/enrollments/settlement-lines-panel";
-import { apiErrorMessage, toastApiError } from "@/src/lib/api-error";
+import { toastApiError } from "@/src/lib/api-error";
+import {
+  liveRedemptionCompleteRemarksError,
+  liveRedemptionRejectReasonError,
+  redemptionRejectReasonReady,
+  validateRedemptionCompleteRemarks,
+  validateRedemptionRejectReason,
+} from "@/src/lib/redemption-form-validation";
 import { downloadText } from "@/src/lib/download";
 import { money } from "@/src/lib/format";
 import { cn } from "@/lib/utils";
@@ -191,8 +199,12 @@ function RedemptionDetailBody({
   d,
   rejectReason,
   setRejectReason,
+  rejectReasonTouched,
+  setRejectReasonTouched,
   completeRemarks,
   setCompleteRemarks,
+  completeRemarksTouched,
+  setCompleteRemarksTouched,
   showRejectForm,
   setShowRejectForm,
   busy,
@@ -203,8 +215,12 @@ function RedemptionDetailBody({
   d: RedemptionDetailView;
   rejectReason: string;
   setRejectReason: (v: string) => void;
+  rejectReasonTouched: boolean;
+  setRejectReasonTouched: (v: boolean) => void;
   completeRemarks: string;
   setCompleteRemarks: (v: string) => void;
+  completeRemarksTouched: boolean;
+  setCompleteRemarksTouched: (v: boolean) => void;
   showRejectForm: boolean;
   setShowRejectForm: (v: boolean) => void;
   busy: boolean;
@@ -212,6 +228,17 @@ function RedemptionDetailBody({
   onReject: () => void;
   onCompleteClick: () => void;
 }) {
+  const rejectReasonError =
+    rejectReasonTouched || rejectReason.trim()
+      ? liveRedemptionRejectReasonError(rejectReason)
+      : undefined;
+  const completeRemarksError =
+    completeRemarksTouched || completeRemarks.length > 0
+      ? liveRedemptionCompleteRemarksError(completeRemarks)
+      : undefined;
+  const canConfirmReject = redemptionRejectReasonReady(rejectReason);
+  const canCompleteHandover =
+    validateRedemptionCompleteRemarks(completeRemarks) === undefined;
   const [fetchReceipt, receiptState] = useLazyGetRedemptionReceiptQuery();
   const settlementPreview = {
     ...d.settlementPreview,
@@ -350,22 +377,34 @@ function RedemptionDetailBody({
             <Textarea
               placeholder="Explain why this request cannot be approved"
               value={rejectReason}
-              onChange={(e) => setRejectReason(e.target.value)}
+              onChange={(e) => {
+                setRejectReasonTouched(true);
+                setRejectReason(e.target.value);
+              }}
+              onBlur={() => setRejectReasonTouched(true)}
               rows={3}
-              className="resize-none border-[#e4d7d2] bg-[#faf7f5]"
+              className={cn(
+                "resize-none border-[#e4d7d2] bg-[#faf7f5]",
+                rejectReasonError && "border-red-600",
+              )}
+              aria-invalid={Boolean(rejectReasonError)}
             />
+            <FormFieldError message={rejectReasonError} />
             <div className="mt-3 flex gap-2">
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => setShowRejectForm(false)}
+                onClick={() => {
+                  setShowRejectForm(false);
+                  setRejectReasonTouched(false);
+                }}
               >
                 Cancel
               </Button>
               <Button
                 size="sm"
                 variant="destructive"
-                disabled={busy || !rejectReason.trim()}
+                disabled={busy || !canConfirmReject}
                 onClick={onReject}
               >
                 Confirm reject
@@ -380,10 +419,19 @@ function RedemptionDetailBody({
             <Textarea
               placeholder="e.g. Cash paid at counter · Gold weighed and handed over"
               value={completeRemarks}
-              onChange={(e) => setCompleteRemarks(e.target.value)}
+              onChange={(e) => {
+                setCompleteRemarksTouched(true);
+                setCompleteRemarks(e.target.value);
+              }}
+              onBlur={() => setCompleteRemarksTouched(true)}
               rows={3}
-              className="resize-none border-[#e4d7d2] bg-[#faf7f5]"
+              className={cn(
+                "resize-none border-[#e4d7d2] bg-[#faf7f5]",
+                completeRemarksError && "border-red-600",
+              )}
+              aria-invalid={Boolean(completeRemarksError)}
             />
+            <FormFieldError message={completeRemarksError} />
           </DetailBlock>
         ) : null}
 
@@ -456,7 +504,7 @@ function RedemptionDetailBody({
           {approved ? (
             <Button
               className="h-11 w-full text-base font-semibold"
-              disabled={busy}
+              disabled={busy || !canCompleteHandover}
               onClick={onCompleteClick}
             >
               Complete handover
@@ -754,7 +802,9 @@ export function RedemptionDetailSheet({
   const [reject, rejectState] = useRejectRedemptionMutation();
   const [complete, completeState] = useCompleteRedemptionMutation();
   const [rejectReason, setRejectReason] = useState("");
+  const [rejectReasonTouched, setRejectReasonTouched] = useState(false);
   const [completeRemarks, setCompleteRemarks] = useState("");
+  const [completeRemarksTouched, setCompleteRemarksTouched] = useState(false);
   const [confirmCompleteOpen, setConfirmCompleteOpen] = useState(false);
   const [showRejectForm, setShowRejectForm] = useState(false);
 
@@ -773,7 +823,9 @@ export function RedemptionDetailSheet({
 
   function resetLocalState() {
     setRejectReason("");
+    setRejectReasonTouched(false);
     setCompleteRemarks("");
+    setCompleteRemarksTouched(false);
     setConfirmCompleteOpen(false);
     setShowRejectForm(false);
   }
@@ -799,7 +851,7 @@ export function RedemptionDetailSheet({
               <QueryError
                 onRetry={detailQuery.refetch}
                 title="Could not load redemption"
-                detail={apiErrorMessage(detailQuery.error)}
+                error={detailQuery.error}
               />
             </div>
           ) : (
@@ -807,8 +859,12 @@ export function RedemptionDetailSheet({
               d={d}
               rejectReason={rejectReason}
               setRejectReason={setRejectReason}
+              rejectReasonTouched={rejectReasonTouched}
+              setRejectReasonTouched={setRejectReasonTouched}
               completeRemarks={completeRemarks}
               setCompleteRemarks={setCompleteRemarks}
+              completeRemarksTouched={completeRemarksTouched}
+              setCompleteRemarksTouched={setCompleteRemarksTouched}
               showRejectForm={showRejectForm}
               setShowRejectForm={setShowRejectForm}
               busy={busy}
@@ -824,6 +880,12 @@ export function RedemptionDetailSheet({
                 }
               }}
               onReject={async () => {
+                setRejectReasonTouched(true);
+                const reasonErr = validateRedemptionRejectReason(rejectReason);
+                if (reasonErr) {
+                  toast.error(reasonErr);
+                  return;
+                }
                 try {
                   await reject({
                     id: d.id,
@@ -834,7 +896,16 @@ export function RedemptionDetailSheet({
                   toastApiError(err, "Could not reject redemption");
                 }
               }}
-              onCompleteClick={() => setConfirmCompleteOpen(true)}
+              onCompleteClick={() => {
+                setCompleteRemarksTouched(true);
+                const remarksErr =
+                  validateRedemptionCompleteRemarks(completeRemarks);
+                if (remarksErr) {
+                  toast.error(remarksErr);
+                  return;
+                }
+                setConfirmCompleteOpen(true);
+              }}
             />
           )}
         </SheetContent>
@@ -872,11 +943,21 @@ export function RedemptionDetailSheet({
               Not yet
             </AlertDialogCancel>
             <AlertDialogAction
-              disabled={completeState.isLoading || !d}
+              disabled={
+                completeState.isLoading ||
+                !d ||
+                validateRedemptionCompleteRemarks(completeRemarks) !== undefined
+              }
               className="bg-[#730321] hover:bg-[#5a021a]"
               onClick={async (e) => {
                 e.preventDefault();
                 if (!d) return;
+                const remarksErr =
+                  validateRedemptionCompleteRemarks(completeRemarks);
+                if (remarksErr) {
+                  toast.error(remarksErr);
+                  return;
+                }
                 try {
                   await complete({
                     id: d.id,

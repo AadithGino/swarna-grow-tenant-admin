@@ -1,12 +1,12 @@
 /**
- * API mode: defaults to the live backend (`NEXT_PUBLIC_USE_MOCKS=false`).
- * Set `NEXT_PUBLIC_USE_MOCKS=true` for offline demo without swarnagrow-backend.
+ * API mode: defaults to contract-shaped mocks until the backend URL is supplied.
+ * Set `NEXT_PUBLIC_USE_MOCKS=false` to connect every RTK Query endpoint to the API.
  */
 function readUseMocks(): boolean {
   const raw = process.env.NEXT_PUBLIC_USE_MOCKS?.trim().toLowerCase();
   if (raw === "true" || raw === "1" || raw === "yes") return true;
   if (raw === "false" || raw === "0" || raw === "no") return false;
-  return false;
+  return true;
 }
 
 export const env = {
@@ -15,3 +15,8 @@ export const env = {
   useMocks: readUseMocks(),
   mockDelayMs: Number(process.env.NEXT_PUBLIC_MOCK_DELAY_MS ?? 420),
 };
+
+/** Host root for routes outside `/api/v1` (e.g. `/health`). */
+export function apiOrigin(): string {
+  return env.apiBaseUrl.replace(/\/api\/v1\/?$/, "") || env.apiBaseUrl;
+}

@@ -44,7 +44,7 @@ export function MessageDetailDialog({
           {query.isLoading ? (
             <p className="text-sm text-muted-foreground">Loading…</p>
           ) : query.isError ? (
-            <QueryError onRetry={query.refetch} />
+            <QueryError error={query.error} onRetry={query.refetch} />
           ) : (
             <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-2 text-sm">
               <dt className="text-muted-foreground">Sent at</dt>

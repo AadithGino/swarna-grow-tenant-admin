@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,32 +14,79 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
+import { FormFieldError } from "@/src/components/common/form-field-error";
 import { FieldLabel } from "@/src/components/common/page-parts";
+import { toastApiError } from "@/src/lib/api-error";
+import {
+  HANDOVER_REMARKS_MAX,
+  liveHandoverRejectReasonError,
+  liveHandoverRemarksError,
+  validateHandoverAcceptedAmount,
+  validateHandoverRejectReason,
+  validateHandoverRemarks,
+} from "@/src/lib/cash-handover-form-validation";
 import { money } from "@/src/lib/format";
 import {
   useAcceptHandoverMutation,
   useRejectHandoverMutation,
   useResolveHandoverDiscrepancyMutation,
 } from "@/src/store/api/admin-api";
+import { cn } from "@/lib/utils";
 
 export function AcceptHandoverDialog({
   handover,
   open,
   onOpenChange,
 }: {
-  handover: { id: string; handoverNo: string; amount: number; status: string } | null;
+  handover: {
+    id: string;
+    handoverNo: string;
+    amount: number;
+    status: string;
+  } | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
-  const [acceptedPaise, setAcceptedPaise] = useState(0);
+  const [acceptedRupee, setAcceptedRupee] = useState(0);
   const [remarks, setRemarks] = useState("");
-  const [accept] = useAcceptHandoverMutation();
-  const [reject] = useRejectHandoverMutation();
-  const [resolve] = useResolveHandoverDiscrepancyMutation();
+  const [amountTouched, setAmountTouched] = useState(false);
+  const [remarksTouched, setRemarksTouched] = useState(false);
+  const [rejectMode, setRejectMode] = useState(false);
+  const [accept, acceptState] = useAcceptHandoverMutation();
+  const [reject, rejectState] = useRejectHandoverMutation();
+  const [resolve, resolveState] = useResolveHandoverDiscrepancyMutation();
+
+  const busy =
+    acceptState.isLoading || rejectState.isLoading || resolveState.isLoading;
+
+  useEffect(() => {
+    if (!open || !handover) return;
+    setAcceptedRupee(handover.amount);
+    setRemarks("");
+    setAmountTouched(false);
+    setRemarksTouched(false);
+    setRejectMode(false);
+  }, [open, handover?.id, handover?.amount]);
+
   if (!handover) return null;
+
   const submitted = handover.amount;
-  const accepted = acceptedPaise / 100 || submitted;
-  const variance = submitted - accepted;
+  const variance = submitted - acceptedRupee;
+  const amountError =
+    amountTouched || acceptedRupee > 0
+      ? validateHandoverAcceptedAmount(acceptedRupee)
+      : undefined;
+  const remarksError = rejectMode
+    ? liveHandoverRejectReasonError(remarks) ??
+      (remarksTouched && !remarks.trim()
+        ? "Rejection reason is required."
+        : undefined)
+    : liveHandoverRemarksError(remarks);
+
+  const acceptReady =
+    validateHandoverAcceptedAmount(acceptedRupee) === undefined &&
+    validateHandoverRemarks(remarks) === undefined;
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
@@ -55,73 +103,157 @@ export function AcceptHandoverDialog({
               <FieldLabel>Accepted amount (₹)</FieldLabel>
               <Input
                 type="number"
-                defaultValue={submitted}
-                onChange={(e) =>
-                  setAcceptedPaise(Math.round(Number(e.target.value) * 100))
-                }
+                min={0.01}
+                step={0.01}
+                value={acceptedRupee || ""}
+                disabled={rejectMode}
+                className={cn(amountError && "border-red-600")}
+                aria-invalid={Boolean(amountError)}
+                onChange={(e) => {
+                  setAmountTouched(true);
+                  setAcceptedRupee(Number(e.target.value));
+                }}
               />
+              <FormFieldError message={amountError} />
             </div>
-            {variance !== 0 && (
+            {variance !== 0 && !rejectMode && (
               <p className="text-sm text-amber-800">
                 Variance {money(Math.abs(variance))}{" "}
                 {variance > 0 ? "short" : "over"}
               </p>
             )}
-            <Textarea
-              placeholder="Acceptance remarks"
-              value={remarks}
-              onChange={(e) => setRemarks(e.target.value)}
-            />
+            <div>
+              <FieldLabel>
+                {rejectMode ? "Rejection reason (required)" : "Remarks (optional)"}
+              </FieldLabel>
+              <Textarea
+                placeholder={
+                  rejectMode
+                    ? "Why is this handover being rejected?"
+                    : "Acceptance remarks"
+                }
+                value={remarks}
+                maxLength={HANDOVER_REMARKS_MAX}
+                className={cn(remarksError && "border-red-600")}
+                aria-invalid={Boolean(remarksError)}
+                onChange={(e) => setRemarks(e.target.value)}
+                onBlur={() => setRemarksTouched(true)}
+              />
+              <FormFieldError message={remarksTouched ? remarksError : undefined} />
+            </div>
           </div>
         </DialogBody>
         <DialogFooter className="gap-2 sm:justify-between">
           <Button
             variant="outline"
             className="text-red-700"
-            onClick={async () => {
-              await reject({ id: handover.id, reason: remarks || "Rejected" }).unwrap();
-              toast.success("Handover rejected");
-              onOpenChange(false);
+            disabled={busy}
+            onClick={() => {
+              if (!rejectMode) {
+                setRejectMode(true);
+                setRemarksTouched(false);
+                return;
+              }
+              setRemarksTouched(true);
+              const err = validateHandoverRejectReason(remarks);
+              if (err) {
+                toast.error("Fix the highlighted fields.");
+                return;
+              }
+              void (async () => {
+                try {
+                  await reject({
+                    id: handover.id,
+                    reason: remarks.trim(),
+                  }).unwrap();
+                  toast.success("Handover rejected");
+                  onOpenChange(false);
+                } catch (e) {
+                  toastApiError(e, "Could not reject handover");
+                }
+              })();
             }}
           >
-            Reject
+            {rejectMode ? "Confirm reject" : "Reject"}
           </Button>
           <div className="flex gap-2">
+            {rejectMode ? (
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setRejectMode(false);
+                  setRemarks("");
+                  setRemarksTouched(false);
+                }}
+              >
+                Back
+              </Button>
+            ) : null}
             {handover.status === "DISCREPANCY" ? (
               <Button
+                disabled={busy || !acceptReady}
                 onClick={async () => {
-                  await resolve({
-                    id: handover.id,
-                    acceptedAmountPaise: acceptedPaise || Math.round(submitted * 100),
-                    remarks: remarks || "Resolved",
-                  }).unwrap();
-                  toast.success("Discrepancy resolved");
-                  onOpenChange(false);
+                  setAmountTouched(true);
+                  setRemarksTouched(true);
+                  const amtErr = validateHandoverAcceptedAmount(acceptedRupee);
+                  const remErr = validateHandoverRemarks(remarks);
+                  if (amtErr || remErr) {
+                    toast.error("Fix the highlighted fields.");
+                    return;
+                  }
+                  try {
+                    await resolve({
+                      id: handover.id,
+                      acceptedAmountPaise: Math.round(acceptedRupee * 100),
+                      remarks: remarks.trim() || "Resolved",
+                    }).unwrap();
+                    toast.success("Discrepancy resolved");
+                    onOpenChange(false);
+                  } catch (e) {
+                    toastApiError(e, "Could not resolve discrepancy");
+                  }
                 }}
               >
+                {busy && <Loader2 className="animate-spin" />}
                 Resolve
               </Button>
-            ) : (
+            ) : !rejectMode ? (
               <Button
+                disabled={busy || !acceptReady}
                 onClick={async () => {
-                  const amountPaise =
-                    acceptedPaise || Math.round(submitted * 100);
-                  if (variance !== 0) {
-                    await accept({
-                      id: handover.id,
-                      acceptedAmountPaise: amountPaise,
-                      remarks: remarks || "Accepted with variance",
-                    }).unwrap();
-                  } else {
-                    await accept({ id: handover.id, remarks }).unwrap();
+                  setAmountTouched(true);
+                  setRemarksTouched(true);
+                  const amtErr = validateHandoverAcceptedAmount(acceptedRupee);
+                  const remErr = validateHandoverRemarks(remarks);
+                  if (amtErr || remErr) {
+                    toast.error("Fix the highlighted fields.");
+                    return;
                   }
-                  toast.success("Handover accepted");
-                  onOpenChange(false);
+                  const amountPaise = Math.round(acceptedRupee * 100);
+                  try {
+                    if (variance !== 0) {
+                      await accept({
+                        id: handover.id,
+                        acceptedAmountPaise: amountPaise,
+                        remarks: remarks.trim() || "Accepted with variance",
+                      }).unwrap();
+                    } else {
+                      await accept({
+                        id: handover.id,
+                        remarks: remarks.trim() || undefined,
+                      }).unwrap();
+                    }
+                    toast.success("Handover accepted");
+                    onOpenChange(false);
+                  } catch (e) {
+                    toastApiError(e, "Could not accept handover");
+                  }
                 }}
               >
+                {busy && <Loader2 className="animate-spin" />}
                 Accept
               </Button>
-            )}
+            ) : null}
           </div>
         </DialogFooter>
       </DialogContent>

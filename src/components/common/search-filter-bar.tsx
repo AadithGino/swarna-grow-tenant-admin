@@ -12,7 +12,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { FormFieldError } from "@/src/components/common/form-field-error";
 import { Surface } from "@/src/components/common/page-parts";
+import {
+  sanitizeListSearchQueryInput,
+  validateListSearchQuery,
+} from "@/src/lib/list-date-range";
 import { cn } from "@/lib/utils";
 
 export type FilterOption = { value: string; label: string };
@@ -44,23 +49,31 @@ export function SearchFilterBar({
   className?: string;
 }) {
   const selectedLabel = filterLabelFor(filterOptions, filterValue);
+  const searchError = validateListSearchQuery(searchValue);
 
   return (
-    <div
-      className={cn(
-        "flex flex-col sm:flex-row sm:items-stretch",
-        toolbarChrome,
-        className,
-      )}
-    >
+    <div className={cn("space-y-1", className)}>
+      <div
+        className={cn(
+          "flex flex-col sm:flex-row sm:items-stretch",
+          toolbarChrome,
+        )}
+      >
       <div className="relative min-w-0 flex-1 border-b border-[#efe6ea] bg-[#faf6f7] sm:border-b-0 sm:border-r">
         <Search className="pointer-events-none absolute left-3.5 top-1/2 size-[18px] -translate-y-1/2 text-muted-foreground" />
         <Input
           value={searchValue}
-          onChange={(e) => onSearchChange(e.target.value)}
+          onChange={(e) =>
+            onSearchChange(sanitizeListSearchQueryInput(e.target.value))
+          }
           placeholder={searchPlaceholder}
-          className={cn(searchFieldClass, "rounded-none sm:rounded-l-xl")}
+          className={cn(
+            searchFieldClass,
+            "rounded-none sm:rounded-l-xl",
+            searchError && "border-red-600",
+          )}
           aria-label="Search"
+          aria-invalid={Boolean(searchError)}
         />
       </div>
 
@@ -107,6 +120,8 @@ export function SearchFilterBar({
           </SelectGroup>
         </SelectContent>
       </Select>
+      </div>
+      <FormFieldError message={searchError} />
     </div>
   );
 }
@@ -149,18 +164,30 @@ export function SearchToolbar({
   placeholder: string;
   className?: string;
 }) {
+  const searchError = validateListSearchQuery(value);
+
   return (
-    <div className={cn(toolbarChrome, "bg-[#faf6f7]", className)}>
-      <div className="relative min-w-0">
-        <Search className="pointer-events-none absolute left-3.5 top-1/2 size-[18px] -translate-y-1/2 text-muted-foreground" />
-        <Input
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder={placeholder}
-          className={cn(searchFieldClass, "rounded-xl")}
-          aria-label="Search"
-        />
+    <div className={cn("space-y-1", className)}>
+      <div className={cn(toolbarChrome, "bg-[#faf6f7]")}>
+        <div className="relative min-w-0">
+          <Search className="pointer-events-none absolute left-3.5 top-1/2 size-[18px] -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={value}
+            onChange={(e) =>
+              onChange(sanitizeListSearchQueryInput(e.target.value))
+            }
+            placeholder={placeholder}
+            className={cn(
+              searchFieldClass,
+              "rounded-xl",
+              searchError && "border-red-600",
+            )}
+            aria-label="Search"
+            aria-invalid={Boolean(searchError)}
+          />
+        </div>
       </div>
+      <FormFieldError message={searchError} />
     </div>
   );
 }

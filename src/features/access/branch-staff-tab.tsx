@@ -27,7 +27,7 @@ export function BranchStaffTab({ branchId }: { branchId: string }) {
   }
   if (query.isError || !query.data) {
     return (
-      <QueryError onRetry={query.refetch} title="Could not load staff roster" />
+      <QueryError error={query.error} onRetry={query.refetch} title="Could not load staff roster" />
     );
   }
 

@@ -14,6 +14,8 @@ import {
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { toastApiError } from "@/src/lib/api-error";
+import { validatePaymentLinkAmount } from "@/src/lib/payment-form-validation";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { PaginatedDataTable } from "@/src/components/common/paginated-data-table";
@@ -93,6 +95,7 @@ export function CustomerDetailPage({ id }: { id: string }) {
       <QueryError
         onRetry={customerQuery.refetch}
         title="Customer record is unavailable"
+        error={customerQuery.error}
       />
     );
   const customer = customerQuery.data;
@@ -150,14 +153,19 @@ export function CustomerDetailPage({ id }: { id: string }) {
         toast.error("No payable installment amount on the selected enrollment");
         return;
       }
+      const linkAmountErr = validatePaymentLinkAmount(amountPaise / 100);
+      if (linkAmountErr) {
+        toast.error(linkAmountErr);
+        return;
+      }
       const link = await createPaymentLink({
         schemeId: paymentLinkScheme.id,
         amountPaise,
         idempotencyKey: idempotencyKey(),
       }).unwrap();
       toast.success(`Payment link sent · expires ${link.expiresAt}`);
-    } catch {
-      toast.error("Could not create payment link");
+    } catch (err) {
+      toastApiError(err, "Could not create payment link");
     }
   }
 

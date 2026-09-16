@@ -25,6 +25,9 @@ import {
 } from "@/src/features/dashboard/dashboard-alerts";
 import { PaymentDialog } from "@/src/features/payments/payment-dialog";
 import { money } from "@/src/lib/format";
+import { DateRangeFilter } from "@/src/components/common/date-range-filter";
+import { FormFieldError } from "@/src/components/common/form-field-error";
+import { validateListDateRange } from "@/src/lib/list-date-range";
 import { portalPathFromContract } from "@/src/lib/contract-paths";
 import {
   useDismissAlertMutation,
@@ -33,6 +36,7 @@ import {
   useGetDashboardQuery,
   useGetGoldRateCurrentQuery,
 } from "@/src/store/api/admin-api";
+import { useClientMounted } from "@/src/hooks/use-client-mounted";
 import {
   useActingBranchId,
   useActingBranchKey,
@@ -58,7 +62,14 @@ function isRoundChart(block?: ChartSeriesBlock) {
   return t === "donut" || t === "pie";
 }
 
+function greetingForHour(hour: number) {
+  if (hour < 12) return "Good morning";
+  if (hour < 17) return "Good afternoon";
+  return "Good evening";
+}
+
 export function DashboardPage() {
+  const mounted = useClientMounted();
   const dispatch = useAppDispatch();
   const [period, setPeriod] = useState("THIS_MONTH");
   const globalBranch = useActingBranchKey();
@@ -70,12 +81,7 @@ export function DashboardPage() {
     (session?.user?.role === "TENANT_OWNER" ||
       session?.user?.role === "TENANT_ADMIN");
   const displayName = session?.user?.name?.trim() || "there";
-  const greeting = (() => {
-    const hour = new Date().getHours();
-    if (hour < 12) return "Good morning";
-    if (hour < 17) return "Good afternoon";
-    return "Good evening";
-  })();
+  const greeting = greetingForHour(new Date().getHours());
   const branchesQuery = useGetBranchesQuery(
     { limit: 50 },
     { skip: !multiBranch },
@@ -83,10 +89,35 @@ export function DashboardPage() {
   const goldCurrent = useGetGoldRateCurrentQuery(
     branchId ? { branchId } : undefined,
   );
-  const { data, isLoading, isError, refetch } = useGetDashboardQuery({
-    period,
-    branchId,
-  });
+  const [rangeMode, setRangeMode] = useState<"preset" | "custom">("preset");
+  const [customFrom, setCustomFrom] = useState("");
+  const [customTo, setCustomTo] = useState("");
+  const customRangeError = useMemo(() => {
+    if (rangeMode !== "custom") return undefined;
+    if (!customFrom.trim() && !customTo.trim()) return undefined;
+    return validateListDateRange(customFrom, customTo);
+  }, [rangeMode, customFrom, customTo]);
+
+  const customRangeReady =
+    rangeMode === "custom" &&
+    Boolean(customFrom.trim()) &&
+    Boolean(customTo.trim()) &&
+    !customRangeError;
+
+  const skipDashboard = rangeMode === "custom" && !customRangeReady;
+
+  const dashboardArg = useMemo(() => {
+    const base = { branchId };
+    if (customRangeReady) {
+      return { ...base, period: "CUSTOM", from: customFrom, to: customTo };
+    }
+    return { ...base, period };
+  }, [branchId, customFrom, customTo, customRangeReady, period]);
+
+  const { data, isLoading, isError, error, refetch } = useGetDashboardQuery(
+    dashboardArg,
+    { skip: skipDashboard || !mounted },
+  );
   const alertsQuery = useGetAlertsQuery(branchId ? { branchId } : undefined);
   const [dismissAlert] = useDismissAlertMutation();
 
@@ -100,8 +131,125 @@ export function DashboardPage() {
     [data?.defaultCharts],
   );
 
-  if (isLoading) return <PageSkeleton cards={5} />;
-  if (isError || !data) return <QueryError onRetry={refetch} />;
+  if (!mounted) {
+    return <PageSkeleton cards={5} />;
+  }
+
+  const headerDescription = skipDashboard
+    ? "Pick a start and end date to load metrics for that period."
+    : data?.scope?.label
+      ? `${data.scope.label} · ${data.period?.label ?? "This month"}`
+      : "Here's what's happening with your business today.";
+
+  const rangeControls = (
+    <>
+      <Select
+        value={rangeMode}
+        onValueChange={(v) => setRangeMode(v as "preset" | "custom")}
+      >
+        <SelectTrigger className="w-[9rem]">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="preset">Preset period</SelectItem>
+          <SelectItem value="custom">Custom range</SelectItem>
+        </SelectContent>
+      </Select>
+      {rangeMode === "preset" ? (
+        <Select value={period} onValueChange={setPeriod}>
+          <SelectTrigger className="w-[10rem]">
+            <SelectValue placeholder="Period" />
+          </SelectTrigger>
+          <SelectContent>
+            {PERIOD_OPTIONS.map((o) => (
+              <SelectItem key={o.value} value={o.value}>
+                {o.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      ) : (
+        <div className="space-y-1">
+          <DateRangeFilter
+            from={customFrom}
+            to={customTo}
+            onFromChange={setCustomFrom}
+            onToChange={setCustomTo}
+          />
+          <FormFieldError message={customRangeError} />
+        </div>
+      )}
+    </>
+  );
+
+  const pageHeader = (
+    <PageHeader
+      title={`${greeting}, ${displayName}`}
+      description={headerDescription}
+      actions={
+        <div className="flex flex-wrap items-center gap-2">
+          {canPickActingBranch && branchesQuery.data?.items?.length ? (
+            <Select
+              value={globalBranch}
+              onValueChange={(v) => dispatch(setBranch(v))}
+            >
+              <SelectTrigger className="w-[10rem]">
+                <SelectValue placeholder="Branch" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">All branches</SelectItem>
+                {branchesQuery.data.items.map((b: any) => (
+                  <SelectItem key={b.id} value={b.id}>
+                    {b.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : null}
+          {rangeControls}
+          <PaymentDialog
+            trigger={
+              <Button size="lg">
+                <HandCoins />
+                Collect payment
+              </Button>
+            }
+          />
+        </div>
+      }
+    />
+  );
+
+  if (skipDashboard) {
+    return (
+      <>
+        {pageHeader}
+        <Surface title="Custom date range" description="Dashboard metrics">
+          <p className="p-6 text-sm text-muted-foreground">
+            Choose start and end dates in the header, then metrics will load
+            automatically for that range.
+          </p>
+        </Surface>
+      </>
+    );
+  }
+
+  if (isLoading) {
+    return (
+      <>
+        {pageHeader}
+        <PageSkeleton cards={5} />
+      </>
+    );
+  }
+  if (isError || !data) {
+    return (
+      <>
+        {pageHeader}
+        <QueryError error={error} onRetry={refetch} />
+      </>
+    );
+  }
 
   const centreAlerts = alertsQuery.data ?? data.alerts ?? [];
   const panelAlerts = (
@@ -122,56 +270,7 @@ export function DashboardPage() {
 
   return (
     <>
-      <PageHeader
-        title={`${greeting}, ${displayName}`}
-        description={
-          data.scope?.label
-            ? `${data.scope.label} · ${data.period?.label ?? "This month"}`
-            : "Here's what's happening with your business today."
-        }
-        actions={
-          <div className="flex flex-wrap items-center gap-2">
-            {canPickActingBranch && branchesQuery.data?.items?.length ? (
-              <Select
-                value={globalBranch}
-                onValueChange={(v) => dispatch(setBranch(v))}
-              >
-                <SelectTrigger className="w-[10rem]">
-                  <SelectValue placeholder="Branch" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="ALL">All branches</SelectItem>
-                  {branchesQuery.data.items.map((b: any) => (
-                    <SelectItem key={b.id} value={b.id}>
-                      {b.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            ) : null}
-            <Select value={period} onValueChange={setPeriod}>
-              <SelectTrigger className="w-[10rem]">
-                <SelectValue placeholder="Period" />
-              </SelectTrigger>
-              <SelectContent>
-                {PERIOD_OPTIONS.map((o) => (
-                  <SelectItem key={o.value} value={o.value}>
-                    {o.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <PaymentDialog
-              trigger={
-                <Button size="lg">
-                  <HandCoins />
-                  Collect payment
-                </Button>
-              }
-            />
-          </div>
-        }
-      />
+      {pageHeader}
 
       <SetupChecklist />
 

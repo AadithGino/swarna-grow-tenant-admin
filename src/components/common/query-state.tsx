@@ -1,6 +1,7 @@
 import { AlertCircle, Inbox, RefreshCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { apiErrorDetailLines } from "@/src/lib/api-error";
 
 export function PageSkeleton({ cards = 4 }: { cards?: number }) {
   return (
@@ -23,21 +24,35 @@ export function QueryError({
   onRetry,
   title = "We couldn’t load this information",
   detail,
+  error,
 }: {
   onRetry: () => void;
   title?: string;
   /** Backend or network message; falls back to generic copy. */
   detail?: string;
+  /** RTK Query error — parsed for backend message, code, and trace id. */
+  error?: unknown;
 }) {
+  const fromApi = error ? apiErrorDetailLines(error) : [];
+  const primary =
+    detail ?? fromApi[0] ?? "Check your connection and try again. No changes were made.";
+  const secondary = detail ? fromApi.slice(1) : fromApi.slice(1);
+
   return (
     <div className="grid min-h-72 place-items-center rounded-2xl border bg-white p-8 text-center">
       <div>
         <AlertCircle className="mx-auto mb-3 size-9 text-red-600" />
         <h3 className="text-lg font-bold">{title}</h3>
         <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
-          {detail ??
-            "Check your connection and try again. No changes were made."}
+          {primary}
         </p>
+        {secondary.length ? (
+          <ul className="mx-auto mt-2 max-w-md space-y-0.5 text-xs text-muted-foreground">
+            {secondary.map((line) => (
+              <li key={line}>{line}</li>
+            ))}
+          </ul>
+        ) : null}
         <Button variant="outline" className="mt-5" onClick={onRetry}>
           <RefreshCcw /> Retry
         </Button>

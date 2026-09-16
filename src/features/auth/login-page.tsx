@@ -36,6 +36,8 @@ import {
   useSetPasswordMutation,
   useVerifyPasswordResetOtpMutation,
 } from "@/src/store/api/admin-api";
+import { apiErrorMessage, parseApiError } from "@/src/lib/api-error";
+import { cn } from "@/lib/utils";
 import { useAppDispatch } from "@/src/store/hooks";
 import { setSession } from "@/src/store/slices/session-slice";
 
@@ -48,34 +50,29 @@ type TenantOption = {
 function extractLoginError(err: unknown): {
   code?: string;
   message: string;
+  fieldErrors: Record<string, string>;
   tenants?: TenantOption[];
 } {
-  const e = err as {
-    data?: {
-      success?: boolean;
-      error?: { code?: string; message?: string; details?: any };
-      code?: string;
-      message?: string;
-      details?: any;
-    };
-    error?: string;
-    message?: string;
-    status?: number | string;
-  };
-  const payload = e?.data;
-  const nested = payload?.error;
-  const code = nested?.code ?? payload?.code;
-  const message =
-    nested?.message ??
-    payload?.message ??
-    e?.error ??
-    e?.message ??
-    "Sign in failed";
-  const details = nested?.details ?? payload?.details;
-  const tenants = Array.isArray(details?.tenants)
-    ? (details.tenants as TenantOption[])
-    : undefined;
-  return { code, message, tenants };
+  const parsed = parseApiError(err, "Sign in failed");
+  const payload = (err as { data?: { error?: { details?: unknown } } })?.data;
+  const details = payload?.error?.details;
+  const tenants =
+    details &&
+    typeof details === "object" &&
+    !Array.isArray(details) &&
+    Array.isArray((details as { tenants?: TenantOption[] }).tenants)
+      ? ((details as { tenants: TenantOption[] }).tenants as TenantOption[])
+      : undefined;
+  return { ...parsed, tenants };
+}
+
+function FieldError({ message }: { message?: string }) {
+  if (!message) return null;
+  return (
+    <p role="alert" className="mt-1.5 text-sm text-red-700">
+      {message}
+    </p>
+  );
 }
 
 export function LoginPage() {
@@ -104,6 +101,7 @@ export function LoginPage() {
     null,
   );
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [forgotOpen, setForgotOpen] = useState(false);
   const [forgotTenant, setForgotTenant] = useState("");
   const [forgotMobile, setForgotMobile] = useState("");
@@ -197,6 +195,7 @@ export function LoginPage() {
             onSubmit={async (e) => {
               e.preventDefault();
               setErrorMessage(null);
+              setFieldErrors({});
               setBusy(true);
               try {
                 if (env.useMocks) {
@@ -245,8 +244,15 @@ export function LoginPage() {
                   setTenantCode(parsed.tenants[0]?.tenantCode ?? "");
                   setErrorMessage("Select your jewellery to continue.");
                 } else {
-                  setErrorMessage(parsed.message);
-                  toast.error(parsed.message);
+                  setFieldErrors(parsed.fieldErrors);
+                  const toastText =
+                    Object.values(parsed.fieldErrors)[0] ?? parsed.message;
+                  setErrorMessage(
+                    Object.keys(parsed.fieldErrors).length
+                      ? toastText
+                      : parsed.message,
+                  );
+                  toast.error(toastText);
                 }
               } finally {
                 setBusy(false);
@@ -260,12 +266,26 @@ export function LoginPage() {
                 <Input
                   required
                   value={mobile}
-                  onChange={(e) => setMobile(e.target.value)}
+                  onChange={(e) => {
+                    setMobile(e.target.value);
+                    if (fieldErrors.mobile) {
+                      setFieldErrors((prev) => {
+                        const next = { ...prev };
+                        delete next.mobile;
+                        return next;
+                      });
+                    }
+                  }}
                   inputMode="numeric"
-                  className="h-12 pl-11 text-base"
+                  className={cn(
+                    "h-12 pl-11 text-base",
+                    fieldErrors.mobile && "border-red-600",
+                  )}
                   autoComplete="username"
+                  aria-invalid={Boolean(fieldErrors.mobile)}
                 />
               </div>
+              <FieldError message={fieldErrors.mobile} />
             </div>
             <div>
               <div className="flex justify-between">
@@ -287,10 +307,23 @@ export function LoginPage() {
                 <Input
                   required
                   value={password}
-                  onChange={(e) => setPasswordValue(e.target.value)}
+                  onChange={(e) => {
+                    setPasswordValue(e.target.value);
+                    if (fieldErrors.password) {
+                      setFieldErrors((prev) => {
+                        const next = { ...prev };
+                        delete next.password;
+                        return next;
+                      });
+                    }
+                  }}
                   type={show ? "text" : "password"}
-                  className="h-12 pl-11 pr-12 text-base"
+                  className={cn(
+                    "h-12 pl-11 pr-12 text-base",
+                    fieldErrors.password && "border-red-600",
+                  )}
                   autoComplete="current-password"
+                  aria-invalid={Boolean(fieldErrors.password)}
                 />
                 <button
                   type="button"
@@ -305,6 +338,7 @@ export function LoginPage() {
                   )}
                 </button>
               </div>
+              <FieldError message={fieldErrors.password} />
             </div>
             {(tenantOptions?.length || !env.useMocks) && (
               <div>
@@ -328,16 +362,32 @@ export function LoginPage() {
                 ) : (
                   <Input
                     value={tenantCode}
-                    onChange={(e) => setTenantCode(e.target.value)}
+                    onChange={(e) => {
+                      setTenantCode(e.target.value);
+                      if (fieldErrors.tenantCode) {
+                        setFieldErrors((prev) => {
+                          const next = { ...prev };
+                          delete next.tenantCode;
+                          return next;
+                        });
+                      }
+                    }}
                     placeholder="Tenant code if you work across jewelleries"
-                    className="h-12 text-base"
+                    className={cn(
+                      "h-12 text-base",
+                      fieldErrors.tenantCode && "border-red-600",
+                    )}
                     autoComplete="organization"
+                    aria-invalid={Boolean(fieldErrors.tenantCode)}
                   />
                 )}
+                <FieldError message={fieldErrors.tenantCode} />
               </div>
             )}
-            {errorMessage ? (
-              <p className="text-sm text-red-700">{errorMessage}</p>
+            {errorMessage && !Object.keys(fieldErrors).length ? (
+              <p role="alert" className="text-sm text-red-700">
+                {errorMessage}
+              </p>
             ) : null}
             <Button
               size="lg"
@@ -471,10 +521,9 @@ export function LoginPage() {
                     toast.success("OTP sent if the account exists");
                     setForgotStep("otp");
                   } catch (err) {
-                    const message =
-                      (err as { data?: { error?: { message?: string } } })?.data
-                        ?.error?.message ?? "Could not start password reset";
-                    toast.error(message);
+                    toast.error(
+                      apiErrorMessage(err, "Could not start password reset"),
+                    );
                   }
                 }}
               >
@@ -500,10 +549,7 @@ export function LoginPage() {
                     setResetToken(result.resetToken);
                     setForgotStep("password");
                   } catch (err) {
-                    const message =
-                      (err as { data?: { error?: { message?: string } } })?.data
-                        ?.error?.message ?? "Invalid or expired OTP";
-                    toast.error(message);
+                    toast.error(apiErrorMessage(err, "Invalid or expired OTP"));
                   }
                 }}
               >
@@ -527,10 +573,7 @@ export function LoginPage() {
                     setForgotOpen(false);
                     setPasswordValue("");
                   } catch (err) {
-                    const message =
-                      (err as { data?: { error?: { message?: string } } })?.data
-                        ?.error?.message ?? "Could not set password";
-                    toast.error(message);
+                    toast.error(apiErrorMessage(err, "Could not set password"));
                   }
                 }}
               >
@@ -595,10 +638,7 @@ export function LoginPage() {
                   setMustSetPasswordOpen(false);
                   router.push("/");
                 } catch (err) {
-                  const message =
-                    (err as { data?: { error?: { message?: string } } })?.data
-                      ?.error?.message ?? "Could not set password";
-                  toast.error(message);
+                  toast.error(apiErrorMessage(err, "Could not set password"));
                 }
               }}
             >

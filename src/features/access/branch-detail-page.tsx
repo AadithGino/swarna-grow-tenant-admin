@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { cn } from "@/lib/utils";
 import {
   Building2,
   IndianRupee,
@@ -14,9 +15,19 @@ import {
   UsersRound,
 } from "lucide-react";
 import { toast } from "sonner";
+import { toastApiError } from "@/src/lib/api-error";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ActionDialog } from "@/src/components/common/action-dialog";
+import { FormFieldError } from "@/src/components/common/form-field-error";
+import {
+  branchPatchFormReady,
+  liveBranchFieldErrors,
+  sanitizeBranchPincodeInput,
+  sanitizeOptionalContactDigits,
+  validateBranchPatchForm,
+} from "@/src/lib/access-form-validation";
+import { handleFormApiError } from "@/src/lib/form-api-error";
 import { PermissionGate } from "@/src/components/common/permission-gate";
 import {
   FieldLabel,
@@ -61,6 +72,25 @@ export function BranchDetailPage({ branchId }: { branchId: string }) {
   const [city, setCity] = useState("");
   const [pincode, setPincode] = useState("");
   const [contactNumber, setContactNumber] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [touched, setTouched] = useState<Record<string, boolean>>({});
+
+  const patchForm = useMemo(
+    () => ({ name, line1, city, pincode, contactNumber }),
+    [name, line1, city, pincode, contactNumber],
+  );
+  const liveErrors = useMemo(
+    () => liveBranchFieldErrors({ ...patchForm, code: "XX" }, { requireCode: false }),
+    [patchForm],
+  );
+  const displayError = (field: keyof typeof patchForm) => {
+    const show =
+      touched[field] ||
+      (field === "name" && name.trim()) ||
+      (field === "pincode" && pincode.replace(/\D/g, "")) ||
+      (field === "contactNumber" && contactNumber.replace(/\D/g, ""));
+    return fieldErrors[field] ?? (show ? liveErrors[field] : undefined);
+  };
 
   if (query.isLoading) return <PageSkeleton cards={5} />;
   if (query.isError || !query.data) {
@@ -68,6 +98,7 @@ export function BranchDetailPage({ branchId }: { branchId: string }) {
       <QueryError
         onRetry={query.refetch}
         title="Branch record is unavailable"
+        error={query.error}
       />
     );
   }
@@ -126,6 +157,8 @@ export function BranchDetailPage({ branchId }: { branchId: string }) {
               title="Update branch"
               description="Branch code cannot be changed after creation."
               actionLabel="Save changes"
+              submitDisabled={!branchPatchFormReady(patchForm)}
+              suppressDefaultErrorToast
               onOpenChange={(open) => {
                 if (open) {
                   setName(branchName);
@@ -133,31 +166,54 @@ export function BranchDetailPage({ branchId }: { branchId: string }) {
                   setCity(cityLabel === "—" ? "" : cityLabel);
                   setPincode(pincodeLabel === "—" ? "" : pincodeLabel);
                   setContactNumber(contact === "—" ? "" : contact);
+                  setFieldErrors({});
+                  setTouched({});
                 }
               }}
+              onError={(err) => {
+                handleFormApiError(err, {
+                  setFieldErrors,
+                  fallback: "Could not update branch",
+                });
+              }}
               onSubmit={async () => {
+                setTouched({
+                  name: true,
+                  line1: true,
+                  city: true,
+                  pincode: true,
+                  contactNumber: true,
+                });
+                const clientErrors = validateBranchPatchForm(patchForm);
+                if (Object.keys(clientErrors).length) {
+                  setFieldErrors(clientErrors);
+                  toast.error("Fix the highlighted fields.");
+                  return false;
+                }
+                const pin = sanitizeBranchPincodeInput(pincode);
                 try {
                   await patchBranch({
                     branchId,
                     body: {
-                      name: name.trim() || undefined,
+                      name: name.trim(),
                       address: {
                         line1: line1.trim() || undefined,
                         city: city.trim() || undefined,
-                        pincode: pincode.trim() || undefined,
+                        pincode: pin || undefined,
                       },
-                      contactNumber: contactNumber.trim() || undefined,
+                      contactNumber:
+                        sanitizeOptionalContactDigits(contactNumber) ||
+                        undefined,
                       expectedVersion: audit?.version,
                     },
                   }).unwrap();
                   toast.success("Branch updated");
                   await query.refetch();
                 } catch (err) {
-                  toast.error(
-                    err instanceof Error
-                      ? err.message
-                      : "Could not update branch. Try again.",
-                  );
+                  handleFormApiError(err, {
+                    setFieldErrors,
+                    fallback: "Could not update branch",
+                  });
                   return false;
                 }
               }}
@@ -165,31 +221,101 @@ export function BranchDetailPage({ branchId }: { branchId: string }) {
               <div className="grid gap-4">
                 <div>
                   <FieldLabel>Branch name</FieldLabel>
-                  <Input value={name} onChange={(e) => setName(e.target.value)} />
+                  <Input
+                    value={name}
+                    onChange={(e) => {
+                      setTouched((p) => ({ ...p, name: true }));
+                      setFieldErrors((p) => {
+                        const next = { ...p };
+                        delete next.name;
+                        return next;
+                      });
+                      setName(e.target.value);
+                    }}
+                    className={cn(displayError("name") && "border-red-600")}
+                    aria-invalid={Boolean(displayError("name"))}
+                  />
+                  <FormFieldError message={displayError("name")} />
                 </div>
                 <div>
                   <FieldLabel>Address line</FieldLabel>
-                  <Input value={line1} onChange={(e) => setLine1(e.target.value)} />
+                  <Input
+                    value={line1}
+                    onChange={(e) => {
+                      setTouched((p) => ({ ...p, line1: true }));
+                      setFieldErrors((p) => {
+                        const next = { ...p };
+                        delete next.line1;
+                        return next;
+                      });
+                      setLine1(e.target.value);
+                    }}
+                    className={cn(displayError("line1") && "border-red-600")}
+                    aria-invalid={Boolean(displayError("line1"))}
+                  />
+                  <FormFieldError message={displayError("line1")} />
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <FieldLabel>City</FieldLabel>
-                    <Input value={city} onChange={(e) => setCity(e.target.value)} />
+                    <Input
+                      value={city}
+                      onChange={(e) => {
+                        setTouched((p) => ({ ...p, city: true }));
+                        setFieldErrors((p) => {
+                          const next = { ...p };
+                          delete next.city;
+                          return next;
+                        });
+                        setCity(e.target.value);
+                      }}
+                      className={cn(displayError("city") && "border-red-600")}
+                      aria-invalid={Boolean(displayError("city"))}
+                    />
+                    <FormFieldError message={displayError("city")} />
                   </div>
                   <div>
                     <FieldLabel>Pincode</FieldLabel>
                     <Input
+                      inputMode="numeric"
                       value={pincode}
-                      onChange={(e) => setPincode(e.target.value)}
+                      onChange={(e) => {
+                        setTouched((p) => ({ ...p, pincode: true }));
+                        setFieldErrors((p) => {
+                          const next = { ...p };
+                          delete next.pincode;
+                          return next;
+                        });
+                        setPincode(sanitizeBranchPincodeInput(e.target.value));
+                      }}
+                      className={cn(displayError("pincode") && "border-red-600")}
+                      aria-invalid={Boolean(displayError("pincode"))}
                     />
+                    <FormFieldError message={displayError("pincode")} />
                   </div>
                 </div>
                 <div>
                   <FieldLabel>Contact number</FieldLabel>
                   <Input
+                    inputMode="tel"
                     value={contactNumber}
-                    onChange={(e) => setContactNumber(e.target.value)}
+                    onChange={(e) => {
+                      setTouched((p) => ({ ...p, contactNumber: true }));
+                      setFieldErrors((p) => {
+                        const next = { ...p };
+                        delete next.contactNumber;
+                        return next;
+                      });
+                      setContactNumber(
+                        sanitizeOptionalContactDigits(e.target.value),
+                      );
+                    }}
+                    className={cn(
+                      displayError("contactNumber") && "border-red-600",
+                    )}
+                    aria-invalid={Boolean(displayError("contactNumber"))}
                   />
+                  <FormFieldError message={displayError("contactNumber")} />
                 </div>
               </div>
             </ActionDialog>
@@ -308,7 +434,7 @@ export function BranchDetailPage({ branchId }: { branchId: string }) {
                       toast.success("Branch deactivated");
                     } catch (e: unknown) {
                       const err = e as { data?: { message?: string } };
-                      toast.error(err?.data?.message ?? "Could not deactivate");
+                      toastApiError(err, "Could not deactivate");
                       throw e;
                     }
                   }}

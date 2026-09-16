@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { toastApiError } from "@/src/lib/api-error";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -26,7 +27,19 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { PermissionGate } from "@/src/components/common/permission-gate";
+import { FormFieldError } from "@/src/components/common/form-field-error";
 import { FieldLabel } from "@/src/components/common/page-parts";
+import {
+  HANDOVER_REMARKS_MAX,
+  liveHandoverAmountError,
+  liveHandoverRemarksError,
+  markCashHandoverFormReady,
+  validateHandoverAmount,
+  validateHandoverReceiptCount,
+  validateHandoverRemarks,
+  validateHandoverStaffId,
+} from "@/src/lib/cash-handover-form-validation";
+import { cn } from "@/lib/utils";
 import { ACTION } from "@/src/lib/action-permissions";
 import { idempotencyKey, money } from "@/src/lib/format";
 import {
@@ -65,6 +78,10 @@ function MarkCashSubmittedDialogInner({
   const [autoAccept, setAutoAccept] = useState(true);
   const [remarks, setRemarks] = useState("");
   const [busy, setBusy] = useState(false);
+  const [staffTouched, setStaffTouched] = useState(false);
+  const [amountTouched, setAmountTouched] = useState(false);
+  const [receiptTouched, setReceiptTouched] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   const detailQuery = useGetStaffCashDetailQuery(staffId, {
     skip: !isOpen || !staffId,
@@ -90,7 +107,34 @@ function MarkCashSubmittedDialogInner({
     }
     setAutoAccept(true);
     setPhase("form");
+    setStaffTouched(false);
+    setAmountTouched(false);
+    setReceiptTouched(false);
+    setFieldErrors({});
   }, [isOpen, initialStaff, staffList]);
+
+  const cashInHand = selected?.balance;
+  const staffError =
+    fieldErrors.staffId ??
+    (staffTouched ? validateHandoverStaffId(staffId) : undefined);
+  const amountError =
+    fieldErrors.amount ??
+    (amountTouched || amount > 0
+      ? liveHandoverAmountError(amount, cashInHand)
+      : undefined);
+  const receiptError =
+    fieldErrors.receiptCount ??
+    (receiptTouched ? validateHandoverReceiptCount(receiptCount) : undefined);
+  const remarksError =
+    fieldErrors.remarks ?? liveHandoverRemarksError(remarks);
+
+  const formReady = markCashHandoverFormReady({
+    staffId,
+    amount,
+    receiptCount,
+    remarks,
+    cashInHand,
+  });
 
   useEffect(() => {
     if (initialStaff || !isOpen) return;
@@ -113,8 +157,21 @@ function MarkCashSubmittedDialogInner({
   }, [detailQuery.data?.receiptCount, detailQuery.data?.cashInHand, phase, initialStaff]);
 
   const submitHandover = async () => {
-    if (!staffId) {
-      toast.error("Select a staff member before recording the handover.");
+    setStaffTouched(true);
+    setAmountTouched(true);
+    setReceiptTouched(true);
+    const clientErrors: Record<string, string> = {};
+    const staffErr = validateHandoverStaffId(staffId);
+    if (staffErr) clientErrors.staffId = staffErr;
+    const amtErr = validateHandoverAmount(amount, cashInHand);
+    if (amtErr) clientErrors.amount = amtErr;
+    const rcErr = validateHandoverReceiptCount(receiptCount);
+    if (rcErr) clientErrors.receiptCount = rcErr;
+    const remErr = validateHandoverRemarks(remarks);
+    if (remErr) clientErrors.remarks = remErr;
+    if (Object.keys(clientErrors).length) {
+      setFieldErrors(clientErrors);
+      toast.error("Fix the highlighted fields.");
       return;
     }
     setBusy(true);
@@ -135,11 +192,9 @@ function MarkCashSubmittedDialogInner({
       setRemarks("");
       setOpen(false);
     } catch (err: unknown) {
-      const e = err as { data?: { error?: { message?: string }; message?: string } };
-      toast.error(
-        e?.data?.error?.message ??
-          e?.data?.message ??
-          "Could not record cash handover. Check the amount against cash in hand.",
+      toastApiError(
+        err,
+        "Could not record cash handover. Check the amount against cash in hand.",
       );
     } finally {
       setBusy(false);
@@ -165,10 +220,22 @@ function MarkCashSubmittedDialogInner({
                   <FieldLabel>Staff member</FieldLabel>
                   <Select
                     value={staffId}
-                    onValueChange={setStaffId}
+                    onValueChange={(value) => {
+                      setStaffId(value);
+                      setStaffTouched(true);
+                      setFieldErrors((prev) => {
+                        const next = { ...prev };
+                        delete next.staffId;
+                        return next;
+                      });
+                    }}
                     disabled={Boolean(initialStaff)}
                   >
-                    <SelectTrigger className="h-11 w-full">
+                    <SelectTrigger
+                      className={cn("h-11 w-full", staffError && "border-red-600")}
+                      aria-invalid={Boolean(staffError)}
+                      onBlur={() => setStaffTouched(true)}
+                    >
                       <SelectValue placeholder="Select staff" />
                     </SelectTrigger>
                     <SelectContent>
@@ -179,6 +246,7 @@ function MarkCashSubmittedDialogInner({
                       ))}
                     </SelectContent>
                   </Select>
+                  <FormFieldError message={staffError} />
                 </div>
                 {selected && (
                   <div className="rounded-xl border border-[#eaded9] bg-[#fbf8f5] px-4 py-3 text-sm">
@@ -194,20 +262,40 @@ function MarkCashSubmittedDialogInner({
                     <Input
                       type="number"
                       min={1}
-                      className="h-11"
+                      className={cn("h-11", amountError && "border-red-600")}
                       value={amount || ""}
-                      onChange={(e) => setAmount(Number(e.target.value))}
+                      aria-invalid={Boolean(amountError)}
+                      onChange={(e) => {
+                        setAmountTouched(true);
+                        setAmount(Number(e.target.value));
+                        setFieldErrors((prev) => {
+                          const next = { ...prev };
+                          delete next.amount;
+                          return next;
+                        });
+                      }}
                     />
+                    <FormFieldError message={amountError} />
                   </div>
                   <div>
                     <FieldLabel>Receipt count</FieldLabel>
                     <Input
                       type="number"
                       min={1}
-                      className="h-11"
+                      className={cn("h-11", receiptError && "border-red-600")}
                       value={receiptCount}
-                      onChange={(e) => setReceiptCount(Number(e.target.value))}
+                      aria-invalid={Boolean(receiptError)}
+                      onChange={(e) => {
+                        setReceiptTouched(true);
+                        setReceiptCount(Number(e.target.value));
+                        setFieldErrors((prev) => {
+                          const next = { ...prev };
+                          delete next.receiptCount;
+                          return next;
+                        });
+                      }}
                     />
+                    <FormFieldError message={receiptError} />
                   </div>
                 </div>
                 {detailQuery.isFetching ? (
@@ -263,8 +351,19 @@ function MarkCashSubmittedDialogInner({
                     rows={3}
                     placeholder="Optional — shown on acceptance audit trail"
                     value={remarks}
-                    onChange={(e) => setRemarks(e.target.value)}
+                    maxLength={HANDOVER_REMARKS_MAX}
+                    className={cn(remarksError && "border-red-600")}
+                    aria-invalid={Boolean(remarksError)}
+                    onChange={(e) => {
+                      setRemarks(e.target.value);
+                      setFieldErrors((prev) => {
+                        const next = { ...prev };
+                        delete next.remarks;
+                        return next;
+                      });
+                    }}
                   />
+                  <FormFieldError message={remarksError} />
                 </div>
               </>
             ) : (
@@ -319,13 +418,17 @@ function MarkCashSubmittedDialogInner({
           </Button>
           {phase === "form" ? (
             <Button
-              disabled={
-                !staffId ||
-                amount <= 0 ||
-                receiptCount < 1 ||
-                detailQuery.isFetching
-              }
-              onClick={() => setPhase("confirm")}
+              disabled={!formReady || detailQuery.isFetching}
+              onClick={() => {
+                setStaffTouched(true);
+                setAmountTouched(true);
+                setReceiptTouched(true);
+                if (!formReady) {
+                  toast.error("Fix the highlighted fields.");
+                  return;
+                }
+                setPhase("confirm");
+              }}
             >
               Review & confirm
             </Button>

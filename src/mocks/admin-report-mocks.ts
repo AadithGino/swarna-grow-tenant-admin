@@ -794,11 +794,18 @@ export function mockAdminReport(
 ): ContractWrapper {
   const key = (reportKey in BUILDERS ? reportKey : "OUTSTANDING") as AdminReportKey;
   const payload = BUILDERS[key]();
+  const basePeriod = payload.period as { from?: string; to?: string } | undefined;
+  const from = String(params.from ?? basePeriod?.from ?? "");
+  const to = String(params.to ?? basePeriod?.to ?? "");
   const allRows = payload.rows ?? [];
   const { items, page } = paginateSlice(allRows, params);
   return {
     __contract: true,
-    payload: { ...payload, rows: items },
+    payload: {
+      ...payload,
+      period: from && to ? period(from, to) : payload.period,
+      rows: items,
+    },
     meta: page,
   };
 }

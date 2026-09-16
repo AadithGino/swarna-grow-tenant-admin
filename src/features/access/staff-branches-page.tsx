@@ -3,12 +3,12 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
+import { cn } from "@/lib/utils";
 import {
   Building2,
   IndianRupee,
   MonitorSmartphone,
   Plus,
-  Search,
   ShieldCheck,
   UsersRound,
 } from "lucide-react";
@@ -24,6 +24,23 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { ActionDialog } from "@/src/components/common/action-dialog";
+import { FormFieldError } from "@/src/components/common/form-field-error";
+import {
+  branchCreateFormReady,
+  createStaffFormReady,
+  liveBranchFieldErrors,
+  liveCreateStaffFieldErrors,
+  sanitizeBranchCodeInput,
+  sanitizeBranchPincodeInput,
+  sanitizeOptionalContactDigits,
+  staffRequiresBranch,
+  validateBranchCreateForm,
+  validateCreateStaffForm,
+  type BranchFormFields,
+  type CreateStaffFormFields,
+} from "@/src/lib/access-form-validation";
+import { sanitizeIndianPhoneDigits } from "@/src/lib/customer-form";
+import { handleFormApiError } from "@/src/lib/form-api-error";
 import { PaginatedDataTable } from "@/src/components/common/paginated-data-table";
 import { PermissionGate } from "@/src/components/common/permission-gate";
 import {
@@ -43,7 +60,12 @@ import { StatusBadge } from "@/src/components/common/status-badge";
 import { money } from "@/src/lib/format";
 import { emptyPageMeta } from "@/src/lib/cursor-pagination";
 import { useCursorPagination } from "@/src/hooks/use-cursor-pagination";
+import { ListSearchInput } from "@/src/components/common/list-search-input";
 import { useDebouncedValue } from "@/src/hooks/use-debounced-value";
+import {
+  listSearchQueryForApi,
+  shouldSkipListSearchQuery,
+} from "@/src/lib/list-date-range";
 import {
   useCreateBranchMutation,
   useCreateStaffMutation,
@@ -53,6 +75,31 @@ import {
 } from "@/src/store/api/admin-api";
 
 type StaffRole = "BRANCH_STAFF" | "BRANCH_MANAGER" | "TENANT_ADMIN";
+
+const emptyBranchForm = (): BranchFormFields => ({
+  name: "",
+  code: "",
+  line1: "",
+  city: "",
+  pincode: "",
+  contactNumber: "",
+});
+
+const emptyStaffForm = (branchId = ""): CreateStaffFormFields => ({
+  name: "",
+  mobile: "",
+  password: "",
+  role: "BRANCH_STAFF",
+  branchId,
+  scope: "BRANCH",
+});
+
+function mergeFieldMessage(
+  apiOrSubmit: string | undefined,
+  live: string | undefined,
+): string | undefined {
+  return apiOrSubmit ?? live;
+}
 
 export function StaffBranchesPage() {
   const router = useRouter();
@@ -67,36 +114,91 @@ export function StaffBranchesPage() {
 
   const staffArgs = useMemo(
     () => ({
-      q: debouncedQ || undefined,
+      q: listSearchQueryForApi(debouncedQ),
       branchId: branchFilter,
       ...staffPager.queryParams,
     }),
     [debouncedQ, branchFilter, staffPager.queryParams],
   );
-  const staffQuery = useGetStaffQuery(staffArgs);
+  const staffQuery = useGetStaffQuery(staffArgs, {
+    skip: shouldSkipListSearchQuery(debouncedQ),
+  });
   const branchesQuery = useGetBranchesQuery(branchPager.queryParams);
   const accessSummaryQuery = useGetAccessSummaryQuery();
 
   const branchOptions = branchesQuery.data?.items ?? [];
 
-  const [branchForm, setBranchForm] = useState({
-    name: "",
-    code: "",
-    line1: "",
-    city: "",
-    pincode: "",
-    contactNumber: "",
-  });
+  const [branchForm, setBranchForm] = useState<BranchFormFields>(
+    emptyBranchForm(),
+  );
+  const [branchFieldErrors, setBranchFieldErrors] = useState<
+    Record<string, string>
+  >({});
+  const [branchTouched, setBranchTouched] = useState<
+    Partial<Record<keyof BranchFormFields, boolean>>
+  >({});
 
-  const [staffForm, setStaffForm] = useState({
-    name: "",
-    mobile: "",
-    password: "",
-    role: "BRANCH_STAFF" as StaffRole,
-    branchId: "",
-    scope: "BRANCH" as "BRANCH" | "TENANT",
-    mustChangePassword: true,
-  });
+  const [staffForm, setStaffForm] = useState<
+    CreateStaffFormFields & { mustChangePassword: boolean }
+  >({ ...emptyStaffForm(), mustChangePassword: true });
+  const [staffFieldErrors, setStaffFieldErrors] = useState<
+    Record<string, string>
+  >({});
+  const [staffBranchTouched, setStaffBranchTouched] = useState(false);
+  const [staffTouched, setStaffTouched] = useState<
+    Partial<Record<keyof CreateStaffFormFields, boolean>>
+  >({});
+
+  const branchLiveErrors = useMemo(
+    () => liveBranchFieldErrors(branchForm),
+    [branchForm],
+  );
+  const staffLiveErrors = useMemo(
+    () =>
+      liveCreateStaffFieldErrors(staffForm, {
+        branchTouched: staffBranchTouched,
+      }),
+    [staffForm, staffBranchTouched],
+  );
+
+  const branchDisplayError = (field: keyof BranchFormFields) => {
+    const showLive =
+      branchTouched[field] ||
+      (field === "name" && branchForm.name.trim()) ||
+      (field === "code" && branchForm.code.trim());
+    return mergeFieldMessage(
+      branchFieldErrors[field],
+      showLive ? branchLiveErrors[field] : undefined,
+    );
+  };
+
+  const staffDisplayError = (field: keyof CreateStaffFormFields) => {
+    const showLive =
+      staffTouched[field] ||
+      (field === "name" && staffForm.name.trim()) ||
+      (field === "mobile" && staffForm.mobile.replace(/\D/g, "")) ||
+      (field === "password" && staffForm.password);
+    return mergeFieldMessage(
+      staffFieldErrors[field],
+      showLive ? staffLiveErrors[field] : undefined,
+    );
+  };
+
+  const resetBranchDialog = () => {
+    setBranchForm(emptyBranchForm());
+    setBranchFieldErrors({});
+    setBranchTouched({});
+  };
+
+  const resetStaffDialog = () => {
+    setStaffForm({
+      ...emptyStaffForm(branchOptions[0]?.id ?? ""),
+      mustChangePassword: true,
+    });
+    setStaffFieldErrors({});
+    setStaffTouched({});
+    setStaffBranchTouched(false);
+  };
 
   useEffect(() => {
     if (branchFilter) {
@@ -113,10 +215,10 @@ export function StaffBranchesPage() {
     }
   }, [branchOptions, branchFilter, staffForm.branchId]);
 
-  const branchRequiredForStaff =
-    staffForm.role === "BRANCH_STAFF" ||
-    staffForm.role === "BRANCH_MANAGER" ||
-    (staffForm.role === "TENANT_ADMIN" && staffForm.scope === "BRANCH");
+  const branchRequiredForStaff = staffRequiresBranch(
+    staffForm.role,
+    staffForm.scope,
+  );
 
   if (
     staffQuery.isLoading ||
@@ -140,6 +242,9 @@ export function StaffBranchesPage() {
           branchesQuery.refetch();
           accessSummaryQuery.refetch();
         }}
+        error={
+          staffQuery.error ?? branchesQuery.error ?? accessSummaryQuery.error
+        }
       />
     );
 
@@ -182,27 +287,48 @@ export function StaffBranchesPage() {
                 title="Add branch"
                 description="Branch code is 2–6 uppercase characters and cannot be changed after creation."
                 actionLabel="Create branch"
-                submitDisabled={!branchForm.name || !branchForm.code}
-                onSubmit={async () => {
-                  await createBranch({
-                    name: branchForm.name,
-                    code: branchForm.code.toUpperCase(),
-                    address: {
-                      line1: branchForm.line1 || undefined,
-                      city: branchForm.city || undefined,
-                      pincode: branchForm.pincode || undefined,
-                    },
-                    contactNumber: branchForm.contactNumber || undefined,
-                  }).unwrap();
-                  toast.success(`${branchForm.name} created`);
-                  setBranchForm({
-                    name: "",
-                    code: "",
-                    line1: "",
-                    city: "",
-                    pincode: "",
-                    contactNumber: "",
+                submitDisabled={!branchCreateFormReady(branchForm)}
+                suppressDefaultErrorToast
+                onOpenChange={(open) => {
+                  if (!open) resetBranchDialog();
+                }}
+                onError={(err) => {
+                  handleFormApiError(err, {
+                    setFieldErrors: setBranchFieldErrors,
+                    fallback: "Could not create branch",
                   });
+                }}
+                onSubmit={async () => {
+                  setBranchTouched({
+                    name: true,
+                    code: true,
+                    line1: true,
+                    city: true,
+                    pincode: true,
+                    contactNumber: true,
+                  });
+                  const clientErrors = validateBranchCreateForm(branchForm);
+                  if (Object.keys(clientErrors).length) {
+                    setBranchFieldErrors(clientErrors);
+                    toast.error("Fix the highlighted fields.");
+                    return false;
+                  }
+                  const pin = sanitizeBranchPincodeInput(branchForm.pincode);
+                  await createBranch({
+                    name: branchForm.name.trim(),
+                    code: branchForm.code.trim().toUpperCase(),
+                    address: {
+                      line1: branchForm.line1.trim() || undefined,
+                      city: branchForm.city.trim() || undefined,
+                      pincode: pin || undefined,
+                    },
+                    contactNumber:
+                      sanitizeOptionalContactDigits(
+                        branchForm.contactNumber,
+                      ) || undefined,
+                  }).unwrap();
+                  toast.success(`${branchForm.name.trim()} created`);
+                  resetBranchDialog();
                 }}
               >
                 <div className="grid gap-4">
@@ -210,56 +336,112 @@ export function StaffBranchesPage() {
                     <FieldLabel>Branch name</FieldLabel>
                     <Input
                       value={branchForm.name}
-                      onChange={(e) =>
-                        setBranchForm({ ...branchForm, name: e.target.value })
-                      }
+                      onChange={(e) => {
+                        setBranchTouched((p) => ({ ...p, name: true }));
+                        setBranchFieldErrors((p) => {
+                          const next = { ...p };
+                          delete next.name;
+                          return next;
+                        });
+                        setBranchForm({ ...branchForm, name: e.target.value });
+                      }}
                       placeholder="Panampilly Nagar"
+                      className={cn(
+                        branchDisplayError("name") && "border-red-600",
+                      )}
+                      aria-invalid={Boolean(branchDisplayError("name"))}
                     />
+                    <FormFieldError message={branchDisplayError("name")} />
                   </div>
                   <div>
                     <FieldLabel>Branch code</FieldLabel>
                     <Input
                       value={branchForm.code}
-                      onChange={(e) =>
+                      onChange={(e) => {
+                        setBranchTouched((p) => ({ ...p, code: true }));
+                        setBranchFieldErrors((p) => {
+                          const next = { ...p };
+                          delete next.code;
+                          return next;
+                        });
                         setBranchForm({
                           ...branchForm,
-                          code: e.target.value.toUpperCase(),
-                        })
-                      }
+                          code: sanitizeBranchCodeInput(e.target.value),
+                        });
+                      }}
                       placeholder="PMN"
                       maxLength={6}
+                      className={cn(
+                        branchDisplayError("code") && "border-red-600",
+                      )}
+                      aria-invalid={Boolean(branchDisplayError("code"))}
                     />
+                    <FormFieldError message={branchDisplayError("code")} />
                   </div>
                   <div>
                     <FieldLabel>Address line</FieldLabel>
                     <Input
                       value={branchForm.line1}
-                      onChange={(e) =>
-                        setBranchForm({ ...branchForm, line1: e.target.value })
-                      }
+                      onChange={(e) => {
+                        setBranchTouched((p) => ({ ...p, line1: true }));
+                        setBranchFieldErrors((p) => {
+                          const next = { ...p };
+                          delete next.line1;
+                          return next;
+                        });
+                        setBranchForm({ ...branchForm, line1: e.target.value });
+                      }}
+                      className={cn(
+                        branchDisplayError("line1") && "border-red-600",
+                      )}
+                      aria-invalid={Boolean(branchDisplayError("line1"))}
                     />
+                    <FormFieldError message={branchDisplayError("line1")} />
                   </div>
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div>
                       <FieldLabel>City</FieldLabel>
                       <Input
                         value={branchForm.city}
-                        onChange={(e) =>
-                          setBranchForm({ ...branchForm, city: e.target.value })
-                        }
+                        onChange={(e) => {
+                          setBranchTouched((p) => ({ ...p, city: true }));
+                          setBranchFieldErrors((p) => {
+                            const next = { ...p };
+                            delete next.city;
+                            return next;
+                          });
+                          setBranchForm({ ...branchForm, city: e.target.value });
+                        }}
+                        className={cn(
+                          branchDisplayError("city") && "border-red-600",
+                        )}
+                        aria-invalid={Boolean(branchDisplayError("city"))}
                       />
+                      <FormFieldError message={branchDisplayError("city")} />
                     </div>
                     <div>
                       <FieldLabel>Pincode</FieldLabel>
                       <Input
+                        inputMode="numeric"
                         value={branchForm.pincode}
-                        onChange={(e) =>
+                        onChange={(e) => {
+                          setBranchTouched((p) => ({ ...p, pincode: true }));
+                          setBranchFieldErrors((p) => {
+                            const next = { ...p };
+                            delete next.pincode;
+                            return next;
+                          });
                           setBranchForm({
                             ...branchForm,
-                            pincode: e.target.value,
-                          })
-                        }
+                            pincode: sanitizeBranchPincodeInput(e.target.value),
+                          });
+                        }}
+                        className={cn(
+                          branchDisplayError("pincode") && "border-red-600",
+                        )}
+                        aria-invalid={Boolean(branchDisplayError("pincode"))}
                       />
+                      <FormFieldError message={branchDisplayError("pincode")} />
                     </div>
                   </div>
                   <div>
@@ -267,12 +449,30 @@ export function StaffBranchesPage() {
                     <Input
                       inputMode="tel"
                       value={branchForm.contactNumber}
-                      onChange={(e) =>
+                      onChange={(e) => {
+                        setBranchTouched((p) => ({ ...p, contactNumber: true }));
+                        setBranchFieldErrors((p) => {
+                          const next = { ...p };
+                          delete next.contactNumber;
+                          return next;
+                        });
                         setBranchForm({
                           ...branchForm,
-                          contactNumber: e.target.value,
-                        })
-                      }
+                          contactNumber: sanitizeOptionalContactDigits(
+                            e.target.value,
+                          ),
+                        });
+                      }}
+                      className={cn(
+                        branchDisplayError("contactNumber") &&
+                          "border-red-600",
+                      )}
+                      aria-invalid={Boolean(
+                        branchDisplayError("contactNumber"),
+                      )}
+                    />
+                    <FormFieldError
+                      message={branchDisplayError("contactNumber")}
                     />
                   </div>
                 </div>
@@ -289,16 +489,35 @@ export function StaffBranchesPage() {
                 title="Create staff member"
                 description="Created directly with mobile and a temporary password. They sign in on the staff app — no invite email."
                 actionLabel="Create staff"
-                submitDisabled={
-                  !staffForm.name ||
-                  !staffForm.mobile ||
-                  !staffForm.password ||
-                  (branchRequiredForStaff && !staffForm.branchId)
-                }
+                submitDisabled={!createStaffFormReady(staffForm)}
+                suppressDefaultErrorToast
+                onOpenChange={(open) => {
+                  if (!open) resetStaffDialog();
+                }}
+                onError={(err) => {
+                  handleFormApiError(err, {
+                    setFieldErrors: setStaffFieldErrors,
+                    fallback: "Could not create staff",
+                  });
+                }}
                 onSubmit={async () => {
+                  setStaffTouched({
+                    name: true,
+                    mobile: true,
+                    password: true,
+                    branchId: true,
+                  });
+                  setStaffBranchTouched(true);
+                  const clientErrors = validateCreateStaffForm(staffForm);
+                  if (Object.keys(clientErrors).length) {
+                    setStaffFieldErrors(clientErrors);
+                    toast.error("Fix the highlighted fields.");
+                    return false;
+                  }
+                  const mobile = sanitizeIndianPhoneDigits(staffForm.mobile);
                   await createStaff({
-                    name: staffForm.name,
-                    mobile: staffForm.mobile.replace(/\s/g, ""),
+                    name: staffForm.name.trim(),
+                    mobile,
                     password: staffForm.password,
                     role: staffForm.role,
                     branchId: staffForm.branchId,
@@ -310,18 +529,10 @@ export function StaffBranchesPage() {
                   }).unwrap();
                   toast.success(
                     staffForm.mustChangePassword
-                      ? `${staffForm.name} created — must change password on first login`
-                      : `${staffForm.name} created`,
+                      ? `${staffForm.name.trim()} created — must change password on first login`
+                      : `${staffForm.name.trim()} created`,
                   );
-                  setStaffForm({
-                    name: "",
-                    mobile: "",
-                    password: "",
-                    role: "BRANCH_STAFF",
-                    branchId: branchOptions[0]?.id ?? "",
-                    scope: "BRANCH",
-                    mustChangePassword: true,
-                  });
+                  resetStaffDialog();
                 }}
               >
                 <div className="grid gap-4">
@@ -329,21 +540,46 @@ export function StaffBranchesPage() {
                     <FieldLabel>Full name</FieldLabel>
                     <Input
                       value={staffForm.name}
-                      onChange={(e) =>
-                        setStaffForm({ ...staffForm, name: e.target.value })
-                      }
+                      onChange={(e) => {
+                        setStaffTouched((p) => ({ ...p, name: true }));
+                        setStaffFieldErrors((p) => {
+                          const next = { ...p };
+                          delete next.name;
+                          return next;
+                        });
+                        setStaffForm({ ...staffForm, name: e.target.value });
+                      }}
+                      className={cn(
+                        staffDisplayError("name") && "border-red-600",
+                      )}
+                      aria-invalid={Boolean(staffDisplayError("name"))}
                     />
+                    <FormFieldError message={staffDisplayError("name")} />
                   </div>
                   <div>
                     <FieldLabel>Mobile number</FieldLabel>
                     <Input
                       inputMode="tel"
                       value={staffForm.mobile}
-                      onChange={(e) =>
-                        setStaffForm({ ...staffForm, mobile: e.target.value })
-                      }
+                      onChange={(e) => {
+                        setStaffTouched((p) => ({ ...p, mobile: true }));
+                        setStaffFieldErrors((p) => {
+                          const next = { ...p };
+                          delete next.mobile;
+                          return next;
+                        });
+                        setStaffForm({
+                          ...staffForm,
+                          mobile: sanitizeIndianPhoneDigits(e.target.value),
+                        });
+                      }}
                       placeholder="9846778899"
+                      className={cn(
+                        staffDisplayError("mobile") && "border-red-600",
+                      )}
+                      aria-invalid={Boolean(staffDisplayError("mobile"))}
                     />
+                    <FormFieldError message={staffDisplayError("mobile")} />
                   </div>
                   <div>
                     <FieldLabel>Temporary password</FieldLabel>
@@ -351,10 +587,24 @@ export function StaffBranchesPage() {
                       type="password"
                       autoComplete="new-password"
                       value={staffForm.password}
-                      onChange={(e) =>
-                        setStaffForm({ ...staffForm, password: e.target.value })
-                      }
+                      onChange={(e) => {
+                        setStaffTouched((p) => ({ ...p, password: true }));
+                        setStaffFieldErrors((p) => {
+                          const next = { ...p };
+                          delete next.password;
+                          return next;
+                        });
+                        setStaffForm({ ...staffForm, password: e.target.value });
+                      }}
+                      className={cn(
+                        staffDisplayError("password") && "border-red-600",
+                      )}
+                      aria-invalid={Boolean(staffDisplayError("password"))}
                     />
+                    <FormFieldError message={staffDisplayError("password")} />
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      At least 8 characters (same rule as staff login).
+                    </p>
                   </div>
                   <div>
                     <FieldLabel>Role</FieldLabel>
@@ -414,9 +664,15 @@ export function StaffBranchesPage() {
                       <FieldLabel>Branch</FieldLabel>
                       <Select
                         value={staffForm.branchId}
-                        onValueChange={(v) =>
-                          setStaffForm({ ...staffForm, branchId: v })
-                        }
+                        onValueChange={(v) => {
+                          setStaffBranchTouched(true);
+                          setStaffFieldErrors((p) => {
+                            const next = { ...p };
+                            delete next.branchId;
+                            return next;
+                          });
+                          setStaffForm({ ...staffForm, branchId: v });
+                        }}
                       >
                         <SelectTrigger className="w-full">
                           <SelectValue placeholder="Select branch" />
@@ -429,6 +685,9 @@ export function StaffBranchesPage() {
                           ))}
                         </SelectContent>
                       </Select>
+                      <FormFieldError
+                        message={staffDisplayError("branchId")}
+                      />
                       <p className="mt-1 text-xs text-muted-foreground">
                         Required for branch staff, branch managers, and
                         branch-scoped tenant admins.
@@ -499,15 +758,12 @@ export function StaffBranchesPage() {
       </div>
       <Surface className="overflow-visible">
         <div className="grid gap-3 border-b border-[#eaded9] p-4 lg:grid-cols-[minmax(260px,1fr)_auto]">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 size-5 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              placeholder="Staff name, phone, email or branch…"
-              className="h-11 pl-11"
-            />
-          </div>
+          <ListSearchInput
+            value={q}
+            onChange={setQ}
+            placeholder="Staff name, phone, email or branch…"
+            inputClassName="h-11"
+          />
         </div>
         <PageTabs defaultValue="staff" layout="embedded">
           <PageTabsBar sectionLabel="Directory views">

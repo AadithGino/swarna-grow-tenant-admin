@@ -59,14 +59,11 @@ import {
 } from "@/components/ui/tooltip";
 import { BrandMark } from "@/src/components/brand/brand-mark";
 import { PaymentSuccessHost } from "@/src/components/common/payment-success-host";
-import { AlertCentreMenu } from "@/src/features/dashboard/dashboard-alerts";
-import { HelpCentreMenu } from "@/src/components/layout/help-centre-menu";
 import { SecuritySessionsDialog } from "@/src/features/auth/security-sessions-dialog";
 import { canAccessRoute } from "@/src/lib/permissions";
 import { useAppDispatch, useAppSelector } from "@/src/store/hooks";
 import { clearSession } from "@/src/store/slices/session-slice";
 import {
-  useGetAlertsQuery,
   useGetBranchesQuery,
   useLogoutMutation,
 } from "@/src/store/api/admin-api";
@@ -76,6 +73,7 @@ import {
   toggleSidebar,
 } from "@/src/store/slices/ui-slice";
 import { cn } from "@/lib/utils";
+import { sanitizeListSearchQueryInput } from "@/src/lib/list-date-range";
 import {
   GlobalSearchDialog,
   useGlobalSearchHotkey,
@@ -320,9 +318,6 @@ function Topbar() {
   const openSearch = useCallback(() => setSearchOpen(true), []);
   useGlobalSearchHotkey(openSearch);
   const [logout] = useLogoutMutation();
-  const { data: alerts = [] } = useGetAlertsQuery(
-    branch && branch !== "ALL" ? { branchId: branch } : undefined,
-  );
   const { data: branchesData } = useGetBranchesQuery({ limit: 100 });
   const branchOptions = branchesData?.items ?? [];
 
@@ -346,7 +341,9 @@ function Topbar() {
         open={searchOpen}
         onOpenChange={setSearchOpen}
         query={search}
-        onQueryChange={(value) => dispatch(setGlobalSearch(value))}
+        onQueryChange={(value) =>
+          dispatch(setGlobalSearch(sanitizeListSearchQueryInput(value)))
+        }
       />
       <header className="sticky top-0 z-30 flex h-[5.125rem] items-center gap-3 border-b border-[#e8dcd8] bg-white/95 px-4 backdrop-blur md:px-6">
       <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
@@ -372,7 +369,11 @@ function Topbar() {
         <Search className="absolute left-4 top-1/2 size-5 -translate-y-1/2 text-[#7f7375]" />
         <Input
           value={search}
-          onChange={(e) => dispatch(setGlobalSearch(e.target.value))}
+          onChange={(e) =>
+            dispatch(
+              setGlobalSearch(sanitizeListSearchQueryInput(e.target.value)),
+            )
+          }
           onFocus={() => setSearchOpen(true)}
           onKeyDown={(e) => {
             if (e.key === "Enter") setSearchOpen(true);
@@ -420,8 +421,6 @@ function Topbar() {
           </Select>
         ) : null}
       </div>
-      <HelpCentreMenu />
-      <AlertCentreMenu alerts={alerts} />
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button variant="ghost" className="h-12 gap-3 px-2">

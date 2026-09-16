@@ -11,6 +11,8 @@ import {
   Send,
 } from "lucide-react";
 import { toast } from "sonner";
+import { toastApiError } from "@/src/lib/api-error";
+import { validateReminderConfigOffsets } from "@/src/lib/settings-form-validation";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { DateRangeFilter } from "@/src/components/common/date-range-filter";
@@ -26,14 +28,16 @@ import {
   PageTabsBar,
   PageTabsPanel,
 } from "@/src/components/common/page-tabs";
-import { PageSkeleton, QueryError } from "@/src/components/common/query-state";
+import {
+  EmptyState,
+  PageSkeleton,
+  QueryError,
+} from "@/src/components/common/query-state";
 import { StatusBadge } from "@/src/components/common/status-badge";
 import { money } from "@/src/lib/format";
 import { emptyPageMeta } from "@/src/lib/cursor-pagination";
-import {
-  defaultListRangeFrom,
-  defaultListRangeTo,
-} from "@/src/lib/list-date-range";
+import { FormFieldError } from "@/src/components/common/form-field-error";
+import { useValidatedListDateRange } from "@/src/hooks/use-validated-list-date-range";
 import {
   useActingBranchId,
   useActingBranchKey,
@@ -41,7 +45,6 @@ import {
 import { useCursorPagination } from "@/src/hooks/use-cursor-pagination";
 import { ChartSeriesView } from "@/src/components/common/chart-series-view";
 import { ReminderOffsetTimeline } from "@/src/features/reminders/reminder-offset-timeline";
-import { useThrottledValue } from "@/src/hooks/use-throttled-value";
 import {
   useGetMessagesQuery,
   useGetMessagingSummaryQuery,
@@ -54,29 +57,29 @@ import { MessageDetailDialog } from "@/src/features/reminders/message-detail-dia
 import { TemplatePreviewDialog } from "@/src/features/reminders/template-preview-dialog";
 
 export function RemindersPage() {
-  const [from, setFrom] = useState(() => defaultListRangeFrom());
-  const [to, setTo] = useState(() => defaultListRangeTo());
-  const throttledFrom = useThrottledValue(from, 400);
-  const throttledTo = useThrottledValue(to, 400);
+  const { from, setFrom, to, setTo, dateRangeError, skipForBadDates } =
+    useValidatedListDateRange();
   const branchId = useActingBranchId();
   const branchKey = useActingBranchKey();
   const pager = useCursorPagination(
     8,
-    `${throttledFrom}|${throttledTo}|${branchKey}`,
+    `${from}|${to}|${branchKey}`,
   );
-  const query = useGetMessagesQuery({
-    from: throttledFrom,
-    to: throttledTo,
-    branchId,
-    ...pager.queryParams,
-  });
+  const query = useGetMessagesQuery(
+    {
+      from,
+      to,
+      branchId,
+      ...pager.queryParams,
+    },
+    { skip: skipForBadDates },
+  );
   const templatesQuery = useGetMessagingTemplatesQuery();
   const configQuery = useGetRemindersConfigQuery();
-  const summaryQuery = useGetMessagingSummaryQuery({
-    from: throttledFrom,
-    to: throttledTo,
-    branchId,
-  });
+  const summaryQuery = useGetMessagingSummaryQuery(
+    { from, to, branchId },
+    { skip: skipForBadDates },
+  );
   const [resend] = useResendMessageMutation();
   const [updateConfig] = useUpdateRemindersConfigMutation();
   const [viewMessageId, setViewMessageId] = useState<string | null>(null);
@@ -87,9 +90,40 @@ export function RemindersPage() {
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewType, setPreviewType] = useState<string | null>(null);
   const [previewLabel, setPreviewLabel] = useState<string>("");
+
+  async function persistReminderOffsets(
+    offsets: { key: string; days: number; enabled?: boolean }[],
+  ) {
+    const configErr = validateReminderConfigOffsets(offsets);
+    if (configErr) {
+      toast.error(configErr);
+      return;
+    }
+    try {
+      await updateConfig({ ...configQuery.data, offsets }).unwrap();
+      toast.success("Schedule updated");
+    } catch (err) {
+      toastApiError(err, "Could not update reminder schedule");
+    }
+  }
+
+  if (skipForBadDates) {
+    return (
+      <>
+        <PageHeader
+          eyebrow="Engagement & insight"
+          title="Reminder centre"
+          description="WhatsApp templates, automated schedules, delivery logs, retry queues and usage."
+        />
+        <Surface title="Invalid period">
+          <EmptyState title="Fix the date range" detail={dateRangeError ?? ""} />
+        </Surface>
+      </>
+    );
+  }
   if (query.isLoading) return <PageSkeleton />;
   if (query.isError || !query.data)
-    return <QueryError onRetry={query.refetch} />;
+    return <QueryError error={query.error} onRetry={query.refetch} />;
   const listSummary = query.data.summary ?? {};
   const periodSummary = summaryQuery.data ?? {};
   const s = { ...listSummary, ...periodSummary };
@@ -113,13 +147,16 @@ export function RemindersPage() {
         title="Reminder centre"
         description="WhatsApp templates, automated schedules, delivery logs, retry queues and usage."
         actions={
-          <DateRangeFilter
-            label="Sent"
-            from={from}
-            to={to}
-            onFromChange={setFrom}
-            onToChange={setTo}
-          />
+          <div className="space-y-1">
+            <DateRangeFilter
+              label="Sent"
+              from={from}
+              to={to}
+              onFromChange={setFrom}
+              onToChange={setTo}
+            />
+            <FormFieldError message={dateRangeError} />
+          </div>
         }
       />
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
@@ -129,8 +166,8 @@ export function RemindersPage() {
           value={s.sent ?? 0}
           detail={
             periodSummary.periodLabel ??
-            (throttledFrom && throttledTo
-              ? `${throttledFrom} – ${throttledTo}`
+            (from && to
+              ? `${from} – ${to}`
               : "Selected period")
           }
         />
@@ -313,10 +350,10 @@ export function RemindersPage() {
               offsets={configQuery.data?.offsets ?? []}
               onToggle={async (key, enabled) => {
                 const offsets = (configQuery.data?.offsets ?? []).map(
-                  (o: any) => (o.key === key ? { ...o, enabled } : o),
+                  (o: { key: string; days: number; enabled?: boolean }) =>
+                    o.key === key ? { ...o, enabled } : o,
                 );
-                await updateConfig({ ...configQuery.data, offsets }).unwrap();
-                toast.success("Schedule updated");
+                await persistReminderOffsets(offsets);
               }}
             />
             <div className="divide-y border-t">
@@ -336,13 +373,10 @@ export function RemindersPage() {
                     aria-label={`Enable ${row.label}`}
                     onCheckedChange={async (enabled) => {
                       const offsets = (configQuery.data?.offsets ?? []).map(
-                        (o: any) => (o.key === row.key ? { ...o, enabled } : o),
+                        (o: { key: string; days: number; enabled?: boolean }) =>
+                          o.key === row.key ? { ...o, enabled } : o,
                       );
-                      await updateConfig({
-                        ...configQuery.data,
-                        offsets,
-                      }).unwrap();
-                      toast.success("Schedule updated");
+                      await persistReminderOffsets(offsets);
                     }}
                   />
                 </div>

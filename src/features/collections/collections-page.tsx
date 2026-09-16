@@ -11,7 +11,7 @@ import {
   CreditCard,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { ListSearchInput } from "@/src/components/common/list-search-input";
 import {
   CollectionTrendChart,
   DonutChart,
@@ -24,7 +24,12 @@ import {
   Surface,
 } from "@/src/components/common/page-parts";
 import { PageFilterTabs, PageTab } from "@/src/components/common/page-tabs";
-import { PageSkeleton, QueryError } from "@/src/components/common/query-state";
+import {
+  EmptyState,
+  PageSkeleton,
+  QueryError,
+} from "@/src/components/common/query-state";
+import { useValidatedListDateRange } from "@/src/hooks/use-validated-list-date-range";
 import { StatusBadge } from "@/src/components/common/status-badge";
 import { downloadBlobUrl, downloadCsv, downloadText } from "@/src/lib/download";
 import { money } from "@/src/lib/format";
@@ -32,13 +37,15 @@ import { emptyPageMeta } from "@/src/lib/cursor-pagination";
 import {
   defaultListRangeFrom,
   defaultListRangeTo,
+  listSearchQueryForApi,
+  sanitizeListSearchQueryInput,
+  shouldSkipListSearchQuery,
 } from "@/src/lib/list-date-range";
 import {
   useActingBranchId,
   useActingBranchKey,
 } from "@/src/hooks/use-acting-branch-id";
 import { useCursorPagination } from "@/src/hooks/use-cursor-pagination";
-import { useThrottledValue } from "@/src/hooks/use-throttled-value";
 import { useDebouncedValue } from "@/src/hooks/use-debounced-value";
 import {
   useGetDashboardQuery,
@@ -49,24 +56,28 @@ import {
   useReversePaymentMutation,
 } from "@/src/store/api/admin-api";
 import { toast } from "sonner";
+import { toastApiError } from "@/src/lib/api-error";
+import { ReversePaymentDialog } from "@/src/features/collections/reverse-payment-dialog";
 
 type LedgerTab = "all" | "pending" | "late" | "reversed";
 
 export function CollectionsPage() {
   const searchParams = useSearchParams();
   const receiptFromUrl = searchParams.get("q") ?? "";
-  const [from, setFrom] = useState(() => defaultListRangeFrom());
-  const [to, setTo] = useState(() => defaultListRangeTo());
+  const { from, setFrom, to, setTo, dateRangeError, skipForBadDates } =
+    useValidatedListDateRange();
   const [tab, setTab] = useState<LedgerTab>("all");
-  const [q, setQ] = useState(receiptFromUrl);
+  const [q, setQ] = useState(() =>
+    sanitizeListSearchQueryInput(receiptFromUrl),
+  );
   const debouncedQ = useDebouncedValue(q, 350);
-  const throttledFrom = useThrottledValue(from, 400);
-  const throttledTo = useThrottledValue(to, 400);
+  const skipForSearch = shouldSkipListSearchQuery(debouncedQ);
+  const skipQueries = skipForBadDates || skipForSearch;
   const branchId = useActingBranchId();
   const branchKey = useActingBranchKey();
   const pager = useCursorPagination(
     8,
-    `${throttledFrom}|${throttledTo}|${tab}|${debouncedQ}|${branchKey}`,
+    `${from}|${to}|${tab}|${debouncedQ}|${branchKey}`,
   );
   const [fetchReceipt] = useLazyGetPaymentReceiptQuery();
   const [pollStatus, pollState] = usePollPaymentStatusMutation();
@@ -74,12 +85,16 @@ export function CollectionsPage() {
   const [reversePayment, reverseState] = useReversePaymentMutation();
   const paymentActionBusy =
     pollState.isLoading || reconcileState.isLoading || reverseState.isLoading;
+  const [reverseTarget, setReverseTarget] = useState<{
+    id: string;
+    receiptNo: string;
+  } | null>(null);
 
   const queryArgs = useMemo(() => {
     const range = {
-      from: throttledFrom,
-      to: throttledTo,
-      q: debouncedQ || undefined,
+      from,
+      to,
+      q: listSearchQueryForApi(debouncedQ),
       branchId,
       ...pager.queryParams,
     };
@@ -88,29 +103,40 @@ export function CollectionsPage() {
     if (tab === "late") return { ...range, isLateSuccess: true };
     return range;
   }, [
-    throttledFrom,
-    throttledTo,
+    from,
+    to,
     tab,
     debouncedQ,
     branchId,
     pager.queryParams,
   ]);
 
-  const query = useGetPaymentsQuery(queryArgs);
-  const modeMixQuery = useGetPaymentsQuery({
-    from: throttledFrom,
-    to: throttledTo,
-    branchId,
-    limit: 1,
-  });
-  const dashboard = useGetDashboardQuery({
-    from: throttledFrom,
-    to: throttledTo,
-    branchId,
-  });
+  const query = useGetPaymentsQuery(queryArgs, { skip: skipQueries });
+  const modeMixQuery = useGetPaymentsQuery(
+    { from, to, branchId, limit: 1 },
+    { skip: skipForBadDates },
+  );
+  const dashboard = useGetDashboardQuery(
+    { from, to, branchId, period: "CUSTOM" },
+    { skip: skipForBadDates },
+  );
+  if (skipForBadDates) {
+    return (
+      <>
+        <PageHeader
+          eyebrow="Money & fulfilment"
+          title="Collections"
+          description="All collection channels, gateway states, receipts and reversals in one operational ledger."
+        />
+        <Surface title="Invalid period">
+          <EmptyState title="Fix the date range" detail={dateRangeError ?? ""} />
+        </Surface>
+      </>
+    );
+  }
   if (query.isLoading) return <PageSkeleton />;
   if (query.isError || !query.data)
-    return <QueryError onRetry={query.refetch} />;
+    return <QueryError error={query.error} onRetry={query.refetch} />;
   const s = query.data.summary ?? {};
   const rows = query.data.items;
   const page = query.data.page ?? emptyPageMeta();
@@ -149,8 +175,8 @@ export function CollectionsPage() {
       await pollStatus(paymentId).unwrap();
       toast.success("Gateway status poll queued");
       await query.refetch();
-    } catch {
-      toast.error("Could not poll payment status");
+    } catch (err) {
+      toastApiError(err, "Could not poll payment status");
     }
   }
 
@@ -159,20 +185,8 @@ export function CollectionsPage() {
       await reconcilePayment(paymentId).unwrap();
       toast.success("Reconciliation queued");
       await query.refetch();
-    } catch {
-      toast.error("Could not reconcile payment");
-    }
-  }
-
-  async function handleReverse(paymentId: string) {
-    const reason = window.prompt("Reversal reason (required):")?.trim();
-    if (!reason) return;
-    try {
-      await reversePayment({ paymentId, reason }).unwrap();
-      toast.success("Payment reversed");
-      await query.refetch();
-    } catch {
-      toast.error("Reversal not allowed or failed");
+    } catch (err) {
+      toastApiError(err, "Could not reconcile payment");
     }
   }
 
@@ -260,7 +274,9 @@ export function CollectionsPage() {
                 variant="ghost"
                 className="text-red-700"
                 disabled={paymentActionBusy}
-                onClick={() => void handleReverse(r.id)}
+                onClick={() =>
+                  setReverseTarget({ id: r.id, receiptNo: r.receiptNo })
+                }
               >
                 Reverse
               </Button>
@@ -287,11 +303,13 @@ export function CollectionsPage() {
         description="All collection channels, gateway states, receipts and reversals in one operational ledger."
         actions={
           <>
-            <Input
+            <ListSearchInput
               value={q}
-              onChange={(e) => setQ(e.target.value)}
+              onChange={setQ}
               placeholder="Receipt, customer…"
-              className="h-10 w-[200px] rounded-xl"
+              className="w-[200px]"
+              inputClassName="h-10 rounded-xl"
+              iconClassName="size-4"
             />
             <DateRangeFilter
               label="Paid"
@@ -422,6 +440,23 @@ export function CollectionsPage() {
           columns={ledgerColumns}
         />
       </Surface>
+      <ReversePaymentDialog
+        open={Boolean(reverseTarget)}
+        onOpenChange={(open) => {
+          if (!open) setReverseTarget(null);
+        }}
+        receiptNo={reverseTarget?.receiptNo}
+        busy={reverseState.isLoading}
+        onConfirm={async (reason) => {
+          if (!reverseTarget) return;
+          await reversePayment({
+            paymentId: reverseTarget.id,
+            reason,
+          }).unwrap();
+          toast.success("Payment reversed");
+          await query.refetch();
+        }}
+      />
     </>
   );
 }

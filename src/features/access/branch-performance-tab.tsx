@@ -16,6 +16,8 @@ import {
 import { MoneyPair } from "@/src/features/access/access-detail-parts";
 import { useCursorPagination } from "@/src/hooks/use-cursor-pagination";
 import { emptyPageMeta } from "@/src/lib/cursor-pagination";
+import { FormFieldError } from "@/src/components/common/form-field-error";
+import { validateListDateRange } from "@/src/lib/list-date-range";
 import {
   useGetBranchPerformanceSectionQuery,
   useGetBranchPerformanceSummaryQuery,
@@ -49,6 +51,35 @@ function rangeLabel(from?: string, to?: string) {
   if (to) return `Until ${to}`;
   return "Current month";
 }
+
+type PerformanceCollectionRow = {
+  paidAt?: string;
+  receiptNumber?: string;
+  customer?: { id?: string; name?: string };
+  scheme?: { id?: string; enrollmentNumber?: string };
+  collectedBy?: { id?: string; name?: string };
+  mode?: string;
+  source?: string;
+  amount?: { amountDisplay?: string };
+};
+
+type PerformanceEnrolmentRow = {
+  id?: string;
+  createdAt?: string;
+  enrollmentNumber?: string;
+  customer?: { id?: string; name?: string };
+  plan?: { name?: string; code?: string };
+  status?: string;
+};
+
+type PerformanceHandoverRow = {
+  submittedAt?: string;
+  staff?: { id?: string; name?: string };
+  amount?: { amountDisplay?: string };
+  acceptedAmount?: { amountDisplay?: string };
+  status?: string;
+  settledAt?: string;
+};
 
 export function BranchPerformanceTab({ branchId }: { branchId: string }) {
   const defaults = useMemo(() => defaultMonthRange(), []);
@@ -92,9 +123,14 @@ export function BranchPerformanceTab({ branchId }: { branchId: string }) {
   });
 
   const summary = summaryQuery.data;
-  const collections = collectionsQuery.data?.items ?? [];
-  const enrolments = enrolmentsQuery.data?.items ?? [];
-  const handovers = handoversQuery.data?.items ?? [];
+  const applyRangeError = validateListDateRange(draftFrom, draftTo);
+
+  const collections = (collectionsQuery.data?.items ??
+    []) as PerformanceCollectionRow[];
+  const enrolments = (enrolmentsQuery.data?.items ??
+    []) as PerformanceEnrolmentRow[];
+  const handovers = (handoversQuery.data?.items ??
+    []) as PerformanceHandoverRow[];
 
   const collectionsPage =
     collectionsQuery.data?.page ?? emptyPageMeta();
@@ -130,13 +166,19 @@ export function BranchPerformanceTab({ branchId }: { branchId: string }) {
               onChange={(e) => setDraftTo(e.target.value)}
             />
           </div>
-          <Button
-            onClick={() =>
-              setRange({ from: draftFrom || undefined, to: draftTo || undefined })
-            }
-          >
-            Apply
-          </Button>
+          <div className="space-y-1">
+            <Button
+              disabled={Boolean(applyRangeError)}
+              onClick={() => {
+                const err = validateListDateRange(draftFrom, draftTo);
+                if (err) return;
+                setRange({ from: draftFrom, to: draftTo });
+              }}
+            >
+              Apply
+            </Button>
+            <FormFieldError message={applyRangeError} />
+          </div>
           <Button
             variant="outline"
             onClick={() => {

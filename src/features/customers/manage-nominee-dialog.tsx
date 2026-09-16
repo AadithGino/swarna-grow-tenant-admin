@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Loader2, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -14,7 +14,6 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -22,9 +21,25 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
 import { ActionDialog } from "@/src/components/common/action-dialog";
 import { FieldLabel } from "@/src/components/common/page-parts";
+import {
+  NomineeMobileInput,
+  NomineeNameInput,
+  NomineeNotesInput,
+} from "@/src/components/form/nominee-form-inputs";
+import { normalizeCustomerMobileInput } from "@/src/lib/customer-form";
+import { handleFormApiError } from "@/src/lib/form-api-error";
+import { toastApiError } from "@/src/lib/api-error";
+import {
+  clearNomineeFieldError,
+  liveNomineeFieldErrors,
+  nomineeFormFieldsFromDetail,
+  nomineeFormReadyForSubmit,
+  nomineeFormUnchanged,
+  validateNomineeForm,
+  type NomineeFormFields,
+} from "@/src/lib/nominee-form";
 import type { Customer, NomineeRelationship } from "@/src/types/domain";
 import {
   useRemoveCustomerNomineeMutation,
@@ -41,6 +56,13 @@ const RELATIONSHIPS: { value: NomineeRelationship; label: string }[] = [
   { value: "OTHER", label: "Other" },
 ];
 
+function mergeFieldMessage(
+  apiOrSubmit: string | undefined,
+  live: string | undefined,
+): string | undefined {
+  return apiOrSubmit ?? live;
+}
+
 export function ManageNomineeDialog({
   customer,
   open,
@@ -53,24 +75,39 @@ export function ManageNomineeDialog({
   const [updateNominee] = useUpdateCustomerNomineeMutation();
   const [removeNominee, removeState] = useRemoveCustomerNomineeMutation();
   const [confirmRemove, setConfirmRemove] = useState(false);
-  const [form, setForm] = useState({
-    name: "",
-    relationship: "SPOUSE" as NomineeRelationship,
-    mobile: "",
-    notes: "",
-  });
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [baseline, setBaseline] = useState<NomineeFormFields>(() =>
+    nomineeFormFieldsFromDetail(customer.nomineeDetail),
+  );
+  const [form, setForm] = useState<NomineeFormFields>(() =>
+    nomineeFormFieldsFromDetail(customer.nomineeDetail),
+  );
 
   useEffect(() => {
-    const n = customer.nomineeDetail;
-    setForm({
-      name: n?.name ?? "",
-      relationship: n?.relationship ?? "SPOUSE",
-      mobile: n?.mobile ?? "",
-      notes: n?.notes ?? "",
-    });
+    const next = nomineeFormFieldsFromDetail(customer.nomineeDetail);
+    setBaseline(next);
+    setForm(next);
+    setFieldErrors({});
   }, [customer, open]);
 
   const hasNominee = Boolean(customer.nomineeDetail);
+
+  const liveErrors = useMemo(() => liveNomineeFieldErrors(form), [form]);
+
+  const displayError = (field: keyof NomineeFormFields) =>
+    mergeFieldMessage(fieldErrors[field], liveErrors[field]);
+
+  const setField = <K extends keyof NomineeFormFields>(
+    key: K,
+    value: NomineeFormFields[K],
+  ) => {
+    setForm((prev) => ({ ...prev, [key]: value }));
+    setFieldErrors((prev) => clearNomineeFieldError(prev, key));
+  };
+
+  const submitDisabled =
+    !nomineeFormReadyForSubmit(form) ||
+    (hasNominee && nomineeFormUnchanged(form, baseline));
 
   return (
     <>
@@ -81,17 +118,28 @@ export function ManageNomineeDialog({
         title={hasNominee ? "Manage nominee" : "Add nominee"}
         description="One optional nominee per customer — name, relationship, mobile and notes only."
         actionLabel={hasNominee ? "Save nominee" : "Add nominee"}
+        submitDisabled={submitDisabled}
+        suppressDefaultErrorToast
+        onError={(err) => {
+          handleFormApiError(err, {
+            setFieldErrors,
+            fallback: "Could not save nominee",
+          });
+        }}
         onSubmit={async () => {
-          if (form.name.trim().length < 2 || !form.mobile.trim()) {
-            toast.error("Name and mobile are required");
-            throw new Error("validation");
+          const clientErrors = validateNomineeForm(form);
+          if (Object.keys(clientErrors).length) {
+            setFieldErrors(clientErrors);
+            toast.error("Fix the highlighted fields.");
+            return false;
           }
+          const mobile = normalizeCustomerMobileInput(form.mobile);
           await updateNominee({
             id: customer.id,
             expectedVersion: customer.version,
             name: form.name.trim(),
             relationship: form.relationship,
-            mobile: form.mobile.trim(),
+            mobile,
             notes: form.notes.trim() || undefined,
           }).unwrap();
           toast.success(hasNominee ? "Nominee updated" : "Nominee added");
@@ -104,23 +152,18 @@ export function ManageNomineeDialog({
               {customer.nomineeDetail.updatedAt}
             </p>
           ) : null}
-          <div>
-            <FieldLabel>Full name</FieldLabel>
-            <Input
-              value={form.name}
-              onChange={(e) => setForm({ ...form, name: e.target.value })}
-            />
-          </div>
+          <NomineeNameInput
+            value={form.name}
+            onChange={(value) => setField("name", value)}
+            error={displayError("name")}
+          />
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
               <FieldLabel>Relationship</FieldLabel>
               <Select
                 value={form.relationship}
                 onValueChange={(value) =>
-                  setForm({
-                    ...form,
-                    relationship: value as NomineeRelationship,
-                  })
+                  setField("relationship", value as NomineeRelationship)
                 }
               >
                 <SelectTrigger className="w-full">
@@ -135,24 +178,17 @@ export function ManageNomineeDialog({
                 </SelectContent>
               </Select>
             </div>
-            <div>
-              <FieldLabel>Mobile</FieldLabel>
-              <Input
-                value={form.mobile}
-                onChange={(e) => setForm({ ...form, mobile: e.target.value })}
-                inputMode="tel"
-              />
-            </div>
-          </div>
-          <div>
-            <FieldLabel>Notes (optional)</FieldLabel>
-            <Textarea
-              value={form.notes}
-              onChange={(e) => setForm({ ...form, notes: e.target.value })}
-              rows={3}
-              placeholder="Operational contact note only"
+            <NomineeMobileInput
+              value={form.mobile}
+              onChange={(value) => setField("mobile", value)}
+              error={displayError("mobile")}
             />
           </div>
+          <NomineeNotesInput
+            value={form.notes}
+            onChange={(value) => setField("notes", value)}
+            error={displayError("notes")}
+          />
           {hasNominee ? (
             <Button
               type="button"
@@ -183,13 +219,17 @@ export function ManageNomineeDialog({
               disabled={removeState.isLoading}
               onClick={async (e) => {
                 e.preventDefault();
-                await removeNominee({
-                  id: customer.id,
-                  expectedVersion: customer.version,
-                }).unwrap();
-                toast.success("Nominee removed");
-                setConfirmRemove(false);
-                onOpenChange(false);
+                try {
+                  await removeNominee({
+                    id: customer.id,
+                    expectedVersion: customer.version,
+                  }).unwrap();
+                  toast.success("Nominee removed");
+                  setConfirmRemove(false);
+                  onOpenChange(false);
+                } catch (err) {
+                  toastApiError(err, "Could not remove nominee");
+                }
               }}
             >
               {removeState.isLoading && <Loader2 className="animate-spin" />}

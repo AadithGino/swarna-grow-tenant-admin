@@ -27,8 +27,8 @@ import {
   useActingBranchKey,
 } from "@/src/hooks/use-acting-branch-id";
 import { useCursorPagination } from "@/src/hooks/use-cursor-pagination";
-import { useThrottledValue } from "@/src/hooks/use-throttled-value";
-import { apiErrorMessage } from "@/src/lib/api-error";
+import { useValidatedListDateRange } from "@/src/hooks/use-validated-list-date-range";
+import { FormFieldError } from "@/src/components/common/form-field-error";
 import {
   appTodayYmd,
   applyWideListRangePreset,
@@ -45,6 +45,7 @@ import {
   SettlementPreviewDialog,
 } from "@/src/features/enrollments/settlement-dialogs";
 import { RedemptionsQueue } from "@/src/features/maturity/redemptions-queue";
+import { FlexibleLocksPanel } from "@/src/features/maturity/flexible-locks-panel";
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -114,13 +115,11 @@ function maturitySettlementAction(
 export function MaturityPage() {
   const searchParams = useSearchParams();
   const reviewRedemptionId = searchParams.get("review");
-  const [from, setFrom] = useState(() => defaultListRangeFrom());
-  const [to, setTo] = useState(() => defaultListRangeTo());
+  const { from, setFrom, to, setTo, dateRangeError, skipForBadDates } =
+    useValidatedListDateRange();
   const [calendarMonth, setCalendarMonth] = useState(() =>
     appTodayYmd().slice(0, 7),
   );
-  const throttledFrom = useThrottledValue(from, 400);
-  const throttledTo = useThrottledValue(to, 400);
   const [view, setView] = useState(
     reviewRedemptionId ? "redemptions" : "month",
   );
@@ -141,8 +140,8 @@ export function MaturityPage() {
     setSettlementSchemeId(null);
   }
   const monthMeta = monthBounds(calendarMonth);
-  const queryFrom = view === "month" ? monthMeta.from : throttledFrom;
-  const queryTo = view === "month" ? monthMeta.to : throttledTo;
+  const queryFrom = view === "month" ? monthMeta.from : from;
+  const queryTo = view === "month" ? monthMeta.to : to;
   const branchId = useActingBranchId();
   const branchKey = useActingBranchKey();
   const pager = useCursorPagination(
@@ -161,12 +160,12 @@ export function MaturityPage() {
 
   const listQuery = useGetMaturitiesQuery(
     {
-      from: throttledFrom,
-      to: throttledTo,
+      from,
+      to,
       branchId,
       ...pager.queryParams,
     },
-    { skip: view !== "list" },
+    { skip: view !== "list" || skipForBadDates },
   );
 
   const calendarQuery = useGetMaturitiesCalendarQuery(
@@ -212,14 +211,8 @@ export function MaturityPage() {
           }
         }}
         title="Could not load maturity data"
-        detail={
-          view === "month" && calendarQuery.isError
-            ? apiErrorMessage(calendarQuery.error)
-            : view === "list" && listQuery.isError
-              ? apiErrorMessage(listQuery.error)
-              : statsQuery.isError
-                ? apiErrorMessage(statsQuery.error)
-                : undefined
+        error={
+          calendarQuery.error ?? listQuery.error ?? statsQuery.error
         }
       />
     );
@@ -280,20 +273,23 @@ export function MaturityPage() {
         description="Plan maturities, liabilities and redemption workflow."
         actions={
           view !== "month" ? (
-            <DateRangeFilter
-              label="Maturity"
-              from={from}
-              to={to}
-              onFromChange={setFrom}
-              onToChange={setTo}
-              presetLabel={wideListRangePresetLabel()}
-              onPreset={() => {
-                const { from: nextFrom, to: nextTo } =
-                  applyWideListRangePreset();
-                setFrom(nextFrom);
-                setTo(nextTo);
-              }}
-            />
+            <div className="space-y-1">
+              <DateRangeFilter
+                label="Maturity"
+                from={from}
+                to={to}
+                onFromChange={setFrom}
+                onToChange={setTo}
+                presetLabel={wideListRangePresetLabel()}
+                onPreset={() => {
+                  const { from: nextFrom, to: nextTo } =
+                    applyWideListRangePreset();
+                  setFrom(nextFrom);
+                  setTo(nextTo);
+                }}
+              />
+              <FormFieldError message={dateRangeError} />
+            </div>
           ) : null
         }
       />
@@ -344,6 +340,7 @@ export function MaturityPage() {
           <PageTab value="month">Month</PageTab>
           <PageTab value="list">List</PageTab>
           <PageTab value="redemptions">Redemption queue</PageTab>
+          <PageTab value="flex-locks">Flexible locks</PageTab>
         </PageTabsBar>
         <PageTabsPanel value="month" flush>
           <Surface>
@@ -502,6 +499,9 @@ export function MaturityPage() {
         </PageTabsPanel>
         <PageTabsPanel value="redemptions" flush>
           <RedemptionsQueue />
+        </PageTabsPanel>
+        <PageTabsPanel value="flex-locks" flush>
+          <FlexibleLocksPanel />
         </PageTabsPanel>
       </PageTabs>
     </>

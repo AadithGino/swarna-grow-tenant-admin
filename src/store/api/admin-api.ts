@@ -5,11 +5,15 @@ import type {
   FetchBaseQueryError,
 } from "@reduxjs/toolkit/query";
 import { env } from "@/src/config/env";
-import { clearAuthTokens, storeAuthTokens } from "@/src/lib/auth-session";
+import { handleTenantUnauthorized } from "@/src/lib/auth-logout";
+import { storeAuthTokens } from "@/src/lib/auth-session";
+import type { AppDispatch } from "@/src/store";
 import {
   fetchAuthorizedBlob,
   fetchAuthorizedMaybeBlob,
 } from "@/src/lib/download-api";
+import { readContractResponseBody } from "@/src/lib/contract-response";
+import { normalizeFetchBaseQueryError } from "@/src/lib/api-error";
 import { newIdempotencyKey } from "@/src/lib/idempotency";
 import { businessTodayYmd } from "@/src/lib/list-date-range";
 import { mockRequest } from "@/src/mocks/mock-server";
@@ -91,6 +95,8 @@ export type ListQueryParams = {
 export type DateRangeQueryParams = {
   from?: string;
   to?: string;
+  period?: string;
+  preset?: string;
 };
 
 function isoDate(d: Date) {
@@ -228,6 +234,7 @@ function withIdempotencyHeader(args: ApiArgs): ApiArgs {
 
 const rawBaseQuery = fetchBaseQuery({
   baseUrl: env.apiBaseUrl,
+  responseHandler: readContractResponseBody,
   prepareHeaders: (headers, { getState }) => {
     if (typeof window !== "undefined") {
       const token = localStorage.getItem("swarnagrow.accessToken");
@@ -293,7 +300,12 @@ function unwrapContractEnvelope(result: {
       },
     };
   }
-  if (result.error) return { error: result.error, meta: result.meta };
+  if (result.error) {
+    return {
+      error: normalizeFetchBaseQueryError(result.error),
+      meta: result.meta,
+    };
+  }
   return { data: result.data, meta: result.meta };
 }
 
@@ -318,12 +330,16 @@ const appBaseQuery = (async (args, api, extraOptions) => {
 
   const requestUrl = typeof requestArgs.url === "string" ? requestArgs.url : "";
   const isAuthRefresh = requestUrl.includes("/auth/refresh");
+  const isAuthLogin =
+    requestUrl.includes("/auth/login") || requestUrl.includes("/auth/otp");
   const alreadyRetried = Boolean(extraOptions?._authRetry);
+  const dispatch = api.dispatch as AppDispatch;
 
   if (
     result.error?.status === 401 &&
     typeof window !== "undefined" &&
     !isAuthRefresh &&
+    !isAuthLogin &&
     !alreadyRetried
   ) {
     const refreshToken = localStorage.getItem("swarnagrow.refreshToken");
@@ -358,15 +374,26 @@ const appBaseQuery = (async (args, api, extraOptions) => {
           _authRetry: true,
         });
       } else {
-        clearAuthTokens();
+        handleTenantUnauthorized(dispatch);
       }
     } else {
-      clearAuthTokens();
+      handleTenantUnauthorized(dispatch);
     }
-  } else if (result.error?.status === 401 && typeof window !== "undefined") {
-    clearAuthTokens();
+  } else if (
+    result.error?.status === 401 &&
+    typeof window !== "undefined" &&
+    !isAuthRefresh &&
+    !isAuthLogin
+  ) {
+    handleTenantUnauthorized(dispatch);
   }
 
+  if (result.error) {
+    return {
+      error: normalizeFetchBaseQueryError(result.error),
+      meta: result.meta,
+    };
+  }
   return unwrapContractEnvelope(result);
 }) as BaseQueryFn<ApiArgs, unknown, FetchBaseQueryError, AppBaseQueryExtra>;
 
@@ -3084,6 +3111,8 @@ export const adminApi = createApi({
             q?: string;
             type?: string;
             entityType?: string;
+            action?: string;
+            branchId?: string;
           })
       | void
     >({
@@ -3223,7 +3252,7 @@ export const adminApi = createApi({
     }),
     getDefaulters: builder.query<
       ReturnType<typeof adaptListBundle>,
-      ListQueryParams | void
+      (ListQueryParams & { q?: string; branchId?: string }) | void
     >({
       query: (params) => ({
         url: "/admin/defaulters",
@@ -3235,7 +3264,7 @@ export const adminApi = createApi({
     }),
     getFlexibleLocks: builder.query<
       ReturnType<typeof adaptListBundle>,
-      ListQueryParams | void
+      (ListQueryParams & { branchId?: string }) | void
     >({
       query: (params) => ({
         url: "/admin/flexible-locks",

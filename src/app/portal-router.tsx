@@ -149,8 +149,66 @@ const PortalNotFoundPage = dynamic(
     ),
   options,
 );
+const PlatformLoginPage = dynamic(
+  () => import("@/src/features/platform/platform-login-page").then((m) => m.PlatformLoginPage),
+  options,
+);
+const PlatformDashboardPage = dynamic(
+  () => import("@/src/features/platform/platform-dashboard-page").then((m) => m.PlatformDashboardPage),
+  options,
+);
+const PlatformTenantsPage = dynamic(
+  () => import("@/src/features/platform/platform-tenants-page").then((m) => m.PlatformTenantsPage),
+  options,
+);
+const PlatformTenantCreatePage = dynamic(
+  () => import("@/src/features/platform/platform-tenant-create-page").then((m) => m.PlatformTenantCreatePage),
+  options,
+);
+const PlatformTenantDetailPage = dynamic(
+  () => import("@/src/features/platform/platform-tenant-detail-page").then((m) => m.PlatformTenantDetailPage),
+  options,
+);
+const PlatformPlansPage = dynamic(
+  () => import("@/src/features/platform/platform-plans-page").then((m) => m.PlatformPlansPage),
+  options,
+);
+const PlatformTemplateRegistryPage = dynamic(
+  () => import("@/src/features/platform/platform-template-registry-page").then((m) => m.PlatformTemplateRegistryPage),
+  options,
+);
+const PlatformMonitoringPage = dynamic(
+  () => import("@/src/features/platform/platform-monitoring-page").then((m) => m.PlatformMonitoringPage),
+  options,
+);
+const PlatformAuditPage = dynamic(
+  () => import("@/src/features/platform/platform-audit-page").then((m) => m.PlatformAuditPage),
+  options,
+);
+const PlatformSettingsPage = dynamic(
+  () => import("@/src/features/platform/platform-settings-page").then((m) => m.PlatformSettingsPage),
+  options,
+);
+
+function PlatformRouter({ slug }: { slug: string[] }) {
+  const [, section, id, detail] = slug;
+  if (section === "login") return <PlatformLoginPage />;
+  if (!section) return <PlatformDashboardPage />;
+  if (section === "tenants") {
+    if (id === "new") return <PlatformTenantCreatePage />;
+    if (id) return <PlatformTenantDetailPage tenantId={id} initialTab={detail ?? "overview"} />;
+    return <PlatformTenantsPage />;
+  }
+  if (section === "plans") return <PlatformPlansPage />;
+  if (section === "templates") return <PlatformTemplateRegistryPage />;
+  if (section === "monitoring") return <PlatformMonitoringPage />;
+  if (section === "audit") return <PlatformAuditPage />;
+  if (section === "settings") return <PlatformSettingsPage />;
+  return <PortalNotFoundPage path={slug.join("/")} />;
+}
 
 export function PortalRouter({ slug }: { slug: string[] }) {
+  if (slug[0] === "platform") return <PlatformRouter slug={slug} />;
   const [section = "dashboard", id, action] = slug;
   if (section === "login") return <LoginPage />;
   if (!isKnownPortalSection(section)) {

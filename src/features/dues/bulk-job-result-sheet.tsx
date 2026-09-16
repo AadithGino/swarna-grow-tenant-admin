@@ -21,6 +21,9 @@ const SKIP_LABELS: Record<string, string> = {
   QUOTA_EXCEEDED: "WhatsApp quota exceeded",
   NO_OPEN_INSTALLMENT: "No payable installment",
   ALREADY_SENT: "Link already sent today",
+  FLEXIBLE_SCHEME_EXCLUDED: "Flexible scheme (not eligible)",
+  NOT_FOUND: "Scheme not found",
+  QUOTA_EXCEEDED: "WhatsApp quota exceeded",
 };
 
 export function BulkJobResultSheet({

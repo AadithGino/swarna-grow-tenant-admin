@@ -24,7 +24,7 @@ export function CustomersAnalyticsTab() {
   );
   if (query.isLoading) return <PageSkeleton />;
   if (query.isError || !query.data)
-    return <QueryError onRetry={query.refetch} />;
+    return <QueryError error={query.error} onRetry={query.refetch} />;
   const charts = query.data.charts ?? {};
   return (
     <div className="space-y-5">

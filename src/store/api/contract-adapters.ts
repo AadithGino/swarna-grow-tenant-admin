@@ -1110,6 +1110,7 @@ export function adaptPlans(raw: any) {
       id: entityId(item),
       code: item.code,
       name: item.displayName ?? item.name,
+      displayName: item.displayName ?? item.name,
       valueBasis: item.valueBasis,
       paymentPattern:
         item.paymentPattern === "FIXED"
@@ -1783,7 +1784,7 @@ const DASHBOARD_CHART_META: Record<
   },
   "scheme-status-distribution": {
     chartType: "donut",
-    title: "Scheme status",
+    title: "Scheme status (current portfolio)",
     yAxis: { type: "count", label: "Schemes" },
     seriesKey: "STATUS",
     seriesName: "Schemes",

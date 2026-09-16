@@ -17,11 +17,20 @@ export function PlanSchedulePreviewPanel({
   data,
   emptyHint = "Set duration and amount rules, then continue — the schedule preview updates automatically.",
   loading,
+  error,
 }: {
   data?: PlanSchedulePreviewData;
   emptyHint?: string;
   loading?: boolean;
+  error?: string;
 }) {
+  if (error) {
+    return (
+      <p className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-900">
+        {error}
+      </p>
+    );
+  }
   const preview = normalizePreviewData(data);
   if (loading) {
     return (

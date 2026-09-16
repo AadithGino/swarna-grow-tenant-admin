@@ -43,7 +43,7 @@ export function TemplatePreviewDialog({
               Loading preview…
             </p>
           ) : query.isError ? (
-            <QueryError onRetry={query.refetch} />
+            <QueryError error={query.error} onRetry={query.refetch} />
           ) : (
             <div className="rounded-xl bg-[#f6efe9] p-4 text-sm leading-6 whitespace-pre-wrap">
               {String(

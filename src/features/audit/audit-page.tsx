@@ -1,7 +1,8 @@
 "use client";
 
 import { Download, Loader2, Search, ShieldCheck } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,6 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { FormFieldError } from "@/src/components/common/form-field-error";
 import { PaginatedDataTable } from "@/src/components/common/paginated-data-table";
 import { PageHeader, Surface } from "@/src/components/common/page-parts";
 import { PageSkeleton, QueryError } from "@/src/components/common/query-state";
@@ -23,6 +25,11 @@ import {
 import {
   defaultListRangeFrom,
   defaultListRangeTo,
+  LIST_SEARCH_QUERY_MAX,
+  listSearchQueryForApi,
+  shouldSkipListSearchQuery,
+  validateListDateRange,
+  validateListSearchQuery,
 } from "@/src/lib/list-date-range";
 import {
   useActingBranchId,
@@ -30,7 +37,6 @@ import {
 } from "@/src/hooks/use-acting-branch-id";
 import { useCursorPagination } from "@/src/hooks/use-cursor-pagination";
 import { useDebouncedValue } from "@/src/hooks/use-debounced-value";
-import { useThrottledValue } from "@/src/hooks/use-throttled-value";
 import { adminApi, useGetAuditQuery } from "@/src/store/api/admin-api";
 import { useAppDispatch } from "@/src/store/hooks";
 import { fetchAllListPages } from "@/src/lib/fetch-all-list-pages";
@@ -82,31 +88,46 @@ export function AuditPage() {
   const [exportBusy, setExportBusy] = useState(false);
   const [q, setQ] = useState("");
   const [type, setType] = useState("ALL");
+  const [actionFilter, setActionFilter] = useState("");
   const [from, setFrom] = useState(() => defaultListRangeFrom());
   const [to, setTo] = useState(() => defaultListRangeTo());
   const debouncedQ = useDebouncedValue(q, 350);
-  const throttledFrom = useThrottledValue(from, 400);
-  const throttledTo = useThrottledValue(to, 400);
+  const debouncedAction = useDebouncedValue(actionFilter.trim(), 350);
   const [inspectRow, setInspectRow] = useState<AuditRow | null>(null);
   const branchId = useActingBranchId();
   const branchKey = useActingBranchKey();
   const pager = useCursorPagination(
     AUDIT_PAGE_LIMIT,
-    `${debouncedQ}|${type}|${throttledFrom}|${throttledTo}|${branchKey}`,
+    `${debouncedQ}|${type}|${debouncedAction}|${from}|${to}|${branchKey}`,
   );
-  const query = useGetAuditQuery({
-    q: debouncedQ || undefined,
-    type: type === "ALL" ? undefined : type,
-    from: throttledFrom || undefined,
-    to: throttledTo || undefined,
-    branchId,
-    ...pager.queryParams,
-  });
-  if (query.isLoading) return <PageSkeleton cards={3} />;
-  if (query.isError || !query.data)
-    return <QueryError onRetry={query.refetch} />;
-  const rows = query.data.items as AuditRow[];
-  const page = query.data.page ?? emptyPageMeta(AUDIT_PAGE_LIMIT);
+  const dateRangeError = useMemo(
+    () => validateListDateRange(from, to),
+    [from, to],
+  );
+  const searchError = validateListSearchQuery(q);
+
+  const query = useGetAuditQuery(
+    {
+      q: listSearchQueryForApi(debouncedQ),
+      type: type === "ALL" ? undefined : type,
+      action: debouncedAction || undefined,
+      from: from || undefined,
+      to: to || undefined,
+      branchId,
+      ...pager.queryParams,
+    },
+    {
+      skip: Boolean(dateRangeError) || shouldSkipListSearchQuery(debouncedQ),
+    },
+  );
+  if (query.isLoading && !dateRangeError) return <PageSkeleton cards={3} />;
+  if (!dateRangeError && (query.isError || !query.data)) {
+    return (
+      <QueryError error={query.error} onRetry={query.refetch} />
+    );
+  }
+  const rows = (query.data?.items ?? []) as AuditRow[];
+  const page = query.data?.page ?? emptyPageMeta(AUDIT_PAGE_LIMIT);
   const resultSummary = pageRangeLabel(pager.pageIndex, page, rows.length);
   return (
     <>
@@ -119,15 +140,26 @@ export function AuditPage() {
             variant="outline"
             disabled={exportBusy}
             onClick={async () => {
+              const rangeErr = validateListDateRange(from, to);
+              if (rangeErr) {
+                toast.error(rangeErr);
+                return;
+              }
+              const qErr = validateListSearchQuery(debouncedQ);
+              if (qErr) {
+                toast.error(qErr);
+                return;
+              }
               setExportBusy(true);
               try {
                 const all = await fetchAllListPages<AuditRow>(async (cursor) => {
                   const result = await dispatch(
                     adminApi.endpoints.getAudit.initiate({
-                      q: debouncedQ || undefined,
+                      q: listSearchQueryForApi(debouncedQ),
                       type: type === "ALL" ? undefined : type,
-                      from: throttledFrom || undefined,
-                      to: throttledTo || undefined,
+                      action: debouncedAction || undefined,
+                      from: from || undefined,
+                      to: to || undefined,
                       limit: 100,
                       cursor,
                     }),
@@ -176,16 +208,28 @@ export function AuditPage() {
         }
       />
       <Surface>
-        <div className="grid gap-3 p-4 md:grid-cols-[1fr_220px_160px_160px]">
+        <div className="grid gap-3 p-4 md:grid-cols-[1fr_180px_220px_160px_160px]">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 size-5 -translate-y-1/2 text-muted-foreground" />
             <Input
               value={q}
-              onChange={(e) => setQ(e.target.value)}
+              onChange={(e) =>
+                setQ(e.target.value.slice(0, LIST_SEARCH_QUERY_MAX))
+              }
               placeholder="Actor, action or entity"
-              className="h-11 pl-11"
+              className={cn("h-11 pl-11", searchError && "border-red-600")}
+              aria-invalid={Boolean(searchError)}
             />
+            <div className="mt-1 pl-11">
+              <FormFieldError message={searchError} />
+            </div>
           </div>
+          <Input
+            value={actionFilter}
+            onChange={(e) => setActionFilter(e.target.value.slice(0, 80))}
+            placeholder="Action contains…"
+            className="h-11"
+          />
           <Select value={type} onValueChange={setType}>
             <SelectTrigger className="h-11 w-full">
               <SelectValue />
@@ -203,16 +247,30 @@ export function AuditPage() {
             type="date"
             value={from}
             onChange={(e) => setFrom(e.target.value)}
-            className="h-11"
+            className={cn("h-11", dateRangeError && "border-red-600")}
+            aria-invalid={Boolean(dateRangeError)}
           />
           <Input
             type="date"
             value={to}
             onChange={(e) => setTo(e.target.value)}
-            className="h-11"
+            className={cn("h-11", dateRangeError && "border-red-600")}
+            aria-invalid={Boolean(dateRangeError)}
           />
         </div>
+        {dateRangeError ? (
+          <div className="px-4 pb-4">
+            <FormFieldError message={dateRangeError} />
+          </div>
+        ) : null}
       </Surface>
+      {dateRangeError ? (
+        <Surface title="Adjust filters">
+          <p className="p-5 text-sm text-muted-foreground">
+            {dateRangeError} Audit events load after the date range is valid.
+          </p>
+        </Surface>
+      ) : (
       <Surface
         title="Immutable events"
         description={resultSummary}
@@ -272,6 +330,7 @@ export function AuditPage() {
           ]}
         />
       </Surface>
+      )}
       <Dialog
         open={inspectRow != null}
         onOpenChange={(open) => !open && setInspectRow(null)}

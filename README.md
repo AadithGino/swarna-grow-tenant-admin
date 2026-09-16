@@ -1,6 +1,23 @@
-# Swarna Grow Tenant Admin Portal
+# Swarna Grow Admin Portals
 
-Production-oriented React tenant administration portal built from the Swarna Grow API contract v1.2 and the supplied UI references. The customer mobile app and platform super-admin are intentionally excluded.
+Production-oriented React tenant and platform-super-admin portals built from the Swarna Grow API contracts and supplied UI references. The customer mobile app is intentionally excluded.
+
+## Platform super-admin console
+
+The platform console starts at `/platform/login` and is role-separated from the
+tenant-admin surface. In mock mode the login form is prefilled and all platform
+screens are interactive without a backend.
+
+- `/platform` — command centre and platform KPIs
+- `/platform/tenants` — jeweller directory and filters
+- `/platform/tenants/new` — guided tenant, owner and plan onboarding
+- `/platform/tenants/:tenantId` — profile, provisioning, templates,
+  subscription, invoices, usage and feature flags
+- `/platform/plans` — subscription catalogue CRUD and deprecation
+- `/platform/templates` — canonical Meta template registry and readiness
+- `/platform/monitoring` — health, webhook failures/retry and error logs
+- `/platform/audit` — traceable platform audit events
+- `/platform/settings` — environment and security policy
 
 ## Included product areas
 
@@ -62,7 +79,7 @@ app/                         Route entrypoints, providers, loading and error bou
 src/app/                     Portal routing, Redux provider and WebMCP bridge
 src/components/brand/        Replaceable brand assets
 src/components/common/       Tables, charts, async states, surfaces and dialogs
-src/components/layout/       Responsive tenant shell and navigation
+src/components/layout/       Responsive tenant and platform shells
 src/features/                One folder per business module
 src/mocks/                   In-memory contract-shaped demo server
 src/store/api/               RTK Query endpoints and contract adapters

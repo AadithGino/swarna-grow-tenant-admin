@@ -24,20 +24,21 @@ import {
   PageTabsBar,
   PageTabsPanel,
 } from "@/src/components/common/page-tabs";
-import { PageSkeleton, QueryError } from "@/src/components/common/query-state";
+import {
+  EmptyState,
+  PageSkeleton,
+  QueryError,
+} from "@/src/components/common/query-state";
 import { StatusBadge } from "@/src/components/common/status-badge";
 import { money } from "@/src/lib/format";
 import { emptyPageMeta } from "@/src/lib/cursor-pagination";
-import {
-  defaultListRangeFrom,
-  defaultListRangeTo,
-} from "@/src/lib/list-date-range";
+import { FormFieldError } from "@/src/components/common/form-field-error";
+import { useValidatedListDateRange } from "@/src/hooks/use-validated-list-date-range";
 import {
   useActingBranchId,
   useActingBranchKey,
 } from "@/src/hooks/use-acting-branch-id";
 import { useCursorPagination } from "@/src/hooks/use-cursor-pagination";
-import { useThrottledValue } from "@/src/hooks/use-throttled-value";
 import {
   ChartSeriesView,
   hasChartSeriesData,
@@ -64,10 +65,8 @@ import { HandoverDetailDialog } from "@/src/features/cash/handover-detail-dialog
 export function CashControlPage() {
   const searchParams = useSearchParams();
   const dispatch = useAppDispatch();
-  const [from, setFrom] = useState(() => defaultListRangeFrom());
-  const [to, setTo] = useState(() => defaultListRangeTo());
-  const throttledFrom = useThrottledValue(from, 400);
-  const throttledTo = useThrottledValue(to, 400);
+  const { from, setFrom, to, setTo, dateRangeError, skipForBadDates } =
+    useValidatedListDateRange();
   const [detailId, setDetailId] = useState<string | null>(null);
   const [acceptTarget, setAcceptTarget] = useState<{
     id: string;
@@ -92,11 +91,11 @@ export function CashControlPage() {
   const staffPager = useCursorPagination(8, `staff|${branchKey}`);
   const handoverPager = useCursorPagination(
     8,
-    `${throttledFrom}|${throttledTo}|${branchKey}`,
+    `${from}|${to}|${branchKey}`,
   );
   const reportPager = useCursorPagination(
     5,
-    `${throttledFrom}|${throttledTo}|report|${branchKey}`,
+    `${from}|${to}|report|${branchKey}`,
   );
 
   const overviewQuery = useGetCashOverviewQuery(
@@ -112,25 +111,29 @@ export function CashControlPage() {
   });
   const handoverArgs = useMemo(
     () => ({
-      from: throttledFrom,
-      to: throttledTo,
+      from,
+      to,
       branchId,
       ...handoverPager.queryParams,
     }),
-    [throttledFrom, throttledTo, branchId, handoverPager.queryParams],
+    [from, to, branchId, handoverPager.queryParams],
   );
-  const handoversQuery = useGetCashHandoversQuery(handoverArgs);
+  const handoversQuery = useGetCashHandoversQuery(handoverArgs, {
+    skip: skipForBadDates,
+  });
   const reportArgs = useMemo(
     () => ({
-      from: throttledFrom,
-      to: throttledTo,
+      from,
+      to,
       groupBy: "STAFF" as const,
       branchId,
       ...reportPager.queryParams,
     }),
-    [throttledFrom, throttledTo, branchId, reportPager.queryParams],
+    [from, to, branchId, reportPager.queryParams],
   );
-  const reportQuery = useGetCashReportQuery(reportArgs);
+  const reportQuery = useGetCashReportQuery(reportArgs, {
+    skip: skipForBadDates,
+  });
 
   const [resolveDiscrepancy] = useResolveHandoverDiscrepancyMutation();
 
@@ -139,6 +142,21 @@ export function CashControlPage() {
     staffQuery.isLoading ||
     handoversQuery.isLoading ||
     reportQuery.isLoading;
+
+  if (skipForBadDates) {
+    return (
+      <>
+        <PageHeader
+          eyebrow="Money & fulfilment"
+          title="Cash control"
+          description="Staff cash balances, handovers, discrepancies and branch-level cash reporting."
+        />
+        <Surface title="Invalid period">
+          <EmptyState title="Fix the date range" detail={dateRangeError ?? ""} />
+        </Surface>
+      </>
+    );
+  }
 
   if (loading) return <PageSkeleton />;
 
@@ -160,6 +178,12 @@ export function CashControlPage() {
           handoversQuery.refetch();
           reportQuery.refetch();
         }}
+        error={
+          overviewQuery.error ??
+          staffQuery.error ??
+          handoversQuery.error ??
+          reportQuery.error
+        }
       />
     );
   }
@@ -377,13 +401,16 @@ export function CashControlPage() {
             title="Cash submission history"
             description="Every handover — initiated in the staff app (pending until accepted) or recorded at the branch counter (usually accepted immediately). Open a row for receipts, denominations, and timeline."
             action={
-              <DateRangeFilter
-                label="Submitted"
-                from={from}
-                to={to}
-                onFromChange={setFrom}
-                onToChange={setTo}
-              />
+              <div className="space-y-1">
+                <DateRangeFilter
+                  label="Submitted"
+                  from={from}
+                  to={to}
+                  onFromChange={setFrom}
+                  onToChange={setTo}
+                />
+                <FormFieldError message={dateRangeError} />
+              </div>
             }
           >
             <PaginatedDataTable
@@ -500,13 +527,16 @@ export function CashControlPage() {
             title="Cash reconciliation report"
             description="Period totals with a breakdown by staff member."
             action={
-              <DateRangeFilter
-                label="Period"
-                from={from}
-                to={to}
-                onFromChange={setFrom}
-                onToChange={setTo}
-              />
+              <div className="space-y-1">
+                <DateRangeFilter
+                  label="Period"
+                  from={from}
+                  to={to}
+                  onFromChange={setFrom}
+                  onToChange={setTo}
+                />
+                <FormFieldError message={dateRangeError} />
+              </div>
             }
           >
             <div className="grid gap-4 border-b p-5 md:grid-cols-3">

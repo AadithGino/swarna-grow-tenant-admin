@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { cn } from "@/lib/utils";
 import {
   Building2,
   IndianRupee,
@@ -15,6 +16,7 @@ import {
   UserRound,
 } from "lucide-react";
 import { toast } from "sonner";
+import { toastApiError } from "@/src/lib/api-error";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -25,6 +27,16 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { ActionDialog } from "@/src/components/common/action-dialog";
+import { FormFieldError } from "@/src/components/common/form-field-error";
+import {
+  liveStaffDeactivateReasonError,
+  liveStaffNameError,
+  liveTemporaryPasswordError,
+  validateStaffDeactivateReason,
+  validateStaffName,
+  validateTemporaryPassword,
+} from "@/src/lib/access-form-validation";
+import { handleFormApiError } from "@/src/lib/form-api-error";
 import { PermissionGate } from "@/src/components/common/permission-gate";
 import {
   FieldLabel,
@@ -112,6 +124,24 @@ export function StaffDetailPage({ staffId }: { staffId: string }) {
   const [tempPassword, setTempPassword] = useState("Temp#9182");
   const [transferBranchId, setTransferBranchId] = useState("");
   const [deactivateReason, setDeactivateReason] = useState("");
+  const [editNameTouched, setEditNameTouched] = useState(false);
+  const [passwordTouched, setPasswordTouched] = useState(false);
+  const [deactivateTouched, setDeactivateTouched] = useState(false);
+
+  const editNameError = useMemo(() => {
+    if (!editNameTouched && !editName.trim()) return undefined;
+    return liveStaffNameError(editName);
+  }, [editName, editNameTouched]);
+
+  const tempPasswordError = useMemo(() => {
+    if (!passwordTouched && !tempPassword) return undefined;
+    return liveTemporaryPasswordError(tempPassword);
+  }, [tempPassword, passwordTouched]);
+
+  const deactivateReasonError = useMemo(() => {
+    if (!deactivateTouched && !deactivateReason) return undefined;
+    return liveStaffDeactivateReasonError(deactivateReason);
+  }, [deactivateReason, deactivateTouched]);
 
   if (query.isLoading) return <PageSkeleton cards={5} />;
   if (query.isError || !query.data) {
@@ -119,6 +149,7 @@ export function StaffDetailPage({ staffId }: { staffId: string }) {
       <QueryError
         onRetry={query.refetch}
         title="Staff record is unavailable"
+        error={query.error}
       />
     );
   }
@@ -169,24 +200,53 @@ export function StaffDetailPage({ staffId }: { staffId: string }) {
                 title="Update staff profile"
                 description="Change display name for receipts and audit."
                 actionLabel="Save changes"
-                submitDisabled={!editName.trim()}
+                submitDisabled={validateStaffName(editName) !== undefined}
+                suppressDefaultErrorToast
                 onOpenChange={(open) => {
-                  if (open) setEditName(name);
+                  if (open) {
+                    setEditName(name);
+                    setEditNameTouched(false);
+                  }
+                }}
+                onError={(err) => {
+                  handleFormApiError(err, {
+                    fallback: "Could not update profile",
+                  });
                 }}
                 onSubmit={async () => {
-                  await patchStaff({
-                    staffId,
-                    body: { name: editName.trim() },
-                  }).unwrap();
-                  toast.success("Profile updated");
+                  setEditNameTouched(true);
+                  const nameErr = validateStaffName(editName);
+                  if (nameErr) {
+                    toast.error(nameErr);
+                    return false;
+                  }
+                  try {
+                    await patchStaff({
+                      staffId,
+                      body: { name: editName.trim() },
+                    }).unwrap();
+                    toast.success("Profile updated");
+                    await query.refetch();
+                  } catch (err) {
+                    handleFormApiError(err, {
+                      fallback: "Could not update profile",
+                    });
+                    return false;
+                  }
                 }}
               >
                 <div>
                   <FieldLabel>Full name</FieldLabel>
                   <Input
                     value={editName}
-                    onChange={(e) => setEditName(e.target.value)}
+                    onChange={(e) => {
+                      setEditNameTouched(true);
+                      setEditName(e.target.value);
+                    }}
+                    className={cn(editNameError && "border-red-600")}
+                    aria-invalid={Boolean(editNameError)}
                   />
+                  <FormFieldError message={editNameError} />
                 </div>
               </ActionDialog>
             </PermissionGate>
@@ -290,23 +350,54 @@ export function StaffDetailPage({ staffId }: { staffId: string }) {
                   title="Reset password"
                   description="A temporary password is shown once. Share it securely with the staff member."
                   actionLabel="Reset password"
+                  submitDisabled={validateTemporaryPassword(tempPassword) !== undefined}
+                  suppressDefaultErrorToast
+                  onOpenChange={(open) => {
+                    if (open) setPasswordTouched(false);
+                  }}
+                  onError={(err) => {
+                    handleFormApiError(err, {
+                      fallback: "Could not reset password",
+                    });
+                  }}
                   onSubmit={async () => {
-                    const res = (await resetPassword({
-                      staffId,
-                      mode: "SET_TEMPORARY",
-                      temporaryPassword: tempPassword,
-                    }).unwrap()) as { temporaryPassword?: string };
-                    toast.success(
-                      `Temporary password: ${res.temporaryPassword ?? tempPassword}`,
-                    );
+                    setPasswordTouched(true);
+                    const pwdErr = validateTemporaryPassword(tempPassword);
+                    if (pwdErr) {
+                      toast.error(pwdErr);
+                      return false;
+                    }
+                    try {
+                      const res = (await resetPassword({
+                        staffId,
+                        mode: "SET_TEMPORARY",
+                        temporaryPassword: tempPassword,
+                      }).unwrap()) as { temporaryPassword?: string };
+                      toast.success(
+                        `Temporary password: ${res.temporaryPassword ?? tempPassword}`,
+                      );
+                    } catch (err) {
+                      handleFormApiError(err, {
+                        fallback: "Could not reset password",
+                      });
+                      return false;
+                    }
                   }}
                 >
                   <div>
                     <FieldLabel>Temporary password</FieldLabel>
                     <Input
+                      type="password"
+                      autoComplete="new-password"
                       value={tempPassword}
-                      onChange={(e) => setTempPassword(e.target.value)}
+                      onChange={(e) => {
+                        setPasswordTouched(true);
+                        setTempPassword(e.target.value);
+                      }}
+                      className={cn(tempPasswordError && "border-red-600")}
+                      aria-invalid={Boolean(tempPasswordError)}
                     />
+                    <FormFieldError message={tempPasswordError} />
                   </div>
                 </ActionDialog>
                 {String(d.role) === "TENANT_ADMIN" ? (
@@ -368,17 +459,37 @@ export function StaffDetailPage({ staffId }: { staffId: string }) {
                   title="Deactivate staff"
                   description="Cash balance must be zero before access can be removed."
                   actionLabel="Deactivate"
+                  submitDisabled={
+                    validateStaffDeactivateReason(deactivateReason) !== undefined
+                  }
+                  suppressDefaultErrorToast
+                  onOpenChange={(open) => {
+                    if (!open) {
+                      setDeactivateReason("");
+                      setDeactivateTouched(false);
+                    }
+                  }}
+                  onError={(err) => {
+                    toastApiError(err, "Could not deactivate");
+                  }}
                   onSubmit={async () => {
+                    setDeactivateTouched(true);
+                    const reasonErr =
+                      validateStaffDeactivateReason(deactivateReason);
+                    if (reasonErr) {
+                      toast.error(reasonErr);
+                      return false;
+                    }
                     try {
                       await deactivateStaff({
                         staffId,
-                        reason: deactivateReason || undefined,
+                        reason: deactivateReason.trim() || undefined,
                       }).unwrap();
                       toast.success("Staff deactivated");
+                      await query.refetch();
                     } catch (e: unknown) {
-                      const err = e as { data?: { message?: string } };
-                      toast.error(err?.data?.message ?? "Could not deactivate");
-                      throw e;
+                      toastApiError(e, "Could not deactivate");
+                      return false;
                     }
                   }}
                 >
@@ -386,9 +497,17 @@ export function StaffDetailPage({ staffId }: { staffId: string }) {
                     <FieldLabel>Reason (optional)</FieldLabel>
                     <Input
                       value={deactivateReason}
-                      onChange={(e) => setDeactivateReason(e.target.value)}
+                      onChange={(e) => {
+                        setDeactivateTouched(true);
+                        setDeactivateReason(e.target.value);
+                      }}
                       placeholder="Resigned"
+                      className={cn(
+                        deactivateReasonError && "border-red-600",
+                      )}
+                      aria-invalid={Boolean(deactivateReasonError)}
                     />
+                    <FormFieldError message={deactivateReasonError} />
                   </div>
                 </ActionDialog>
               ) : (

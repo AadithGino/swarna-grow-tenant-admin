@@ -12,16 +12,12 @@ import {
   Download,
   Gift,
   MoreVertical,
-  Plus,
-  Search,
   Upload,
   UserCheck,
   UsersRound,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -29,25 +25,25 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ActionDialog } from "@/src/components/common/action-dialog";
 import { PermissionGate } from "@/src/components/common/permission-gate";
+import { CreateCustomerDialog } from "@/src/features/customers/create-customer-dialog";
 import { ACTION } from "@/src/lib/action-permissions";
 import { PaginatedDataTable } from "@/src/components/common/paginated-data-table";
-import {
-  FieldLabel,
-  PageHeader,
-  StatCard,
-  Surface,
-} from "@/src/components/common/page-parts";
+import { PageHeader, StatCard, Surface } from "@/src/components/common/page-parts";
 import { PageSkeleton, QueryError } from "@/src/components/common/query-state";
 import { StatusBadge } from "@/src/components/common/status-badge";
 import { downloadCsv } from "@/src/lib/download";
 import { money } from "@/src/lib/format";
 import { emptyPageMeta } from "@/src/lib/cursor-pagination";
 import { useCursorPagination } from "@/src/hooks/use-cursor-pagination";
+import { ListSearchInput } from "@/src/components/common/list-search-input";
 import { useDebouncedValue } from "@/src/hooks/use-debounced-value";
 import {
-  useCreateCustomerMutation,
+  listSearchQueryForApi,
+  sanitizeListSearchQueryInput,
+  shouldSkipListSearchQuery,
+} from "@/src/lib/list-date-range";
+import {
   useGetBranchesQuery,
   useGetCustomerAnalyticsQuery,
   useGetCustomersQuery,
@@ -62,27 +58,29 @@ import { ImportCustomersDialog } from "@/src/features/customers/import-customers
 export function CustomersPage() {
   const router = useRouter();
   const globalSearch = useAppSelector((s) => s.ui.globalSearch);
-  const [q, setQ] = useState(globalSearch);
+  const [q, setQ] = useState(() => sanitizeListSearchQueryInput(globalSearch));
   useEffect(() => {
-    setQ(globalSearch);
+    setQ(sanitizeListSearchQueryInput(globalSearch));
   }, [globalSearch]);
   const branchId = useActingBranchId();
   const branchKey = useActingBranchKey();
   const [kyc, setKyc] = useState("ALL");
   const debouncedQ = useDebouncedValue(q, 350);
   const pager = useCursorPagination(8, `${debouncedQ}|${branchKey}|${kyc}`);
-  const { data, isLoading, isError, refetch } = useGetCustomersQuery({
-    q: debouncedQ || undefined,
-    branchId,
-    kycStatus: kyc === "ALL" ? undefined : kyc,
-    ...pager.queryParams,
-  });
+  const { data, isLoading, isError, error, refetch } = useGetCustomersQuery(
+    {
+      q: listSearchQueryForApi(debouncedQ),
+      branchId,
+      kycStatus: kyc === "ALL" ? undefined : kyc,
+      ...pager.queryParams,
+    },
+    { skip: shouldSkipListSearchQuery(debouncedQ) },
+  );
   const { data: branchesData } = useGetBranchesQuery({ limit: 100 });
   const analyticsQuery = useGetCustomerAnalyticsQuery(
     branchId ? { branchId } : undefined,
   );
   const branches = branchesData?.items ?? [];
-  const [createCustomer] = useCreateCustomerMutation();
   const [importOpen, setImportOpen] = useState(false);
   const branchCodeToId = useMemo(() => {
     const map = new Map<string, string>();
@@ -92,15 +90,8 @@ export function CustomersPage() {
     }
     return map;
   }, [branches]);
-  const [form, setForm] = useState({
-    name: "",
-    phone: "",
-    email: "",
-    branchId: "",
-    address: "",
-  });
   if (isLoading) return <PageSkeleton />;
-  if (isError || !data) return <QueryError onRetry={refetch} />;
+  if (isError || !data) return <QueryError error={error} onRetry={refetch} />;
   const rows = data.items;
   const page = data.page ?? emptyPageMeta();
   const analyticsSummary = analyticsQuery.data?.summary ?? [];
@@ -148,101 +139,7 @@ export function CustomersPage() {
               Export
             </Button>
             <PermissionGate permission={ACTION.customerWrite}>
-            <ActionDialog
-              trigger={
-                <Button>
-                  <Plus />
-                  Create customer
-                </Button>
-              }
-              title="Create customer"
-              description="Mobile uniqueness is checked by the API before creation."
-              actionLabel="Create customer"
-              onSubmit={async () => {
-                if (!form.name || !form.phone)
-                  throw new Error("Name and phone are required");
-                const created = await createCustomer({
-                  name: form.name,
-                  phone: form.phone,
-                  email: form.email,
-                  branchId: form.branchId || undefined,
-                  address: form.address,
-                }).unwrap();
-                toast.success(`${created.name} created`);
-                setForm({
-                  name: "",
-                  phone: "",
-                  email: "",
-                  branchId: "",
-                  address: "",
-                });
-              }}
-            >
-              <div className="grid gap-4">
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div>
-                    <FieldLabel>Full name</FieldLabel>
-                    <Input
-                      value={form.name}
-                      onChange={(e) =>
-                        setForm({ ...form, name: e.target.value })
-                      }
-                    />
-                  </div>
-                  <div>
-                    <FieldLabel>Mobile number</FieldLabel>
-                    <Input
-                      value={form.phone}
-                      onChange={(e) =>
-                        setForm({ ...form, phone: e.target.value })
-                      }
-                      inputMode="tel"
-                    />
-                  </div>
-                </div>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div>
-                    <FieldLabel>Email</FieldLabel>
-                    <Input
-                      type="email"
-                      value={form.email}
-                      onChange={(e) =>
-                        setForm({ ...form, email: e.target.value })
-                      }
-                    />
-                  </div>
-                  <div>
-                    <FieldLabel>Primary branch</FieldLabel>
-                    <Select
-                      value={form.branchId || undefined}
-                      onValueChange={(value) =>
-                        setForm({ ...form, branchId: value })
-                      }
-                    >
-                      <SelectTrigger className="w-full">
-                        <SelectValue placeholder="Select branch" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {branches.map((b) => (
-                          <SelectItem key={b.id} value={b.id}>
-                            {b.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-                <div>
-                  <FieldLabel>Address</FieldLabel>
-                  <Input
-                    value={form.address}
-                    onChange={(e) =>
-                      setForm({ ...form, address: e.target.value })
-                    }
-                  />
-                </div>
-              </div>
-            </ActionDialog>
+              <CreateCustomerDialog branches={branches} />
             </PermissionGate>
           </>
         }
@@ -294,15 +191,12 @@ export function CustomersPage() {
         <PageTabsPanel value="directory">
       <Surface>
         <div className="grid gap-3 border-b p-4 lg:grid-cols-[minmax(280px,1fr)_220px]">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 size-5 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              placeholder="Name, phone, customer ID or enrollment no."
-              className="h-11 pl-11"
-            />
-          </div>
+          <ListSearchInput
+            value={q}
+            onChange={setQ}
+            placeholder="Name, phone, customer ID or enrollment no."
+            inputClassName="h-11"
+          />
           <Select value={kyc} onValueChange={setKyc}>
             <SelectTrigger className="h-11 w-full">
               <SelectValue />
@@ -398,6 +292,7 @@ export function CustomersPage() {
         open={importOpen}
         onOpenChange={setImportOpen}
         branchCodeToId={branchCodeToId}
+        requireBranch={branches.length > 0}
       />
     </>
   );

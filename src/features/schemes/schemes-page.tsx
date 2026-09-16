@@ -16,6 +16,12 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { ListSearchInput } from "@/src/components/common/list-search-input";
+import { useDebouncedValue } from "@/src/hooks/use-debounced-value";
+import {
+  listSearchQueryForApi,
+  shouldSkipListSearchQuery,
+} from "@/src/lib/list-date-range";
 import {
   Select,
   SelectContent,
@@ -24,6 +30,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { ActionDialog } from "@/src/components/common/action-dialog";
+import { FormFieldError } from "@/src/components/common/form-field-error";
+import { toastApiError } from "@/src/lib/api-error";
+import { validateQuickPlanDraft } from "@/src/lib/plan-builder-validation";
 import { PaginatedDataTable } from "@/src/components/common/paginated-data-table";
 import {
   FieldLabel,
@@ -65,10 +74,21 @@ export function SchemesPage() {
   const [status, setStatus] = useState("ALL");
   const [valueBasis, setValueBasis] = useState("ALL");
   const [paymentPattern, setPaymentPattern] = useState("ALL");
-  const pager = useCursorPagination(8, `${status}|${valueBasis}|${paymentPattern}`);
+  const [q, setQ] = useState("");
+  const debouncedQ = useDebouncedValue(q, 350);
+  const pager = useCursorPagination(
+    8,
+    `${status}|${valueBasis}|${paymentPattern}|${debouncedQ}`,
+  );
   const queryArgs = useMemo(
     () => ({
-      status: status === "ALL" ? undefined : status,
+      q: listSearchQueryForApi(debouncedQ),
+      status:
+        status === "ALL"
+          ? undefined
+          : status === "ARCHIVED"
+            ? "INACTIVE"
+            : status,
       valueBasis: valueBasis === "ALL" ? undefined : valueBasis,
       paymentPattern:
         paymentPattern === "ALL"
@@ -78,9 +98,11 @@ export function SchemesPage() {
             : "FLEXIBLE",
       ...pager.queryParams,
     }),
-    [status, valueBasis, paymentPattern, pager.queryParams],
+    [status, valueBasis, paymentPattern, debouncedQ, pager.queryParams],
   );
-  const query = useGetPlansQuery(queryArgs);
+  const query = useGetPlansQuery(queryArgs, {
+    skip: shouldSkipListSearchQuery(debouncedQ),
+  });
   const [form, setForm] = useState({
     name: "",
     code: "",
@@ -89,9 +111,13 @@ export function SchemesPage() {
     tenure: 12,
     amount: 3000,
   });
+  const [quickPlanErrors, setQuickPlanErrors] = useState<
+    Record<string, string>
+  >({});
+  const [previewError, setPreviewError] = useState<string | undefined>();
   if (query.isLoading) return <PageSkeleton />;
   if (query.isError || !query.data)
-    return <QueryError onRetry={query.refetch} />;
+    return <QueryError error={query.error} onRetry={query.refetch} />;
   const rows = query.data.items;
   const page = query.data.page ?? emptyPageMeta();
   const s = query.data.summary;
@@ -151,11 +177,20 @@ export function SchemesPage() {
             title="New scheme plan"
             description="Creates a draft. Complete benefit and redemption rules before publishing."
             actionLabel="Create draft"
+            submitDisabled={
+              Object.keys(validateQuickPlanDraft(form)).length > 0
+            }
             onSubmit={async () => {
+              const clientErrors = validateQuickPlanDraft(form);
+              if (Object.keys(clientErrors).length) {
+                setQuickPlanErrors(clientErrors);
+                toast.error("Fix the highlighted fields.");
+                return false;
+              }
               const draft = defaultPlanBuilderForm();
-              draft.name = form.name;
-              draft.code = form.code;
-              draft.displayName = form.name;
+              draft.name = form.name.trim();
+              draft.code = form.code.trim().toUpperCase();
+              draft.displayName = form.name.trim();
               draft.valueBasis = form.valueBasis as "CASH" | "GOLD_WEIGHT";
               draft.paymentPattern = form.paymentPattern as
                 | "FIXED_DATE"
@@ -165,8 +200,13 @@ export function SchemesPage() {
               draft.fixedAmount = form.amount;
               draft.minAmount = form.amount;
               draft.maxAmount = Math.max(form.amount * 10, form.amount);
-              await createPlan(buildPlanCreatePayload(draft) as any).unwrap();
-              toast.success("Scheme draft created");
+              try {
+                await createPlan(buildPlanCreatePayload(draft) as any).unwrap();
+                toast.success("Scheme draft created");
+              } catch (err) {
+                toastApiError(err, "Could not create scheme draft");
+                return false;
+              }
             }}
           >
             <div className="grid gap-4">
@@ -175,19 +215,37 @@ export function SchemesPage() {
                   <FieldLabel>Plan name</FieldLabel>
                   <Input
                     value={form.name}
-                    onChange={(e) => setForm({ ...form, name: e.target.value })}
+                    onChange={(e) => {
+                      setForm({ ...form, name: e.target.value });
+                      setQuickPlanErrors((p) => {
+                        const n = { ...p };
+                        delete n.name;
+                        return n;
+                      });
+                    }}
                     placeholder="Akshaya 12 Month"
+                    className={cn(quickPlanErrors.name && "border-red-600")}
+                    aria-invalid={Boolean(quickPlanErrors.name)}
                   />
+                  <FormFieldError message={quickPlanErrors.name} />
                 </div>
                 <div>
                   <FieldLabel>Plan code</FieldLabel>
                   <Input
                     value={form.code}
-                    onChange={(e) =>
-                      setForm({ ...form, code: e.target.value.toUpperCase() })
-                    }
+                    onChange={(e) => {
+                      setForm({ ...form, code: e.target.value.toUpperCase() });
+                      setQuickPlanErrors((p) => {
+                        const n = { ...p };
+                        delete n.code;
+                        return n;
+                      });
+                    }}
                     placeholder="AKS12"
+                    className={cn(quickPlanErrors.code && "border-red-600")}
+                    aria-invalid={Boolean(quickPlanErrors.code)}
                   />
+                  <FormFieldError message={quickPlanErrors.code} />
                 </div>
               </div>
               <div className="grid gap-4 sm:grid-cols-2">
@@ -232,20 +290,36 @@ export function SchemesPage() {
                   <Input
                     type="number"
                     value={form.tenure}
-                    onChange={(e) =>
-                      setForm({ ...form, tenure: Number(e.target.value) })
-                    }
+                    onChange={(e) => {
+                      setForm({ ...form, tenure: Number(e.target.value) });
+                      setQuickPlanErrors((p) => {
+                        const n = { ...p };
+                        delete n.tenure;
+                        return n;
+                      });
+                    }}
+                    className={cn(quickPlanErrors.tenure && "border-red-600")}
+                    aria-invalid={Boolean(quickPlanErrors.tenure)}
                   />
+                  <FormFieldError message={quickPlanErrors.tenure} />
                 </div>
                 <div>
                   <FieldLabel>Default amount</FieldLabel>
                   <Input
                     type="number"
                     value={form.amount}
-                    onChange={(e) =>
-                      setForm({ ...form, amount: Number(e.target.value) })
-                    }
+                    onChange={(e) => {
+                      setForm({ ...form, amount: Number(e.target.value) });
+                      setQuickPlanErrors((p) => {
+                        const n = { ...p };
+                        delete n.amount;
+                        return n;
+                      });
+                    }}
+                    className={cn(quickPlanErrors.amount && "border-red-600")}
+                    aria-invalid={Boolean(quickPlanErrors.amount)}
                   />
+                  <FormFieldError message={quickPlanErrors.amount} />
                 </div>
               </div>
               <div className="rounded-xl border bg-[#fff8e8] p-4 text-sm">
@@ -256,9 +330,15 @@ export function SchemesPage() {
                 type="button"
                 variant="outline"
                 onClick={async () => {
+                  const clientErrors = validateQuickPlanDraft(form);
+                  if (Object.keys(clientErrors).length) {
+                    setQuickPlanErrors(clientErrors);
+                    toast.error("Fix the highlighted fields.");
+                    return;
+                  }
                   const draft = defaultPlanBuilderForm();
-                  draft.name = form.name;
-                  draft.code = form.code;
+                  draft.name = form.name.trim();
+                  draft.code = form.code.trim().toUpperCase();
                   draft.valueBasis = form.valueBasis as "CASH" | "GOLD_WEIGHT";
                   draft.paymentPattern = form.paymentPattern as
                     | "FIXED_DATE"
@@ -267,21 +347,31 @@ export function SchemesPage() {
                   draft.installmentCount = form.tenure;
                   draft.fixedAmount = form.amount;
                   draft.minAmount = form.amount;
-                  const res = await previewSchedule(
-                    buildPreviewScheduleBody(draft),
-                  ).unwrap();
-                  const firstDue =
-                    res.summary.firstDueDate ??
-                    res.summary.freeWindow?.from ??
-                    "—";
-                  toast.message(
-                    `Preview: maturity ${res.summary.maturityDate ?? "—"} · first ${firstDue}`,
-                  );
+                  try {
+                    const res = await previewSchedule(
+                      buildPreviewScheduleBody(draft),
+                    ).unwrap();
+                    setPreviewError(undefined);
+                    const firstDue =
+                      res.summary.firstDueDate ??
+                      res.summary.freeWindow?.from ??
+                      "—";
+                    toast.message(
+                      `Preview: maturity ${res.summary.maturityDate ?? "—"} · first ${firstDue}`,
+                    );
+                  } catch (err) {
+                    setPreviewError(
+                      toastApiError(err, "Could not preview schedule"),
+                    );
+                  }
                 }}
               >
                 Preview schedule
               </Button>
-              <PlanSchedulePreviewPanel data={previewState.data} />
+              <PlanSchedulePreviewPanel
+                data={previewState.data}
+                error={previewError}
+              />
             </div>
           </ActionDialog>
           </PermissionGate>
@@ -318,7 +408,13 @@ export function SchemesPage() {
         />
       </div>
       <Surface>
-        <div className="grid gap-4 border-b border-[#eaded9] p-4 xl:grid-cols-[minmax(0,1fr)_200px_200px] xl:items-end">
+        <div className="grid gap-4 border-b border-[#eaded9] p-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_200px_200px] xl:items-end">
+          <ListSearchInput
+            value={q}
+            onChange={setQ}
+            placeholder="Plan name or code…"
+            inputClassName="h-11"
+          />
           <div className="min-w-0">
             <p className="mb-3 text-xs font-bold uppercase tracking-[0.14em] text-[#9a6f2a]">
               Status
@@ -436,7 +532,13 @@ export function SchemesPage() {
             {
               key: "tenure",
               header: "Tenure",
-              render: (r: any) => `${r.tenure} months`,
+              render: (r: any) => `${r.tenure ?? "—"} months`,
+            },
+            {
+              key: "display",
+              header: "Display name",
+              className: "hidden xl:table-cell text-sm text-muted-foreground",
+              render: (r: any) => r.displayName ?? r.name,
             },
             {
               key: "amount",

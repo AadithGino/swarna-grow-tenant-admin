@@ -15,16 +15,19 @@ import {
   amountUsesSlabs,
 } from "@/src/lib/enrol-plan-rules";
 import { money } from "@/src/lib/format";
+import { cn } from "@/lib/utils";
 import type { SchemePlan } from "@/src/types/domain";
 
 export function EnrolAmountControl({
   plan,
   amount,
   onAmountChange,
+  invalid,
 }: {
   plan?: SchemePlan;
   amount: number;
   onAmountChange: (amount: number) => void;
+  invalid?: boolean;
 }) {
   const locked = amountFieldLocked(plan);
   const slabs = amountUsesSlabs(plan);
@@ -41,7 +44,13 @@ export function EnrolAmountControl({
           value={String(amount)}
           onValueChange={(value) => onAmountChange(Number(value))}
         >
-          <SelectTrigger className="h-11 w-full rounded-xl bg-[#faf7f5]">
+          <SelectTrigger
+            className={cn(
+              "h-11 w-full rounded-xl bg-[#faf7f5]",
+              invalid && "border-red-600",
+            )}
+            aria-invalid={invalid}
+          >
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -63,7 +72,11 @@ export function EnrolAmountControl({
       ) : (
         <Input
           type="number"
-          className="h-11 rounded-xl bg-[#faf7f5]"
+          className={cn(
+            "h-11 rounded-xl bg-[#faf7f5]",
+            invalid && "border-red-600",
+          )}
+          aria-invalid={invalid}
           value={amount}
           min={plan?.minAmount}
           max={plan?.maxAmount}

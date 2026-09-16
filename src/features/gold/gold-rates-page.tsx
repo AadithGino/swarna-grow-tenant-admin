@@ -31,6 +31,16 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { ActionDialog } from "@/src/components/common/action-dialog";
+import { FormFieldError } from "@/src/components/common/form-field-error";
+import { toastApiError } from "@/src/lib/api-error";
+import {
+  goldRateFormReady,
+  liveGoldRatePerGramError,
+  validateGoldEffectiveDate,
+  validateGoldRatePerGram,
+} from "@/src/lib/gold-rate-form-validation";
+import { businessTodayYmd } from "@/src/lib/list-date-range";
+import { cn } from "@/lib/utils";
 import { PaginatedDataTable } from "@/src/components/common/paginated-data-table";
 import {
   FieldLabel,
@@ -84,6 +94,11 @@ export function GoldRatesPage() {
   const [addRate] = useAddGoldRateMutation();
   const [rate, setRate] = useState(7225);
   const [branch, setBranch] = useState("ALL");
+  const [rateTouched, setRateTouched] = useState(false);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const effectiveDate = businessTodayYmd();
+  const rateError =
+    rateTouched || rate > 0 ? liveGoldRatePerGramError(rate) : undefined;
 
   useEffect(() => {
     setBranch(actingBranchId ?? "ALL");
@@ -131,7 +146,7 @@ export function GoldRatesPage() {
 
   if (query.isLoading) return <PageSkeleton />;
   if (query.isError || !query.data)
-    return <QueryError onRetry={query.refetch} />;
+    return <QueryError error={query.error} onRetry={query.refetch} />;
 
   return (
     <>
@@ -141,34 +156,73 @@ export function GoldRatesPage() {
         description="Daily rates for gold-weight scheme payments and liability calculations."
         actions={
           <ActionDialog
+            open={dialogOpen}
+            onOpenChange={(open) => {
+              setDialogOpen(open);
+              if (!open) setRateTouched(false);
+            }}
             trigger={
-              <Button>
+              <Button onClick={() => setDialogOpen(true)}>
                 <Plus />
                 Add gold rate
               </Button>
             }
             title="Set gold rate"
-            description="The new rate is immutable and becomes effective at the submitted timestamp."
+            description="The new rate is immutable and becomes effective on the business date below (IST)."
             actionLabel="Publish rate"
+            submitDisabled={!goldRateFormReady(rate, effectiveDate)}
             onSubmit={async () => {
-              await addRate({
-                ratePerGram: rate,
-                branch,
-                idempotencyKey: idempotencyKey(),
-              }).unwrap();
-              toast.success("Gold rate published");
+              setRateTouched(true);
+              const rateErr = validateGoldRatePerGram(rate);
+              const dateErr = validateGoldEffectiveDate(effectiveDate);
+              if (rateErr || dateErr) {
+                toast.error(rateErr ?? dateErr);
+                return false;
+              }
+              try {
+                await addRate({
+                  ratePerGram: rate,
+                  branch,
+                  idempotencyKey: idempotencyKey(),
+                }).unwrap();
+                toast.success("Gold rate published");
+                setDialogOpen(false);
+              } catch (err) {
+                toastApiError(err, "Could not publish gold rate");
+                return false;
+              }
             }}
           >
             <div className="grid gap-4">
               <div>
+                <FieldLabel>Effective date</FieldLabel>
+                <Input
+                  value={effectiveDate}
+                  readOnly
+                  className="h-11 bg-muted/40 font-mono text-sm"
+                />
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Published rates use today&apos;s business date (YYYY-MM-DD).
+                </p>
+              </div>
+              <div>
                 <FieldLabel>Rate per gram</FieldLabel>
                 <Input
                   type="number"
-                  min={1}
-                  value={rate}
-                  onChange={(e) => setRate(Number(e.target.value))}
-                  className="h-12 text-lg font-bold"
+                  min={0.01}
+                  step={0.01}
+                  value={rate || ""}
+                  onChange={(e) => {
+                    setRateTouched(true);
+                    setRate(Number(e.target.value));
+                  }}
+                  className={cn(
+                    "h-12 text-lg font-bold",
+                    rateError && "border-red-600",
+                  )}
+                  aria-invalid={Boolean(rateError)}
                 />
+                <FormFieldError message={rateError} />
               </div>
               <div>
                 <FieldLabel>Applies to</FieldLabel>

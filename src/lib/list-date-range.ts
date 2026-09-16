@@ -55,3 +55,70 @@ export function applyWideListRangePreset(): { from: string; to: string } {
 export function wideListRangePresetLabel(): string {
   return env.useMocks ? "All demo" : "Full year";
 }
+
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+function parseIsoDate(date: string): Date | null {
+  if (!ISO_DATE.test(date)) return null;
+  const [y, m, d] = date.split("-").map(Number);
+  const dt = new Date(y, m - 1, d);
+  if (
+    dt.getFullYear() !== y ||
+    dt.getMonth() !== m - 1 ||
+    dt.getDate() !== d
+  ) {
+    return null;
+  }
+  return dt;
+}
+
+/** Validates YYYY-MM-DD pair for list/report/audit filters (from ≤ to). */
+export function validateListDateRange(
+  from: string,
+  to: string,
+): string | undefined {
+  const fromTrim = from.trim();
+  const toTrim = to.trim();
+  if (!fromTrim || !toTrim) {
+    return "Choose both start and end dates.";
+  }
+  if (!ISO_DATE.test(fromTrim) || !ISO_DATE.test(toTrim)) {
+    return "Use date format YYYY-MM-DD.";
+  }
+  const fromDt = parseIsoDate(fromTrim);
+  const toDt = parseIsoDate(toTrim);
+  if (!fromDt || !toDt) {
+    return "Enter valid calendar dates.";
+  }
+  if (fromDt.getTime() > toDt.getTime()) {
+    return "Start date must be on or before end date.";
+  }
+  return undefined;
+}
+
+export const LIST_SEARCH_QUERY_MAX = 120;
+
+export function validateListSearchQuery(q: string): string | undefined {
+  if (q.length > LIST_SEARCH_QUERY_MAX) {
+    return `Search must be ${LIST_SEARCH_QUERY_MAX} characters or fewer.`;
+  }
+  return undefined;
+}
+
+export function sanitizeListSearchQueryInput(raw: string): string {
+  return raw.slice(0, LIST_SEARCH_QUERY_MAX);
+}
+
+/** Trimmed query for list API `q` param; omit when empty or over limit. */
+export function listSearchQueryForApi(q: string): string | undefined {
+  const trimmed = q.trim();
+  if (!trimmed || validateListSearchQuery(trimmed)) return undefined;
+  return trimmed;
+}
+
+/** Skip fetching when debounced search exceeds backend max length. */
+export function shouldSkipListSearchQuery(q: string): boolean {
+  const trimmed = q.trim();
+  if (!trimmed) return false;
+  return Boolean(validateListSearchQuery(trimmed));
+}

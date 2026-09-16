@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { toastApiError } from "@/src/lib/api-error";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -16,7 +17,14 @@ import {
   dialogScrollShellClass,
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
+import { FormFieldError } from "@/src/components/common/form-field-error";
 import { FieldLabel } from "@/src/components/common/page-parts";
+import {
+  CUSTOMER_STATUS_REASON_MAX,
+  customerStatusReasonReady,
+  liveCustomerStatusReasonError,
+  validateCustomerStatusReasonRequired,
+} from "@/src/lib/customer-status-form";
 import { StatusBadge } from "@/src/components/common/status-badge";
 import type { Customer } from "@/src/types/domain";
 import {
@@ -47,10 +55,16 @@ export function CustomerStatusDialog({
   const [acknowledged, setAcknowledged] = useState(false);
   const [blockAppAccess, setBlockAppAccess] = useState(true);
   const [stopReminders, setStopReminders] = useState(true);
+  const [reasonTouched, setReasonTouched] = useState(false);
+
+  const reasonLiveError = liveCustomerStatusReasonError(reason);
+  const reasonDisplayError =
+    reasonTouched || reason.trim().length > 0 ? reasonLiveError : undefined;
 
   useEffect(() => {
     if (!open) return;
     setReason("");
+    setReasonTouched(false);
     setAcknowledged(false);
     setBlockAppAccess(true);
     setStopReminders(true);
@@ -109,9 +123,14 @@ export function CustomerStatusDialog({
                     <Textarea
                       value={reason}
                       onChange={(e) => setReason(e.target.value)}
+                      onBlur={() => setReasonTouched(true)}
                       rows={3}
+                      maxLength={CUSTOMER_STATUS_REASON_MAX}
                       placeholder="Why is this customer being deactivated?"
+                      className={cn(reasonDisplayError && "border-red-600")}
+                      aria-invalid={Boolean(reasonDisplayError)}
                     />
+                    <FormFieldError message={reasonDisplayError} />
                   </div>
                   <label className="flex items-start gap-3 text-sm">
                     <Checkbox
@@ -139,9 +158,14 @@ export function CustomerStatusDialog({
                 <Textarea
                   value={reason}
                   onChange={(e) => setReason(e.target.value)}
+                  onBlur={() => setReasonTouched(true)}
                   rows={3}
+                  maxLength={CUSTOMER_STATUS_REASON_MAX}
                   placeholder="Repeated cheque bounce, fraud concern, etc."
+                  className={cn(reasonDisplayError && "border-red-600")}
+                  aria-invalid={Boolean(reasonDisplayError)}
                 />
+                <FormFieldError message={reasonDisplayError} />
               </div>
               <label className="flex items-center gap-3 text-sm">
                 <Checkbox
@@ -177,8 +201,18 @@ export function CustomerStatusDialog({
           {mode === "deactivate" && customer.status === "ACTIVE" ? (
             <Button
               variant="destructive"
-              disabled={!canDeactivate || !acknowledged || !reason.trim() || busy}
+              disabled={
+                !canDeactivate ||
+                !acknowledged ||
+                !customerStatusReasonReady(reason) ||
+                busy
+              }
               onClick={async () => {
+                setReasonTouched(true);
+                if (validateCustomerStatusReasonRequired(reason)) {
+                  toast.error("Fix the highlighted fields.");
+                  return;
+                }
                 try {
                   await updateCustomer({
                     id: customer.id,
@@ -186,11 +220,8 @@ export function CustomerStatusDialog({
                   }).unwrap();
                   toast.success(`${customer.name} deactivated`);
                   onOpenChange(false);
-                } catch (err: any) {
-                  toast.error(
-                    err?.data?.message ??
-                      "Could not deactivate this customer",
-                  );
+                } catch (err) {
+                  toastApiError(err, "Could not deactivate this customer");
                 }
               }}
             >
@@ -201,16 +232,25 @@ export function CustomerStatusDialog({
           {mode === "block" && customer.status === "ACTIVE" ? (
             <Button
               variant="destructive"
-              disabled={!reason.trim() || busy}
+              disabled={!customerStatusReasonReady(reason) || busy}
               onClick={async () => {
-                await blockCustomer({
-                  id: customer.id,
-                  reason: reason.trim(),
-                  blockAppAccess,
-                  stopReminders,
-                }).unwrap();
-                toast.success(`${customer.name} blocked`);
-                onOpenChange(false);
+                setReasonTouched(true);
+                if (validateCustomerStatusReasonRequired(reason)) {
+                  toast.error("Fix the highlighted fields.");
+                  return;
+                }
+                try {
+                  await blockCustomer({
+                    id: customer.id,
+                    reason: reason.trim(),
+                    blockAppAccess,
+                    stopReminders,
+                  }).unwrap();
+                  toast.success(`${customer.name} blocked`);
+                  onOpenChange(false);
+                } catch (err) {
+                  toastApiError(err, "Could not block this customer");
+                }
               }}
             >
               {busy && <Loader2 className="animate-spin" />}
