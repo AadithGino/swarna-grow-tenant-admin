@@ -1,0 +1,612 @@
+"use client";
+
+import { useState } from "react";
+import { Eye, EyeOff, LockKeyhole, Phone } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Dialog,
+  DialogBody,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { BrandMark } from "@/src/components/brand/brand-mark";
+import { FieldLabel } from "@/src/components/common/page-parts";
+import { env } from "@/src/config/env";
+import { MOCK_OWNER_SESSION } from "@/src/config/mock-session";
+import { portalSessionFromLogin } from "@/src/lib/auth-session";
+import { getOrCreateDeviceId } from "@/src/lib/device-id";
+import {
+  adminApi,
+  useForgotPasswordMutation,
+  useLoginMutation,
+  useResetPasswordWithTokenMutation,
+  useSetPasswordMutation,
+  useVerifyPasswordResetOtpMutation,
+} from "@/src/store/api/admin-api";
+import { useAppDispatch } from "@/src/store/hooks";
+import { setSession } from "@/src/store/slices/session-slice";
+
+type TenantOption = {
+  tenantCode: string;
+  displayName: string;
+  logoUrl?: string | null;
+};
+
+function extractLoginError(err: unknown): {
+  code?: string;
+  message: string;
+  tenants?: TenantOption[];
+} {
+  const e = err as {
+    data?: {
+      success?: boolean;
+      error?: { code?: string; message?: string; details?: any };
+      code?: string;
+      message?: string;
+      details?: any;
+    };
+    error?: string;
+    message?: string;
+    status?: number | string;
+  };
+  const payload = e?.data;
+  const nested = payload?.error;
+  const code = nested?.code ?? payload?.code;
+  const message =
+    nested?.message ??
+    payload?.message ??
+    e?.error ??
+    e?.message ??
+    "Sign in failed";
+  const details = nested?.details ?? payload?.details;
+  const tenants = Array.isArray(details?.tenants)
+    ? (details.tenants as TenantOption[])
+    : undefined;
+  return { code, message, tenants };
+}
+
+export function LoginPage() {
+  const router = useRouter();
+  const dispatch = useAppDispatch();
+  const [login, loginState] = useLoginMutation();
+  const [forgotPassword, forgotState] = useForgotPasswordMutation();
+  const [verifyResetOtp, verifyOtpState] = useVerifyPasswordResetOtpMutation();
+  const [resetPasswordWithToken, resetWithTokenState] =
+    useResetPasswordWithTokenMutation();
+  const [setPassword, setPasswordState] = useSetPasswordMutation();
+  const [forgotStep, setForgotStep] = useState<"request" | "otp" | "password">(
+    "request",
+  );
+  const [resetOtp, setResetOtp] = useState("");
+  const [resetToken, setResetToken] = useState("");
+  const [resetNewPassword, setResetNewPassword] = useState("");
+  const [show, setShow] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [mobile, setMobile] = useState(env.useMocks ? "9847012345" : "");
+  const [password, setPasswordValue] = useState(
+    env.useMocks ? "Swarna@2026" : "",
+  );
+  const [tenantCode, setTenantCode] = useState("");
+  const [tenantOptions, setTenantOptions] = useState<TenantOption[] | null>(
+    null,
+  );
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [forgotOpen, setForgotOpen] = useState(false);
+  const [forgotTenant, setForgotTenant] = useState("");
+  const [forgotMobile, setForgotMobile] = useState("");
+  const [mustSetPasswordOpen, setMustSetPasswordOpen] = useState(false);
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+
+  async function completeLogin(
+    sessionInput: Parameters<typeof portalSessionFromLogin>[0],
+    { redirect = true }: { redirect?: boolean } = {},
+  ) {
+    const session = portalSessionFromLogin(sessionInput);
+    dispatch(setSession(session));
+
+    if (!env.useMocks) {
+      try {
+        const profile = await dispatch(
+          adminApi.endpoints.getSettingsProfile.initiate(undefined, {
+            forceRefetch: true,
+          }),
+        ).unwrap();
+        const displayName =
+          profile?.displayName ??
+          profile?.businessName ??
+          profile?.name ??
+          session.tenant.displayName;
+        const code =
+          profile?.tenantCode ??
+          profile?.code ??
+          session.tenant.tenantCode;
+        if (
+          displayName !== session.tenant.displayName ||
+          code !== session.tenant.tenantCode
+        ) {
+          dispatch(
+            setSession({
+              ...session,
+              tenant: {
+                ...session.tenant,
+                displayName,
+                tenantCode: code,
+              },
+            }),
+          );
+        }
+      } catch {
+        // Profile is optional for first paint; tenantId placeholder is fine.
+      }
+    }
+
+    if (redirect) router.push("/");
+  }
+
+  return (
+    <main className="grid min-h-screen bg-[#fbf7f3] lg:grid-cols-[minmax(360px,44%)_1fr]">
+      <section className="relative hidden overflow-hidden bg-[#490b17] p-12 text-white lg:flex lg:flex-col lg:justify-between">
+        <BrandMark />
+        <div className="relative z-10 max-w-xl">
+          <div className="mb-6 h-1 w-20 rounded-full bg-[#dfb546]" />
+          <h1 className="text-5xl font-extrabold leading-[1.06] tracking-[-0.045em]">
+            Every gold scheme, under control.
+          </h1>
+          <p className="mt-6 max-w-lg text-lg leading-8 text-[#eadadd]">
+            Collections, customer accounts, maturity, gold liability and staff
+            cash—one operational view for your jewellery.
+          </p>
+        </div>
+        <div className="text-sm text-[#cbaeb4]">
+          Secure tenant administration · Role-based access
+        </div>
+        <div className="absolute -bottom-40 -right-40 size-[560px] rounded-full border-[90px] border-[#650d21] opacity-70" />
+      </section>
+      <section className="grid place-items-center p-6">
+        <div className="w-full max-w-md">
+          <div className="mb-8 lg:hidden">
+            <div className="inline-flex rounded-2xl bg-[#490b17] p-3">
+              <BrandMark />
+            </div>
+          </div>
+          <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#9a6f2a]">
+            Jewellery portal
+          </p>
+          <h2 className="mt-2 text-4xl font-extrabold tracking-[-0.04em] text-[#26151a]">
+            Welcome back
+          </h2>
+          <p className="mt-2 text-muted-foreground">
+            Sign in with your registered mobile number and password.
+          </p>
+          <form
+            className="mt-8 space-y-5"
+            onSubmit={async (e) => {
+              e.preventDefault();
+              setErrorMessage(null);
+              setBusy(true);
+              try {
+                if (env.useMocks) {
+                  await new Promise((resolve) => setTimeout(resolve, 650));
+                  dispatch(setSession(MOCK_OWNER_SESSION));
+                  router.push("/");
+                  return;
+                }
+
+                const data = await login({
+                  mobile: mobile.trim(),
+                  password,
+                  deviceId: getOrCreateDeviceId(),
+                  platform: "web",
+                  ...(tenantCode.trim()
+                    ? { tenantCode: tenantCode.trim() }
+                    : {}),
+                }).unwrap();
+
+                const needsPassword = Boolean(
+                  (data.user as { mustSetPassword?: boolean })?.mustSetPassword,
+                );
+                await completeLogin(
+                  {
+                    accessToken: data.accessToken,
+                    refreshToken: data.refreshToken,
+                    user: data.user as Parameters<
+                      typeof portalSessionFromLogin
+                    >[0]["user"],
+                    mobile: mobile.trim(),
+                  },
+                  { redirect: !needsPassword },
+                );
+                if (needsPassword) {
+                  setNewPassword("");
+                  setConfirmPassword("");
+                  setMustSetPasswordOpen(true);
+                }
+              } catch (err) {
+                const parsed = extractLoginError(err);
+                if (
+                  parsed.code === "TENANT_SELECTION_REQUIRED" &&
+                  parsed.tenants?.length
+                ) {
+                  setTenantOptions(parsed.tenants);
+                  setTenantCode(parsed.tenants[0]?.tenantCode ?? "");
+                  setErrorMessage("Select your jewellery to continue.");
+                } else {
+                  setErrorMessage(parsed.message);
+                  toast.error(parsed.message);
+                }
+              } finally {
+                setBusy(false);
+              }
+            }}
+          >
+            <div>
+              <FieldLabel>Mobile number</FieldLabel>
+              <div className="relative">
+                <Phone className="absolute left-3 top-1/2 size-5 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  required
+                  value={mobile}
+                  onChange={(e) => setMobile(e.target.value)}
+                  inputMode="numeric"
+                  className="h-12 pl-11 text-base"
+                  autoComplete="username"
+                />
+              </div>
+            </div>
+            <div>
+              <div className="flex justify-between">
+                <FieldLabel>Password</FieldLabel>
+                <button
+                  type="button"
+                  className="mb-1.5 text-sm font-semibold text-[#730321]"
+                  onClick={() => {
+                    setForgotTenant(tenantCode);
+                    setForgotMobile(mobile);
+                    setForgotOpen(true);
+                  }}
+                >
+                  Forgot password?
+                </button>
+              </div>
+              <div className="relative">
+                <LockKeyhole className="absolute left-3 top-1/2 size-5 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  required
+                  value={password}
+                  onChange={(e) => setPasswordValue(e.target.value)}
+                  type={show ? "text" : "password"}
+                  className="h-12 pl-11 pr-12 text-base"
+                  autoComplete="current-password"
+                />
+                <button
+                  type="button"
+                  aria-label={show ? "Hide password" : "Show password"}
+                  onClick={() => setShow(!show)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+                >
+                  {show ? (
+                    <EyeOff className="size-5" />
+                  ) : (
+                    <Eye className="size-5" />
+                  )}
+                </button>
+              </div>
+            </div>
+            {(tenantOptions?.length || !env.useMocks) && (
+              <div>
+                <FieldLabel>
+                  Jewellery code
+                  {tenantOptions?.length ? "" : " (optional)"}
+                </FieldLabel>
+                {tenantOptions?.length ? (
+                  <Select value={tenantCode} onValueChange={setTenantCode}>
+                    <SelectTrigger className="h-12 w-full text-base">
+                      <SelectValue placeholder="Select jewellery" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {tenantOptions.map((t) => (
+                        <SelectItem key={t.tenantCode} value={t.tenantCode}>
+                          {t.displayName} ({t.tenantCode})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <Input
+                    value={tenantCode}
+                    onChange={(e) => setTenantCode(e.target.value)}
+                    placeholder="Tenant code if you work across jewelleries"
+                    className="h-12 text-base"
+                    autoComplete="organization"
+                  />
+                )}
+              </div>
+            )}
+            {errorMessage ? (
+              <p className="text-sm text-red-700">{errorMessage}</p>
+            ) : null}
+            <Button
+              size="lg"
+              className="h-12 w-full text-base"
+              disabled={busy || loginState.isLoading}
+            >
+              {busy || loginState.isLoading ? "Signing in…" : "Sign in"}
+            </Button>
+          </form>
+          <div className="mt-6 rounded-xl border border-[#eadbb5] bg-[#fff8e8] p-4 text-sm text-[#725a28]">
+            {env.useMocks ? (
+              <>
+                <strong>Mock mode is active.</strong> Prefilled credentials open
+                the offline demo. Set{" "}
+                <code className="rounded bg-[#f5e6bc] px-1 text-xs">
+                  NEXT_PUBLIC_USE_MOCKS=false
+                </code>{" "}
+                and run swarnagrow-backend for live API testing.
+              </>
+            ) : (
+              <>
+                Connected to{" "}
+                <code className="rounded bg-white/80 px-1 text-xs">
+                  {env.apiBaseUrl}
+                </code>
+                . Sign in with your jewellery staff credentials.
+              </>
+            )}
+          </div>
+        </div>
+      </section>
+
+      <Dialog
+        open={forgotOpen}
+        onOpenChange={(open) => {
+          setForgotOpen(open);
+          if (!open) {
+            setForgotStep("request");
+            setResetOtp("");
+            setResetToken("");
+            setResetNewPassword("");
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogBody>
+            <DialogHeader>
+              <DialogTitle>Reset password</DialogTitle>
+              <DialogDescription>
+                {forgotStep === "request"
+                  ? "Enter your jewellery code and mobile. We will send a reset OTP if the account exists."
+                  : forgotStep === "otp"
+                    ? env.useMocks
+                      ? "Enter the OTP (use 123456 in local mock mode)."
+                      : "Enter the OTP sent to your mobile."
+                    : "Choose a new password for your staff account."}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="mt-4 space-y-3">
+              {forgotStep === "request" ? (
+                <>
+                  <div>
+                    <FieldLabel>Jewellery code</FieldLabel>
+                    <Input
+                      value={forgotTenant}
+                      onChange={(e) => setForgotTenant(e.target.value)}
+                      autoComplete="organization"
+                    />
+                  </div>
+                  <div>
+                    <FieldLabel>Mobile number</FieldLabel>
+                    <Input
+                      value={forgotMobile}
+                      onChange={(e) => setForgotMobile(e.target.value)}
+                      inputMode="numeric"
+                      autoComplete="tel"
+                    />
+                  </div>
+                </>
+              ) : null}
+              {forgotStep === "otp" ? (
+                <div>
+                  <FieldLabel>OTP</FieldLabel>
+                  <Input
+                    value={resetOtp}
+                    onChange={(e) => setResetOtp(e.target.value.replace(/\D/g, ""))}
+                    inputMode="numeric"
+                    maxLength={8}
+                    placeholder="6-digit code"
+                  />
+                </div>
+              ) : null}
+              {forgotStep === "password" ? (
+                <div>
+                  <FieldLabel>New password</FieldLabel>
+                  <Input
+                    type="password"
+                    value={resetNewPassword}
+                    onChange={(e) => setResetNewPassword(e.target.value)}
+                    autoComplete="new-password"
+                  />
+                </div>
+              ) : null}
+            </div>
+          </DialogBody>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                if (forgotStep === "otp") setForgotStep("request");
+                else if (forgotStep === "password") setForgotStep("otp");
+                else setForgotOpen(false);
+              }}
+            >
+              {forgotStep === "request" ? "Cancel" : "Back"}
+            </Button>
+            {forgotStep === "request" ? (
+              <Button
+                disabled={
+                  forgotState.isLoading ||
+                  !forgotTenant.trim() ||
+                  !forgotMobile.trim()
+                }
+                onClick={async () => {
+                  try {
+                    await forgotPassword({
+                      tenantCode: forgotTenant.trim().toUpperCase(),
+                      mobile: forgotMobile.trim(),
+                      deviceId: getOrCreateDeviceId(),
+                    }).unwrap();
+                    toast.success("OTP sent if the account exists");
+                    setForgotStep("otp");
+                  } catch (err) {
+                    const message =
+                      (err as { data?: { error?: { message?: string } } })?.data
+                        ?.error?.message ?? "Could not start password reset";
+                    toast.error(message);
+                  }
+                }}
+              >
+                {forgotState.isLoading ? "Sending…" : "Send OTP"}
+              </Button>
+            ) : null}
+            {forgotStep === "otp" ? (
+              <Button
+                disabled={
+                  verifyOtpState.isLoading ||
+                  resetOtp.length < 4 ||
+                  !forgotTenant.trim() ||
+                  !forgotMobile.trim()
+                }
+                onClick={async () => {
+                  try {
+                    const result = await verifyResetOtp({
+                      tenantCode: forgotTenant.trim().toUpperCase(),
+                      mobile: forgotMobile.trim(),
+                      otp: resetOtp,
+                      deviceId: getOrCreateDeviceId(),
+                    }).unwrap();
+                    setResetToken(result.resetToken);
+                    setForgotStep("password");
+                  } catch (err) {
+                    const message =
+                      (err as { data?: { error?: { message?: string } } })?.data
+                        ?.error?.message ?? "Invalid or expired OTP";
+                    toast.error(message);
+                  }
+                }}
+              >
+                {verifyOtpState.isLoading ? "Verifying…" : "Verify OTP"}
+              </Button>
+            ) : null}
+            {forgotStep === "password" ? (
+              <Button
+                disabled={
+                  resetWithTokenState.isLoading ||
+                  resetNewPassword.length < 8 ||
+                  !resetToken
+                }
+                onClick={async () => {
+                  try {
+                    await resetPasswordWithToken({
+                      resetToken,
+                      password: resetNewPassword,
+                    }).unwrap();
+                    toast.success("Password updated — sign in with the new password");
+                    setForgotOpen(false);
+                    setPasswordValue("");
+                  } catch (err) {
+                    const message =
+                      (err as { data?: { error?: { message?: string } } })?.data
+                        ?.error?.message ?? "Could not set password";
+                    toast.error(message);
+                  }
+                }}
+              >
+                {resetWithTokenState.isLoading ? "Saving…" : "Set password"}
+              </Button>
+            ) : null}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={mustSetPasswordOpen}
+        onOpenChange={(next) => {
+          if (!next) return;
+          setMustSetPasswordOpen(next);
+        }}
+      >
+        <DialogContent className="sm:max-w-md" showCloseButton={false}>
+          <DialogBody>
+            <DialogHeader>
+              <DialogTitle>Set a new password</DialogTitle>
+              <DialogDescription>
+                Your account requires a new password before you continue.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="mt-4 space-y-3">
+              <div>
+                <FieldLabel>New password</FieldLabel>
+                <Input
+                  type="password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  autoComplete="new-password"
+                />
+              </div>
+              <div>
+                <FieldLabel>Confirm password</FieldLabel>
+                <Input
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  autoComplete="new-password"
+                />
+              </div>
+            </div>
+          </DialogBody>
+          <DialogFooter>
+            <Button
+              disabled={
+                setPasswordState.isLoading ||
+                !newPassword.trim() ||
+                newPassword !== confirmPassword
+              }
+              onClick={async () => {
+                if (newPassword !== confirmPassword) {
+                  toast.error("Passwords do not match");
+                  return;
+                }
+                try {
+                  await setPassword({ password: newPassword }).unwrap();
+                  toast.success("Password set");
+                  setMustSetPasswordOpen(false);
+                  router.push("/");
+                } catch (err) {
+                  const message =
+                    (err as { data?: { error?: { message?: string } } })?.data
+                      ?.error?.message ?? "Could not set password";
+                  toast.error(message);
+                }
+              }}
+            >
+              {setPasswordState.isLoading ? "Saving…" : "Continue"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </main>
+  );
+}

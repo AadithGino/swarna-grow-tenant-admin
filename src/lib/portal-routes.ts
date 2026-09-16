@@ -1,0 +1,24 @@
+/** Top-level portal path segments handled by `PortalRouter`. */
+export const PORTAL_SECTIONS = new Set([
+  "dashboard",
+  "customers",
+  "enrollments",
+  "dues",
+  "collections",
+  "cash-control",
+  "maturity",
+  "gold-rates",
+  "reminders",
+  "reports",
+  "schemes",
+  "staff-branches",
+  "support",
+  "audit",
+  "settings",
+  "alerts",
+  "login",
+]);
+
+export function isKnownPortalSection(section: string): boolean {
+  return PORTAL_SECTIONS.has(section);
+}
