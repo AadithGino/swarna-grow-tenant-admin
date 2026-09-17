@@ -43,6 +43,7 @@ import { openCustomerPaymentTarget } from "@/src/lib/customer-payment-redirect";
 import type { CustomerSchemeDetail } from "@/src/types/customer";
 import { useCustomerTenant } from "@/src/components/customer/customer-tenant-context";
 import { customerPath } from "@/src/lib/customer-tenant";
+import { useCustomerPortalCapabilities } from "@/src/lib/customer-portal-capabilities";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { isGoldWeightScheme } from "@/src/lib/customer-gold-ui";
@@ -291,6 +292,7 @@ function PhonePePaymentDialog({ scheme, open, onOpenChange }: { scheme: Customer
 
 export function CustomerSchemeDetailPage({ id }: { id: string }) {
   const { tenantSlug } = useCustomerTenant();
+  const { customerAppPaymentsEnabled } = useCustomerPortalCapabilities();
   const { data: scheme, isLoading, isError, refetch } = useGetCustomerSchemeQuery(id);
   const [payOpen, setPayOpen] = useState(false);
   const [redeemOpen, setRedeemOpen] = useState(false);
@@ -314,7 +316,15 @@ export function CustomerSchemeDetailPage({ id }: { id: string }) {
 
   const totalPaid = scheme.totalPaid ?? { amountPaise: 0, amountDisplay: "₹0" };
   const header = scheme.header ?? { eyebrow: "", title: scheme.planName, description: scheme.subtitle ?? "" };
-  const payButton = scheme.payButton ?? { visible: scheme.canPay, enabled: scheme.canPay, label: "Pay" };
+  const payButtonRaw = scheme.payButton ?? { visible: scheme.canPay, enabled: scheme.canPay, label: "Pay" };
+  const payButton = customerAppPaymentsEnabled
+    ? payButtonRaw
+    : {
+        ...payButtonRaw,
+        enabled: false,
+        label: "Payments unavailable",
+        helperText: "This jeweller has set the customer app to view-only or disabled online payments.",
+      };
   const passbook = scheme.passbookSummary ?? { totalEntries: scheme.payments?.length ?? 0, lastPaymentAt: "", totalPaid };
   const redemption = scheme.redemption ?? { eligible: false, status: "NOT_ELIGIBLE", preferredModes: [] as Array<{ mode: string; label: string } | string> };
   const schemeIsGold = isGoldWeightScheme(scheme.valueBasis);

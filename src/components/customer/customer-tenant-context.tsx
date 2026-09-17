@@ -28,6 +28,9 @@ type CustomerTenantContextValue = {
     customerSelfRegistration?: boolean;
     customerSelfEnrol?: boolean;
     multiScheme?: boolean;
+    customerLoginMode?: "OTP_ONLY" | "PASSWORD_ONLY";
+    customerAppWriteEnabled?: boolean;
+    customerAppPaymentsEnabled?: boolean;
     supportNumber?: string;
   } | null;
   loading: boolean;
@@ -86,6 +89,9 @@ export function CustomerTenantProvider({
             customerSelfRegistration: tenant.customerSelfRegistration,
             customerSelfEnrol: tenant.customerSelfEnrol,
             multiScheme: tenant.multiScheme,
+            customerLoginMode: tenant.customerLoginMode,
+            customerAppWriteEnabled: tenant.customerAppWriteEnabled,
+            customerAppPaymentsEnabled: tenant.customerAppPaymentsEnabled,
             supportNumber: tenant.supportNumber,
           }
         : null,

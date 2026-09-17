@@ -8,6 +8,9 @@ export type CustomerPortalCapabilities = {
   customerSelfRegistration: boolean;
   customerSelfEnrol: boolean;
   multiScheme: boolean;
+  customerLoginMode: "OTP_ONLY" | "PASSWORD_ONLY";
+  customerAppWriteEnabled: boolean;
+  customerAppPaymentsEnabled: boolean;
 };
 
 function capBool(value: boolean | undefined | null, defaultWhenUnset: boolean): boolean {
@@ -24,6 +27,12 @@ export function customerPortalCapabilitiesFromTenant(
     customerSelfRegistration: capBool(tenant?.customerSelfRegistration, true),
     customerSelfEnrol: capBool(tenant?.customerSelfEnrol, true),
     multiScheme: capBool(tenant?.multiScheme, true),
+    customerLoginMode:
+      tenant?.customerLoginMode === "PASSWORD_ONLY"
+        ? "PASSWORD_ONLY"
+        : "OTP_ONLY",
+    customerAppWriteEnabled: capBool(tenant?.customerAppWriteEnabled, true),
+    customerAppPaymentsEnabled: capBool(tenant?.customerAppPaymentsEnabled, true),
   };
 }
 
@@ -48,5 +57,17 @@ export function useCustomerPortalCapabilities(): CustomerPortalCapabilities {
     customerSelfEnrol:
       session.customerSelfEnrol != null ? session.customerSelfEnrol : fromTenant.customerSelfEnrol,
     multiScheme: session.multiScheme != null ? session.multiScheme : fromTenant.multiScheme,
+    customerLoginMode:
+      session.customerLoginMode != null
+        ? session.customerLoginMode
+        : fromTenant.customerLoginMode,
+    customerAppWriteEnabled:
+      session.customerAppWriteEnabled != null
+        ? session.customerAppWriteEnabled
+        : fromTenant.customerAppWriteEnabled,
+    customerAppPaymentsEnabled:
+      session.customerAppPaymentsEnabled != null
+        ? session.customerAppPaymentsEnabled
+        : fromTenant.customerAppPaymentsEnabled,
   };
 }

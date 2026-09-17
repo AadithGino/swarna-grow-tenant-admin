@@ -30,7 +30,6 @@ export type CustomerProfile = {
   name: string;
   mobile: string;
   email?: string;
-  dateOfBirth?: string;
   address?: string;
   mobileImmutable: true;
   whatsappOptIn: boolean;
@@ -81,6 +80,9 @@ export type TenantBranding = {
   customerSelfRegistration?: boolean;
   customerSelfEnrol?: boolean;
   multiScheme?: boolean;
+  customerLoginMode?: "OTP_ONLY" | "PASSWORD_ONLY";
+  customerAppWriteEnabled?: boolean;
+  customerAppPaymentsEnabled?: boolean;
 };
 
 export type CustomerPastScheme = {

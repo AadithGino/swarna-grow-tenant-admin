@@ -39,7 +39,7 @@ export function CustomerHomePage() {
   const { tenantSlug } = useCustomerTenant();
   const { data, isLoading, isError, refetch } = useGetCustomerHomeQuery();
   const { visible: showGoldMetrics } = useCustomerGoldMetricsVisible();
-  const { customerSelfEnrol } = useCustomerPortalCapabilities();
+  const { customerSelfEnrol, customerAppPaymentsEnabled } = useCustomerPortalCapabilities();
 
   if (isLoading || !data) return <PageSkeleton cards={3} />;
   if (isError) return <QueryError onRetry={refetch} />;
@@ -54,7 +54,18 @@ export function CustomerHomePage() {
   const actionScheme = schemes.find((scheme) => scheme.id === data.actionCard?.schemeId) ?? schemes.find((scheme) => scheme.canPay);
 
   const quickActions = [
-    { key: "PAY", label: actionScheme?.displayMode === "FIXED" ? "Pay" : "Contribute", icon: IndianRupee, href: actionScheme ? customerPath(tenantSlug, "schemes", actionScheme.id) : customerPath(tenantSlug, "schemes") },
+    {
+      key: "PAY",
+      label: customerAppPaymentsEnabled
+        ? actionScheme?.displayMode === "FIXED"
+          ? "Pay"
+          : "Contribute"
+        : "View schemes",
+      icon: IndianRupee,
+      href: actionScheme && customerAppPaymentsEnabled
+        ? customerPath(tenantSlug, "schemes", actionScheme.id)
+        : customerPath(tenantSlug, "schemes"),
+    },
     ...(customerSelfEnrol ? [{ key: "ENROL", label: "Explore plans", icon: Grid2X2, href: customerPath(tenantSlug, "plans") }] : []),
     { key: "PASSBOOK", label: "Passbook", icon: WalletCards, href: customerPath(tenantSlug, "payments") },
   ];
@@ -101,7 +112,7 @@ export function CustomerHomePage() {
             <span className="grid size-12 shrink-0 place-items-center rounded-full bg-[#fff0c8] text-[#8b5f08]"><CalendarDays className="size-5" /></span>
             <div className="min-w-0"><p className="text-[0.7rem] font-extrabold uppercase tracking-[.15em] text-[#956817]">{actionScheme.displayMode === "FIXED" ? "Instalment ready" : "Contribute when you choose"}</p><h2 className="mt-1 truncate text-lg font-black">{data.actionCard.title}</h2><p className="mt-0.5 truncate text-sm text-[#6f6b78]">{actionScheme.planName}{actionScheme.nextActionAmount ? ` · ${actionScheme.nextActionAmount.amountDisplay}` : ""}</p></div>
           </div>
-          <div className="shrink-0"><Button asChild className="h-12 w-full rounded-xl bg-[#730321] px-6 text-sm font-black hover:bg-[#590219] sm:w-auto"><Link href={customerPath(tenantSlug, "schemes", actionScheme.id)}>{actionScheme.displayMode === "FIXED" ? "Pay with PhonePe" : "Contribute securely"}<ArrowRight className="ml-2 size-4" /></Link></Button><p className="mt-2 flex items-center justify-center gap-1 text-[0.7rem] text-[#77727c]"><ShieldCheck className="size-3.5" />Secure payment</p></div>
+          <div className="shrink-0"><Button asChild className="h-12 w-full rounded-xl bg-[#730321] px-6 text-sm font-black hover:bg-[#590219] sm:w-auto"><Link href={customerPath(tenantSlug, "schemes", actionScheme.id)}>{customerAppPaymentsEnabled ? (actionScheme.displayMode === "FIXED" ? "Pay with PhonePe" : "Contribute securely") : "View scheme"}<ArrowRight className="ml-2 size-4" /></Link></Button><p className="mt-2 flex items-center justify-center gap-1 text-[0.7rem] text-[#77727c]"><ShieldCheck className="size-3.5" />{customerAppPaymentsEnabled ? "Secure payment" : "View-only mode enabled"}</p></div>
         </section>
       ) : null}
 

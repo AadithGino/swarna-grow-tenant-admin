@@ -215,6 +215,9 @@ export function SettingsPage({
     kycMandatory: false,
     customerSelfEnrolEnabled: true,
     customerSelfRegistrationEnabled: true,
+    customerLoginMode: "OTP_ONLY" as "OTP_ONLY" | "PASSWORD_ONLY",
+    customerAppWriteEnabled: true,
+    customerAppPaymentsEnabled: true,
     redemptionApprovalRequired: true,
     receiptPrefix: "",
     receiptNumberFormat: "",
@@ -329,6 +332,12 @@ export function SettingsPage({
       customerSelfEnrolEnabled: Boolean(o.customerSelfEnrolEnabled),
       customerSelfRegistrationEnabled: Boolean(
         o.customerSelfRegistrationEnabled,
+      ),
+      customerLoginMode:
+        o.customerLoginMode === "PASSWORD_ONLY" ? "PASSWORD_ONLY" : "OTP_ONLY",
+      customerAppWriteEnabled: Boolean(o.customerAppWriteEnabled ?? true),
+      customerAppPaymentsEnabled: Boolean(
+        o.customerAppPaymentsEnabled ?? true,
       ),
       redemptionApprovalRequired: Boolean(o.redemptionApprovalRequired),
       receiptPrefix: String(o.receiptPrefix ?? ""),
@@ -1170,6 +1179,16 @@ export function SettingsPage({
                     "Public signup into this tenant",
                   ],
                   [
+                    "customerAppWriteEnabled",
+                    "Customer app write access",
+                    "When off, customer app becomes view-only",
+                  ],
+                  [
+                    "customerAppPaymentsEnabled",
+                    "Customer app payments",
+                    "When off, pay/contribute actions are blocked in app",
+                  ],
+                  [
                     "redemptionApprovalRequired",
                     "Redemption approval required",
                     "When off, branch manager can complete without admin",
@@ -1186,14 +1205,64 @@ export function SettingsPage({
                   </div>
                   <Switch
                     checked={Boolean(opsForm[key])}
-                    onCheckedChange={(v) =>
-                      setOpsForm({ ...opsForm, [key]: v === true })
+                    onCheckedChange={(v) => {
+                      const next = v === true;
+                      if (key === "customerAppWriteEnabled" && !next) {
+                        setOpsForm({
+                          ...opsForm,
+                          customerAppWriteEnabled: false,
+                          customerAppPaymentsEnabled: false,
+                        });
+                        return;
+                      }
+                      if (key === "customerAppPaymentsEnabled" && !opsForm.customerAppWriteEnabled) {
+                        return;
+                      }
+                      setOpsForm({ ...opsForm, [key]: next });
+                    }}
+                    disabled={
+                      key === "customerAppPaymentsEnabled" &&
+                      !opsForm.customerAppWriteEnabled
                     }
                   />
                 </div>
               ))}
             </div>
             <div className="grid gap-5 border-t border-[#eaded9] p-6 md:grid-cols-2">
+              <div>
+                <FieldLabel>Customer login mode</FieldLabel>
+                <div className="mt-2 grid grid-cols-2 gap-2">
+                  <Button
+                    type="button"
+                    variant={
+                      opsForm.customerLoginMode === "OTP_ONLY"
+                        ? "default"
+                        : "outline"
+                    }
+                    onClick={() =>
+                      setOpsForm({ ...opsForm, customerLoginMode: "OTP_ONLY" })
+                    }
+                  >
+                    OTP only
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={
+                      opsForm.customerLoginMode === "PASSWORD_ONLY"
+                        ? "default"
+                        : "outline"
+                    }
+                    onClick={() =>
+                      setOpsForm({
+                        ...opsForm,
+                        customerLoginMode: "PASSWORD_ONLY",
+                      })
+                    }
+                  >
+                    Password only
+                  </Button>
+                </div>
+              </div>
               <div>
                 <FieldLabel>Receipt prefix</FieldLabel>
                 <Input

@@ -146,10 +146,6 @@ export function CustomerProfilePage() {
             ["Mobile", data.mobile],
             ["Email", data.email ?? "Not added"],
             ["Passbook", data.passbookNumber ?? "—"],
-            [
-              "Date of birth",
-              data.dateOfBirth ? new Date(data.dateOfBirth).toLocaleDateString("en-IN") : "Not added",
-            ],
             ["Primary branch", data.branch?.name ?? "—"],
             ["WhatsApp updates", data.whatsappOptIn ? "Enabled" : "Disabled"],
           ].map(([label, value]) => (

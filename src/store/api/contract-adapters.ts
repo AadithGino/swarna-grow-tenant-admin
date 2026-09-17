@@ -1453,6 +1453,11 @@ export function adaptSettingsOperations(raw: unknown): Record<string, unknown> {
     customerSelfEnrolEnabled: ops.customerSelfEnrolEnabled ?? true,
     customerSelfRegistrationEnabled:
       ops.customerSelfRegistrationEnabled ?? true,
+    customerLoginMode: ops.customerLoginMode ?? "OTP_ONLY",
+    customerAppWriteEnabled: ops.customerAppWriteEnabled ?? true,
+    customerAppPaymentsEnabled:
+      (ops.customerAppWriteEnabled ?? true) &&
+      (ops.customerAppPaymentsEnabled ?? true),
     receiptPrefix: ops.receiptPrefix ?? "",
     receiptNumberFormat: ops.receiptNumberFormat ?? "",
     passbookNumberFormat: ops.passbookNumberFormat ?? "",

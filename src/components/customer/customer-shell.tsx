@@ -27,7 +27,7 @@ export function CustomerShell({ children }: { children: React.ReactNode }) {
   const dispatch = useAppDispatch();
   const { tenantSlug } = useCustomerTenant();
   const { data: home } = useGetCustomerHomeQuery();
-  const { customerSelfEnrol } = useCustomerPortalCapabilities();
+  const { customerSelfEnrol, customerAppWriteEnabled, customerAppPaymentsEnabled } = useCustomerPortalCapabilities();
   const unread = home?.unreadNotificationCount ?? 0;
   const homeHref = customerPath(tenantSlug);
   const navigation = coreNavigation.map((item) => ({ ...item, href: item.segment ? customerPath(tenantSlug, item.segment) : homeHref }));
@@ -50,7 +50,7 @@ export function CustomerShell({ children }: { children: React.ReactNode }) {
                 {item.label}
               </Link>
             ))}
-            {customerSelfEnrol ? <Link href={customerPath(tenantSlug, "plans")} className="ml-1 inline-flex items-center gap-2 rounded-xl border border-[#eadfda] px-4 py-2.5 text-sm font-bold text-[#730321] hover:bg-[#fff7e5]"><Sparkles className="size-4 text-[#a47316]" />Explore plans</Link> : null}
+            {customerSelfEnrol && customerAppWriteEnabled ? <Link href={customerPath(tenantSlug, "plans")} className="ml-1 inline-flex items-center gap-2 rounded-xl border border-[#eadfda] px-4 py-2.5 text-sm font-bold text-[#730321] hover:bg-[#fff7e5]"><Sparkles className="size-4 text-[#a47316]" />Explore plans</Link> : null}
           </nav>
           <div className="ml-auto flex items-center gap-2 lg:ml-4">
             <Link href={customerPath(tenantSlug, "notifications")} aria-label={`${unread} unread notifications`} className="relative grid size-11 place-items-center rounded-full border border-[#e5ddd7] bg-white text-[#171722] transition hover:border-[#cdbdb5]">
@@ -63,6 +63,13 @@ export function CustomerShell({ children }: { children: React.ReactNode }) {
       </header>
 
       <main className="mx-auto min-h-[calc(100vh-76px)] max-w-[1240px] px-4 pb-28 pt-7 sm:px-6 sm:pt-9 lg:px-8 lg:pb-12">
+        {!customerAppWriteEnabled || !customerAppPaymentsEnabled ? (
+          <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            {!customerAppWriteEnabled
+              ? "View-only mode is enabled by your jeweller."
+              : "Online payments are currently disabled by your jeweller."}
+          </div>
+        ) : null}
         <CustomerRegistrationGuard>{children}</CustomerRegistrationGuard>
       </main>
 

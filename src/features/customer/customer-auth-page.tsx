@@ -6,7 +6,7 @@ import { ArrowLeft, ArrowRight, CheckCircle2, LoaderCircle, LockKeyhole, Smartph
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useRequestCustomerOtpMutation, useVerifyCustomerOtpMutation } from "@/src/store/api/customer-api";
+import { useLoginCustomerPasswordMutation, useRequestCustomerOtpMutation, useVerifyCustomerOtpMutation } from "@/src/store/api/customer-api";
 import { customerSignedIn } from "@/src/store/slices/customer-session-slice";
 import { useAppDispatch } from "@/src/store/hooks";
 import { toast } from "sonner";
@@ -28,11 +28,14 @@ export function CustomerLoginPage() {
   const [otp, setOtp] = useState("123456");
   const [otpId, setOtpId] = useState("");
   const [seconds, setSeconds] = useState(0);
+  const [password, setPassword] = useState("");
   const [requestOtp, requestState] = useRequestCustomerOtpMutation();
   const [verifyOtp, verifyState] = useVerifyCustomerOtpMutation();
+  const [loginPassword, loginPasswordState] = useLoginCustomerPasswordMutation();
   const portalCaps = customerPortalCapabilitiesFromTenant(tenant);
   const registrationEnabled = portalCaps.customerSelfRegistration;
   const kycPortalEnabled = portalCaps.kycMandatory;
+  const passwordOnlyLogin = portalCaps.customerLoginMode === "PASSWORD_ONLY";
 
   useEffect(() => {
     if (!seconds) return;
@@ -114,6 +117,9 @@ export function CustomerLoginPage() {
           customerSelfRegistration: caps.customerSelfRegistration,
           customerSelfEnrol: caps.customerSelfEnrol,
           multiScheme: caps.multiScheme,
+          customerLoginMode: caps.customerLoginMode,
+          customerAppWriteEnabled: caps.customerAppWriteEnabled,
+          customerAppPaymentsEnabled: caps.customerAppPaymentsEnabled,
         }),
       );
       const slug = tenantSlug ?? result.tenant.tenantCode.toLowerCase().replace(/_/g, "-");
@@ -147,6 +153,49 @@ export function CustomerLoginPage() {
       } else {
         toast.error("That OTP is incorrect or expired");
       }
+    }
+  };
+
+  const signInWithPassword = async () => {
+    if (!tenantCode) return toast.error("Open your jeweller’s customer link (e.g. /customer/your-code/login).");
+    if (!/^\d{10}$/.test(mobile)) return toast.error("Enter a valid 10-digit mobile number");
+    if (password.length < 8) return toast.error("Enter your password");
+    try {
+      const result = await loginPassword({
+        tenantCode,
+        mobile: `+91${mobile}`,
+        password,
+        deviceId: "customer-web",
+      }).unwrap();
+      const profileComplete = Boolean(result.profileComplete ?? result.customer.profileComplete);
+      const caps = {
+        ...customerPortalCapabilitiesFromTenant(result.tenant),
+        ...result.tenantCapabilities,
+      };
+      dispatch(
+        customerSignedIn({
+          customerId: result.customer.id,
+          tenantCode: result.tenant.tenantCode,
+          accessToken: result.accessToken,
+          refreshToken: result.refreshToken,
+          profileComplete,
+          kycMandatory: caps.kycMandatory,
+          customerSelfRegistration: caps.customerSelfRegistration,
+          customerSelfEnrol: caps.customerSelfEnrol,
+          multiScheme: caps.multiScheme,
+          customerLoginMode: caps.customerLoginMode,
+          customerAppWriteEnabled: caps.customerAppWriteEnabled,
+          customerAppPaymentsEnabled: caps.customerAppPaymentsEnabled,
+        }),
+      );
+      const slug = tenantSlug ?? result.tenant.tenantCode.toLowerCase().replace(/_/g, "-");
+      if (!profileComplete) {
+        router.replace(customerPath(slug, "onboarding"));
+        return;
+      }
+      router.replace(customerPath(slug));
+    } catch {
+      toast.error("Mobile number or password is incorrect");
     }
   };
 
@@ -189,7 +238,9 @@ export function CustomerLoginPage() {
             <span className="text-[#8b5f08]">always within reach.</span>
           </h1>
           <p className="mt-6 max-w-lg text-lg leading-8 text-[#706b77]">
-            {registrationEnabled
+            {passwordOnlyLogin
+              ? `Sign in with your mobile number and customer password to access ${jewellerName}.`
+              : registrationEnabled
               ? kycPortalEnabled
                 ? `Sign in or register with OTP, complete identity verification, and manage schemes with ${jewellerName}.`
                 : `Sign in or register with OTP and manage your gold savings schemes with ${jewellerName}.`
@@ -199,7 +250,7 @@ export function CustomerLoginPage() {
       </section>
       <section className="flex min-h-screen items-center justify-center px-5 py-10 sm:px-10">
         <div className="w-full max-w-md">
-          {registrationEnabled ? (
+          {registrationEnabled && !passwordOnlyLogin ? (
             <div className="mb-6 flex rounded-xl bg-[#eee8e5] p-1">
               <button
                 type="button"
@@ -231,20 +282,68 @@ export function CustomerLoginPage() {
               {step === "mobile" ? <Smartphone /> : <LockKeyhole />}
             </div>
             <h2 className="mt-5 text-2xl font-black">
-              {step === "mobile"
+              {passwordOnlyLogin
+                ? "Welcome back"
+                : step === "mobile"
                 ? mode === "login"
                   ? "Welcome back"
                   : "Create your account"
                 : "Verify your mobile"}
             </h2>
             <p className="mt-2 text-sm leading-6 text-muted-foreground">
-              {step === "mobile"
+              {passwordOnlyLogin
+                ? `Enter the mobile number registered with ${jewellerName} and your password.`
+                : step === "mobile"
                 ? mode === "login"
                   ? `Enter the mobile number registered with ${jewellerName}.`
                   : `Register with your mobile to start saving with ${jewellerName}.`
                 : `We sent a 6-digit code to +91 ${mobile.slice(0, 2)}••• ••${mobile.slice(-3)}.`}
             </p>
-            {step === "mobile" ? (
+            {passwordOnlyLogin ? (
+              <div className="mt-7 space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="mobile">Mobile number</Label>
+                  <div className="flex h-12 overflow-hidden rounded-xl border bg-white focus-within:ring-2 focus-within:ring-[#9c5869]">
+                    <span className="grid place-items-center border-r bg-[#faf6f3] px-3 text-sm font-bold">+91</span>
+                    <Input
+                      id="mobile"
+                      inputMode="numeric"
+                      maxLength={10}
+                      value={mobile}
+                      onChange={(e) => setMobile(e.target.value.replace(/\D/g, ""))}
+                      className="h-full border-0 shadow-none focus-visible:ring-0"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="password">Password</Label>
+                  <Input
+                    id="password"
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="h-12 rounded-xl"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    If your password was not set yet, use your mobile number as the default password.
+                  </p>
+                </div>
+                <Button
+                  onClick={signInWithPassword}
+                  disabled={loginPasswordState.isLoading}
+                  className="mt-2 h-12 w-full rounded-xl bg-[#730321] text-base font-bold hover:bg-[#5a0219]"
+                >
+                  {loginPasswordState.isLoading ? (
+                    <LoaderCircle className="animate-spin" />
+                  ) : (
+                    <>
+                      Sign in
+                      <ArrowRight className="ml-auto" />
+                    </>
+                  )}
+                </Button>
+              </div>
+            ) : step === "mobile" ? (
               <div className="mt-7 space-y-2">
                 <Label htmlFor="mobile">Mobile number</Label>
                 <div className="flex h-12 overflow-hidden rounded-xl border bg-white focus-within:ring-2 focus-within:ring-[#9c5869]">
@@ -318,7 +417,7 @@ export function CustomerLoginPage() {
             )}
           </div>
           <p className="mt-5 text-center text-xs leading-5 text-muted-foreground">
-            {registrationEnabled ? (
+            {registrationEnabled && !passwordOnlyLogin ? (
               mode === "login" ? (
                 <>
                   New to {jewellerName}?{" "}
@@ -335,7 +434,11 @@ export function CustomerLoginPage() {
                 </>
               )
             ) : (
-              <>New customers should visit {jewellerName} or call the branch to register.</>
+              <>
+                {passwordOnlyLogin
+                  ? "Ask your branch for your customer password if you have not received one."
+                  : `New customers should visit ${jewellerName} or call the branch to register.`}
+              </>
             )}
           </p>
         </div>

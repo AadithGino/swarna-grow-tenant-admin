@@ -842,6 +842,20 @@ export const adminApi = createApi({
         "Dashboard",
       ],
     }),
+    setCustomerPassword: builder.mutation<
+      { customerId: string; passwordSet: boolean; mustSetPassword?: boolean },
+      { id: string; password: string; mustChangeOnNextLogin?: boolean }
+    >({
+      query: ({ id, password, mustChangeOnNextLogin }) => ({
+        url: `/admin/customers/${id}/set-password`,
+        method: "POST",
+        params: { id },
+        body: { password, mustChangeOnNextLogin: mustChangeOnNextLogin === true },
+        mockKey: "setCustomerPassword",
+      }),
+      transformResponse: (raw) => contractPayload(raw) as any,
+      invalidatesTags: (_r, _e, { id }) => [{ type: "Customer", id }, "Customer"],
+    }),
     verifyCustomerKyc: builder.mutation<
       Customer,
       { id: string; decision: "VERIFIED" | "REJECTED"; remarks?: string }
@@ -3395,6 +3409,7 @@ export const {
   useGetCustomerMessagesQuery,
   useCreateCustomerMutation,
   useUpdateCustomerMutation,
+  useSetCustomerPasswordMutation,
   useVerifyCustomerKycMutation,
   useSubmitCustomerKycMutation,
   useUpdateCustomerNomineeMutation,

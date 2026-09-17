@@ -53,6 +53,9 @@ export type SettingsBrandingForm = {
 };
 
 export type SettingsOperationsForm = {
+  customerLoginMode: "OTP_ONLY" | "PASSWORD_ONLY";
+  customerAppWriteEnabled: boolean;
+  customerAppPaymentsEnabled: boolean;
   receiptPrefix: string;
   receiptNumberFormat: string;
   passbookNumberFormat: string;

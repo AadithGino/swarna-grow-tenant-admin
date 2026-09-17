@@ -33,6 +33,9 @@ export const customerTenant: TenantBranding = {
   customerSelfRegistration: true,
   customerSelfEnrol: true,
   multiScheme: true,
+  customerLoginMode: "OTP_ONLY",
+  customerAppWriteEnabled: true,
+  customerAppPaymentsEnabled: true,
 };
 
 export const customerProfile: CustomerProfile = {
@@ -42,7 +45,6 @@ export const customerProfile: CustomerProfile = {
   name: "Anjali Nair",
   mobile: "+91 98470 12345",
   email: "anjali.nair@example.com",
-  dateOfBirth: "1992-06-18",
   address: "Panampilly Nagar, Kochi, Kerala 682036",
   mobileImmutable: true,
   whatsappOptIn: true,

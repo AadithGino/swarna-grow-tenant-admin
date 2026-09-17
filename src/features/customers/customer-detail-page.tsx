@@ -17,7 +17,9 @@ import { toast } from "sonner";
 import { toastApiError } from "@/src/lib/api-error";
 import { validatePaymentLinkAmount } from "@/src/lib/payment-form-validation";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
+import { ActionDialog } from "@/src/components/common/action-dialog";
 import { PaginatedDataTable } from "@/src/components/common/paginated-data-table";
 import {
   PageHeader,
@@ -55,6 +57,7 @@ import {
   useGetCustomerSchemesQuery,
   useLazyGetCustomerStatementQuery,
   useLazyGetPaymentReceiptQuery,
+  useSetCustomerPasswordMutation,
 } from "@/src/store/api/admin-api";
 
 export function CustomerDetailPage({ id }: { id: string }) {
@@ -63,11 +66,13 @@ export function CustomerDetailPage({ id }: { id: string }) {
   const [enrollOpen, setEnrollOpen] = useState(false);
   const [kycOpen, setKycOpen] = useState(false);
   const [nomineeOpen, setNomineeOpen] = useState(false);
+  const [password, setPassword] = useState("");
   const [statusOpen, setStatusOpen] = useState(false);
   const [statusMode, setStatusMode] = useState<
     "deactivate" | "block" | "restore"
   >("deactivate");
   const [createPaymentLink, createLinkState] = useCreatePaymentLinkMutation();
+  const [setCustomerPassword] = useSetCustomerPasswordMutation();
   const [fetchStatement, statementState] = useLazyGetCustomerStatementQuery();
   const [fetchReceipt] = useLazyGetPaymentReceiptQuery();
   const customerQuery = useGetCustomerQuery(id);
@@ -312,11 +317,11 @@ export function CustomerDetailPage({ id }: { id: string }) {
               Joined {customer.joined} · {customer.email}
             </p>
           </div>
-          <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
-            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+          <div className="flex flex-wrap items-center justify-end gap-2">
               <PermissionGate permission={ACTION.schemeEnrol}>
                 <Button
-                  className="w-full shrink-0 sm:w-auto"
+                  size="sm"
+                  className="shrink-0"
                   onClick={() => setEnrollOpen(true)}
                 >
                   <Plus />
@@ -325,7 +330,8 @@ export function CustomerDetailPage({ id }: { id: string }) {
               </PermissionGate>
               <Button
                 variant="secondary"
-                className="w-full shrink-0 bg-[#f3eef0] text-foreground hover:bg-[#ebe3e6] sm:w-auto"
+                size="sm"
+                className="shrink-0 bg-[#f3eef0] text-foreground hover:bg-[#ebe3e6]"
                 disabled={createLinkState.isLoading || !paymentLinkScheme?.id}
                 onClick={() => void handleSendPaymentLink()}
               >
@@ -334,23 +340,56 @@ export function CustomerDetailPage({ id }: { id: string }) {
               </Button>
               <Button
                 variant="secondary"
-                className="w-full shrink-0 bg-[#f3eef0] text-foreground hover:bg-[#ebe3e6] sm:w-auto"
+                size="sm"
+                className="shrink-0 bg-[#f3eef0] text-foreground hover:bg-[#ebe3e6]"
                 disabled={statementState.isFetching}
                 onClick={() => void handleDownloadStatement()}
               >
                 <Download />
                 Download passbook
               </Button>
-            </div>
-            <div
-              className="hidden h-9 w-px shrink-0 bg-[#e8dde2] xl:block"
-              aria-hidden
-            />
-            <div className="flex flex-col gap-2 sm:flex-row">
+              <PermissionGate permission={ACTION.customerPasswordWrite}>
+                <ActionDialog
+                  trigger={
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      className="shrink-0 bg-[#f3eef0] text-foreground hover:bg-[#ebe3e6]"
+                    >
+                      Set customer password
+                    </Button>
+                  }
+                  title="Set customer password"
+                  description="Use at least 8 characters. If not set manually, customer mobile number works as default password."
+                  actionLabel="Save password"
+                  submitDisabled={password.trim().length < 8}
+                  onSubmit={async () => {
+                    await setCustomerPassword({
+                      id: customer.id,
+                      password: password.trim(),
+                    }).unwrap();
+                    setPassword("");
+                    toast.success("Customer password updated");
+                  }}
+                  onOpenChange={(open) => {
+                    if (!open) setPassword("");
+                  }}
+                >
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">New password</label>
+                    <Input
+                      type="password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="Minimum 8 characters"
+                    />
+                  </div>
+                </ActionDialog>
+              </PermissionGate>
               <Button
                 variant="outline"
                 size="sm"
-                className="w-full shrink-0 border-red-200 bg-white text-red-700 hover:bg-red-50 hover:text-red-800 sm:w-auto"
+                className="shrink-0 border-red-200 bg-white text-red-700 hover:bg-red-50 hover:text-red-800"
                 onClick={() => {
                   if (
                     customer.status === "BLOCKED" ||
@@ -373,7 +412,7 @@ export function CustomerDetailPage({ id }: { id: string }) {
                 <Button
                   variant="outline"
                   size="sm"
-                  className="w-full shrink-0 border-red-200 bg-white text-red-700 hover:bg-red-50 hover:text-red-800 sm:w-auto"
+                  className="shrink-0 border-red-200 bg-white text-red-700 hover:bg-red-50 hover:text-red-800"
                   onClick={() => {
                     setStatusMode("block");
                     setStatusOpen(true);
@@ -382,7 +421,6 @@ export function CustomerDetailPage({ id }: { id: string }) {
                   Block customer
                 </Button>
               ) : null}
-            </div>
           </div>
         </div>
       </Surface>

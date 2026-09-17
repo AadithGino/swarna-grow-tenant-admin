@@ -10,6 +10,9 @@ type CustomerSessionState = {
   customerSelfRegistration?: boolean;
   customerSelfEnrol?: boolean;
   multiScheme?: boolean;
+  customerLoginMode?: "OTP_ONLY" | "PASSWORD_ONLY";
+  customerAppWriteEnabled?: boolean;
+  customerAppPaymentsEnabled?: boolean;
 };
 
 const initialState: CustomerSessionState = {
@@ -37,6 +40,9 @@ const customerSessionSlice = createSlice({
         customerSelfRegistration?: boolean;
         customerSelfEnrol?: boolean;
         multiScheme?: boolean;
+        customerLoginMode?: "OTP_ONLY" | "PASSWORD_ONLY";
+        customerAppWriteEnabled?: boolean;
+        customerAppPaymentsEnabled?: boolean;
       }>,
     ) {
       state.authenticated = true;
@@ -47,6 +53,9 @@ const customerSessionSlice = createSlice({
       state.customerSelfRegistration = action.payload.customerSelfRegistration;
       state.customerSelfEnrol = action.payload.customerSelfEnrol;
       state.multiScheme = action.payload.multiScheme;
+      state.customerLoginMode = action.payload.customerLoginMode;
+      state.customerAppWriteEnabled = action.payload.customerAppWriteEnabled;
+      state.customerAppPaymentsEnabled = action.payload.customerAppPaymentsEnabled;
       if (typeof window !== "undefined") {
         if (action.payload.accessToken) localStorage.setItem("swarnagrow.customer.accessToken", action.payload.accessToken);
         if (action.payload.refreshToken) localStorage.setItem("swarnagrow.customer.refreshToken", action.payload.refreshToken);
@@ -60,6 +69,9 @@ const customerSessionSlice = createSlice({
       state.customerSelfRegistration = undefined;
       state.customerSelfEnrol = undefined;
       state.multiScheme = undefined;
+      state.customerLoginMode = undefined;
+      state.customerAppWriteEnabled = undefined;
+      state.customerAppPaymentsEnabled = undefined;
       if (typeof window !== "undefined") {
         localStorage.removeItem("swarnagrow.customer.accessToken");
         localStorage.removeItem("swarnagrow.customer.refreshToken");

@@ -26,7 +26,6 @@ export function CustomerOnboardingPage() {
   const [step, setStep] = useState<Step>("profile");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
-  const [dateOfBirth, setDateOfBirth] = useState("");
   const [address, setAddress] = useState("");
   const [completeProfile, completeState] = useCompleteCustomerProfileMutation();
   const [submitKyc, kycState] = useSubmitCustomerKycMutation();
@@ -42,7 +41,6 @@ export function CustomerOnboardingPage() {
       await completeProfile({
         name: name.trim(),
         ...(email.trim() ? { email: email.trim() } : {}),
-        ...(dateOfBirth ? { dateOfBirth } : {}),
         ...(address.trim() ? { address: address.trim() } : {}),
       }).unwrap();
       dispatch(customerProfileCompleted());
@@ -103,10 +101,6 @@ export function CustomerOnboardingPage() {
                 <div>
                   <Label htmlFor="email">Email</Label>
                   <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="mt-2" />
-                </div>
-                <div>
-                  <Label htmlFor="dob">Date of birth</Label>
-                  <Input id="dob" type="date" value={dateOfBirth} onChange={(e) => setDateOfBirth(e.target.value)} className="mt-2" />
                 </div>
                 <div>
                   <Label htmlFor="address">Address</Label>

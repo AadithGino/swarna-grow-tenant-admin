@@ -89,9 +89,38 @@ const mockBaseQuery: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQueryErro
       profileComplete: !isSignup,
       customer: isSignup ? incompleteProfile : customerProfile,
       tenant: customerTenant,
-      tenantCapabilities: { customerSelfEnrol: true, customerSelfRegistration: true, kycMandatory: false, multiScheme: true },
+      tenantCapabilities: {
+        customerSelfEnrol: true,
+        customerSelfRegistration: true,
+        kycMandatory: false,
+        multiScheme: true,
+        customerLoginMode: "OTP_ONLY",
+        customerAppWriteEnabled: true,
+        customerAppPaymentsEnabled: true,
+      },
       accessToken: "mock-customer-access",
       refreshToken: "mock-customer-refresh",
+      expiresIn: 1800,
+      tokenType: "Bearer",
+    });
+  }
+  if (url === "/public/auth/login-password" && method === "POST") {
+    return ok({
+      isNewCustomer: false,
+      profileComplete: true,
+      customer: customerProfile,
+      tenant: customerTenant,
+      tenantCapabilities: {
+        customerSelfEnrol: true,
+        customerSelfRegistration: false,
+        kycMandatory: false,
+        multiScheme: true,
+        customerLoginMode: "PASSWORD_ONLY",
+        customerAppWriteEnabled: true,
+        customerAppPaymentsEnabled: true,
+      },
+      accessToken: "mock-customer-access-password",
+      refreshToken: "mock-customer-refresh-password",
       expiresIn: 1800,
       tokenType: "Bearer",
     });
@@ -104,7 +133,6 @@ const mockBaseQuery: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQueryErro
       ...customerProfile,
       name: String(body?.name ?? customerProfile.name),
       email: body?.email ?? customerProfile.email,
-      dateOfBirth: body?.dateOfBirth ?? customerProfile.dateOfBirth,
       address: body?.address ?? customerProfile.address,
       profileComplete: true,
     });
@@ -324,10 +352,43 @@ export const customerApi = createApi({
         refreshToken: string;
         isNewCustomer?: boolean;
         profileComplete?: boolean;
-        tenantCapabilities?: { kycMandatory?: boolean; customerSelfRegistration?: boolean };
+        tenantCapabilities?: {
+          kycMandatory?: boolean;
+          customerSelfRegistration?: boolean;
+          customerSelfEnrol?: boolean;
+          multiScheme?: boolean;
+          customerLoginMode?: "OTP_ONLY" | "PASSWORD_ONLY";
+          customerAppWriteEnabled?: boolean;
+          customerAppPaymentsEnabled?: boolean;
+        };
       },
       Record<string, unknown>
     >({ query: (body) => ({ url: "/public/auth/otp/verify", method: "POST", body }) }),
+    loginCustomerPassword: builder.mutation<
+      {
+        customer: CustomerProfile;
+        tenant: typeof customerTenant;
+        accessToken: string;
+        refreshToken: string;
+        profileComplete?: boolean;
+        tenantCapabilities?: {
+          kycMandatory?: boolean;
+          customerSelfRegistration?: boolean;
+          customerSelfEnrol?: boolean;
+          multiScheme?: boolean;
+          customerLoginMode?: "OTP_ONLY" | "PASSWORD_ONLY";
+          customerAppWriteEnabled?: boolean;
+          customerAppPaymentsEnabled?: boolean;
+        };
+      },
+      { tenantCode: string; mobile: string; password: string; deviceId?: string }
+    >({
+      query: (body) => ({
+        url: "/public/auth/login-password",
+        method: "POST",
+        body,
+      }),
+    }),
     getCustomerHome: builder.query<CustomerHome, void>({
       query: () => ({
         url: "/app/home",
@@ -339,7 +400,7 @@ export const customerApi = createApi({
     updateCustomerProfile: builder.mutation<CustomerProfile, Partial<CustomerProfile>>({ query: (body) => ({ url: "/app/profile", method: "PATCH", body }), invalidatesTags: ["CustomerProfile", "CustomerHome"] }),
     completeCustomerProfile: builder.mutation<
       CustomerProfile,
-      { name: string; email?: string; dateOfBirth?: string; address?: string }
+      { name: string; email?: string; address?: string }
     >({
       query: (body) => ({ url: "/app/profile/complete", method: "POST", body }),
       invalidatesTags: ["CustomerProfile", "CustomerHome"],
@@ -474,7 +535,7 @@ export const customerApi = createApi({
 });
 
 export const {
-  useResolveTenantQuery, useRequestCustomerOtpMutation, useVerifyCustomerOtpMutation,
+  useResolveTenantQuery, useRequestCustomerOtpMutation, useVerifyCustomerOtpMutation, useLoginCustomerPasswordMutation,
   useGetCustomerHomeQuery, useGetCustomerProfileQuery, useUpdateCustomerProfileMutation,
   useCompleteCustomerProfileMutation, usePresignCustomerUploadMutation, useSubmitCustomerKycMutation,
   useUpdateCustomerNomineeMutation, useRemoveCustomerNomineeMutation,
