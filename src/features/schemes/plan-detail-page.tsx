@@ -2,42 +2,41 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
+  ArrowLeft,
   BarChart3,
   CalendarClock,
-  Check,
   Copy,
   Gift,
   IndianRupee,
   Layers3,
-  LockKeyhole,
+  MoreHorizontal,
   Pencil,
   Scale,
   ScrollText,
   Shield,
   Smartphone,
-  Sparkles,
   Store,
-  X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { PermissionGate } from "@/src/components/common/permission-gate";
 import {
-  PageHeader,
-  StatCard,
-  Surface,
-} from "@/src/components/common/page-parts";
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { PermissionGate } from "@/src/components/common/permission-gate";
+import { PageSkeleton, QueryError } from "@/src/components/common/query-state";
 import {
   PageTab,
   PageTabs,
   PageTabsBar,
   PageTabsPanel,
 } from "@/src/components/common/page-tabs";
-import { PageSkeleton, QueryError } from "@/src/components/common/query-state";
-import { StatusBadge } from "@/src/components/common/status-badge";
 import { ACTION } from "@/src/lib/action-permissions";
 import {
   useActivatePlanMutation,
@@ -48,13 +47,17 @@ import {
   usePreviewPlanScheduleMutation,
 } from "@/src/store/api/admin-api";
 import {
-  PlanAvailabilitySidebar,
-  PlanDetailHero,
+  PlanChannelPanel,
+  PlanCustomerPreviewCard,
+  PlanDetailBanner,
+  PlanEnrolmentPulse,
   PlanFlexiblePhaseBar,
-  PlanPerformanceSidebar,
-  PlanPerformanceTab,
-  PlanSchedulePreviewSurface,
-  PlanStaffMetaGrid,
+  PlanInternalMetaCard,
+  PlanPerformanceDashboard,
+  PlanRuleCard,
+  PlanRulesNav,
+  PlanScheduleSection,
+  PlanStatusAlert,
   PlanTermsPanel,
 } from "@/src/features/schemes/plan-detail-visuals";
 import {
@@ -65,94 +68,12 @@ import {
   paymentRulesFields,
   penaltyDisplay,
   scheduleRulesFields,
-  type FieldEntry,
 } from "@/src/features/schemes/plan-contract-fields";
 import {
   amountSummaryLabel,
   planDetailToForm,
 } from "@/src/features/schemes/plan-builder-form";
 import { PlanAvailabilityDialog } from "@/src/features/schemes/plan-availability-dialog";
-import { cn } from "@/lib/utils";
-
-function InfoTile({
-  label,
-  value,
-  className,
-}: {
-  label: string;
-  value: React.ReactNode;
-  className?: string;
-}) {
-  return (
-    <div className={className}>
-      <dt className="text-sm text-muted-foreground">{label}</dt>
-      <dd className="mt-1 font-semibold text-[#2d191d]">{value}</dd>
-    </div>
-  );
-}
-
-function ContractFieldGrid({
-  entries,
-  className,
-}: {
-  entries: FieldEntry[];
-  className?: string;
-}) {
-  return (
-    <dl className={cn("grid gap-x-6 gap-y-5 sm:grid-cols-2", className)}>
-      {entries.map((e) => (
-        <InfoTile key={e.label} label={e.label} value={e.value} />
-      ))}
-    </dl>
-  );
-}
-
-function YesNo({ ok, yes = "Yes", no = "No" }: { ok: boolean; yes?: string; no?: string }) {
-  return (
-    <span
-      className={cn(
-        "inline-flex items-center gap-1.5 text-sm font-semibold",
-        ok ? "text-emerald-700" : "text-[#776a6d]",
-      )}
-    >
-      {ok ? <Check className="size-3.5" /> : <X className="size-3.5 opacity-60" />}
-      {ok ? yes : no}
-    </span>
-  );
-}
-
-function RulesSection({
-  icon: Icon,
-  title,
-  description,
-  children,
-  className,
-}: {
-  icon: React.ComponentType<{ className?: string }>;
-  title: string;
-  description?: string;
-  children: React.ReactNode;
-  className?: string;
-}) {
-  return (
-    <div className={cn("scroll-mt-4", className)}>
-      <div className="mb-4 flex items-start gap-3">
-        <div className="grid size-10 shrink-0 place-items-center rounded-xl bg-[#f7ecee] text-[#7b0a2b]">
-          <Icon className="size-5" />
-        </div>
-        <div>
-          <h3 className="text-lg font-bold text-[#2d191d]">{title}</h3>
-          {description ? (
-            <p className="mt-0.5 text-sm text-muted-foreground">{description}</p>
-          ) : null}
-        </div>
-      </div>
-      <div className="rounded-2xl border border-[#e4d7d2] bg-[#faf7f5]/50 p-5">
-        {children}
-      </div>
-    </div>
-  );
-}
 
 export function PlanDetailPage({ planId }: { planId: string }) {
   const router = useRouter();
@@ -184,7 +105,7 @@ export function PlanDetailPage({ planId }: { planId: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- preview when plan payload loads
   }, [planId, planQuery.data]);
 
-  if (planQuery.isLoading) return <PageSkeleton cards={5} />;
+  if (planQuery.isLoading) return <PageSkeleton cards={4} />;
   if (planQuery.isError || !planQuery.data)
     return (
       <QueryError
@@ -198,10 +119,7 @@ export function PlanDetailPage({ planId }: { planId: string }) {
   const amountRules = (plan.amountRules ?? {}) as Record<string, unknown>;
   const scheduleRules = plan.scheduleRules as Record<string, unknown> | null;
   const paymentRules = (plan.paymentRules ?? {}) as Record<string, unknown>;
-  const flexibleRules = (plan.flexibleRules ?? null) as Record<
-    string,
-    unknown
-  > | null;
+  const flexibleRules = (plan.flexibleRules ?? null) as Record<string, unknown> | null;
   const goldRules = (plan.goldRules ?? null) as Record<string, unknown> | null;
   const benefit = (plan.benefit ?? {}) as Record<string, unknown>;
   const redemption = (plan.redemptionRules ?? {}) as Record<string, unknown>;
@@ -214,6 +132,7 @@ export function PlanDetailPage({ planId }: { planId: string }) {
   const status = String(plan.status ?? "DRAFT");
   const isFlexible = pattern.includes("FLEXIBLE");
   const displayName = String(plan.displayName ?? plan.name);
+  const internalName = String(plan.name ?? displayName);
   const benefitLabel = String(benefit.displayLabel ?? benefit.type ?? "—");
   const description =
     String(plan.description ?? "").trim() ||
@@ -224,12 +143,8 @@ export function PlanDetailPage({ planId }: { planId: string }) {
   const redemptionModes = Array.isArray(redemption.allowedModes)
     ? (redemption.allowedModes as string[])
     : [];
-  const flexCycles = Number(
-    (flexibleRules?.flexiblePhaseCycles as number | undefined) ?? 6,
-  );
-  const cappedCycles = Number(
-    (flexibleRules?.cappedPhaseCycles as number | undefined) ?? 5,
-  );
+  const flexCycles = Number(flexibleRules?.flexiblePhaseCycles ?? 6);
+  const cappedCycles = Number(flexibleRules?.cappedPhaseCycles ?? 5);
   const collectedDisplay =
     typeof inlineStats.collectedThisMonth === "object" &&
     inlineStats.collectedThisMonth &&
@@ -261,211 +176,192 @@ export function PlanDetailPage({ planId }: { planId: string }) {
     avail.enrolmentOpenFrom || avail.enrolmentOpenTo
       ? `${avail.enrolmentOpenFrom ?? "Open"} → ${avail.enrolmentOpenTo ?? "No end"}`
       : "Always open";
+  const maxEnrolments =
+    avail.maxEnrolments == null ? "Unlimited" : String(avail.maxEnrolments);
 
-  return (
-    <div className="space-y-6 pb-10">
-      <Link
-        href="/schemes"
-        className="inline-flex items-center gap-2 text-sm font-semibold text-muted-foreground hover:text-[#730321]"
-      >
-        ← Back to scheme plans
-      </Link>
+  const ruleSections = useMemo(() => {
+    const sections = [
+      { id: "rules-amount", label: "Amount rules", icon: IndianRupee },
+      { id: "rules-schedule", label: "Schedule", icon: CalendarClock },
+      { id: "rules-payments", label: "Payments", icon: Layers3 },
+    ];
+    if (flexibleRules) {
+      sections.push({ id: "rules-flexible", label: "Flexible phases", icon: CalendarClock });
+    }
+    if (goldRules && String(plan.valueBasis) === "GOLD_WEIGHT") {
+      sections.push({ id: "rules-gold", label: "Gold weight", icon: Scale });
+    }
+    sections.push(
+      { id: "rules-benefit", label: "Benefit", icon: Gift },
+      { id: "rules-redemption", label: "Redemption", icon: Shield },
+      { id: "rules-availability", label: "Availability", icon: Store },
+    );
+    return sections;
+  }, [flexibleRules, goldRules, plan.valueBasis]);
 
-      <PageHeader
-        eyebrow="Scheme plan"
-        title={displayName}
-        description={`${plan.code} · ${pattern.replace(/_/g, " ")} · ${String(plan.valueBasis).replace(/_/g, " ")}`}
-        actions={
-          <PermissionGate permission={ACTION.planWrite}>
-            <div className="flex flex-wrap gap-2">
-              <Button
-                variant="outline"
-                onClick={() => setAvailabilityOpen(true)}
-              >
-                <Smartphone />
-                App & availability
-              </Button>
-              {editLocked ? (
-                <Button
-                  onClick={() => router.push(`/schemes/${planId}/duplicate`)}
-                >
-                  <Copy />
-                  Duplicate to edit
-                </Button>
-              ) : (
-                <Button asChild>
-                  <Link href={`/schemes/${planId}/edit`}>
-                    <Pencil />
-                    Edit plan
-                  </Link>
-                </Button>
-              )}
-              {status === "DRAFT" ? (
-                <Button
-                  variant="secondary"
-                  className="bg-[#f3eef0]"
-                  onClick={async () => {
-                    await activatePlan(planId).unwrap();
-                    toast.success(`${displayName} is now active`);
-                  }}
-                >
-                  Activate
-                </Button>
-              ) : status === "ACTIVE" ? (
-                <Button
-                  variant="outline"
-                  className="border-red-200 text-red-700 hover:bg-red-50"
-                  onClick={async () => {
-                    await deactivatePlan(planId).unwrap();
-                    toast.success(`${displayName} deactivated`);
-                  }}
-                >
-                  Deactivate
-                </Button>
-              ) : null}
-              <Button
-                variant="outline"
+  const actionMenu = (
+    <PermissionGate permission={ACTION.planWrite}>
+      <div className="flex flex-wrap items-center gap-2">
+        <Button variant="outline" onClick={() => setAvailabilityOpen(true)}>
+          <Smartphone />
+          App & availability
+        </Button>
+        {editLocked ? (
+          <Button onClick={() => router.push(`/schemes/${planId}/duplicate`)}>
+            <Copy />
+            Duplicate to edit
+          </Button>
+        ) : (
+          <Button asChild>
+            <Link href={`/schemes/${planId}/edit`}>
+              <Pencil />
+              Edit plan
+            </Link>
+          </Button>
+        )}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" size="icon" aria-label="More actions">
+              <MoreHorizontal className="size-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-52">
+            {status === "DRAFT" ? (
+              <DropdownMenuItem
                 onClick={async () => {
-                  try {
-                    const copy = await duplicatePlan(planId).unwrap();
-                    toast.success(`${copy.code} duplicated`);
-                  } catch {
-                    toast.error("Could not duplicate plan");
-                  }
+                  await activatePlan(planId).unwrap();
+                  toast.success(`${displayName} is now active`);
                 }}
               >
-                <Copy />
-                Duplicate
-              </Button>
-            </div>
-          </PermissionGate>
-        }
-      />
-
-      {editLocked ? (
-        <div className="rounded-2xl border border-amber-200 bg-[#fff8e8] px-5 py-4 text-sm">
-          <div className="flex flex-wrap items-center gap-2">
-            <LockKeyhole className="size-4 text-amber-800" />
-            <span className="font-semibold text-[#805817]">Financial rules locked</span>
-            <Badge variant="outline" className="border-amber-300 bg-white/80">
-              {activeSchemes} active enrolments
-            </Badge>
-          </div>
-          <p className="mt-2 text-[#5c4a2a]">
-            Duplicate this plan to change amounts or schedule. Use{" "}
-            <button
-              type="button"
-              className="font-semibold text-[#730321] underline-offset-2 hover:underline"
-              onClick={() => setAvailabilityOpen(true)}
+                Activate plan
+              </DropdownMenuItem>
+            ) : status === "ACTIVE" ? (
+              <DropdownMenuItem
+                className="text-red-700 focus:text-red-700"
+                onClick={async () => {
+                  await deactivatePlan(planId).unwrap();
+                  toast.success(`${displayName} deactivated`);
+                }}
+              >
+                Deactivate plan
+              </DropdownMenuItem>
+            ) : null}
+            <DropdownMenuItem
+              onClick={async () => {
+                try {
+                  const copy = await duplicatePlan(planId).unwrap();
+                  toast.success(`${copy.code} duplicated`);
+                } catch {
+                  toast.error("Could not duplicate plan");
+                }
+              }}
             >
-              App & availability
-            </button>{" "}
-            to update customer app listing and self-enrol without opening the full editor.
-          </p>
-        </div>
-      ) : status === "DRAFT" ? (
-        <div className="rounded-2xl border border-[#eadbb5] bg-[#fff7df] px-5 py-4 text-sm">
-          <div className="flex flex-wrap items-center gap-2">
-            <StatusBadge status="DRAFT" />
-            <span className="font-semibold text-[#805817]">Not visible to customers yet</span>
-          </div>
-          <p className="mt-2 text-muted-foreground">
-            Activate when branches are ready to enrol on this template.
-          </p>
-        </div>
-      ) : status === "ACTIVE" ? (
-        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-4 text-sm">
-          <div className="flex flex-wrap items-center gap-2">
-            <StatusBadge status="ACTIVE" />
-            <span className="font-semibold text-emerald-800">Live for enrolment</span>
-          </div>
-        </div>
-      ) : null}
+              <Copy className="size-4" />
+              Duplicate plan
+            </DropdownMenuItem>
+            {!editLocked ? (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem asChild>
+                  <Link href={`/schemes/${planId}/edit`}>
+                    <Pencil className="size-4" />
+                    Open in editor
+                  </Link>
+                </DropdownMenuItem>
+              </>
+            ) : null}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+    </PermissionGate>
+  );
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard
-          icon={Layers3}
-          label="Status"
-          value={<StatusBadge status={status} />}
-          detail={`v${plan.version ?? 1}${editLocked ? " · locked" : ""}`}
-          tone="wine"
-        />
-        <StatCard
-          icon={Gift}
-          label="Active enrolments"
-          value={activeSchemes.toLocaleString("en-IN")}
-          detail={`${totalEnrolments.toLocaleString("en-IN")} total`}
-          tone="gold"
-        />
-        <StatCard
-          icon={Sparkles}
-          label="Benefit"
-          value={benefitLabel.length > 24 ? `${benefitLabel.slice(0, 22)}…` : benefitLabel}
-          detail={
-            isFlexible
-              ? "Flexible plan"
-              : String(benefit.type ?? "").replace(/_/g, " ")
-          }
-          tone="green"
-        />
-        <StatCard
-          icon={Scale}
-          label="Tenure"
-          value={`${plan.durationMonths} mo`}
-          detail={`${plan.installmentCount} ${isFlexible ? "cycles" : "installments"}`}
-          tone="cream"
-        />
+  return (
+    <div className="space-y-6 pb-12">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <Link
+          href="/schemes"
+          className="inline-flex items-center gap-2 text-sm font-semibold text-muted-foreground transition hover:text-[#730321]"
+        >
+          <ArrowLeft className="size-4" />
+          Back to scheme plans
+        </Link>
+        {actionMenu}
       </div>
 
-      <PlanDetailHero
+      <PlanDetailBanner
         displayName={displayName}
+        internalName={internalName}
         description={description}
         code={String(plan.code)}
+        status={status}
+        version={Number(plan.version ?? 1)}
+        editLocked={editLocked}
+        pattern={pattern}
+        valueBasis={String(plan.valueBasis)}
         amountLabel={amountLabel}
         benefitLabel={benefitLabel}
         tenureMonths={Number(plan.durationMonths ?? 0)}
+        installmentCount={Number(plan.installmentCount ?? 0)}
+        activeSchemes={activeSchemes}
+        totalEnrolments={totalEnrolments}
         visibleInApp={Boolean(avail.visibleInCustomerApp)}
         selfEnrol={Boolean(avail.customerSelfEnrolAllowed)}
-        prematureOk={Boolean(redemption.prematureClosureAllowed)}
-        lockInMonths={Number(redemption.lockInMonths ?? 0)}
       />
 
+      {editLocked ? (
+        <PlanStatusAlert
+          variant="locked"
+          activeSchemes={activeSchemes}
+          onEditAvailability={() => setAvailabilityOpen(true)}
+        />
+      ) : status === "DRAFT" ? (
+        <PlanStatusAlert variant="draft" />
+      ) : status === "ACTIVE" ? (
+        <PlanStatusAlert variant="active" />
+      ) : null}
+
       <PageTabs defaultValue="overview">
-        <PageTabsBar sectionLabel="Plan record">
+        <PageTabsBar sectionLabel="Plan workspace">
           <PageTab value="overview">
             <ScrollText className="size-4" />
             Overview
+          </PageTab>
+          <PageTab value="schedule">
+            <CalendarClock className="size-4" />
+            Schedule
           </PageTab>
           <PageTab value="rules">
             <Shield className="size-4" />
             Rules
           </PageTab>
-          <PageTab value="stats">
+          <PageTab value="performance">
             <BarChart3 className="size-4" />
             Performance
           </PageTab>
         </PageTabsBar>
 
         <PageTabsPanel value="overview">
-          <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(280px,340px)]">
+          <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(300px,360px)]">
             <div className="space-y-6">
-              {isFlexible ? (
-                <PlanFlexiblePhaseBar
-                  flexibleCycles={flexCycles}
-                  cappedCycles={cappedCycles}
-                />
-              ) : null}
-              <PlanSchedulePreviewSurface
-                preview={previewState.data}
-                loading={previewState.isLoading}
-                isFlexible={isFlexible}
+              <PlanCustomerPreviewCard
+                displayName={displayName}
+                amountLabel={amountLabel}
+                benefitLabel={benefitLabel}
+                tenureMonths={Number(plan.durationMonths ?? 0)}
+                prematureOk={Boolean(redemption.prematureClosureAllowed)}
+                lockInMonths={Number(redemption.lockInMonths ?? 0)}
+                redemptionModes={redemptionModes}
               />
-              <PlanStaffMetaGrid
+              <PlanInternalMetaCard
                 rows={[
-                  { label: "Internal name", value: String(plan.name) },
+                  { label: "Internal name", value: internalName },
                   { label: "Value basis", value: String(plan.valueBasis).replace(/_/g, " ") },
                   { label: "Payment pattern", value: pattern.replace(/_/g, " ") },
-                  { label: "Amount mode", value: String(amountSummary.amountMode ?? "—").replace(/_/g, " ") },
+                  {
+                    label: "Amount mode",
+                    value: String(amountSummary.amountMode ?? "—").replace(/_/g, " "),
+                  },
                 ]}
               />
               <PlanTermsPanel
@@ -475,17 +371,18 @@ export function PlanDetailPage({ planId }: { planId: string }) {
               />
             </div>
             <aside className="space-y-6 xl:sticky xl:top-4 xl:self-start">
-              <PlanPerformanceSidebar
+              <PlanEnrolmentPulse
                 enrolments={statsData?.enrolments}
                 financials={statsData?.financials as Record<string, unknown> | undefined}
                 loading={statsQuery.isLoading}
                 collectedThisMonth={collectedDisplay}
               />
-              <PlanAvailabilitySidebar
+              <PlanChannelPanel
                 allBranches={Boolean(avail.allBranches ?? true)}
                 visibleInApp={Boolean(avail.visibleInCustomerApp)}
                 selfEnrol={Boolean(avail.customerSelfEnrolAllowed)}
                 windowLabel={enrolWindow}
+                maxEnrolments={maxEnrolments}
                 redemptionModes={redemptionModes}
                 action={
                   <PermissionGate permission={ACTION.planWrite}>
@@ -505,138 +402,138 @@ export function PlanDetailPage({ planId }: { planId: string }) {
           </div>
         </PageTabsPanel>
 
-        <PageTabsPanel value="rules">
-          <Surface
-            title="Financial & redemption rules"
-            description="Read-only view of the template configuration"
-          >
-            <div className="space-y-10 p-6 sm:p-8">
-              <RulesSection
+        <PageTabsPanel value="schedule">
+          <div className="space-y-6">
+            {isFlexible ? (
+              <PlanFlexiblePhaseBar
+                flexibleCycles={flexCycles}
+                cappedCycles={cappedCycles}
+              />
+            ) : null}
+            <PlanScheduleSection
+              preview={previewState.data}
+              loading={previewState.isLoading}
+              isFlexible={isFlexible}
+            />
+          </div>
+        </PageTabsPanel>
+
+        <PageTabsPanel value="rules" flush>
+          <div className="grid gap-6 p-4 sm:p-5 xl:grid-cols-[220px_minmax(0,1fr)]">
+            <PlanRulesNav sections={ruleSections} className="hidden xl:block xl:sticky xl:top-4 xl:self-start" />
+            <div className="space-y-5">
+              <PlanRuleCard
+                id="rules-amount"
                 icon={IndianRupee}
                 title="Amount rules"
-                description="Min, max, slabs, and how customers choose instalment size"
-              >
-                <p className="mb-4 rounded-xl bg-white px-4 py-3 text-sm font-semibold text-[#730321] ring-1 ring-[#e4d7d2]">
-                  {amountLabel}
-                </p>
-                <ContractFieldGrid entries={amountRulesFields(amountRules)} />
-              </RulesSection>
-
-              <RulesSection
+                description="Minimums, maximums, slabs, and how customers choose instalment size"
+                highlight={amountLabel}
+                entries={amountRulesFields(amountRules)}
+              />
+              <PlanRuleCard
+                id="rules-schedule"
                 icon={CalendarClock}
                 title="Schedule"
-                description="Due dates and first-instalment behaviour"
-              >
-                <ContractFieldGrid entries={scheduleRulesFields(scheduleRules)} />
-              </RulesSection>
-
-              <RulesSection
+                description="Due dates, grace period, and first-instalment behaviour"
+                entries={scheduleRulesFields(scheduleRules)}
+              />
+              <PlanRuleCard
+                id="rules-payments"
                 icon={Layers3}
                 title="Payments"
                 description="Partial payments, advances, and per-transaction limits"
-              >
-                <ContractFieldGrid entries={paymentRulesFields(paymentRules)} />
-              </RulesSection>
-
+                entries={paymentRulesFields(paymentRules)}
+              />
               {flexibleRules ? (
-                <RulesSection
+                <PlanRuleCard
+                  id="rules-flexible"
                   icon={CalendarClock}
                   title="Flexible phases"
                   description="Free window, cap computation, and capped-cycle behaviour"
-                >
-                  <ContractFieldGrid
-                    entries={flexibleRulesFields(flexibleRules)}
-                    className="lg:grid-cols-3"
-                  />
-                </RulesSection>
+                  entries={flexibleRulesFields(flexibleRules)}
+                />
               ) : null}
-
               {goldRules && String(plan.valueBasis) === "GOLD_WEIGHT" ? (
-                <RulesSection icon={Scale} title="Gold weight" description="Rate and rounding">
-                  <ContractFieldGrid entries={goldRulesFields(goldRules)} />
-                </RulesSection>
+                <PlanRuleCard
+                  id="rules-gold"
+                  icon={Scale}
+                  title="Gold weight"
+                  description="Rate source and rounding for weight-based plans"
+                  entries={goldRulesFields(goldRules)}
+                />
               ) : null}
-
-              <RulesSection icon={Gift} title="Benefit" description="What the customer earns at maturity">
-                <ContractFieldGrid entries={benefitFields(benefit)} />
-              </RulesSection>
-
-              <RulesSection
+              <PlanRuleCard
+                id="rules-benefit"
+                icon={Gift}
+                title="Benefit"
+                description="What the customer earns at maturity"
+                entries={benefitFields(benefit)}
+              />
+              <PlanRuleCard
+                id="rules-redemption"
                 icon={Shield}
                 title="Redemption"
-                description="Closure, penalties, and settlement modes"
-              >
-                <div className="mb-4 flex flex-wrap gap-2">
-                  <Badge variant="outline">
-                    {redemption.prematureClosureAllowed ? "Premature OK" : "Maturity only"}
-                  </Badge>
-                  {Number(redemption.lockInMonths ?? 0) > 0 ? (
-                    <Badge variant="outline">{redemption.lockInMonths} mo lock-in</Badge>
-                  ) : null}
-                </div>
-                <ContractFieldGrid
-                  entries={[
-                    { label: "Penalty", value: penaltyDisplay(penalty) },
-                    {
-                      label: "Modes",
-                      value:
-                        redemptionModes.length > 0
-                          ? redemptionModes.map((m) => m.replace(/_/g, " ")).join(" · ")
-                          : "—",
-                    },
-                    {
-                      label: "Any branch",
-                      value: redemption.redeemAtAnyBranch ? "Yes" : "Home branch only",
-                    },
-                  ]}
-                />
-              </RulesSection>
-
-              <RulesSection icon={Store} title="Availability">
-                <ContractFieldGrid
-                  entries={[
-                    {
-                      label: "Branches",
-                      value: avail.allBranches ? "All branches" : "Selected only",
-                    },
-                    {
-                      label: "Max enrolments",
-                      value:
-                        avail.maxEnrolments == null
-                          ? "Unlimited"
-                          : String(avail.maxEnrolments),
-                    },
-                    { label: "Enrolment window", value: enrolWindow },
-                    {
-                      label: "Customer app",
-                      value: (
-                        <YesNo
-                          ok={Boolean(avail.visibleInCustomerApp)}
-                          yes="Visible"
-                          no="Hidden"
-                        />
-                      ),
-                    },
-                    {
-                      label: "Self-enrol",
-                      value: (
-                        <YesNo ok={Boolean(avail.customerSelfEnrolAllowed)} />
-                      ),
-                    },
-                  ]}
-                />
-              </RulesSection>
+                description="Closure rules, penalties, and settlement modes"
+                badges={
+                  <>
+                    <Badge variant="outline">
+                      {redemption.prematureClosureAllowed ? "Premature OK" : "Maturity only"}
+                    </Badge>
+                    {Number(redemption.lockInMonths ?? 0) > 0 ? (
+                      <Badge variant="outline">
+                        {String(redemption.lockInMonths)} mo lock-in
+                      </Badge>
+                    ) : null}
+                  </>
+                }
+                entries={[
+                  { label: "Penalty", value: penaltyDisplay(penalty) },
+                  {
+                    label: "Modes",
+                    value:
+                      redemptionModes.length > 0
+                        ? redemptionModes.map((m) => m.replace(/_/g, " ")).join(" · ")
+                        : "—",
+                  },
+                  {
+                    label: "Any branch",
+                    value: redemption.redeemAtAnyBranch ? "Yes" : "Home branch only",
+                  },
+                ]}
+              />
+              <PlanRuleCard
+                id="rules-availability"
+                icon={Store}
+                title="Availability"
+                description="Where and how customers can enrol on this plan"
+                entries={[
+                  {
+                    label: "Branches",
+                    value: avail.allBranches ? "All branches" : "Selected only",
+                  },
+                  { label: "Max enrolments", value: maxEnrolments },
+                  { label: "Enrolment window", value: enrolWindow },
+                  {
+                    label: "Customer app",
+                    value: avail.visibleInCustomerApp ? "Visible" : "Hidden",
+                  },
+                  {
+                    label: "Self-enrol",
+                    value: avail.customerSelfEnrolAllowed ? "Allowed" : "Staff only",
+                  },
+                ]}
+              />
             </div>
-          </Surface>
+          </div>
         </PageTabsPanel>
 
-        <PageTabsPanel value="stats">
+        <PageTabsPanel value="performance">
           {statsQuery.isLoading ? (
             <PageSkeleton />
           ) : statsQuery.isError || !statsQuery.data ? (
             <QueryError error={statsQuery.error} onRetry={statsQuery.refetch} />
           ) : (
-            <PlanPerformanceTab
+            <PlanPerformanceDashboard
               enrolments={statsData?.enrolments}
               financials={statsData?.financials as Record<string, unknown>}
               charts={

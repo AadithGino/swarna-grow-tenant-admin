@@ -16,6 +16,7 @@ import { useCustomerTenant } from "@/src/components/customer/customer-tenant-con
 import { customerPath } from "@/src/lib/customer-tenant";
 import { useCustomerKycEnabled } from "@/src/lib/customer-kyc-enabled";
 import {
+  useGetCustomerUploadDownloadQuery,
   useGetCustomerDevicesQuery,
   useGetCustomerPastSchemesQuery,
   useGetCustomerProfileQuery,
@@ -26,6 +27,29 @@ import {
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import type { CustomerPastScheme } from "@/src/types/customer";
+
+function KycDocumentLink({
+  uploadId,
+  fileName,
+  fallbackViewUrl,
+}: {
+  uploadId?: string;
+  fileName?: string | null;
+  fallbackViewUrl?: string | null;
+}) {
+  const { data } = useGetCustomerUploadDownloadQuery(uploadId as string, {
+    skip: !uploadId,
+  });
+  const href = data?.downloadUrl ?? fallbackViewUrl ?? null;
+  if (!href) {
+    return <span className="text-xs text-muted-foreground">On file</span>;
+  }
+  return (
+    <a href={href} target="_blank" rel="noreferrer" className="text-xs font-bold text-[#730321] underline">
+      {fileName ? "View document" : "Open document"}
+    </a>
+  );
+}
 
 function kycBadgeClass(status: string) {
   if (status === "VERIFIED") return "bg-emerald-50 text-emerald-700";
@@ -225,13 +249,11 @@ export function CustomerProfilePage() {
                     <FileImage className="size-8 text-[#730321]" />
                     <span className="text-sm font-bold">{doc.label}</span>
                     {doc.fileName ? <span className="text-[10px] text-muted-foreground">{doc.fileName}</span> : null}
-                    {doc.viewUrl ? (
-                      <a href={doc.viewUrl} target="_blank" rel="noreferrer" className="text-xs font-bold text-[#730321] underline">
-                        View document
-                      </a>
-                    ) : (
-                      <span className="text-xs text-muted-foreground">On file</span>
-                    )}
+                    <KycDocumentLink
+                      uploadId={doc.uploadId}
+                      fileName={doc.fileName}
+                      fallbackViewUrl={doc.viewUrl}
+                    />
                   </div>
                 ))}
               </div>

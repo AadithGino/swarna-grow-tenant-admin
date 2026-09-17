@@ -40,6 +40,8 @@ import {
 } from "@/src/lib/kyc-form";
 import type { Customer } from "@/src/types/domain";
 import {
+  useCompleteUploadMutation,
+  useGetUploadDownloadQuery,
   usePresignUploadMutation,
   useSubmitCustomerKycMutation,
   useVerifyCustomerKycMutation,
@@ -52,6 +54,54 @@ function mergeMessage(
   live: string | undefined,
 ): string | undefined {
   return apiOrSubmit ?? live;
+}
+
+function uploadIdFromPath(value?: string): string | null {
+  if (!value) return null;
+  const match = value.match(/\/uploads\/([^/?#]+)/);
+  return match?.[1] ? decodeURIComponent(match[1]) : null;
+}
+
+function KycDocumentPreview({
+  doc,
+}: {
+  doc: { side: string; label: string; previewUrl?: string; uploadId?: string };
+}) {
+  const uploadId = doc.uploadId ?? uploadIdFromPath(doc.previewUrl);
+  const { data } = useGetUploadDownloadQuery(uploadId as string, {
+    skip: !uploadId,
+  });
+  const previewUrl = uploadId ? (data?.downloadUrl ?? undefined) : doc.previewUrl;
+
+  return (
+    <div
+      className="flex min-h-40 flex-col items-center justify-center gap-2 overflow-hidden rounded-xl border bg-muted/40 p-4"
+    >
+      {previewUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={previewUrl}
+          alt={doc.label}
+          className="max-h-48 w-full rounded-lg object-contain"
+        />
+      ) : (
+        <FileImage className="size-10 text-[#730321]" />
+      )}
+      <span className="text-sm font-medium">{doc.label}</span>
+      {previewUrl ? (
+        <a
+          href={previewUrl}
+          target="_blank"
+          rel="noreferrer"
+          className="text-xs text-[#730321] underline"
+        >
+          Open full size
+        </a>
+      ) : (
+        <span className="text-xs text-muted-foreground">On file</span>
+      )}
+    </div>
+  );
 }
 
 export function ReviewKycDialog({
@@ -68,6 +118,7 @@ export function ReviewKycDialog({
   const [verifyKyc, verifyState] = useVerifyCustomerKycMutation();
   const [submitKycMutation, submitState] = useSubmitCustomerKycMutation();
   const [presignUpload] = usePresignUploadMutation();
+  const [completeUpload] = useCompleteUploadMutation();
   const [rejectRemarks, setRejectRemarks] = useState("");
   const [uploadType, setUploadType] = useState<"AADHAAR" | "PAN">("AADHAAR");
   const [panNumber, setPanNumber] = useState("");
@@ -148,6 +199,7 @@ export function ReviewKycDialog({
         file,
         (input) => presignUpload(input).unwrap(),
         "KYC_DOCUMENT",
+        (id) => completeUpload(id).unwrap(),
       );
       if (target === "front") {
         setFrontUploadId(uploadId);
@@ -374,34 +426,10 @@ export function ReviewKycDialog({
             {(kyc?.documents?.length ?? 0) > 0 && !showUpload ? (
               <div className="grid gap-3 sm:grid-cols-2">
                 {kyc!.documents.map((doc) => (
-                  <div
-                    key={doc.side}
-                    className="flex min-h-40 flex-col items-center justify-center gap-2 overflow-hidden rounded-xl border bg-muted/40 p-4"
-                  >
-                    {doc.previewUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={doc.previewUrl}
-                        alt={doc.label}
-                        className="max-h-48 w-full rounded-lg object-contain"
-                      />
-                    ) : (
-                      <FileImage className="size-10 text-[#730321]" />
-                    )}
-                    <span className="text-sm font-medium">{doc.label}</span>
-                    {doc.previewUrl ? (
-                      <a
-                        href={doc.previewUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-xs text-[#730321] underline"
-                      >
-                        Open full size
-                      </a>
-                    ) : (
-                      <span className="text-xs text-muted-foreground">On file</span>
-                    )}
-                  </div>
+                  <KycDocumentPreview
+                    key={`${doc.side}-${doc.uploadId ?? doc.previewUrl ?? doc.label}`}
+                    doc={doc}
+                  />
                 ))}
               </div>
             ) : null}

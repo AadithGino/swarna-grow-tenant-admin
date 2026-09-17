@@ -1,21 +1,18 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
-import { Download, FileText, SlidersHorizontal } from "lucide-react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Download, FileText } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { DateRangeFilter } from "@/src/components/common/date-range-filter";
-import { ChartSeriesView } from "@/src/components/common/chart-series-view";
+import {
+  ChartSeriesView,
+  chartSurfaceBodyClass,
+  chartUsesFlexibleHeight,
+} from "@/src/components/common/chart-series-view";
 import { CursorPagination } from "@/src/components/common/cursor-pagination";
 import { ReportTable } from "@/src/components/common/report-table";
-import {
-  FieldLabel,
-  PageHeader,
-  Surface,
-} from "@/src/components/common/page-parts";
-import { FormFieldError } from "@/src/components/common/form-field-error";
+import { PageHeader, Surface } from "@/src/components/common/page-parts";
 import { toastApiError } from "@/src/lib/api-error";
 import {
   listSearchQueryForApi,
@@ -48,6 +45,7 @@ import {
   defaultListRangeFrom,
   defaultListRangeTo,
 } from "@/src/lib/list-date-range";
+import { useClientMounted } from "@/src/hooks/use-client-mounted";
 import { useCursorPagination } from "@/src/hooks/use-cursor-pagination";
 import { useDebouncedValue } from "@/src/hooks/use-debounced-value";
 import { useThrottledValue } from "@/src/hooks/use-throttled-value";
@@ -66,11 +64,15 @@ import {
   ADMIN_REPORT_LABELS,
   type AdminReportKey,
 } from "@/src/types/admin-report";
+import { ReportFiltersPanel } from "@/src/features/reports/report-filters-panel";
 import { ReportSummaryStrip } from "@/src/features/reports/report-summary-strip";
 import { ExportsPanel } from "@/src/features/reports/exports-panel";
 import {
   reportSupportsBranchFilter,
   reportSupportsPlanFilter,
+  reportUsesBranchFocusSelector,
+  reportUsesCustomerFocusSelector,
+  reportUsesSchemeFocusSelector,
 } from "@/src/features/reports/report-filter-support";
 
 function cellExportValue(value: unknown): string {
@@ -87,58 +89,127 @@ function cellExportValue(value: unknown): string {
   return String(value);
 }
 
+const REPORTS_HEADER_FALLBACK =
+  "Operational and financial reporting with summary, charts, and detailed tables.";
+
 export function ReportsPage() {
+  const mounted = useClientMounted();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [createExport] = useCreateReportExportMutation();
   const [fetchExportStatus] = useLazyGetExportStatusQuery();
   const [exportFormat, setExportFormat] = useState("CSV");
   const [reportKey, setReportKey] = useState<AdminReportKey>("COLLECTION");
   const [from, setFrom] = useState(() => defaultListRangeFrom());
   const [to, setTo] = useState(() => defaultListRangeTo());
-  const globalBranchKey = useAppSelector((s) => s.ui.branchId);
-  const actingBranchId =
-    globalBranchKey && globalBranchKey !== "ALL" ? globalBranchKey : undefined;
+  const [reportBranchId, setReportBranchId] = useState("ALL");
   const [planId, setPlanId] = useState("ALL");
+  const [focusBranchId, setFocusBranchId] = useState("ALL");
+  const [focusPlanId, setFocusPlanId] = useState("ALL");
   const [groupBy, setGroupBy] = useState("BRANCH");
+  const [customerFocusMode, setCustomerFocusMode] = useState<"ALL" | "INDIVIDUAL">(
+    "ALL",
+  );
   const [customerId, setCustomerId] = useState("");
   const [customerSearch, setCustomerSearch] = useState("");
   const throttledCustomerId = useThrottledValue(customerId, 400);
   const debouncedCustomerSearch = useDebouncedValue(customerSearch, 350);
-  const isCustomerLedger = reportKey === "CUSTOMER_LEDGER";
+  const isCustomerPerformance = reportKey === "CUSTOMER_PERFORMANCE";
   const selectedCustomerId = throttledCustomerId.trim();
-  const skipReportQuery = isCustomerLedger && !selectedCustomerId;
+  const skipReportQuery =
+    isCustomerPerformance &&
+    customerFocusMode === "INDIVIDUAL" &&
+    !selectedCustomerId;
   const dateRangeError = useMemo(
     () => validateListDateRange(from, to),
     [from, to],
   );
   const skipReportForBadDates = Boolean(dateRangeError);
   const customerLedgerError =
-    isCustomerLedger && !selectedCustomerId
-      ? "Select a customer for the ledger report."
+    isCustomerPerformance &&
+    customerFocusMode === "INDIVIDUAL" &&
+    !selectedCustomerId
+      ? "Select a customer to view their ledger."
       : undefined;
-  const multiBranch = useAppSelector(
-    (s) => s.session.session?.capabilities?.multiBranch !== false,
-  );
-  const showBranchFilter = multiBranch && reportSupportsBranchFilter(reportKey);
-  const showPlanFilter = reportSupportsPlanFilter(reportKey);
+  const session = useAppSelector((s) => s.session.session);
+  const multiBranch = session?.capabilities?.multiBranch !== false;
+  const tenantWideReports =
+    session?.user?.role === "TENANT_OWNER" ||
+    session?.user?.role === "TENANT_ADMIN";
+  const isBranchPerformance = reportKey === "BRANCH_PERFORMANCE";
+  const isSchemePerformance = reportKey === "SCHEME_PERFORMANCE";
+  const showBranchFilter =
+    multiBranch &&
+    tenantWideReports &&
+    reportSupportsBranchFilter(reportKey) &&
+    !isBranchPerformance;
+  const showPlanFilter =
+    reportSupportsPlanFilter(reportKey) && !isSchemePerformance;
+  const showBranchFocus =
+    multiBranch &&
+    tenantWideReports &&
+    reportUsesBranchFocusSelector(reportKey);
+  const showSchemeFocus = reportUsesSchemeFocusSelector(reportKey);
+  const showCustomerFocus = reportUsesCustomerFocusSelector(reportKey);
   const plansQuery = useGetPlansQuery(
     { status: "ACTIVE", limit: 100 },
-    { skip: !showPlanFilter },
+    { skip: !showPlanFilter && !showSchemeFocus },
+  );
+  const branchesQuery = useGetBranchesQuery(
+    { limit: 100 },
+    { skip: !showBranchFocus && !showBranchFilter },
   );
   const plans = plansQuery.data?.items ?? [];
+  const branches = branchesQuery.data?.items ?? [];
 
   useEffect(() => {
-    if (isCustomerLedger) return;
+    if (isCustomerPerformance) return;
+    setCustomerFocusMode("ALL");
     setCustomerId("");
     setCustomerSearch("");
-  }, [isCustomerLedger]);
+  }, [isCustomerPerformance]);
+
+  useEffect(() => {
+    if (!isBranchPerformance) setFocusBranchId("ALL");
+    if (!isSchemePerformance) setFocusPlanId("ALL");
+    if (!isCustomerPerformance) setCustomerFocusMode("ALL");
+    if (!showBranchFilter) setReportBranchId("ALL");
+  }, [
+    isBranchPerformance,
+    isSchemePerformance,
+    isCustomerPerformance,
+    showBranchFilter,
+    reportKey,
+  ]);
+
+  useEffect(() => {
+    const key = searchParams.get("reportKey");
+    const branchFromUrl = searchParams.get("branchId");
+    const planFromUrl = searchParams.get("planId");
+    const customerFromUrl = searchParams.get("customerId");
+    const normalizedKey =
+      key === "CUSTOMER_LEDGER" ? "CUSTOMER_PERFORMANCE" : key;
+    if (
+      normalizedKey &&
+      (ADMIN_REPORT_KEYS as readonly string[]).includes(normalizedKey)
+    ) {
+      setReportKey(normalizedKey as AdminReportKey);
+    }
+    if (branchFromUrl) setFocusBranchId(branchFromUrl);
+    if (planFromUrl) setFocusPlanId(planFromUrl);
+    if (customerFromUrl) {
+      setCustomerFocusMode("INDIVIDUAL");
+      setCustomerId(customerFromUrl);
+    }
+  }, [searchParams]);
 
   const customerSearchError = validateListSearchQuery(customerSearch);
   const customersQuery = useGetCustomersQuery(
     { q: listSearchQueryForApi(debouncedCustomerSearch), limit: 40 },
     {
       skip:
-        !isCustomerLedger ||
+        !isCustomerPerformance ||
+        customerFocusMode !== "INDIVIDUAL" ||
         shouldSkipListSearchQuery(debouncedCustomerSearch),
     },
   );
@@ -146,7 +217,7 @@ export function ReportsPage() {
 
   const pager = useCursorPagination(
     8,
-    `${reportKey}|${from}|${to}|${globalBranchKey}|${planId}|${groupBy}|${throttledCustomerId}`,
+    `${reportKey}|${from}|${to}|${reportBranchId}|${planId}|${focusBranchId}|${focusPlanId}|${customerFocusMode}|${groupBy}|${throttledCustomerId}`,
   );
 
   const queryArgs = useMemo(
@@ -156,10 +227,28 @@ export function ReportsPage() {
       from,
       to,
       groupBy: reportKey === "COLLECTION" ? groupBy : undefined,
-      branchId: showBranchFilter ? actingBranchId : undefined,
-      planId: showPlanFilter && planId !== "ALL" ? planId : undefined,
+      branchId: isBranchPerformance
+        ? focusBranchId !== "ALL"
+          ? focusBranchId
+          : "ALL"
+        : showBranchFilter
+          ? reportBranchId !== "ALL"
+            ? reportBranchId
+            : "ALL"
+          : undefined,
+      planId: isSchemePerformance
+        ? focusPlanId !== "ALL"
+          ? focusPlanId
+          : "ALL"
+        : showPlanFilter && planId !== "ALL"
+          ? planId
+          : undefined,
       customerId:
-        isCustomerLedger && selectedCustomerId ? selectedCustomerId : undefined,
+        isCustomerPerformance &&
+        customerFocusMode === "INDIVIDUAL" &&
+        selectedCustomerId
+          ? selectedCustomerId
+          : undefined,
       ...pager.queryParams,
     }),
     [
@@ -167,23 +256,40 @@ export function ReportsPage() {
       from,
       to,
       groupBy,
-      actingBranchId,
+      reportBranchId,
       planId,
+      focusBranchId,
+      focusPlanId,
+      isBranchPerformance,
+      isSchemePerformance,
       showBranchFilter,
       showPlanFilter,
       selectedCustomerId,
-      isCustomerLedger,
+      customerFocusMode,
+      isCustomerPerformance,
       pager.queryParams,
     ],
   );
 
   const query = useGetReportsQuery(queryArgs, {
-    skip: skipReportQuery || skipReportForBadDates,
+    skip: skipReportQuery || skipReportForBadDates || !mounted,
   });
-  const report = skipReportQuery ? undefined : query.data;
+  const report = skipReportQuery || !mounted ? undefined : query.data;
   const page = report?.page ?? emptyPageMeta();
   const chartEntries = Object.entries(report?.charts ?? {});
   const reportTitle = report?.title ?? ADMIN_REPORT_LABELS[reportKey];
+  const reportHeaderDescription = useMemo(() => {
+    if (!mounted) return REPORTS_HEADER_FALLBACK;
+    if (skipReportQuery) {
+      return "Choose an individual customer to load their ledger for the selected period.";
+    }
+    const parts = [
+      report?.scope?.label,
+      report?.period?.label ?? `${from} – ${to}`,
+      report?.generatedAt ? `Generated ${report.generatedAt}` : null,
+    ].filter(Boolean);
+    return parts.join(" · ") || REPORTS_HEADER_FALLBACK;
+  }, [mounted, skipReportQuery, report, from, to]);
 
   const exportCsv = () => {
     if (!report) return;
@@ -255,7 +361,8 @@ export function ReportsPage() {
       from,
       to,
       customerId: customerId.trim(),
-      requireCustomer: isCustomerLedger,
+      requireCustomer:
+        isCustomerPerformance && customerFocusMode === "INDIVIDUAL",
     });
     if (Object.keys(clientErrors).length) {
       const first = Object.values(clientErrors)[0];
@@ -268,7 +375,9 @@ export function ReportsPage() {
       params: {
         from,
         to,
-        ...(isCustomerLedger && customerId.trim()
+        ...(isCustomerPerformance &&
+        customerFocusMode === "INDIVIDUAL" &&
+        customerId.trim()
           ? { customerId: customerId.trim() }
           : {}),
       },
@@ -292,26 +401,20 @@ export function ReportsPage() {
       from,
       to,
       customerId: customerId.trim(),
-      requireCustomer: isCustomerLedger,
+      requireCustomer:
+        isCustomerPerformance && customerFocusMode === "INDIVIDUAL",
     }) || skipReportQuery;
+
+  if (!mounted) {
+    return <PageSkeleton cards={5} />;
+  }
 
   return (
     <>
       <PageHeader
         eyebrow="Reports & controls"
         title={reportTitle}
-        description={
-          skipReportQuery
-            ? "Choose a customer to load their ledger statement for the selected period."
-            : [
-                report?.scope?.label,
-                report?.period?.label ?? `${from} – ${to}`,
-                report?.generatedAt ? `Generated ${report.generatedAt}` : null,
-              ]
-                .filter(Boolean)
-                .join(" · ") ||
-              "Operational and financial reporting with summary, charts, and detailed tables."
-        }
+        description={reportHeaderDescription}
         actions={
           skipReportQuery ? undefined : (
             <>
@@ -344,134 +447,52 @@ export function ReportsPage() {
         }
       />
 
-      <Surface>
-        <div className="flex flex-col gap-4 p-5">
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            <div className="min-w-0 sm:col-span-2 lg:col-span-1">
-              <FieldLabel>Report</FieldLabel>
-              <Select
-                value={reportKey}
-                onValueChange={(v) => setReportKey(v as AdminReportKey)}
-              >
-                <SelectTrigger className="h-11 w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {ADMIN_REPORT_KEYS.map((key) => (
-                    <SelectItem key={key} value={key}>
-                      {ADMIN_REPORT_LABELS[key]}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            {showPlanFilter && (
-              <div className="min-w-0">
-                <FieldLabel>Scheme plan</FieldLabel>
-                <Select value={planId} onValueChange={setPlanId}>
-                  <SelectTrigger className="h-11 w-full">
-                    <SelectValue placeholder="All plans" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="ALL">All plans</SelectItem>
-                    {plans.map((p) => (
-                      <SelectItem key={p.id} value={p.id}>
-                        {p.name}
-                        {p.code ? ` (${p.code})` : ""}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-            {reportKey === "COLLECTION" && (
-              <div className="min-w-0">
-                <FieldLabel>Group by</FieldLabel>
-                <Select value={groupBy} onValueChange={setGroupBy}>
-                  <SelectTrigger className="h-11 w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="BRANCH">Branch</SelectItem>
-                    <SelectItem value="DAY">Day</SelectItem>
-                    <SelectItem value="STAFF">Staff</SelectItem>
-                    <SelectItem value="MODE">Mode</SelectItem>
-                    <SelectItem value="PLAN">Plan</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-          </div>
-
-          {isCustomerLedger && (
-            <div className="grid gap-3 border-t border-[#efe6ea] pt-4 sm:grid-cols-2">
-              <div className="sm:col-span-2 space-y-2">
-                <FieldLabel>Customer</FieldLabel>
-                <Input
-                  className="h-11"
-                  placeholder="Search by name, mobile, or passbook no."
-                  value={customerSearch}
-                  onChange={(e) =>
-                    setCustomerSearch(
-                      sanitizeListSearchQueryInput(e.target.value),
-                    )
-                  }
-                  aria-invalid={Boolean(customerSearchError)}
-                />
-                <FormFieldError message={customerSearchError} />
-                <Select
-                  value={customerId || undefined}
-                  onValueChange={setCustomerId}
-                >
-                  <SelectTrigger className="h-11 w-full">
-                    <SelectValue placeholder="Select customer for ledger" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {customerOptions.map((c) => (
-                      <SelectItem key={c.id} value={c.id}>
-                        {c.name} · {c.customerNo}
-                        {c.mobile ? ` · ${c.mobile}` : ""}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <FormFieldError message={customerLedgerError} />
-                <p className="text-xs text-muted-foreground">
-                  {customersQuery.isLoading
-                    ? "Loading customers…"
-                    : customerOptions.length === 0
-                      ? "No customers match — try a different search."
-                      : `${customerOptions.length} customer(s) — pick one to load the ledger.`}
-                </p>
-              </div>
-            </div>
-          )}
-
-          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[#efe6ea] pt-4">
-            <div className="min-w-0 flex-1">
-              <DateRangeFilter
-                label="Period"
-                from={from}
-                to={to}
-                onFromChange={setFrom}
-                onToChange={setTo}
-              />
-              <div className="mt-2">
-                <FormFieldError message={dateRangeError} />
-              </div>
-            </div>
-            <Button
-              className="h-10 shrink-0"
-              variant="outline"
-              disabled={skipReportQuery || Boolean(dateRangeError)}
-              onClick={() => query.refetch()}
-            >
-              <SlidersHorizontal />
-              Apply filters
-            </Button>
-          </div>
-        </div>
-      </Surface>
+      <ReportFiltersPanel
+        reportKey={reportKey}
+        onReportKeyChange={setReportKey}
+        from={from}
+        to={to}
+        onFromChange={setFrom}
+        onToChange={setTo}
+        dateRangeError={dateRangeError}
+        showBranchFilter={showBranchFilter}
+        reportBranchId={reportBranchId}
+        onReportBranchIdChange={setReportBranchId}
+        branches={branches}
+        showPlanFilter={showPlanFilter}
+        planId={planId}
+        onPlanIdChange={setPlanId}
+        plans={plans}
+        groupBy={groupBy}
+        onGroupByChange={setGroupBy}
+        showBranchFocus={showBranchFocus}
+        focusBranchId={focusBranchId}
+        onFocusBranchIdChange={setFocusBranchId}
+        showSchemeFocus={showSchemeFocus}
+        focusPlanId={focusPlanId}
+        onFocusPlanIdChange={setFocusPlanId}
+        showCustomerFocus={showCustomerFocus}
+        customerFocusMode={customerFocusMode}
+        onCustomerFocusModeChange={(mode) => {
+          setCustomerFocusMode(mode);
+          if (mode === "ALL") {
+            setCustomerId("");
+            setCustomerSearch("");
+          }
+        }}
+        customerSearch={customerSearch}
+        onCustomerSearchChange={(value) =>
+          setCustomerSearch(sanitizeListSearchQueryInput(value))
+        }
+        customerSearchError={customerSearchError}
+        customerId={customerId}
+        onCustomerIdChange={setCustomerId}
+        customerOptions={customerOptions}
+        customerLedgerError={customerLedgerError}
+        customersLoading={customersQuery.isLoading}
+        onApply={() => query.refetch()}
+        applyDisabled={skipReportQuery || Boolean(dateRangeError)}
+      />
 
       {skipReportForBadDates && !skipReportQuery ? (
         <Surface title="Invalid period">
@@ -485,7 +506,7 @@ export function ReportsPage() {
         <Surface title="Customer ledger">
           <EmptyState
             title="Select a customer to view their ledger"
-            detail="Use the search box and dropdown above, or open a customer profile and run the ledger from there."
+            detail="Search and pick a customer above, or click a row in the overview table to drill down."
           />
           <div className="flex justify-center gap-3 pb-8">
             <Button variant="outline" onClick={() => router.push("/customers")}>
@@ -525,22 +546,10 @@ export function ReportsPage() {
                   title={chart.title}
                   description={chart.subtitle}
                 >
-                  <div
-                    className={`p-4 ${
-                      (chart.chartType ?? "").toLowerCase().includes("donut") ||
-                      (chart.chartType ?? "").toLowerCase() === "pie"
-                        ? "min-h-[340px]"
-                        : "h-[320px]"
-                    }`}
-                  >
+                  <div className={`p-4 ${chartSurfaceBodyClass(chart)}`}>
                     <div
                       className={
-                        (chart.chartType ?? "")
-                          .toLowerCase()
-                          .includes("donut") ||
-                        (chart.chartType ?? "").toLowerCase() === "pie"
-                          ? undefined
-                          : "h-full"
+                        chartUsesFlexibleHeight(chart) ? undefined : "h-full"
                       }
                     >
                       <ChartSeriesView chart={chart} />

@@ -11,8 +11,15 @@ export const BRANCH_NAME_MAX = 160;
 export const BRANCH_LINE1_MAX = 200;
 export const BRANCH_CITY_MAX = 80;
 export const STAFF_NAME_MAX = 120;
-export const STAFF_PASSWORD_MIN = 8;
-export const STAFF_PASSWORD_MAX = 128;
+import {
+  PASSWORD_PIN_MESSAGE,
+  livePasswordPinError,
+  passwordPinReady,
+  sanitizePasswordPinInput,
+  validatePasswordPin,
+} from "@/src/lib/password-validation";
+
+export { sanitizePasswordPinInput };
 export const STAFF_DEACTIVATE_REASON_MAX = 500;
 
 export type BranchFormFields = {
@@ -230,21 +237,16 @@ export function liveStaffMobileError(mobile: string): string | undefined {
 
 export function validateTemporaryPassword(password: string): string | undefined {
   if (!password) return "Temporary password is required.";
-  if (password.length < STAFF_PASSWORD_MIN) {
-    return `Password must be at least ${STAFF_PASSWORD_MIN} characters.`;
-  }
-  if (password.length > STAFF_PASSWORD_MAX) {
-    return `Password must be ${STAFF_PASSWORD_MAX} characters or fewer.`;
-  }
-  return undefined;
+  return validatePasswordPin(password);
 }
 
 export function liveTemporaryPasswordError(
   password: string,
 ): string | undefined {
-  if (!password) return undefined;
-  return validateTemporaryPassword(password);
+  return livePasswordPinError(password);
 }
+
+export { PASSWORD_PIN_MESSAGE, passwordPinReady };
 
 export function staffRequiresBranch(
   role: CreateStaffFormFields["role"],

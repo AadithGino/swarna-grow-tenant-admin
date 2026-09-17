@@ -20,7 +20,11 @@ import {
   customerPlanEnrolRules,
   defaultCustomerEnrolAmountRupee,
 } from "@/src/lib/customer-enrol-plan";
-import { resolvedFirstInstallmentMode } from "@/src/lib/enrol-plan-rules";
+import {
+  amountFieldLocked,
+  amountUsesSlabs,
+  resolvedFirstInstallmentMode,
+} from "@/src/lib/enrol-plan-rules";
 import { openCustomerPaymentTarget } from "@/src/lib/customer-payment-redirect";
 import { toast } from "sonner";
 
@@ -37,7 +41,12 @@ export function CustomerPlanDetailPage({ id }: { id: string }) {
 
   useEffect(() => {
     if (!plan) return;
-    setAmount((prev) => (prev == null ? defaultCustomerEnrolAmountRupee(plan) : prev));
+    const rules = customerPlanEnrolRules(plan);
+    if (amountFieldLocked(rules) || amountUsesSlabs(rules)) {
+      setAmount((prev) => (prev == null ? defaultCustomerEnrolAmountRupee(plan) : prev));
+    } else {
+      setAmount(undefined);
+    }
     const collectNow = plan.firstInstallmentRequired !== false;
     setPayNow(collectNow);
   }, [plan?.id, plan?.firstInstallmentRequired]);
@@ -48,7 +57,14 @@ export function CustomerPlanDetailPage({ id }: { id: string }) {
   const jewellerName = tenant?.displayName ?? tenant?.appDisplayName ?? "your jeweller";
   const contributionText = plan.contributionDetail ?? plan.amountSummary;
   const benefitText = plan.benefitSummary || "Benefit follows plan rules shown at enrolment";
-  const amountValue = amount ?? defaultCustomerEnrolAmountRupee(plan);
+  const presetAmount =
+    amountFieldLocked(enrolRules) || amountUsesSlabs(enrolRules);
+  const amountValue = presetAmount
+    ? (amount ?? defaultCustomerEnrolAmountRupee(plan))
+    : amount;
+  const amountError = amountValue != null ? validateEnrolAmountRupee(plan, amountValue) : "Enter a valid amount";
+  const hasValidAmount = amountValue != null && !amountError;
+  const hardBlocked = !plan.canEnrol;
   const firstMode = resolvedFirstInstallmentMode(
     enrolRules,
     payNow ? "COLLECT_NOW" : "START_NEXT_CYCLE",
@@ -66,12 +82,13 @@ export function CustomerPlanDetailPage({ id }: { id: string }) {
     : [];
 
   const submit = async () => {
-    if (!plan.canEnrol) {
+    if (hardBlocked) {
       return toast.error(plan.blockedReason ?? "You cannot enrol in this plan right now");
     }
     if (!agreed) return toast.error("Please confirm that you understand the plan rules");
-    const validation = validateEnrolAmountRupee(plan, amountValue);
-    if (validation) return toast.error(validation);
+    if (!hasValidAmount || amountValue == null) {
+      return toast.error(amountError ?? "Enter a valid amount");
+    }
     try {
       const statusRedirectUrl = customerPath(tenantSlug, "pay", "status");
       const statusRedirectFull = `${window.location.origin}${statusRedirectUrl}`;
@@ -190,9 +207,13 @@ export function CustomerPlanDetailPage({ id }: { id: string }) {
           <p className="mt-2 text-sm leading-6 text-muted-foreground">
             Your plan rules are set by {jewellerName} and cannot be changed after enrolment.
           </p>
-          {!plan.canEnrol && plan.blockedReason ? (
+          {hardBlocked && plan.blockedReason ? (
             <p className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
               {plan.blockedReason}
+            </p>
+          ) : !hasValidAmount && amountValue != null && amountError ? (
+            <p className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+              {amountError}
             </p>
           ) : null}
           <div className="mt-6">
@@ -200,7 +221,7 @@ export function CustomerPlanDetailPage({ id }: { id: string }) {
               plan={enrolRules}
               amount={amountValue}
               onAmountChange={setAmount}
-              invalid={Boolean(validateEnrolAmountRupee(plan, amountValue))}
+              invalid={amountValue != null && Boolean(amountError)}
             />
           </div>
           {!payNowHidden && showPayNowToggle ? (
@@ -212,7 +233,7 @@ export function CustomerPlanDetailPage({ id }: { id: string }) {
               <Switch
                 checked={payNow}
                 onCheckedChange={setPayNow}
-                disabled={!plan.canEnrol || payNowLocked}
+                disabled={hardBlocked || payNowLocked}
               />
             </div>
           ) : payNowHidden ? (
@@ -225,7 +246,7 @@ export function CustomerPlanDetailPage({ id }: { id: string }) {
               type="checkbox"
               checked={agreed}
               onChange={(e) => setAgreed(e.target.checked)}
-              disabled={!plan.canEnrol}
+              disabled={hardBlocked}
               className="mt-1 size-4 accent-[#730321]"
             />
             <span>
@@ -240,7 +261,7 @@ export function CustomerPlanDetailPage({ id }: { id: string }) {
           </div>
           <Button
             onClick={submit}
-            disabled={enrolState.isLoading || !Number(amountValue) || !plan.canEnrol}
+            disabled={enrolState.isLoading || !hasValidAmount || hardBlocked || !agreed}
             className="mt-5 h-12 w-full rounded-xl bg-[#730321] text-base font-black"
           >
             {enrolState.isLoading ? (

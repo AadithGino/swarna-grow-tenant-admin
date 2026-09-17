@@ -10,6 +10,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { applyThisMonthRange } from "@/src/lib/list-date-range";
+import { cn } from "@/lib/utils";
 
 /** Backend workboard presets (see resolveDatePreset). */
 export type WorkboardDatePreset =
@@ -106,6 +107,7 @@ export function DateRangeFilter({
   label = "Period",
   presetLabel = "This month",
   onPreset,
+  className,
 }: {
   from: string;
   to: string;
@@ -114,6 +116,7 @@ export function DateRangeFilter({
   label?: string;
   presetLabel?: string;
   onPreset?: () => void;
+  className?: string;
 }) {
   const applyPreset =
     onPreset ??
@@ -125,7 +128,10 @@ export function DateRangeFilter({
 
   return (
     <div
-      className="flex flex-wrap items-center gap-1.5 rounded-xl border border-[#eaded9] bg-[#f7f0ec]/70 px-2 py-1.5"
+      className={cn(
+        "flex flex-wrap items-center gap-1.5 rounded-xl border border-[#eaded9] bg-[#f7f0ec]/70 px-2 py-1.5",
+        className,
+      )}
       role="group"
       aria-label={`${label} date range`}
     >

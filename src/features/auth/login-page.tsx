@@ -40,6 +40,10 @@ import { apiErrorMessage, parseApiError } from "@/src/lib/api-error";
 import { cn } from "@/lib/utils";
 import { useAppDispatch } from "@/src/store/hooks";
 import { setSession } from "@/src/store/slices/session-slice";
+import {
+  passwordPinReady,
+  sanitizePasswordPinInput,
+} from "@/src/lib/password-validation";
 
 type TenantOption = {
   tenantCode: string;
@@ -94,7 +98,7 @@ export function LoginPage() {
   const [busy, setBusy] = useState(false);
   const [mobile, setMobile] = useState(env.useMocks ? "9847012345" : "");
   const [password, setPasswordValue] = useState(
-    env.useMocks ? "Swarna@2026" : "",
+    env.useMocks ? "2026" : "",
   );
   const [tenantCode, setTenantCode] = useState("");
   const [tenantOptions, setTenantOptions] = useState<TenantOption[] | null>(
@@ -308,7 +312,7 @@ export function LoginPage() {
                   required
                   value={password}
                   onChange={(e) => {
-                    setPasswordValue(e.target.value);
+                    setPasswordValue(sanitizePasswordPinInput(e.target.value));
                     if (fieldErrors.password) {
                       setFieldErrors((prev) => {
                         const next = { ...prev };
@@ -318,8 +322,10 @@ export function LoginPage() {
                     }
                   }}
                   type={show ? "text" : "password"}
+                  inputMode="numeric"
+                  placeholder="Min. 4 digits"
                   className={cn(
-                    "h-12 pl-11 pr-12 text-base",
+                    "h-12 pl-11 pr-12 text-base tracking-[0.35em]",
                     fieldErrors.password && "border-red-600",
                   )}
                   autoComplete="current-password"
@@ -486,7 +492,11 @@ export function LoginPage() {
                   <Input
                     type="password"
                     value={resetNewPassword}
-                    onChange={(e) => setResetNewPassword(e.target.value)}
+                    onChange={(e) =>
+                      setResetNewPassword(sanitizePasswordPinInput(e.target.value))
+                    }
+                    inputMode="numeric"
+                    placeholder="Min. 4 digits"
                     autoComplete="new-password"
                   />
                 </div>
@@ -560,7 +570,7 @@ export function LoginPage() {
               <Button
                 disabled={
                   resetWithTokenState.isLoading ||
-                  resetNewPassword.length < 8 ||
+                  !passwordPinReady(resetNewPassword) ||
                   !resetToken
                 }
                 onClick={async () => {
@@ -605,7 +615,11 @@ export function LoginPage() {
                 <Input
                   type="password"
                   value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
+                  onChange={(e) =>
+                    setNewPassword(sanitizePasswordPinInput(e.target.value))
+                  }
+                  inputMode="numeric"
+                  placeholder="Min. 4 digits"
                   autoComplete="new-password"
                 />
               </div>
@@ -614,7 +628,11 @@ export function LoginPage() {
                 <Input
                   type="password"
                   value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  onChange={(e) =>
+                    setConfirmPassword(sanitizePasswordPinInput(e.target.value))
+                  }
+                  inputMode="numeric"
+                  placeholder="Min. 4 digits"
                   autoComplete="new-password"
                 />
               </div>
@@ -624,7 +642,7 @@ export function LoginPage() {
             <Button
               disabled={
                 setPasswordState.isLoading ||
-                !newPassword.trim() ||
+                !passwordPinReady(newPassword) ||
                 newPassword !== confirmPassword
               }
               onClick={async () => {

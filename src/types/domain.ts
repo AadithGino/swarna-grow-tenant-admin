@@ -34,6 +34,7 @@ export type CustomerKycStatus =
 export interface CustomerKycDocument {
   side: "FRONT" | "BACK" | "SINGLE";
   label: string;
+  uploadId?: string;
   previewUrl?: string;
 }
 

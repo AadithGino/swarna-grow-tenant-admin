@@ -1,5 +1,6 @@
 import { env } from "@/src/config/env";
 import { refreshTenantAccessToken } from "@/src/lib/auth-refresh-fetch";
+import { TOKEN_KEYS } from "@/src/lib/auth-token-storage";
 
 function resolveApiUrl(path: string): string {
   if (path.startsWith("http://") || path.startsWith("https://")) return path;
@@ -15,7 +16,7 @@ function resolveApiUrl(path: string): string {
 function tenantAuthHeaders(): Record<string, string> {
   const token =
     typeof window !== "undefined"
-      ? localStorage.getItem("swarnagrow.accessToken")
+      ? localStorage.getItem(TOKEN_KEYS.tenant.access)
       : null;
   const actingBranch =
     typeof window !== "undefined"

@@ -24,9 +24,27 @@ import type {
 } from "@/src/types/customer";
 import { useCustomerTenant } from "@/src/components/customer/customer-tenant-context";
 import { customerPath } from "@/src/lib/customer-tenant";
+import { useGetCustomerUploadDownloadQuery } from "@/src/store/api/customer-api";
+
+function uploadIdFromPath(value?: string | null): string | null {
+  if (!value) return null;
+  const match = value.match(/\/uploads\/([^/?#]+)/);
+  return match?.[1] ? decodeURIComponent(match[1]) : null;
+}
 
 export function CustomerBrand({ compact = false }: { compact?: boolean }) {
   const { tenant } = useCustomerTenant();
+  const logoUploadId = uploadIdFromPath(tenant?.logoUrl);
+  const hasCustomerSession =
+    typeof window !== "undefined" &&
+    Boolean(window.localStorage.getItem("swarnagrow.customer.accessToken"));
+  const { data: logoDownload } = useGetCustomerUploadDownloadQuery(
+    logoUploadId as string,
+    { skip: !logoUploadId || !hasCustomerSession },
+  );
+  const logoSrc = logoUploadId
+    ? (logoDownload?.downloadUrl ?? null)
+    : (tenant?.logoUrl ?? null);
   const title = tenant?.appDisplayName ?? tenant?.displayName ?? "Kairali Gold Savings";
   const words = title.split(/\s+/);
   const primary = words.slice(0, Math.max(1, words.length - 2)).join(" ") || words[0];
@@ -34,9 +52,9 @@ export function CustomerBrand({ compact = false }: { compact?: boolean }) {
 
   return (
     <span className="inline-flex min-w-0 items-center gap-3">
-      {tenant?.logoUrl ? (
+      {logoSrc ? (
         <span className="relative size-11 shrink-0 overflow-hidden rounded-xl bg-white">
-          <Image src={tenant.logoUrl} alt="" fill sizes="44px" unoptimized className="object-contain" />
+          <Image src={logoSrc} alt="" fill sizes="44px" unoptimized className="object-contain" />
         </span>
       ) : (
         <span className="relative grid size-11 shrink-0 place-items-center font-serif text-[2.35rem] leading-none text-[#b68a2d]">

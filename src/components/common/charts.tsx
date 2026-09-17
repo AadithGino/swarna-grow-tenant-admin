@@ -16,7 +16,7 @@ import {
   YAxis,
 } from "recharts";
 import { cn } from "@/lib/utils";
-import { money } from "@/src/lib/format";
+import { compactMoney, money } from "@/src/lib/format";
 
 export const CHART_PALETTE = [
   "#730321",
@@ -69,9 +69,13 @@ export function ChartSliceLegend({
             aria-hidden
           />
           <span className="truncate font-medium">{item.name}</span>
-          <span className="shrink-0 text-[#8a787c]">
-            {item.display ?? money(item.value)}
-          </span>
+          {(item.display ??
+            (Number.isFinite(item.value) ? money(item.value) : null)) && (
+            <span className="shrink-0 text-[#8a787c]">
+              {item.display ??
+                (Number.isFinite(item.value) ? money(item.value) : "")}
+            </span>
+          )}
         </li>
       ))}
     </ul>
@@ -94,7 +98,7 @@ export function CollectionTrendChart({ data }: { data: any[] }) {
     <ResponsiveContainer width="100%" height="100%">
       <AreaChart
         data={data}
-        margin={{ left: -10, right: 12, top: 12, bottom: 0 }}
+        margin={{ left: 4, right: 12, top: 12, bottom: 0 }}
       >
         <defs>
           <linearGradient id="cashFill" x1="0" y1="0" x2="0" y2="1">
@@ -114,10 +118,11 @@ export function CollectionTrendChart({ data }: { data: any[] }) {
           tickLine={false}
         />
         <YAxis
-          tickFormatter={(v) => `${Math.round(v / 1000)}k`}
-          tick={{ fontSize: 12, fill: "#7c7072" }}
+          tickFormatter={(v) => compactMoney(Number(v))}
+          tick={{ fontSize: 11, fill: "#7c7072" }}
           axisLine={false}
           tickLine={false}
+          width={56}
         />
         <Tooltip
           formatter={(v) => money(Number(v))}
@@ -157,34 +162,53 @@ export function DonutChart({
   data,
   centre,
   showLegend = true,
+  showSliceLabels = false,
 }: {
   data: { name: string; value: number }[];
   centre?: string;
   showLegend?: boolean;
+  /** Slice labels overlap the hole when a legend is shown — off by default. */
+  showSliceLabels?: boolean;
 }) {
+  const total = data.reduce((sum, item) => sum + item.value, 0);
+  const minPieValue = total > 0 ? total * 0.005 : 0;
+  const pieData = data.filter((item) => item.value >= minPieValue);
+  const chartData = pieData.length ? pieData : data;
+  const maxShare =
+    total > 0 ? Math.max(...chartData.map((item) => item.value)) / total : 1;
+  const usePadding =
+    chartData.length > 1 && maxShare < 0.92 && minPieValue > 0;
+
   const legendItems: ChartLegendItem[] = data.map((item, i) => ({
     name: item.name,
     value: item.value,
     display: money(item.value),
     color: CHART_PALETTE[i % CHART_PALETTE.length],
   }));
+  const colourFor = (name: string) => {
+    const index = data.findIndex((item) => item.name === name);
+    return CHART_PALETTE[(index >= 0 ? index : 0) % CHART_PALETTE.length];
+  };
+
   return (
     <div className="flex w-full flex-col">
-      <div className="relative h-[240px] w-full shrink-0">
+      <div className="relative mx-auto h-[220px] w-full max-w-[280px] shrink-0">
         <ResponsiveContainer width="100%" height="100%">
-          <PieChart margin={{ top: 8, right: 8, bottom: 8, left: 8 }}>
+          <PieChart margin={{ top: 4, right: 4, bottom: 4, left: 4 }}>
             <Pie
-              data={data}
+              data={chartData}
               dataKey="value"
               nameKey="name"
               innerRadius="58%"
-              outerRadius="82%"
-              paddingAngle={2}
-              label={pieSliceLabel}
+              outerRadius="80%"
+              paddingAngle={usePadding ? 2 : 0}
+              label={showSliceLabels ? pieSliceLabel : false}
               labelLine={false}
+              stroke="#fff"
+              strokeWidth={1}
             >
-              {data.map((_, i) => (
-                <Cell key={i} fill={CHART_PALETTE[i % CHART_PALETTE.length]} />
+              {chartData.map((item) => (
+                <Cell key={item.name} fill={colourFor(item.name)} />
               ))}
             </Pie>
             <Tooltip
@@ -197,8 +221,10 @@ export function DonutChart({
           </PieChart>
         </ResponsiveContainer>
         {centre && (
-          <div className="pointer-events-none absolute inset-0 grid place-items-center text-center">
-            <strong className="text-xl text-[#2e181d]">{centre}</strong>
+          <div className="pointer-events-none absolute inset-0 grid place-items-center px-6 text-center">
+            <p className="max-w-[9.5rem] text-sm font-bold leading-snug text-[#2e181d] sm:text-base">
+              {centre}
+            </p>
           </div>
         )}
       </div>

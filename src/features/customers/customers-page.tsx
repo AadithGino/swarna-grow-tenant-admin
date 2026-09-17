@@ -77,9 +77,10 @@ export function CustomersPage() {
     { skip: shouldSkipListSearchQuery(debouncedQ) },
   );
   const { data: branchesData } = useGetBranchesQuery({ limit: 100 });
-  const analyticsQuery = useGetCustomerAnalyticsQuery(
-    branchId ? { branchId } : undefined,
-  );
+  const analyticsQuery = useGetCustomerAnalyticsQuery({
+    branchId,
+    period: "THIS_MONTH",
+  });
   const branches = branchesData?.items ?? [];
   const [importOpen, setImportOpen] = useState(false);
   const branchCodeToId = useMemo(() => {
@@ -97,16 +98,27 @@ export function CustomersPage() {
   const analyticsSummary = analyticsQuery.data?.summary ?? [];
   const metric = (key: string) =>
     analyticsSummary.find((m) => m.key === key)?.value;
+  const analyticsTotals = analyticsQuery.data?.totals as
+    | { kyc?: { verified?: number } }
+    | undefined;
   const kycVerified =
-    typeof metric("KYC_VERIFIED") === "number"
-      ? metric("KYC_VERIFIED")
-      : data.items.filter((x) => x.kyc === "VERIFIED").length;
+    typeof analyticsTotals?.kyc?.verified === "number"
+      ? analyticsTotals.kyc.verified
+      : typeof metric("KYC_VERIFIED") === "number"
+        ? metric("KYC_VERIFIED")
+        : data.items.filter((x) => x.kyc === "VERIFIED").length;
   const activeSchemesMetric =
-    typeof metric("WITH_ACTIVE_SCHEME") === "number"
-      ? metric("WITH_ACTIVE_SCHEME")
-      : null;
+    typeof metric("CUSTOMERS_WITH_ACTIVE_SCHEME") === "number"
+      ? metric("CUSTOMERS_WITH_ACTIVE_SCHEME")
+      : typeof metric("WITH_ACTIVE_SCHEME") === "number"
+        ? metric("WITH_ACTIVE_SCHEME")
+        : null;
   const totalCustomers =
-    typeof metric("TOTAL") === "number" ? metric("TOTAL") : data.total;
+    typeof metric("TOTAL_CUSTOMERS") === "number"
+      ? metric("TOTAL_CUSTOMERS")
+      : typeof metric("TOTAL") === "number"
+        ? metric("TOTAL")
+        : data.total;
   return (
     <>
       <PageHeader

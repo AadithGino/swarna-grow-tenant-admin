@@ -72,6 +72,37 @@ function linearValueTicks(dataMax: number, segments = 4): number[] {
   return [...new Set(ticks)].sort((a, b) => a - b);
 }
 
+function rowSeriesTotal(
+  row: Record<string, string | number>,
+  seriesKeys: string[],
+): number {
+  return seriesKeys.reduce((sum, key) => sum + Number(row[key] ?? 0), 0);
+}
+
+function shouldPercentStackGroupedCurrency(
+  grouped: boolean,
+  yAxis: ChartSeriesBlock["yAxis"],
+  barRows: Record<string, string | number>[],
+): boolean {
+  return grouped && yAxis?.type === "currency" && barRows.length >= 2;
+}
+
+function buildPercentStackRows(
+  barRows: Record<string, string | number>[],
+  seriesKeys: string[],
+): Record<string, string | number>[] {
+  return barRows.map((row) => {
+    const total = rowSeriesTotal(row, seriesKeys);
+    const out: Record<string, string | number> = { x: row.x, totalAmount: total };
+    for (const key of seriesKeys) {
+      const amount = Number(row[key] ?? 0);
+      out[key] = total > 0 ? Math.round((amount / total) * 1000) / 10 : 0;
+      out[`${key}Display`] = row[`${key}Display`] ?? "";
+    }
+    return out;
+  });
+}
+
 function barValueMax(
   barRows: Record<string, string | number>[],
   seriesKeys: string[],
@@ -119,19 +150,59 @@ export function hasChartSeriesData(block?: ChartSeriesBlock | null): boolean {
   return block.series.some((s) => (s.data?.length ?? 0) > 0);
 }
 
+function chartTypeKey(chart: ChartSeriesBlock): string {
+  return (chart.chartType ?? "bar").toLowerCase();
+}
+
+/** Charts that grow with content (faceted grouped bars, etc.) must not sit in a fixed-height box. */
+export function chartUsesFlexibleHeight(chart: ChartSeriesBlock): boolean {
+  const type = chartTypeKey(chart);
+  return type.includes("groupedbar") || type.includes("grouped_bar");
+}
+
+export function chartSurfaceBodyClass(chart: ChartSeriesBlock): string {
+  const type = chartTypeKey(chart);
+  if (type.includes("donut") || type === "pie") return "min-h-[340px]";
+  if (chartUsesFlexibleHeight(chart)) return "min-h-[320px]";
+  return "h-[320px]";
+}
+
 function seriesToRows(block: ChartSeriesBlock) {
   const series = block.series ?? [];
   if (!series.length) return [];
   const map = new Map<string, Record<string, string | number>>();
   for (const s of series) {
     for (const point of s.data ?? []) {
-      const row = map.get(point.x) ?? { x: point.x };
+      const row = map.get(point.x) ?? {
+        x: point.x,
+        xDisplay: (point as { xDisplay?: string }).xDisplay ?? point.x,
+      };
       row[s.key] = point.y;
       row[`${s.key}Display`] = point.yDisplay ?? "";
       map.set(point.x, row);
     }
   }
   return [...map.values()];
+}
+
+function formatTrendAxisLabel(value: unknown, rows: Record<string, string | number>[]) {
+  const match = rows.find((row) => row.x === value);
+  const display = match?.xDisplay;
+  if (typeof display === "string" && display.trim()) return display;
+  const raw = String(value ?? "");
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+    return new Date(`${raw}T12:00:00`).toLocaleDateString("en-IN", {
+      day: "numeric",
+      month: "short",
+    });
+  }
+  if (/^\d{4}-\d{2}$/.test(raw)) {
+    return new Date(`${raw}-01T12:00:00`).toLocaleDateString("en-IN", {
+      month: "short",
+      year: "2-digit",
+    });
+  }
+  return raw;
 }
 
 export function ChartSeriesView({ chart }: { chart: ChartSeriesBlock }) {
@@ -163,24 +234,39 @@ export function ChartSeriesView({ chart }: { chart: ChartSeriesBlock }) {
     }));
     const innerRadius = type === "donut" ? "58%" : 0;
     const slices = data.filter((d) => d.value > 0);
-    const pieData = slices.length ? slices : data;
+    const total = slices.reduce((sum, d) => sum + d.value, 0);
+    const minPieValue = total > 0 ? total * 0.005 : 0;
+    const visibleSlices = slices.filter((d) => d.value >= minPieValue);
+    const pieData = visibleSlices.length ? visibleSlices : slices.length ? slices : data;
+    const maxShare =
+      total > 0 ? Math.max(...pieData.map((d) => d.value)) / total : 1;
+    const usePadding = pieData.length > 1 && maxShare < 0.92;
     return (
       <div className="flex w-full flex-col">
-        <div className="h-[248px] w-full shrink-0">
+        <div className="mx-auto h-[248px] w-full max-w-[300px] shrink-0">
           <ResponsiveContainer width="100%" height="100%">
-            <PieChart margin={{ top: 12, right: 12, bottom: 12, left: 12 }}>
+            <PieChart margin={{ top: 8, right: 8, bottom: 8, left: 8 }}>
               <Pie
                 data={pieData}
                 dataKey="value"
                 nameKey="name"
                 innerRadius={innerRadius}
                 outerRadius="76%"
-                paddingAngle={2}
-                label={pieSliceLabel}
+                paddingAngle={usePadding ? 2 : 0}
+                label={false}
                 labelLine={false}
+                stroke="#fff"
+                strokeWidth={1}
               >
-                {pieData.map((_, i) => (
-                  <Cell key={i} fill={palette[i % palette.length]} />
+                {pieData.map((d, i) => (
+                  <Cell
+                    key={d.name}
+                    fill={
+                      palette[
+                        slices.findIndex((s) => s.name === d.name) % palette.length
+                      ]
+                    }
+                  />
                 ))}
               </Pie>
               <Tooltip
@@ -199,19 +285,34 @@ export function ChartSeriesView({ chart }: { chart: ChartSeriesBlock }) {
   }
 
   if (type === "line") {
+    const denseAxis = rows.length > 14;
     return (
+      <div className="h-[280px] w-full">
       <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={rows} margin={{ left: -8, right: 12, top: 8 }}>
+        <LineChart data={rows} margin={{ left: -8, right: 12, top: 8, bottom: denseAxis ? 8 : 0 }}>
           <CartesianGrid vertical={false} stroke="#eadfda" strokeDasharray="4 4" />
-          <XAxis dataKey="x" tick={{ fontSize: 11, fill: "#7c7072" }} axisLine={false} tickLine={false} />
+          <XAxis
+            dataKey="x"
+            tick={{ fontSize: 11, fill: "#7c7072" }}
+            axisLine={false}
+            tickLine={false}
+            interval={denseAxis ? "preserveStartEnd" : 0}
+            angle={denseAxis ? -32 : 0}
+            textAnchor={denseAxis ? "end" : "middle"}
+            height={denseAxis ? 56 : 30}
+            tickFormatter={(value) => formatTrendAxisLabel(value, rows)}
+          />
           <YAxis
             tickFormatter={(v) => yFormat(yAxis, Number(v))}
             tick={{ fontSize: 11, fill: "#7c7072" }}
             axisLine={false}
             tickLine={false}
+            domain={[0, "auto"]}
+            allowDecimals={false}
           />
           <Tooltip
             formatter={(v) => yFormat(yAxis, Number(v))}
+            labelFormatter={(label) => formatTrendAxisLabel(label, rows)}
             contentStyle={{ borderRadius: 12, borderColor: "#e4d7d2" }}
           />
           {series.map((s, i) => (
@@ -222,7 +323,13 @@ export function ChartSeriesView({ chart }: { chart: ChartSeriesBlock }) {
               name={s.name}
               stroke={palette[i % palette.length]}
               strokeWidth={2.5}
-              dot={false}
+              dot={{
+                r: rows.length <= 31 ? 3.5 : 2,
+                stroke: palette[i % palette.length],
+                strokeWidth: 2,
+                fill: "#fff",
+              }}
+              activeDot={{ r: 5 }}
             />
           ))}
           <Legend
@@ -232,11 +339,13 @@ export function ChartSeriesView({ chart }: { chart: ChartSeriesBlock }) {
           />
         </LineChart>
       </ResponsiveContainer>
+      </div>
     );
   }
 
   if (type === "area") {
     return (
+      <div className="h-[280px] w-full">
       <ResponsiveContainer width="100%" height="100%">
         <AreaChart data={rows} margin={{ left: -8, right: 12, top: 8 }}>
           <CartesianGrid vertical={false} stroke="#eadfda" strokeDasharray="4 4" />
@@ -266,12 +375,15 @@ export function ChartSeriesView({ chart }: { chart: ChartSeriesBlock }) {
           />
         </AreaChart>
       </ResponsiveContainer>
+      </div>
     );
   }
 
   const horizontalExplicit =
     type === "horizontalbar" || type === "horizontal_bar";
-  const hideBarLegend = horizontalExplicit && series.length <= 1;
+  const grouped = type === "groupedbar" || type === "grouped_bar";
+  const hideBarLegend =
+    (horizontalExplicit || grouped) && series.length <= 1;
   const stacked = type === "stackedbar" || type === "stacked_bar";
   const barRows = rowsForBarChart(chart, rows);
   const seriesKeys = series.map((s) => s.key);
@@ -282,6 +394,7 @@ export function ChartSeriesView({ chart }: { chart: ChartSeriesBlock }) {
   );
   const verticalLayout =
     horizontalExplicit ||
+    grouped ||
     (stacked && categoryCount >= 4) ||
     (stacked && longestCategory > 18);
   const tiltXLabels = !verticalLayout && categoryCount >= 3;
@@ -294,10 +407,102 @@ export function ChartSeriesView({ chart }: { chart: ChartSeriesBlock }) {
     Math.max(96, Math.ceil(longestCategory * 6.2)),
   );
   const autoVerticalHeight =
-    verticalLayout && !horizontalExplicit
-      ? Math.min(480, Math.max(300, categoryCount * 48 + 120))
+    verticalLayout && (!horizontalExplicit || grouped)
+      ? Math.min(520, Math.max(grouped ? 280 : 300, categoryCount * 52 + 120))
       : null;
   const scrollMinWidth = scrollable ? categoryCount * 88 : undefined;
+  const percentStacked = shouldPercentStackGroupedCurrency(
+    grouped,
+    yAxis,
+    barRows,
+  );
+
+  if (percentStacked) {
+    const activeSeries = series.filter((s) =>
+      barRows.some((row) => Number(row[s.key] ?? 0) > 0),
+    );
+    const percentRows = buildPercentStackRows(barRows, seriesKeys);
+    const stackHeight = Math.max(280, categoryCount * 48 + 88);
+    const scrollableStack = categoryCount > 6;
+    const legendItems: ChartLegendItem[] = activeSeries
+      .map((s, i) => {
+        const total = barRows.reduce(
+          (sum, row) => sum + Number(row[s.key] ?? 0),
+          0,
+        );
+        return {
+          name: s.name,
+          value: total,
+          display: total > 0 ? money(total) : undefined,
+          color: palette[i % palette.length],
+        };
+      })
+      .filter((item) => item.value > 0);
+    const percentChart = (
+      <div className="w-full" style={{ height: stackHeight }}>
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart
+            data={percentRows}
+            layout="vertical"
+            margin={{ left: 4, right: 12, top: 8, bottom: hideBarLegend ? 12 : 8 }}
+          >
+            <CartesianGrid horizontal={false} stroke="#eee3df" />
+            <XAxis
+              type="number"
+              domain={[0, 100]}
+              ticks={[0, 25, 50, 75, 100]}
+              tickFormatter={(v) => `${v}%`}
+              tick={{ fontSize: 11, fill: "#7c7072" }}
+              axisLine={false}
+              tickLine={false}
+            />
+            <YAxis
+              dataKey="x"
+              type="category"
+              width={categoryAxisWidth}
+              tick={{ fontSize: 11, fill: "#7c7072" }}
+              tickFormatter={(v) => truncateCategoryLabel(v)}
+              axisLine={false}
+              tickLine={false}
+            />
+            <Tooltip
+              formatter={(v, name, item) => {
+                const key = String(item?.dataKey ?? "");
+                const payload = item?.payload as Record<string, unknown> | undefined;
+                const display = payload?.[`${key}Display`];
+                const pct = Number(v);
+                if (typeof display === "string" && display.trim()) {
+                  return [`${display} (${pct.toFixed(1)}%)`, String(name ?? "")];
+                }
+                return [`${pct.toFixed(1)}%`, String(name ?? "")];
+              }}
+              labelFormatter={(label) => String(label)}
+            />
+            {activeSeries.map((s, i) => (
+              <Bar
+                key={s.key}
+                dataKey={s.key}
+                name={s.name}
+                stackId="modeMix"
+                fill={palette[i % palette.length]}
+                barSize={28}
+              />
+            ))}
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+    );
+    return (
+      <div className="py-1">
+        {scrollableStack ? (
+          <div className="max-h-[480px] overflow-y-auto">{percentChart}</div>
+        ) : (
+          percentChart
+        )}
+        <ChartSliceLegend items={legendItems} />
+      </div>
+    );
+  }
 
   const barChart = (
     <ResponsiveContainer width="100%" height={autoVerticalHeight ?? "100%"}>
@@ -384,8 +589,12 @@ export function ChartSeriesView({ chart }: { chart: ChartSeriesBlock }) {
             name={s.name}
             stackId={stacked ? "stack" : undefined}
             fill={palette[i % palette.length]}
-            radius={stacked ? 0 : [6, 6, 0, 0]}
-            barSize={verticalLayout ? 28 : undefined}
+            radius={
+              stacked ? 0 : grouped ? [0, 4, 4, 0] : [6, 6, 0, 0]
+            }
+            barSize={
+              verticalLayout ? (grouped ? 10 : 28) : undefined
+            }
           />
         ))}
         {!hideBarLegend ? (

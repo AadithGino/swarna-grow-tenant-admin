@@ -121,7 +121,7 @@ export function StaffDetailPage({ staffId }: { staffId: string }) {
   const [transferBranch] = useTransferStaffBranchMutation();
 
   const [editName, setEditName] = useState("");
-  const [tempPassword, setTempPassword] = useState("Temp#9182");
+  const [tempPassword, setTempPassword] = useState("2026");
   const [transferBranchId, setTransferBranchId] = useState("");
   const [deactivateReason, setDeactivateReason] = useState("");
   const [editNameTouched, setEditNameTouched] = useState(false);
@@ -389,10 +389,14 @@ export function StaffDetailPage({ staffId }: { staffId: string }) {
                     <Input
                       type="password"
                       autoComplete="new-password"
+                      inputMode="numeric"
+                      placeholder="Min. 4 digits"
                       value={tempPassword}
                       onChange={(e) => {
                         setPasswordTouched(true);
-                        setTempPassword(e.target.value);
+                        setTempPassword(
+                          e.target.value.replace(/\D/g, "").slice(0, 128),
+                        );
                       }}
                       className={cn(tempPasswordError && "border-red-600")}
                       aria-invalid={Boolean(tempPasswordError)}

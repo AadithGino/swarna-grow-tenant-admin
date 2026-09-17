@@ -16,7 +16,10 @@ import {
   type KycUploadType,
 } from "@/src/lib/kyc-form";
 import { uploadFileViaPresign } from "@/src/lib/upload-via-presign";
-import { usePresignCustomerUploadMutation } from "@/src/store/api/customer-api";
+import {
+  useCompleteCustomerUploadMutation,
+  usePresignCustomerUploadMutation,
+} from "@/src/store/api/customer-api";
 import { toast } from "sonner";
 
 type Props = {
@@ -32,6 +35,7 @@ type Props = {
 
 export function CustomerKycSubmitForm({ onSubmit, submitting }: Props) {
   const [presignUpload] = usePresignCustomerUploadMutation();
+  const [completeUpload] = useCompleteCustomerUploadMutation();
   const [uploadType, setUploadType] = useState<KycUploadType>("AADHAAR");
   const [panNumber, setPanNumber] = useState("");
   const [frontUploadId, setFrontUploadId] = useState<string | null>(null);
@@ -57,6 +61,7 @@ export function CustomerKycSubmitForm({ onSubmit, submitting }: Props) {
         file,
         (input) => presignUpload(input).unwrap(),
         "KYC_DOCUMENT",
+        (id) => completeUpload(id).unwrap(),
       );
       if (target === "front") setFrontUploadId(uploadId);
       if (target === "back") setBackUploadId(uploadId);

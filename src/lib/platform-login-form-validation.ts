@@ -1,7 +1,13 @@
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-export const PLATFORM_LOGIN_PASSWORD_MIN = 8;
-export const PLATFORM_LOGIN_PASSWORD_MAX = 128;
+import {
+  livePasswordPinError,
+  passwordPinReady,
+  sanitizePasswordPinInput,
+  validatePasswordPin,
+} from "@/src/lib/password-validation";
+
+export { sanitizePasswordPinInput };
 
 export function validatePlatformLoginEmail(email: string): string | undefined {
   const trimmed = email.trim();
@@ -20,22 +26,16 @@ export function livePlatformLoginEmailError(email: string): string | undefined {
 export function validatePlatformLoginPassword(
   password: string,
 ): string | undefined {
-  if (!password) return "Password is required.";
-  if (password.length < PLATFORM_LOGIN_PASSWORD_MIN) {
-    return `Password must be at least ${PLATFORM_LOGIN_PASSWORD_MIN} characters.`;
-  }
-  if (password.length > PLATFORM_LOGIN_PASSWORD_MAX) {
-    return `Password must be ${PLATFORM_LOGIN_PASSWORD_MAX} characters or fewer.`;
-  }
-  return undefined;
+  return validatePasswordPin(password);
 }
 
 export function livePlatformLoginPasswordError(
   password: string,
 ): string | undefined {
-  if (!password) return undefined;
-  return validatePlatformLoginPassword(password);
+  return livePasswordPinError(password);
 }
+
+export { passwordPinReady };
 
 export function validatePlatformLoginForm(input: {
   email: string;

@@ -17,7 +17,9 @@ import {
   livePlatformLoginPasswordError,
   platformLoginFormReady,
   validatePlatformLoginForm,
+  sanitizePasswordPinInput,
 } from "@/src/lib/platform-login-form-validation";
+import { persistPlatformTokens, TOKEN_KEYS } from "@/src/lib/auth-token-storage";
 import { usePlatformLoginMutation } from "@/src/store/api/platform-api";
 
 function mergeFieldMessage(
@@ -34,7 +36,7 @@ export function PlatformLoginPage() {
     env.useMocks ? "ops@platform.com" : "",
   );
   const [password, setPassword] = useState(
-    env.useMocks ? "ChangeMeNow!123" : "",
+    env.useMocks ? "1234" : "",
   );
   const [show, setShow] = useState(false);
   const [submitError, setSubmitError] = useState<unknown>(null);
@@ -77,18 +79,8 @@ export function PlatformLoginPage() {
         email: email.trim(),
         password,
       }).unwrap();
-      localStorage.setItem(
-        "swarnagrow.platformAccessToken",
-        result.accessToken,
-      );
-      localStorage.setItem(
-        "swarnagrow.platformRefreshToken",
-        result.refreshToken,
-      );
-      localStorage.setItem(
-        "swarnagrow.platformUser",
-        JSON.stringify(result.user),
-      );
+      persistPlatformTokens(result.accessToken, result.refreshToken);
+      localStorage.setItem(TOKEN_KEYS.platform.user, JSON.stringify(result.user));
       router.push("/platform");
     } catch (e) {
       setSubmitError(e);
@@ -180,11 +172,13 @@ export function PlatformLoginPage() {
                       delete next.password;
                       return next;
                     });
-                    setPassword(e.target.value);
+                    setPassword(sanitizePasswordPinInput(e.target.value));
                   }}
                   onBlur={() => setTouched((p) => ({ ...p, password: true }))}
+                  inputMode="numeric"
+                  placeholder="Min. 4 digits"
                   className={cn(
-                    "h-12 pr-12",
+                    "h-12 pr-12 tracking-[0.35em]",
                     displayPasswordError && "border-red-600",
                   )}
                   autoComplete="current-password"

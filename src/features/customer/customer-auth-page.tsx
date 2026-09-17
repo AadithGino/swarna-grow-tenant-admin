@@ -159,7 +159,9 @@ export function CustomerLoginPage() {
   const signInWithPassword = async () => {
     if (!tenantCode) return toast.error("Open your jeweller’s customer link (e.g. /customer/your-code/login).");
     if (!/^\d{10}$/.test(mobile)) return toast.error("Enter a valid 10-digit mobile number");
-    if (password.length < 8) return toast.error("Enter your password");
+    if (!/^\d{4,128}$/.test(password)) {
+      return toast.error("Enter a password with at least 4 digits");
+    }
     try {
       const result = await loginPassword({
         tenantCode,
@@ -320,12 +322,16 @@ export function CustomerLoginPage() {
                   <Input
                     id="password"
                     type="password"
+                    inputMode="numeric"
                     value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="h-12 rounded-xl"
+                    onChange={(e) =>
+                      setPassword(e.target.value.replace(/\D/g, "").slice(0, 128))
+                    }
+                    placeholder="Min. 4 digits"
+                    className="h-12 rounded-xl tracking-[0.35em]"
                   />
                   <p className="text-xs text-muted-foreground">
-                    If your password was not set yet, use your mobile number as the default password.
+                    Use the numeric password set by your jeweller (minimum 4 digits).
                   </p>
                 </div>
                 <Button

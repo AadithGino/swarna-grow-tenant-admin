@@ -360,9 +360,9 @@ export function CustomerDetailPage({ id }: { id: string }) {
                     </Button>
                   }
                   title="Set customer password"
-                  description="Use at least 8 characters. If not set manually, customer mobile number works as default password."
+                  description="Set a numeric password for this customer (minimum 4 digits)."
                   actionLabel="Save password"
-                  submitDisabled={password.trim().length < 8}
+                  submitDisabled={!/^\d{4,128}$/.test(password.trim())}
                   onSubmit={async () => {
                     await setCustomerPassword({
                       id: customer.id,
@@ -379,9 +379,12 @@ export function CustomerDetailPage({ id }: { id: string }) {
                     <label className="text-sm font-medium">New password</label>
                     <Input
                       type="password"
+                      inputMode="numeric"
                       value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      placeholder="Minimum 8 characters"
+                      onChange={(e) =>
+                        setPassword(e.target.value.replace(/\D/g, "").slice(0, 128))
+                      }
+                      placeholder="Min. 4 digits"
                     />
                   </div>
                 </ActionDialog>

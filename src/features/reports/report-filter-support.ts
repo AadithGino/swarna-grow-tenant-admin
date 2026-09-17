@@ -33,3 +33,15 @@ export function reportSupportsBranchFilter(reportKey: AdminReportKey) {
 export function reportSupportsPlanFilter(reportKey: AdminReportKey) {
   return REPORTS_WITH_PLAN_FILTER.has(reportKey);
 }
+
+export function reportUsesBranchFocusSelector(reportKey: AdminReportKey) {
+  return reportKey === "BRANCH_PERFORMANCE";
+}
+
+export function reportUsesSchemeFocusSelector(reportKey: AdminReportKey) {
+  return reportKey === "SCHEME_PERFORMANCE";
+}
+
+export function reportUsesCustomerFocusSelector(reportKey: AdminReportKey) {
+  return reportKey === "CUSTOMER_PERFORMANCE";
+}

@@ -2648,58 +2648,163 @@ export async function mockRequest<T>({
           : { available: true },
       } as T;
     }
-    case "customerAnalytics":
+    case "customerAnalytics": {
+      const from = String(params.from ?? "2026-09-01");
+      const to = String(params.to ?? "2026-09-07");
+      const trendDays = [
+        { x: "2026-09-01", xDisplay: "1 Sep", y: 2, yDisplay: "2" },
+        { x: "2026-09-02", xDisplay: "2 Sep", y: 1, yDisplay: "1" },
+        { x: "2026-09-03", xDisplay: "3 Sep", y: 0, yDisplay: "0" },
+        { x: "2026-09-04", xDisplay: "4 Sep", y: 3, yDisplay: "3" },
+        { x: "2026-09-05", xDisplay: "5 Sep", y: 1, yDisplay: "1" },
+        { x: "2026-09-06", xDisplay: "6 Sep", y: 2, yDisplay: "2" },
+        { x: "2026-09-07", xDisplay: "7 Sep", y: 1, yDisplay: "1" },
+      ].filter((point) => point.x >= from && point.x <= to);
       return {
         __contract: true,
         payload: {
+          scope: { level: "TENANT", label: "All showrooms" },
+          period: {
+            from,
+            to,
+            label: `${from} – ${to}`,
+            comparedTo: { from: "2026-08-25", to: "2026-08-31", label: "25–31 Aug 2026" },
+            groupBy: "DAY",
+          },
           summary: [
-            {
-              key: "TOTAL",
-              label: "Total customers",
-              value: 846,
-              valueType: "count",
-            },
-            {
-              key: "WITH_DEVICE",
-              label: "Customers with a registered device",
-              value: 401,
-              valueType: "count",
-            },
+            { key: "TOTAL_CUSTOMERS", label: "Total customers", value: 846, valueType: "count", note: "Current snapshot" },
+            { key: "ACTIVE_CUSTOMERS", label: "Active customers", value: 812, valueType: "count", note: "Current snapshot" },
+            { key: "NEW_CUSTOMERS", label: "New customers", value: 10, valueType: "count", change: { percent: 11.1, direction: "up", isGood: true } },
+            { key: "CUSTOMERS_WITH_ACTIVE_SCHEME", label: "With active scheme", value: 655, valueType: "count", note: "Current snapshot" },
+            { key: "KYC_PENDING", label: "KYC pending", value: 82, valueType: "count", note: "Current snapshot" },
+            { key: "WHATSAPP_OPTED_IN", label: "WhatsApp opted in", value: 780, valueType: "count", note: "Current snapshot" },
           ],
           charts: {
             registrationTrend: {
               chartType: "line",
-              title: "Registrations",
-              yAxis: { type: "count" },
-              series: [
-                {
-                  key: "REG",
-                  name: "Customers",
-                  data: [
-                    { x: "Aug", y: 4200 },
-                    { x: "Sep", y: 4800 },
-                  ],
-                },
-              ],
+              title: "New customers",
+              subtitle: "Customers registered during the selected period",
+              yAxis: { type: "count", label: "Customers" },
+              series: [{ key: "NEW_CUSTOMERS", name: "New customers", data: trendDays }],
             },
             customerStatusDistribution: {
               chartType: "donut",
-              title: "Status",
-              yAxis: { type: "count" },
-              series: [
-                {
-                  key: "S",
-                  name: "Status",
-                  data: [
-                    { x: "Active", y: 61200 },
-                    { x: "Inactive", y: 23400 },
-                  ],
-                },
-              ],
+              title: "Customer status",
+              yAxis: { type: "count", label: "Customers" },
+              series: [{
+                key: "STATUS",
+                name: "Customers",
+                data: [
+                  { x: "Active", y: 812, yDisplay: "812" },
+                  { x: "Inactive", y: 28, yDisplay: "28" },
+                  { x: "Blocked", y: 6, yDisplay: "6" },
+                ],
+              }],
+            },
+            kycDistribution: {
+              chartType: "donut",
+              title: "KYC status",
+              yAxis: { type: "count", label: "Customers" },
+              series: [{
+                key: "KYC",
+                name: "Customers",
+                data: [
+                  { x: "Verified", y: 720, yDisplay: "720" },
+                  { x: "Submitted", y: 20, yDisplay: "20" },
+                  { x: "Not submitted", y: 62, yDisplay: "62" },
+                  { x: "Rejected", y: 44, yDisplay: "44" },
+                ],
+              }],
             },
           },
         },
       } as T;
+    }
+    case "enrollmentAnalytics": {
+      const from = String(params.from ?? "2026-09-01");
+      const to = String(params.to ?? "2026-09-07");
+      const trendDays = [
+        { x: "2026-09-01", xDisplay: "1 Sep", y: 1, yDisplay: "1" },
+        { x: "2026-09-02", xDisplay: "2 Sep", y: 3, yDisplay: "3" },
+        { x: "2026-09-03", xDisplay: "3 Sep", y: 0, yDisplay: "0" },
+        { x: "2026-09-04", xDisplay: "4 Sep", y: 2, yDisplay: "2" },
+        { x: "2026-09-05", xDisplay: "5 Sep", y: 1, yDisplay: "1" },
+        { x: "2026-09-06", xDisplay: "6 Sep", y: 2, yDisplay: "2" },
+        { x: "2026-09-07", xDisplay: "7 Sep", y: 0, yDisplay: "0" },
+      ].filter((point) => point.x >= from && point.x <= to);
+      return {
+        __contract: true,
+        payload: {
+          scope: { level: "TENANT", label: "All showrooms" },
+          period: {
+            from,
+            to,
+            label: `${from} – ${to}`,
+            comparedTo: { from: "2026-08-25", to: "2026-08-31", label: "25–31 Aug 2026" },
+            groupBy: "DAY",
+          },
+          summary: [
+            { key: "TOTAL_ENROLLMENTS", label: "Total enrollments", value: 412, valueType: "count", note: "Current snapshot" },
+            { key: "ACTIVE_ENROLLMENTS", label: "Active enrollments", value: 318, valueType: "count", note: "Current snapshot" },
+            { key: "NEW_ENROLLMENTS", label: "New enrollments", value: 9, valueType: "count", change: { percent: 12.5, direction: "up", isGood: true } },
+            { key: "DEFAULTED", label: "Defaulted", value: 14, valueType: "count", note: "Current snapshot" },
+            { key: "MATURED", label: "Matured", value: 52, valueType: "count", note: "Current snapshot" },
+            { key: "TOTAL_COMMITTED", label: "Total committed", value: { amountPaise: 248500000, amountDisplay: "₹24,85,000" }, valueType: "currency", note: "Current snapshot" },
+          ],
+          charts: {
+            enrollmentTrend: {
+              chartType: "line",
+              title: "New enrollments",
+              subtitle: "Enrollments created during the selected period",
+              yAxis: { type: "count", label: "Enrollments" },
+              series: [{ key: "NEW_ENROLLMENTS", name: "New enrollments", data: trendDays }],
+            },
+            schemeStatusDistribution: {
+              chartType: "donut",
+              title: "Enrollment status",
+              yAxis: { type: "count", label: "Enrollments" },
+              series: [{
+                key: "STATUS",
+                name: "Enrollments",
+                data: [
+                  { x: "Active", y: 280, yDisplay: "280" },
+                  { x: "Locked / capped", y: 38, yDisplay: "38" },
+                  { x: "Matured", y: 52, yDisplay: "52" },
+                  { x: "Defaulted", y: 14, yDisplay: "14" },
+                ],
+              }],
+            },
+            paymentPatternDistribution: {
+              chartType: "donut",
+              title: "Payment pattern",
+              yAxis: { type: "count", label: "Enrollments" },
+              series: [{
+                key: "PATTERN",
+                name: "Enrollments",
+                data: [
+                  { x: "Fixed", y: 340, yDisplay: "340" },
+                  { x: "Flexible", y: 72, yDisplay: "72" },
+                ],
+              }],
+            },
+            enrollmentsByPlan: {
+              chartType: "horizontalBar",
+              title: "Enrollments by plan",
+              yAxis: { type: "count", label: "Enrollments" },
+              series: [{
+                key: "PLAN",
+                name: "Enrollments",
+                data: [
+                  { x: "Akshaya 12 Month", y: 120, yDisplay: "120" },
+                  { x: "11+1 Gold weight", y: 86, yDisplay: "86" },
+                  { x: "Sampoorna Flex 11", y: 64, yDisplay: "64" },
+                ],
+              }],
+            },
+          },
+        },
+      } as T;
+    }
     case "redemptions": {
       const openOnly =
         params.open === true || params.open === "true" || params.open === "1";
@@ -3340,6 +3445,26 @@ export async function mockRequest<T>({
           method: "PUT",
           headers: { "Content-Type": String(body.contentType ?? "image/jpeg") },
           expiresAt: "2026-09-14T10:15:00+05:30",
+        },
+      } as T;
+    case "completeUpload":
+      return {
+        __contract: true,
+        payload: {
+          uploadId: String(params.uploadId ?? "upl_mock"),
+          status: "UPLOADED",
+          viewUrl: `/uploads/${String(params.uploadId ?? "upl_mock")}`,
+        },
+      } as T;
+    case "getUploadDownload":
+      return {
+        __contract: true,
+        payload: {
+          uploadId: String(params.uploadId ?? "upl_mock"),
+          status: "UPLOADED",
+          fileName: "document.jpg",
+          contentType: "image/jpeg",
+          downloadUrl: "https://picsum.photos/seed/swarnagrow-admin-upload/1200/800",
         },
       } as T;
     case "globalSearch": {

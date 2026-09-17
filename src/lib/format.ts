@@ -4,6 +4,15 @@ export const money = (value: number) =>
     currency: "INR",
     maximumFractionDigits: 0,
   }).format(value);
+
+/** Compact rupee labels for chart axes (values already in rupees). */
+export const compactMoney = (value: number) => {
+  const abs = Math.abs(value);
+  if (abs >= 1e7) return `₹${(value / 1e7).toFixed(abs >= 1e8 ? 0 : 1)}Cr`;
+  if (abs >= 1e5) return `₹${(value / 1e5).toFixed(abs >= 1e6 ? 0 : 1)}L`;
+  if (abs >= 1e3) return `₹${Math.round(value / 1e3)}k`;
+  return money(value);
+};
 export const number = (value: number) =>
   new Intl.NumberFormat("en-IN").format(value);
 export const grams = (value: number) => `${value.toFixed(3)} g`;

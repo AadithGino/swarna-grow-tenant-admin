@@ -82,6 +82,7 @@ import {
   adaptCustomerResourceList,
   adaptPortalAlerts,
   adaptCustomerAnalytics,
+  adaptEnrollmentAnalytics,
   adaptAuditEvents,
   adaptRedemptionDetail,
   adaptRedemptionRecord,
@@ -139,15 +140,25 @@ type ApiRootState = {
 };
 
 function injectActingBranch(args: ApiArgs, getState: () => unknown): ApiArgs {
+  const url = String(args.url ?? "");
+  const params = {
+    ...((args.params as Record<string, unknown> | undefined) ?? {}),
+  };
+
+  // Reports declare branch scope explicitly; never inherit the global showroom picker.
+  if (url.includes("/admin/reports/")) {
+    if (params.branchId == null || String(params.branchId).trim() === "") {
+      params.branchId = "ALL";
+    }
+    return { ...args, params };
+  }
+
   const state = getState() as ApiRootState;
   const branch = state.ui?.branchId;
   if (!branch || branch === "ALL") return args;
   const method = (args.method ?? "GET").toUpperCase();
   if (method !== "GET") return args;
 
-  const params = {
-    ...((args.params as Record<string, unknown> | undefined) ?? {}),
-  };
   if (params.branchId != null && String(params.branchId).trim() !== "") {
     return args;
   }
@@ -170,6 +181,7 @@ function mapReportKeyToExportType(reportKey: string): string {
     STAFF_PERFORMANCE: "STAFF_PERFORMANCE",
     SCHEME_REGISTER: "SCHEME",
     CUSTOMER_LEDGER: "CUSTOMER",
+    CUSTOMER_PERFORMANCE: "CUSTOMER",
     MATURITY_REDEMPTION: "MATURITY",
     ENROLMENT: "SCHEME",
     DUE: "DUE",
@@ -387,9 +399,17 @@ const appBaseQuery = (async (args, api, extraOptions) => {
   return unwrapContractEnvelope(result);
 }) as BaseQueryFn<ApiArgs, unknown, FetchBaseQueryError, AppBaseQueryExtra>;
 
+/** Stale-while-revalidate tiers (seconds) — jewellery counter ops. */
+const STALE_TIER_A = 30;
+const STALE_TIER_B = 60;
+const STALE_TIER_C = 120;
+const STALE_TIER_D = 300;
+
 export const adminApi = createApi({
   reducerPath: "adminApi",
   baseQuery: appBaseQuery,
+  /** Tier B default — lists & detail. Tier A/C/D endpoints override below. */
+  refetchOnMountOrArgChange: STALE_TIER_B,
   tagTypes: [
     "Dashboard",
     "Alert",
@@ -404,6 +424,7 @@ export const adminApi = createApi({
     "Grievance",
     "Settings",
     "Export",
+    "Report",
   ],
   endpoints: (builder) => ({
     login: builder.mutation<
@@ -465,6 +486,7 @@ export const adminApi = createApi({
       }),
       transformResponse: (raw) =>
         contractPayload(raw) as Record<string, unknown>,
+      refetchOnMountOrArgChange: STALE_TIER_D,
     }),
     refreshToken: builder.mutation<
       {
@@ -594,6 +616,7 @@ export const adminApi = createApi({
         const payload = contractPayload(raw);
         return Array.isArray(payload) ? payload : [];
       },
+      refetchOnMountOrArgChange: STALE_TIER_D,
     }),
     revokeDevice: builder.mutation<{ revoked: boolean }, string>({
       query: (deviceId) => ({
@@ -711,6 +734,8 @@ export const adminApi = createApi({
         };
       },
       providesTags: ["Dashboard"],
+      refetchOnMountOrArgChange: STALE_TIER_A,
+      refetchOnFocus: true,
     }),
     getAlerts: builder.query<
       PortalAlert[],
@@ -1070,6 +1095,24 @@ export const adminApi = createApi({
       transformResponse: adaptEnrollments,
       providesTags: ["Enrollment"],
     }),
+    getEnrollmentAnalytics: builder.query<
+      ReturnType<typeof adaptEnrollmentAnalytics>,
+      | {
+          branchId?: string;
+          period?: string;
+          from?: string;
+          to?: string;
+          groupBy?: string;
+        }
+      | void
+    >({
+      query: (params) => ({
+        url: "/admin/schemes/analytics",
+        params: params ?? { period: "THIS_MONTH" },
+        mockKey: "enrollmentAnalytics",
+      }),
+      transformResponse: adaptEnrollmentAnalytics,
+    }),
     getEnrollment: builder.query<Enrollment, string>({
       query: (id) => ({
         url: `/admin/schemes/${id}`,
@@ -1133,6 +1176,7 @@ export const adminApi = createApi({
       invalidatesTags: (_r, _e, schemeId) => [
         { type: "Enrollment", id: schemeId },
         "Enrollment",
+        "Report",
       ],
     }),
     applyFlexibleLock: builder.mutation<unknown, string>({
@@ -1145,6 +1189,7 @@ export const adminApi = createApi({
       invalidatesTags: (_r, _e, schemeId) => [
         { type: "Enrollment", id: schemeId },
         "Enrollment",
+        "Report",
       ],
     }),
     getPayableRange: builder.query<
@@ -1207,6 +1252,7 @@ export const adminApi = createApi({
         { type: "Enrollment", id: schemeId },
         "Enrollment",
         "Dashboard",
+        "Report",
       ],
     }),
     closePrematureEnrollment: builder.mutation<
@@ -1253,6 +1299,7 @@ export const adminApi = createApi({
         { type: "Enrollment", id: schemeId },
         "Enrollment",
         "Dashboard",
+        "Report",
       ],
     }),
     validateEnrolment: builder.mutation<
@@ -1319,7 +1366,7 @@ export const adminApi = createApi({
         mockKey: "createEnrollment",
       }),
       transformResponse: adaptEnrollment,
-      invalidatesTags: ["Enrollment", "Customer", "Dashboard"],
+      invalidatesTags: ["Enrollment", "Customer", "Dashboard", "Report"],
     }),
     recordPayment: builder.mutation<
       Payment,
@@ -1356,7 +1403,7 @@ export const adminApi = createApi({
         const item = contractPayload<any>(raw) ?? raw;
         return adaptPaymentList(Array.isArray(item) ? item : [item])[0];
       },
-      invalidatesTags: ["Payment", "Enrollment", "Customer", "Dashboard"],
+      invalidatesTags: ["Payment", "Enrollment", "Customer", "Dashboard", "Report"],
     }),
     getDues: builder.query<
       ReturnType<typeof adaptDueList>,
@@ -1366,6 +1413,7 @@ export const adminApi = createApi({
       query: (params) => ({ url: "/admin/dues", params, mockKey: "dues" }),
       transformResponse: adaptDueList,
       providesTags: ["Enrollment"],
+      refetchOnMountOrArgChange: STALE_TIER_A,
     }),
     getPayments: builder.query<
       ReturnType<typeof adaptPayments>,
@@ -1424,6 +1472,7 @@ export const adminApi = createApi({
       }),
       transformResponse: adaptListBundle,
       providesTags: ["Payment"],
+      refetchOnMountOrArgChange: STALE_TIER_A,
     }),
     getLateSuccessPayments: builder.query<
       ReturnType<typeof adaptListBundle>,
@@ -1436,6 +1485,7 @@ export const adminApi = createApi({
       }),
       transformResponse: adaptListBundle,
       providesTags: ["Payment"],
+      refetchOnMountOrArgChange: STALE_TIER_A,
     }),
     reversePayment: builder.mutation<
       unknown,
@@ -1448,7 +1498,7 @@ export const adminApi = createApi({
         body,
         mockKey: "reversePayment",
       }),
-      invalidatesTags: ["Payment", "Enrollment", "Cash", "Dashboard"],
+      invalidatesTags: ["Payment", "Enrollment", "Cash", "Dashboard", "Report"],
     }),
     pollPaymentStatus: builder.mutation<
       { paymentId: string; queued: boolean },
@@ -1471,7 +1521,7 @@ export const adminApi = createApi({
         params: { paymentId },
         mockKey: "reconcilePayment",
       }),
-      invalidatesTags: ["Payment", "Enrollment", "Dashboard"],
+      invalidatesTags: ["Payment", "Enrollment", "Dashboard", "Report"],
     }),
     sharePaymentWhatsapp: builder.mutation<{ queued: boolean }, string>({
       query: (paymentId) => ({
@@ -1651,6 +1701,7 @@ export const adminApi = createApi({
       }),
       transformResponse: adaptCashOverview,
       providesTags: ["Cash"],
+      refetchOnMountOrArgChange: STALE_TIER_A,
     }),
     getCashStaffBalances: builder.query<
       ReturnType<typeof adaptCashStaffBalances>,
@@ -1663,6 +1714,7 @@ export const adminApi = createApi({
       }),
       transformResponse: adaptCashStaffBalances,
       providesTags: ["Cash"],
+      refetchOnMountOrArgChange: STALE_TIER_A,
     }),
     getCashHandovers: builder.query<
       ReturnType<typeof adaptCashHandovers>,
@@ -1675,6 +1727,7 @@ export const adminApi = createApi({
       }),
       transformResponse: adaptCashHandovers,
       providesTags: ["Cash"],
+      refetchOnMountOrArgChange: STALE_TIER_A,
     }),
     getCashReport: builder.query<
       ReturnType<typeof adaptCashReport>,
@@ -1688,6 +1741,7 @@ export const adminApi = createApi({
       }),
       transformResponse: adaptCashReport,
       providesTags: ["Cash"],
+      refetchOnMountOrArgChange: STALE_TIER_A,
     }),
     acceptHandover: builder.mutation<
       CashHandover,
@@ -1708,7 +1762,7 @@ export const adminApi = createApi({
         },
         mockKey: "acceptHandover",
       }),
-      invalidatesTags: ["Cash"],
+      invalidatesTags: ["Cash", "Dashboard", "Report"],
     }),
     rejectHandover: builder.mutation<
       CashHandover,
@@ -1721,7 +1775,7 @@ export const adminApi = createApi({
         body,
         mockKey: "rejectHandover",
       }),
-      invalidatesTags: ["Cash"],
+      invalidatesTags: ["Cash", "Dashboard", "Report"],
     }),
     resolveHandoverDiscrepancy: builder.mutation<
       CashHandover,
@@ -1745,7 +1799,7 @@ export const adminApi = createApi({
         },
         mockKey: "resolveHandoverDiscrepancy",
       }),
-      invalidatesTags: ["Cash"],
+      invalidatesTags: ["Cash", "Dashboard", "Report"],
     }),
     /** @deprecated use acceptHandover / rejectHandover */
     updateHandover: builder.mutation<
@@ -1762,7 +1816,7 @@ export const adminApi = createApi({
         body: { status },
         mockKey: status === "REJECTED" ? "rejectHandover" : "acceptHandover",
       }),
-      invalidatesTags: ["Cash"],
+      invalidatesTags: ["Cash", "Dashboard", "Report"],
     }),
     createAdminHandover: builder.mutation<
       CashHandover,
@@ -1838,7 +1892,7 @@ export const adminApi = createApi({
           } as CashHandover,
         };
       },
-      invalidatesTags: ["Cash"],
+      invalidatesTags: ["Cash", "Dashboard", "Report"],
     }),
     createCashAdjustment: builder.mutation<
       Record<string, unknown>,
@@ -1857,7 +1911,7 @@ export const adminApi = createApi({
       }),
       transformResponse: (raw) =>
         contractPayload(raw) as Record<string, unknown>,
-      invalidatesTags: ["Cash"],
+      invalidatesTags: ["Cash", "Dashboard", "Report"],
     }),
     getHandover: builder.query<CashHandoverDetail, string>({
       query: (id) => ({
@@ -1921,6 +1975,7 @@ export const adminApi = createApi({
         };
       },
       providesTags: ["GoldRate"],
+      refetchOnMountOrArgChange: STALE_TIER_D,
     }),
     getGoldRates: builder.query<
       ReturnType<typeof adaptGoldHistory>,
@@ -1933,6 +1988,7 @@ export const adminApi = createApi({
       }),
       transformResponse: adaptGoldHistory,
       providesTags: ["GoldRate"],
+      refetchOnMountOrArgChange: STALE_TIER_D,
     }),
     addGoldRate: builder.mutation<
       GoldRate,
@@ -1995,6 +2051,8 @@ export const adminApi = createApi({
         mockKey: "reports",
       }),
       transformResponse: adaptAdminReport,
+      providesTags: ["Report"],
+      refetchOnMountOrArgChange: STALE_TIER_C,
     }),
     getPlans: builder.query<
       ReturnType<typeof adaptPlans>,
@@ -2015,6 +2073,7 @@ export const adminApi = createApi({
       }),
       transformResponse: adaptPlans,
       providesTags: ["Plan"],
+      refetchOnMountOrArgChange: STALE_TIER_D,
     }),
     createPlan: builder.mutation<
       SchemePlan,
@@ -2036,6 +2095,7 @@ export const adminApi = createApi({
       }),
       transformResponse: adaptPlanDetail,
       providesTags: (_r, _e, planId) => [{ type: "Plan", id: planId }],
+      refetchOnMountOrArgChange: STALE_TIER_D,
     }),
     getPlanStats: builder.query<Record<string, unknown>, string>({
       query: (planId) => ({
@@ -2045,6 +2105,7 @@ export const adminApi = createApi({
       }),
       transformResponse: adaptPlanStats,
       providesTags: (_r, _e, planId) => [{ type: "Plan", id: planId }],
+      refetchOnMountOrArgChange: STALE_TIER_D,
     }),
     patchPlan: builder.mutation<
       SchemePlan,
@@ -2111,6 +2172,7 @@ export const adminApi = createApi({
       }),
       transformResponse: adaptSettingsBranding,
       providesTags: ["Settings"],
+      refetchOnMountOrArgChange: STALE_TIER_D,
     }),
     getSettingsProfile: builder.query<Record<string, any>, void>({
       query: () => ({
@@ -2119,6 +2181,7 @@ export const adminApi = createApi({
       }),
       transformResponse: adaptSettingsProfile,
       providesTags: ["Settings"],
+      refetchOnMountOrArgChange: STALE_TIER_D,
     }),
     getSettingsOperations: builder.query<Record<string, any>, void>({
       query: () => ({
@@ -2127,6 +2190,7 @@ export const adminApi = createApi({
       }),
       transformResponse: adaptSettingsOperations,
       providesTags: ["Settings"],
+      refetchOnMountOrArgChange: STALE_TIER_D,
     }),
     getSubscription: builder.query<Record<string, any>, void>({
       query: () => ({
@@ -2135,6 +2199,7 @@ export const adminApi = createApi({
       }),
       transformResponse: adaptSubscription,
       providesTags: ["Settings"],
+      refetchOnMountOrArgChange: STALE_TIER_D,
     }),
     getAvailablePlans: builder.query<Record<string, any>[], void>({
       query: () => ({
@@ -2146,6 +2211,7 @@ export const adminApi = createApi({
         return Array.isArray(payload) ? payload : [];
       },
       providesTags: ["Settings"],
+      refetchOnMountOrArgChange: STALE_TIER_D,
     }),
     getSubscriptionInvoices: builder.query<Record<string, any>[], void>({
       query: () => ({
@@ -2154,6 +2220,7 @@ export const adminApi = createApi({
       }),
       transformResponse: adaptSubscriptionInvoices,
       providesTags: ["Settings"],
+      refetchOnMountOrArgChange: STALE_TIER_D,
     }),
     downloadSubscriptionInvoice: builder.query<
       { blobUrl: string; filename: string },
@@ -2229,6 +2296,7 @@ export const adminApi = createApi({
           suspended: number;
           planName?: string;
         },
+      refetchOnMountOrArgChange: STALE_TIER_D,
     }),
     getAccess: builder.query<{ summary: Record<string, number> }, void>({
       query: () => ({ url: "/admin/staff", mockKey: "access" }),
@@ -2266,6 +2334,7 @@ export const adminApi = createApi({
         };
       },
       providesTags: ["Access"],
+      refetchOnMountOrArgChange: STALE_TIER_D,
     }),
     getStaff: builder.query<
       ReturnType<typeof adaptStaffList>,
@@ -2278,6 +2347,7 @@ export const adminApi = createApi({
       }),
       transformResponse: adaptStaffList,
       providesTags: ["Access"],
+      refetchOnMountOrArgChange: STALE_TIER_D,
     }),
     getBranches: builder.query<
       ReturnType<typeof adaptBranchList>,
@@ -2290,6 +2360,7 @@ export const adminApi = createApi({
       }),
       transformResponse: adaptBranchList,
       providesTags: ["Access"],
+      refetchOnMountOrArgChange: STALE_TIER_D,
     }),
     createStaff: builder.mutation<
       unknown,
@@ -2373,6 +2444,7 @@ export const adminApi = createApi({
       providesTags: (_r, _e, staffId) => [
         { type: "Access", id: `staff-${staffId}` },
       ],
+      refetchOnMountOrArgChange: STALE_TIER_D,
     }),
     getStaffPerformanceSummary: builder.query<
       {
@@ -2391,6 +2463,8 @@ export const adminApi = createApi({
       }),
       transformResponse: (raw) =>
         contractPayload(raw) as Record<string, unknown>,
+      providesTags: ["Report"],
+      refetchOnMountOrArgChange: STALE_TIER_C,
     }),
     getStaffPerformanceSection: builder.query<
       ReturnType<typeof adaptPaginatedList>,
@@ -2408,6 +2482,8 @@ export const adminApi = createApi({
         params: { from, to, cursor, limit },
       }),
       transformResponse: adaptPaginatedList,
+      providesTags: ["Report"],
+      refetchOnMountOrArgChange: STALE_TIER_C,
     }),
     patchStaff: builder.mutation<
       Record<string, unknown>,
@@ -2501,6 +2577,7 @@ export const adminApi = createApi({
       providesTags: (_r, _e, branchId) => [
         { type: "Access", id: `branch-${branchId}` },
       ],
+      refetchOnMountOrArgChange: STALE_TIER_D,
     }),
     getBranchPerformanceSummary: builder.query<
       {
@@ -2519,6 +2596,8 @@ export const adminApi = createApi({
       }),
       transformResponse: (raw) =>
         contractPayload(raw) as Record<string, unknown>,
+      providesTags: ["Report"],
+      refetchOnMountOrArgChange: STALE_TIER_C,
     }),
     getBranchPerformanceSection: builder.query<
       ReturnType<typeof adaptPaginatedList>,
@@ -2536,6 +2615,8 @@ export const adminApi = createApi({
         params: { from, to, cursor, limit },
       }),
       transformResponse: adaptPaginatedList,
+      providesTags: ["Report"],
+      refetchOnMountOrArgChange: STALE_TIER_C,
     }),
     patchBranch: builder.mutation<
       Record<string, unknown>,
@@ -2701,6 +2782,7 @@ export const adminApi = createApi({
       }),
       transformResponse: (raw) => contractPayload(raw) as any,
       providesTags: ["Message"],
+      refetchOnMountOrArgChange: STALE_TIER_D,
     }),
     updateRemindersConfig: builder.mutation<any, Record<string, unknown>>({
       query: (body) => ({
@@ -2722,6 +2804,7 @@ export const adminApi = createApi({
         meta: contractMeta(raw),
       }),
       providesTags: ["Message"],
+      refetchOnMountOrArgChange: STALE_TIER_D,
     }),
     getMessagingTemplatePreview: builder.query<any, string>({
       query: (messageType) => ({
@@ -2730,6 +2813,7 @@ export const adminApi = createApi({
         mockKey: "messagingTemplatePreview",
       }),
       transformResponse: (raw) => contractPayload(raw) as any,
+      refetchOnMountOrArgChange: STALE_TIER_D,
     }),
     getMessagingSummary: builder.query<
       any,
@@ -2775,6 +2859,7 @@ export const adminApi = createApi({
         };
       },
       providesTags: ["Message"],
+      refetchOnMountOrArgChange: STALE_TIER_D,
     }),
     patchSettingsProfile: builder.mutation<any, Record<string, unknown>>({
       query: (body) => ({
@@ -2864,7 +2949,7 @@ export const adminApi = createApi({
         mockKey: "createPaymentLink",
       }),
       transformResponse: (raw) => contractPayload(raw) as any,
-      invalidatesTags: ["Payment", "Enrollment"],
+      invalidatesTags: ["Payment", "Enrollment", "Report"],
     }),
     getOverdues: builder.query<
       ReturnType<typeof adaptDueList>,
@@ -2877,6 +2962,7 @@ export const adminApi = createApi({
       }),
       transformResponse: adaptDueList,
       providesTags: ["Enrollment"],
+      refetchOnMountOrArgChange: STALE_TIER_A,
     }),
     bulkSendOverdueReminders: builder.mutation<
       {
@@ -2964,11 +3050,18 @@ export const adminApi = createApi({
     }),
     getCustomerAnalytics: builder.query<
       ReturnType<typeof adaptCustomerAnalytics>,
-      { branchId?: string } | void
+      | {
+          branchId?: string;
+          period?: string;
+          from?: string;
+          to?: string;
+          groupBy?: string;
+        }
+      | void
     >({
       query: (params) => ({
         url: "/admin/customers/analytics",
-        params: params ?? {},
+        params: params ?? { period: "THIS_MONTH" },
         mockKey: "customerAnalytics",
       }),
       transformResponse: adaptCustomerAnalytics,
@@ -3003,7 +3096,7 @@ export const adminApi = createApi({
         body,
         mockKey: "approveRedemption",
       }),
-      invalidatesTags: ["Enrollment"],
+      invalidatesTags: ["Enrollment", "Dashboard", "Report"],
     }),
     completeRedemption: builder.mutation<
       unknown,
@@ -3016,7 +3109,7 @@ export const adminApi = createApi({
         body,
         mockKey: "completeRedemption",
       }),
-      invalidatesTags: ["Enrollment"],
+      invalidatesTags: ["Enrollment", "Dashboard", "Report"],
     }),
     getRedemption: builder.query<RedemptionDetailView, string>({
       query: (id) => ({
@@ -3038,7 +3131,7 @@ export const adminApi = createApi({
         body,
         mockKey: "rejectRedemption",
       }),
-      invalidatesTags: ["Enrollment"],
+      invalidatesTags: ["Enrollment", "Dashboard", "Report"],
     }),
     getRedemptionReceipt: builder.query<Record<string, unknown>, string>({
       query: (id) => ({
@@ -3138,6 +3231,7 @@ export const adminApi = createApi({
       }),
       transformResponse: (raw) => contractPayload(raw) as any,
       providesTags: ["Settings"],
+      refetchOnMountOrArgChange: STALE_TIER_D,
     }),
     getMessagingMessage: builder.query<Record<string, unknown>, string>({
       query: (messageId) => ({
@@ -3173,6 +3267,7 @@ export const adminApi = createApi({
       }),
       transformResponse: adaptListBundle,
       providesTags: ["Message"],
+      refetchOnMountOrArgChange: STALE_TIER_D,
     }),
     getMessagingQuota: builder.query<
       { used: number; limit: number | null },
@@ -3185,6 +3280,7 @@ export const adminApi = createApi({
       transformResponse: (raw) =>
         contractPayload(raw) as { used: number; limit: number | null },
       providesTags: ["Message"],
+      refetchOnMountOrArgChange: STALE_TIER_D,
     }),
     getMessagingDeadLetter: builder.query<
       ReturnType<typeof adaptListBundle>,
@@ -3197,6 +3293,7 @@ export const adminApi = createApi({
       }),
       transformResponse: adaptListBundle,
       providesTags: ["Message"],
+      refetchOnMountOrArgChange: STALE_TIER_D,
     }),
     requeueDeadLetter: builder.mutation<
       { id: string; queued: boolean },
@@ -3223,6 +3320,7 @@ export const adminApi = createApi({
       }),
       transformResponse: adaptListBundle,
       providesTags: ["Message"],
+      refetchOnMountOrArgChange: STALE_TIER_D,
     }),
     getDashboardActivity: builder.query<
       ReturnType<typeof adaptListBundle>,
@@ -3235,6 +3333,7 @@ export const adminApi = createApi({
       }),
       transformResponse: adaptListBundle,
       providesTags: ["Dashboard"],
+      refetchOnMountOrArgChange: STALE_TIER_A,
     }),
     getCollectionsSummary: builder.query<
       Record<string, unknown>,
@@ -3248,6 +3347,8 @@ export const adminApi = createApi({
       transformResponse: (raw) =>
         contractPayload(raw) as Record<string, unknown>,
       providesTags: ["Dashboard"],
+      refetchOnMountOrArgChange: STALE_TIER_A,
+      refetchOnFocus: true,
     }),
     getSubscriptionUsage: builder.query<Record<string, unknown>, void>({
       query: () => ({
@@ -3257,6 +3358,7 @@ export const adminApi = createApi({
       transformResponse: (raw) =>
         contractPayload(raw) as Record<string, unknown>,
       providesTags: ["Settings"],
+      refetchOnMountOrArgChange: STALE_TIER_D,
     }),
     getDefaulters: builder.query<
       ReturnType<typeof adaptListBundle>,
@@ -3269,6 +3371,7 @@ export const adminApi = createApi({
       }),
       transformResponse: adaptListBundle,
       providesTags: ["Enrollment"],
+      refetchOnMountOrArgChange: STALE_TIER_A,
     }),
     getFlexibleLocks: builder.query<
       ReturnType<typeof adaptListBundle>,
@@ -3290,6 +3393,7 @@ export const adminApi = createApi({
       transformResponse: (raw) =>
         contractPayload(raw) as Record<string, unknown>,
       providesTags: ["Enrollment"],
+      refetchOnMountOrArgChange: STALE_TIER_A,
     }),
     getNavBadges: builder.query<
       {
@@ -3315,6 +3419,7 @@ export const adminApi = createApi({
         };
       },
       providesTags: ["Dashboard", "Enrollment", "Cash", "Message"],
+      refetchOnMountOrArgChange: STALE_TIER_A,
     }),
     getMaturitiesCalendar: builder.query<
       { month?: string; days: { date: string; count: number }[]; items: any[] },
@@ -3382,6 +3487,41 @@ export const adminApi = createApi({
           expiresAt: string;
         },
     }),
+    completeUpload: builder.mutation<
+      { uploadId: string; status: string; viewUrl?: string },
+      string
+    >({
+      query: (uploadId) => ({
+        url: `/admin/uploads/${uploadId}/complete`,
+        method: "POST",
+        params: { uploadId },
+        mockKey: "completeUpload",
+      }),
+      transformResponse: (raw) =>
+        contractPayload(raw) as {
+          uploadId: string;
+          status: string;
+          viewUrl?: string;
+        },
+    }),
+    getUploadDownload: builder.query<
+      { uploadId: string; status: string; fileName?: string | null; contentType?: string | null; downloadUrl: string },
+      string
+    >({
+      query: (uploadId) => ({
+        url: `/admin/uploads/${uploadId}`,
+        params: { uploadId },
+        mockKey: "getUploadDownload",
+      }),
+      transformResponse: (raw) =>
+        contractPayload(raw) as {
+          uploadId: string;
+          status: string;
+          fileName?: string | null;
+          contentType?: string | null;
+          downloadUrl: string;
+        },
+    }),
   }),
 });
 
@@ -3423,6 +3563,7 @@ export const {
   useLazyGetCustomerStatementQuery,
   useShareCustomerStatementWhatsappMutation,
   useGetEnrollmentsQuery,
+  useGetEnrollmentAnalyticsQuery,
   useGetEnrollmentQuery,
   useGetSchemeLedgerQuery,
   useGetSchemePassbookQuery,
@@ -3564,4 +3705,6 @@ export const {
   useGetMaturitiesCalendarQuery,
   useListExportsQuery,
   usePresignUploadMutation,
+  useCompleteUploadMutation,
+  useGetUploadDownloadQuery,
 } = adminApi;

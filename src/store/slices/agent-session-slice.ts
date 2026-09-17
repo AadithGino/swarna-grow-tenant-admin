@@ -1,9 +1,15 @@
 import { createSlice, type PayloadAction } from "@reduxjs/toolkit";
+import {
+  clearAgentTokens,
+  persistAgentTokens,
+  TOKEN_KEYS,
+  type StoredTokens,
+} from "@/src/lib/auth-token-storage";
 import type { AgentSession } from "@/src/types/agent";
 
-export const AGENT_SESSION_KEY = "swarnagrow.agent.session";
-export const AGENT_ACCESS_KEY = "swarnagrow.agent.accessToken";
-export const AGENT_REFRESH_KEY = "swarnagrow.agent.refreshToken";
+export const AGENT_SESSION_KEY = TOKEN_KEYS.agent.session;
+export const AGENT_ACCESS_KEY = TOKEN_KEYS.agent.access;
+export const AGENT_REFRESH_KEY = TOKEN_KEYS.agent.refresh;
 
 function readStored(): AgentSession | null {
   if (typeof window === "undefined") return null;
@@ -30,8 +36,20 @@ const agentSessionSlice = createSlice({
       state.hydrated = true;
       if (typeof window !== "undefined") {
         localStorage.setItem(AGENT_SESSION_KEY, JSON.stringify(action.payload));
-        localStorage.setItem(AGENT_ACCESS_KEY, action.payload.accessToken);
-        localStorage.setItem(AGENT_REFRESH_KEY, action.payload.refreshToken);
+        persistAgentTokens(
+          action.payload.accessToken,
+          action.payload.refreshToken,
+        );
+      }
+    },
+    patchAgentTokens(state, action: PayloadAction<StoredTokens>) {
+      if (!state.session) return;
+      state.session.accessToken = action.payload.accessToken;
+      if (action.payload.refreshToken) {
+        state.session.refreshToken = action.payload.refreshToken;
+      }
+      if (typeof window !== "undefined") {
+        localStorage.setItem(AGENT_SESSION_KEY, JSON.stringify(state.session));
       }
     },
     clearAgentSession(state) {
@@ -39,12 +57,16 @@ const agentSessionSlice = createSlice({
       state.hydrated = true;
       if (typeof window !== "undefined") {
         localStorage.removeItem(AGENT_SESSION_KEY);
-        localStorage.removeItem(AGENT_ACCESS_KEY);
-        localStorage.removeItem(AGENT_REFRESH_KEY);
+        clearAgentTokens();
       }
     },
   },
 });
 
-export const { hydrateAgentSession, setAgentSession, clearAgentSession } = agentSessionSlice.actions;
+export const {
+  hydrateAgentSession,
+  setAgentSession,
+  patchAgentTokens,
+  clearAgentSession,
+} = agentSessionSlice.actions;
 export default agentSessionSlice.reducer;

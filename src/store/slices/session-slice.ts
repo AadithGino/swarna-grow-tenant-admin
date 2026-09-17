@@ -1,6 +1,7 @@
 import { createSlice, type PayloadAction } from "@reduxjs/toolkit";
 import { MOCK_OWNER_SESSION } from "@/src/config/mock-session";
 import { clearAuthTokens } from "@/src/lib/auth-session";
+import type { StoredTokens } from "@/src/lib/auth-token-storage";
 import type { PortalSession } from "@/src/types/session";
 import { SESSION_STORAGE_KEY } from "@/src/types/session";
 
@@ -40,9 +41,15 @@ const sessionSlice = createSlice({
           SESSION_STORAGE_KEY,
           JSON.stringify(action.payload),
         );
+      }
+    },
+    patchSessionTokens(state, action: PayloadAction<StoredTokens>) {
+      if (!state.session) return;
+      state.session.accessToken = action.payload.accessToken;
+      if (typeof window !== "undefined") {
         localStorage.setItem(
-          "swarnagrow.accessToken",
-          action.payload.accessToken,
+          SESSION_STORAGE_KEY,
+          JSON.stringify(state.session),
         );
       }
     },
@@ -74,6 +81,7 @@ const sessionSlice = createSlice({
 export const {
   hydrateSession,
   setSession,
+  patchSessionTokens,
   clearSession,
   markSetupTaskComplete,
   useDemoSession,

@@ -116,7 +116,7 @@ const BUILDERS: Record<AdminReportKey, () => ReportPayload> = {
           ],
         },
         byBranch: {
-          chartType: "stackedBar",
+          chartType: "groupedBar",
           title: "By showroom and mode",
           yAxis: { type: "currency", label: "Amount" },
           series: [
@@ -213,9 +213,10 @@ const BUILDERS: Record<AdminReportKey, () => ReportPayload> = {
             key: "EFFICIENCY",
             name: "Efficiency",
             data: [
-              { x: "2026-07", y: 92.1 },
-              { x: "2026-08", y: 91.3 },
-              { x: "2026-09", y: 90.4 },
+              { x: "2026-09-01", y: 92.1 },
+              { x: "2026-09-08", y: 91.3 },
+              { x: "2026-09-15", y: 90.8 },
+              { x: "2026-09-17", y: 90.4 },
             ],
           },
         ],
@@ -272,7 +273,7 @@ const BUILDERS: Record<AdminReportKey, () => ReportPayload> = {
     ],
     charts: {
       accrualTrend: {
-        chartType: "area",
+        chartType: "line",
         title: "Cumulative grams",
         yAxis: { type: "weight", label: "Grams" },
         series: [
@@ -280,9 +281,10 @@ const BUILDERS: Record<AdminReportKey, () => ReportPayload> = {
             key: "GOLD_ACCRUED",
             name: "Grams",
             data: [
-              { x: "2026-07", y: 2418200 },
-              { x: "2026-08", y: 2634900 },
-              { x: "2026-09", y: 2841500 },
+              { x: "2026-09-01", y: 2418200 },
+              { x: "2026-09-08", y: 2524900 },
+              { x: "2026-09-15", y: 2634900 },
+              { x: "2026-09-17", y: 2841500 },
             ],
           },
         ],
@@ -395,7 +397,7 @@ const BUILDERS: Record<AdminReportKey, () => ReportPayload> = {
     ],
     charts: {
       enrolmentTrend: {
-        chartType: "bar",
+        chartType: "line",
         title: "Enrolments over time",
         yAxis: { type: "count", label: "Enrolments" },
         series: [
@@ -468,9 +470,10 @@ const BUILDERS: Record<AdminReportKey, () => ReportPayload> = {
             key: "SETTLED",
             name: "Settled",
             data: [
-              { x: "Sep W1", y: paise(320000) },
-              { x: "Sep W2", y: paise(410000) },
-              { x: "Sep W3", y: paise(650000) },
+              { x: "2026-09-01", y: paise(0) },
+              { x: "2026-09-08", y: paise(320000) },
+              { x: "2026-09-12", y: paise(410000) },
+              { x: "2026-09-17", y: paise(650000) },
             ],
           },
         ],
@@ -595,10 +598,12 @@ const BUILDERS: Record<AdminReportKey, () => ReportPayload> = {
             key: "SENT",
             name: "Sent",
             data: [
-              { x: "Sep 10", y: 120 },
-              { x: "Sep 11", y: 142 },
-              { x: "Sep 12", y: 156 },
-              { x: "Sep 13", y: 168 },
+              { x: "2026-09-10", y: 120 },
+              { x: "2026-09-11", y: 142 },
+              { x: "2026-09-12", y: 156 },
+              { x: "2026-09-13", y: 168 },
+              { x: "2026-09-14", y: 0 },
+              { x: "2026-09-15", y: 175 },
             ],
           },
         ],
@@ -760,32 +765,215 @@ const BUILDERS: Record<AdminReportKey, () => ReportPayload> = {
     exportFormats: ["CSV", "XLSX", "PDF"],
   }),
 
-  CUSTOMER_LEDGER: () => ({
-    reportKey: "CUSTOMER_LEDGER",
-    title: "Customer ledger",
-    summary: [
-      { key: "OPENING", label: "Opening balance", value: amt(0), valueType: "currency" },
-      { key: "CREDITS", label: "Credits", value: amt(84000), valueType: "currency" },
-      { key: "CLOSING", label: "Closing balance", value: amt(84000), valueType: "currency" },
-    ],
-    charts: {},
-    columns: [
-      { key: "date", label: "Date", type: "date", sticky: true },
-      { key: "description", label: "Description", type: "text" },
-      { key: "debit", label: "Debit", type: "currency", align: "right" },
-      { key: "credit", label: "Credit", type: "currency", align: "right" },
-      { key: "balance", label: "Balance", type: "currency", align: "right", emphasis: true },
-    ],
-    rows: mockDb.payments.slice(0, 18).map((p, i) => ({
+  BRANCH_PERFORMANCE: () => {
+    const rows = mockDb.branches.map((b, i) => ({
+      key: b.id,
+      label: b.name,
+      collected: amt(112400 - i * 8000),
+      enrolments: 18 - i * 3,
+      activeSchemes: 120 - i * 15,
+      paymentCount: 40 + i * 18,
+      drilldownPath: `/reports?reportKey=BRANCH_PERFORMANCE&branchId=${b.id}`,
+    }));
+    return {
+      reportKey: "BRANCH_PERFORMANCE",
+      title: "Branch performance comparison",
+      scope,
+      period: period("2026-09-01", "2026-09-17"),
+      summary: [
+        { key: "COLLECTED", label: "Total collected", value: amt(224800), valueType: "currency" },
+        { key: "ENROLMENTS", label: "New enrolments", value: 36, valueType: "count" },
+        { key: "ACTIVE", label: "Active schemes", value: 240, valueType: "count" },
+        { key: "BRANCHES", label: "Showrooms", value: rows.length, valueType: "count" },
+      ],
+      charts: {
+        collectionByBranch: {
+          chartType: "horizontalBar",
+          title: "Collection by showroom",
+          yAxis: { type: "currency", label: "Amount" },
+          series: [
+            {
+              key: "COLLECTED",
+              name: "Collected",
+              data: rows.map((r) => ({
+                x: r.label,
+                y: (r.collected as { amountPaise: number }).amountPaise,
+              })),
+            },
+          ],
+        },
+        enrolmentsByBranch: {
+          chartType: "horizontalBar",
+          title: "Enrolments by showroom",
+          yAxis: { type: "count", label: "Enrolments" },
+          series: [
+            {
+              key: "ENROLMENTS",
+              name: "Enrolments",
+              data: rows.map((r) => ({ x: r.label, y: r.enrolments })),
+            },
+          ],
+        },
+      },
+      columns: [
+        { key: "label", label: "Showroom", type: "text", sticky: true },
+        { key: "collected", label: "Collected", type: "currency", align: "right", emphasis: true },
+        { key: "enrolments", label: "Enrolments", type: "count", align: "right" },
+        { key: "activeSchemes", label: "Active schemes", type: "count", align: "right" },
+        { key: "paymentCount", label: "Payments", type: "count", align: "right" },
+      ],
+      rows,
+      exportFormats: ["CSV", "XLSX", "PDF"],
+    };
+  },
+
+  SCHEME_PERFORMANCE: () => {
+    const rows = mockDb.plans.map((p, i) => ({
       key: p.id,
-      date: p.date,
-      description: `Payment ${p.receiptNo}`,
-      debit: amt(0),
-      credit: amt(p.amount),
-      balance: amt(p.amount * (i + 1)),
-    })),
-    exportFormats: ["CSV", "XLSX", "PDF"],
-  }),
+      label: p.name,
+      enrolments: Math.round(p.activeEnrollments / 15),
+      collected: amt(p.activeEnrollments * p.amount * 0.4),
+      activeSchemes: p.activeEnrollments,
+      paymentCount: 20 + i * 8,
+      drilldownPath: `/reports?reportKey=SCHEME_PERFORMANCE&planId=${p.id}`,
+    }));
+    return {
+      reportKey: "SCHEME_PERFORMANCE",
+      title: "Scheme performance comparison",
+      scope,
+      period: period("2026-09-01", "2026-09-17"),
+      summary: [
+        { key: "ENROLMENTS", label: "New enrolments", value: 48, valueType: "count" },
+        { key: "COLLECTED", label: "Total collected", value: amt(420000), valueType: "currency" },
+        { key: "ACTIVE", label: "Active schemes", value: 431, valueType: "count" },
+        { key: "PLANS", label: "Scheme plans", value: rows.length, valueType: "count" },
+      ],
+      charts: {
+        enrolmentsByPlan: {
+          chartType: "horizontalBar",
+          title: "Enrolments by plan",
+          yAxis: { type: "count", label: "Enrolments" },
+          series: [
+            {
+              key: "ENROLMENTS",
+              name: "Enrolments",
+              data: rows.map((r) => ({ x: r.label, y: r.enrolments })),
+            },
+          ],
+        },
+        collectionByPlan: {
+          chartType: "horizontalBar",
+          title: "Collection by plan",
+          yAxis: { type: "currency", label: "Amount" },
+          series: [
+            {
+              key: "COLLECTED",
+              name: "Collected",
+              data: rows.map((r) => ({
+                x: r.label,
+                y: (r.collected as { amountPaise: number }).amountPaise,
+              })),
+            },
+          ],
+        },
+      },
+      columns: [
+        { key: "label", label: "Scheme plan", type: "text", sticky: true },
+        { key: "enrolments", label: "Enrolments", type: "count", align: "right" },
+        { key: "collected", label: "Collected", type: "currency", align: "right", emphasis: true },
+        { key: "activeSchemes", label: "Active schemes", type: "count", align: "right" },
+        { key: "paymentCount", label: "Payments", type: "count", align: "right" },
+      ],
+      rows,
+      exportFormats: ["CSV", "XLSX", "PDF"],
+    };
+  },
+
+  CUSTOMER_PERFORMANCE: (params: Record<string, unknown> = {}) => {
+    const customerId = params.customerId as string | undefined;
+    if (customerId) {
+      const customer = mockDb.customers.find((c) => c.id === customerId) ?? mockDb.customers[0];
+      return {
+        reportKey: "CUSTOMER_PERFORMANCE",
+        title: `Customer ledger — ${customer?.name ?? "Customer"}`,
+        summary: [
+          { key: "OPENING", label: "Opening balance", value: amt(0), valueType: "currency" },
+          { key: "CREDITS", label: "Credits", value: amt(84000), valueType: "currency" },
+          { key: "CLOSING", label: "Closing balance", value: amt(84000), valueType: "currency" },
+        ],
+        charts: {},
+        columns: [
+          { key: "date", label: "Date", type: "date", sticky: true },
+          { key: "description", label: "Description", type: "text" },
+          { key: "debit", label: "Debit", type: "currency", align: "right" },
+          { key: "credit", label: "Credit", type: "currency", align: "right" },
+          { key: "balance", label: "Balance", type: "currency", align: "right", emphasis: true },
+        ],
+        rows: mockDb.payments.slice(0, 18).map((p, i) => ({
+          key: p.id,
+          date: p.date,
+          description: `Payment ${p.receiptNo}`,
+          debit: amt(0),
+          credit: amt(p.amount),
+          balance: amt(p.amount * (i + 1)),
+        })),
+        exportFormats: ["CSV", "XLSX", "PDF"],
+      };
+    }
+
+    const rows = mockDb.customers.slice(0, 8).map((c, i) => ({
+      key: c.id,
+      label: `${c.name} · ${c.customerNo}`,
+      collected: amt(120000 + i * 15000),
+      enrolments: 1 + (i % 2),
+      activeSchemes: 1,
+      paymentCount: 2 + i,
+      drilldownPath: `/reports?reportKey=CUSTOMER_PERFORMANCE&customerId=${c.id}`,
+    }));
+
+    return {
+      reportKey: "CUSTOMER_PERFORMANCE",
+      title: "Customer performance overview",
+      summary: [
+        { key: "TOTAL_CUSTOMERS", label: "Total customers", value: mockDb.customers.length, valueType: "count" },
+        { key: "NEW_CUSTOMERS", label: "New registrations", value: 3, valueType: "count" },
+        { key: "COLLECTED", label: "Total collected", value: amt(960000), valueType: "currency" },
+        { key: "ENROLMENTS", label: "New enrolments", value: 6, valueType: "count" },
+        { key: "ACTIVE_CUSTOMERS", label: "Customers with active schemes", value: 5, valueType: "count" },
+      ],
+      charts: {
+        collectionByCustomer: {
+          chartType: "horizontalBar",
+          title: "Collection by customer",
+          series: [
+            {
+              key: "COLLECTED",
+              name: "Collected",
+              data: rows.map((row) => ({
+                x: row.label,
+                y: row.collected.amountPaise,
+                yDisplay: row.collected.amountDisplay,
+              })),
+            },
+          ],
+        },
+        registrationTrend: {
+          chartType: "line",
+          title: "New customer registrations",
+          series: [{ key: "REGISTRATIONS", name: "Registrations", data: trendPoints(6, 2) }],
+        },
+      },
+      columns: [
+        { key: "label", label: "Customer", type: "text", sticky: true },
+        { key: "collected", label: "Collected", type: "currency", align: "right", emphasis: true },
+        { key: "enrolments", label: "Enrolments", type: "count", align: "right" },
+        { key: "activeSchemes", label: "Active schemes", type: "count", align: "right" },
+        { key: "paymentCount", label: "Payments", type: "count", align: "right" },
+      ],
+      rows,
+      exportFormats: ["CSV", "XLSX", "PDF"],
+    };
+  },
 };
 
 export function mockAdminReport(
@@ -793,7 +981,10 @@ export function mockAdminReport(
   params: Record<string, unknown>,
 ): ContractWrapper {
   const key = (reportKey in BUILDERS ? reportKey : "OUTSTANDING") as AdminReportKey;
-  const payload = BUILDERS[key]();
+  const payload =
+    key === "CUSTOMER_PERFORMANCE"
+      ? BUILDERS.CUSTOMER_PERFORMANCE(params)
+      : BUILDERS[key]();
   const basePeriod = payload.period as { from?: string; to?: string } | undefined;
   const from = String(params.from ?? basePeriod?.from ?? "");
   const to = String(params.to ?? basePeriod?.to ?? "");

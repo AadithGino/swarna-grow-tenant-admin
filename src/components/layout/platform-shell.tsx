@@ -2,9 +2,19 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { usePlatformSession } from "@/src/features/platform/use-platform-session";
-import { useGetPlatformDashboardQuery } from "@/src/store/api/platform-api";
+import { clearPlatformAuthStorage } from "@/src/lib/auth-logout";
+import {
+  hasPlatformSession,
+  readStoredRefreshToken,
+} from "@/src/lib/auth-token-storage";
+import { useAppDispatch } from "@/src/store/hooks";
+import {
+  platformApi,
+  useGetPlatformDashboardQuery,
+  usePlatformLogoutMutation,
+} from "@/src/store/api/platform-api";
 import { Building2, ChevronDown, CreditCard, FileClock, LayoutDashboard, Menu, Search, Settings2, ShieldCheck, Tags, Webhook } from "lucide-react";
 import { BrandMark } from "@/src/components/brand/brand-mark";
 import {
@@ -91,30 +101,60 @@ function PlatformSidebar({ close, monitoringCount }: { close?: () => void; monit
 
 export function PlatformShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
+  const pathname = usePathname();
+  const dispatch = useAppDispatch();
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
+  const [sessionReady, setSessionReady] = useState(false);
   const openSearch = useCallback(() => setSearchOpen(true), []);
   useGlobalSearchHotkey(openSearch);
 
   const mounted = useClientMounted();
   const { user, initials } = usePlatformSession();
-  const dashboard = useGetPlatformDashboardQuery(undefined, { skip: !mounted });
+  const [logout] = usePlatformLogoutMutation();
+  const dashboard = useGetPlatformDashboardQuery(undefined, {
+    skip: !mounted || !sessionReady,
+  });
   const monitoringCount = useMemo(() => {
     if (!mounted) return 0;
     const webhook = dashboard.data?.alerts.find((a) => a.key === "WEBHOOK_FAILURES");
     return webhook?.count ?? 0;
   }, [dashboard.data?.alerts, mounted]);
 
-  const signOut = () => {
-    localStorage.removeItem("swarnagrow.platformAccessToken");
-    localStorage.removeItem("swarnagrow.platformRefreshToken");
-    localStorage.removeItem("swarnagrow.platformUser");
+  useEffect(() => {
+    if (!mounted) return;
+    if (!hasPlatformSession()) {
+      router.replace(
+        `/platform/login?next=${encodeURIComponent(pathname)}`,
+      );
+      return;
+    }
+    setSessionReady(true);
+  }, [mounted, pathname, router]);
+
+  const signOut = async () => {
+    const refreshToken = readStoredRefreshToken("platform") ?? undefined;
+    try {
+      await logout({ refreshToken }).unwrap();
+    } catch {
+      // Always clear local session even if revoke fails.
+    }
+    clearPlatformAuthStorage();
+    dispatch(platformApi.util.resetApiState());
     router.push("/platform/login");
   };
 
   const displayName = user?.name ?? "Platform admin";
   const roleLabel = user?.role === "SUPER_ADMIN" ? "Platform super admin" : user?.role ?? "Platform user";
+
+  if (!mounted || !sessionReady) {
+    return (
+      <div className="grid min-h-screen place-items-center bg-[#fbf8f5]">
+        <div className="size-10 animate-spin rounded-full border-4 border-[#ecd8dd] border-t-[#730321]" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#fbf8f5] lg:grid lg:grid-cols-[17.5rem_minmax(0,1fr)]">

@@ -22,6 +22,7 @@ branchListener.startListening({
         "Grievance",
         "Settings",
         "Export",
+        "Report",
       ]),
     );
   },

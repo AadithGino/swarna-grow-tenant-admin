@@ -1,7 +1,9 @@
+import {
+  clearTenantTokens,
+  persistTenantTokens,
+  TOKEN_KEYS,
+} from "@/src/lib/auth-token-storage";
 import type { PortalSession } from "@/src/types/session";
-
-const REFRESH_TOKEN_KEY = "swarnagrow.refreshToken";
-const ACCESS_TOKEN_KEY = "swarnagrow.accessToken";
 
 const DEFAULT_CAPABILITIES = {
   multiBranch: true,
@@ -13,17 +15,11 @@ const DEFAULT_CAPABILITIES = {
 } as const;
 
 export function storeAuthTokens(accessToken: string, refreshToken?: string) {
-  if (typeof window === "undefined") return;
-  localStorage.setItem(ACCESS_TOKEN_KEY, accessToken);
-  if (refreshToken) {
-    localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
-  }
+  persistTenantTokens(accessToken, refreshToken);
 }
 
 export function clearAuthTokens() {
-  if (typeof window === "undefined") return;
-  localStorage.removeItem(ACCESS_TOKEN_KEY);
-  localStorage.removeItem(REFRESH_TOKEN_KEY);
+  clearTenantTokens();
 }
 
 export function portalSessionFromLogin(data: {

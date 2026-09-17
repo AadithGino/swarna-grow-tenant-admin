@@ -1,9 +1,12 @@
 import { env } from "@/src/config/env";
-import { storeAuthTokens } from "@/src/lib/auth-session";
+import {
+  persistAgentTokens,
+  persistCustomerTokens,
+  persistPlatformTokens,
+  persistTenantTokens,
+  readStoredRefreshToken,
+} from "@/src/lib/auth-token-storage";
 import { parseRefreshTokens } from "@/src/lib/auth-tokens-from-refresh";
-
-const CUSTOMER_ACCESS = "swarnagrow.customer.accessToken";
-const CUSTOMER_REFRESH = "swarnagrow.customer.refreshToken";
 
 function apiUrl(path: string): string {
   const base = env.apiBaseUrl.replace(/\/$/, "");
@@ -35,38 +38,43 @@ async function postRefresh(
 /** Refresh tenant (admin) access token using stored refresh token. */
 export async function refreshTenantAccessToken(): Promise<boolean> {
   if (typeof window === "undefined") return false;
-  const refreshToken = localStorage.getItem("swarnagrow.refreshToken");
+  const refreshToken = readStoredRefreshToken("tenant");
   if (!refreshToken) return false;
   const tokens = await postRefresh("/auth/refresh", refreshToken);
   if (!tokens?.accessToken) return false;
-  storeAuthTokens(tokens.accessToken, tokens.refreshToken);
+  persistTenantTokens(tokens.accessToken, tokens.refreshToken);
   return true;
 }
 
 /** Refresh customer app access token using stored refresh token. */
 export async function refreshCustomerAccessToken(): Promise<boolean> {
   if (typeof window === "undefined") return false;
-  const refreshToken = localStorage.getItem(CUSTOMER_REFRESH);
+  const refreshToken = readStoredRefreshToken("customer");
   if (!refreshToken) return false;
   const tokens = await postRefresh("/app/auth/refresh", refreshToken);
   if (!tokens?.accessToken) return false;
-  localStorage.setItem(CUSTOMER_ACCESS, tokens.accessToken);
-  if (tokens.refreshToken) {
-    localStorage.setItem(CUSTOMER_REFRESH, tokens.refreshToken);
-  }
+  persistCustomerTokens(tokens.accessToken, tokens.refreshToken);
   return true;
 }
 
 /** Refresh platform access token using stored refresh token. */
 export async function refreshPlatformAccessToken(): Promise<boolean> {
   if (typeof window === "undefined") return false;
-  const refreshToken = localStorage.getItem("swarnagrow.platformRefreshToken");
+  const refreshToken = readStoredRefreshToken("platform");
   if (!refreshToken) return false;
   const tokens = await postRefresh("/platform/auth/refresh", refreshToken);
   if (!tokens?.accessToken) return false;
-  localStorage.setItem("swarnagrow.platformAccessToken", tokens.accessToken);
-  if (tokens.refreshToken) {
-    localStorage.setItem("swarnagrow.platformRefreshToken", tokens.refreshToken);
-  }
+  persistPlatformTokens(tokens.accessToken, tokens.refreshToken);
+  return true;
+}
+
+/** Refresh agent/collector access token using stored refresh token. */
+export async function refreshAgentAccessToken(): Promise<boolean> {
+  if (typeof window === "undefined") return false;
+  const refreshToken = readStoredRefreshToken("agent");
+  if (!refreshToken) return false;
+  const tokens = await postRefresh("/auth/refresh", refreshToken);
+  if (!tokens?.accessToken) return false;
+  persistAgentTokens(tokens.accessToken, tokens.refreshToken);
   return true;
 }

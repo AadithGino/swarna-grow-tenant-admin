@@ -1,5 +1,11 @@
 "use client";
 
+import {
+  PageTab,
+  PageTabs,
+  PageTabsBar,
+  PageTabsPanel,
+} from "@/src/components/common/page-tabs";
 import { Clock3, Gift, IndianRupee, Layers3, Plus } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -27,7 +33,11 @@ import {
   shouldSkipListSearchQuery,
 } from "@/src/lib/list-date-range";
 import { EnrollmentsCreateDialog } from "@/src/features/enrollments/enrollments-create-dialog";
-import { useGetEnrollmentsQuery } from "@/src/store/api/admin-api";
+import { EnrollmentsAnalyticsTab } from "@/src/features/enrollments/enrollments-analytics-tab";
+import {
+  useGetEnrollmentAnalyticsQuery,
+  useGetEnrollmentsQuery,
+} from "@/src/store/api/admin-api";
 import {
   useActingBranchId,
   useActingBranchKey,
@@ -64,12 +74,57 @@ export function EnrollmentsPage() {
     },
     { skip: shouldSkipListSearchQuery(debouncedQ) },
   );
+  const analyticsQuery = useGetEnrollmentAnalyticsQuery({
+    branchId,
+    period: "THIS_MONTH",
+  });
 
   if (query.isLoading) return <PageSkeleton />;
   if (query.isError || !query.data)
     return <QueryError error={query.error} onRetry={query.refetch} />;
+
   const summary = query.data.summary;
   const page = query.data.page ?? emptyPageMeta();
+  const analyticsSummary = analyticsQuery.data?.summary ?? [];
+  const analyticsTotals = analyticsQuery.data?.totals as
+    | {
+        activeEnrollments?: number;
+        lockedEnrollments?: number;
+        defaultedEnrollments?: number;
+        maturedEnrollments?: number;
+        redeemedOrClosedEnrollments?: number;
+      }
+    | undefined;
+  const metric = (key: string) =>
+    analyticsSummary.find((m) => m.key === key)?.value;
+
+  const activeCount =
+    typeof analyticsTotals?.activeEnrollments === "number"
+      ? analyticsTotals.activeEnrollments
+      : typeof metric("ACTIVE_ENROLLMENTS") === "number"
+        ? metric("ACTIVE_ENROLLMENTS")
+        : summary.active;
+  const lockedCount =
+    typeof analyticsTotals?.lockedEnrollments === "number"
+      ? analyticsTotals.lockedEnrollments
+      : summary.locked ?? 0;
+  const defaultedCount =
+    typeof analyticsTotals?.defaultedEnrollments === "number"
+      ? analyticsTotals.defaultedEnrollments
+      : typeof metric("DEFAULTED") === "number"
+        ? metric("DEFAULTED")
+        : summary.defaulted ?? 0;
+  const maturedCount =
+    typeof analyticsTotals?.maturedEnrollments === "number"
+      ? analyticsTotals.maturedEnrollments
+      : typeof metric("MATURED") === "number"
+        ? metric("MATURED")
+        : summary.matured;
+  const redeemedCount =
+    typeof analyticsTotals?.redeemedOrClosedEnrollments === "number"
+      ? analyticsTotals.redeemedOrClosedEnrollments
+      : summary.redeemed ?? 0;
+
   return (
     <>
       <PageHeader
@@ -91,127 +146,142 @@ export function EnrollmentsPage() {
         <StatCard
           icon={Layers3}
           label="Active"
-          value={summary.active}
-          detail="Matches current list filters"
+          value={activeCount}
+          detail={
+            analyticsQuery.isFetching
+              ? "Updating tenant totals…"
+              : "Current snapshot"
+          }
         />
         <StatCard
           icon={IndianRupee}
           label="Locked / capped"
-          value={summary.locked ?? 0}
-          detail="Matches current list filters"
+          value={lockedCount}
+          detail="Current snapshot"
           tone="gold"
         />
         <StatCard
           icon={Clock3}
           label="Defaulted"
-          value={summary.defaulted ?? 0}
-          detail="Matches current list filters"
+          value={defaultedCount}
+          detail="Current snapshot"
           tone="red"
         />
         <StatCard
           icon={Gift}
           label="Matured"
-          value={summary.matured}
-          detail="Matches current list filters"
+          value={maturedCount}
+          detail="Current snapshot"
           tone="cream"
         />
         <StatCard
           icon={Gift}
           label="Redeemed / closed"
-          value={summary.redeemed ?? 0}
-          detail="Matches current list filters"
+          value={redeemedCount}
+          detail="Current snapshot"
           tone="wine"
         />
       </div>
-      <ListToolbar>
-        <SearchFilterBar
-          searchValue={q}
-          onSearchChange={setQ}
-          searchPlaceholder="Enrollment number, customer, phone…"
-          filterValue={status}
-          onFilterChange={setStatus}
-          filterOptions={ENROLLMENT_STATUS_FILTERS}
-          filterLabel="Status"
-        />
-      </ListToolbar>
-      <Surface
-        title={`${filterLabelFor(ENROLLMENT_STATUS_FILTERS, status)} enrollments`}
-        description="Select a row to open the complete scheme account"
-      >
-        <PaginatedDataTable
-          rows={query.data.items}
-          page={page}
-          pageIndex={pager.pageIndex}
-          onNext={() => pager.goNext(page.nextCursor)}
-          onPrevious={pager.goPrevious}
-          canPrevious={pager.canPrevious}
-          onRowClick={(row: any) => router.push(`/enrollments/${row.id}`)}
-          columns={[
-            {
-              key: "no",
-              header: "Enrollment",
-              render: (r: any) => <strong>{r.enrollmentNo}</strong>,
-            },
-            {
-              key: "customer",
-              header: "Customer",
-              render: (r: any) => r.customer,
-            },
-            { key: "scheme", header: "Scheme", render: (r: any) => r.plan },
-            {
-              key: "type",
-              header: "Type",
-              render: (r: any) =>
-                r.paymentPattern === "FLEXIBLE" ? "Flexible" : "Fixed",
-            },
-            { key: "branch", header: "Branch", render: (r: any) => r.branch },
-            {
-              key: "progress",
-              header: "Progress",
-              render: (r: any) => `${r.progress} / ${r.tenure}`,
-            },
-            {
-              key: "paid",
-              header: "Paid",
-              render: (r: any) => money(r.paid),
-            },
-            {
-              key: "next",
-              header: "Next due",
-              render: (r: any) =>
-                r.nextDue
-                  ? `${money(r.nextDueAmount ?? r.installment)} · ${r.nextDue}`
-                  : "—",
-            },
-            {
-              key: "maturity",
-              header: "Maturity",
-              render: (r: any) => r.maturity ?? "—",
-            },
-            {
-              key: "status",
-              header: "Status",
-              render: (r: any) => <StatusBadge status={r.status} />,
-            },
-            {
-              key: "view",
-              header: "",
-              render: (r: any) => (
-                <Button
-                  variant="link"
-                  className="h-auto p-0"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    router.push(`/enrollments/${r.id}`);
-                  }}
-                >
-                  View
-                </Button>
-              ),
-            },
-          ]}
-        />
-      </Surface>
+      <PageTabs defaultValue="directory">
+        <PageTabsBar sectionLabel="Enrollments">
+          <PageTab value="directory">Directory</PageTab>
+          <PageTab value="analytics">Analytics</PageTab>
+        </PageTabsBar>
+        <PageTabsPanel value="analytics">
+          <EnrollmentsAnalyticsTab />
+        </PageTabsPanel>
+        <PageTabsPanel value="directory">
+          <ListToolbar>
+            <SearchFilterBar
+              searchValue={q}
+              onSearchChange={setQ}
+              searchPlaceholder="Enrollment number, customer, phone…"
+              filterValue={status}
+              onFilterChange={setStatus}
+              filterOptions={ENROLLMENT_STATUS_FILTERS}
+              filterLabel="Status"
+            />
+          </ListToolbar>
+          <Surface
+            title={`${filterLabelFor(ENROLLMENT_STATUS_FILTERS, status)} enrollments`}
+            description="Select a row to open the complete scheme account"
+          >
+            <PaginatedDataTable
+              rows={query.data.items}
+              page={page}
+              pageIndex={pager.pageIndex}
+              onNext={() => pager.goNext(page.nextCursor)}
+              onPrevious={pager.goPrevious}
+              canPrevious={pager.canPrevious}
+              onRowClick={(row: any) => router.push(`/enrollments/${row.id}`)}
+              columns={[
+                {
+                  key: "no",
+                  header: "Enrollment",
+                  render: (r: any) => <strong>{r.enrollmentNo}</strong>,
+                },
+                {
+                  key: "customer",
+                  header: "Customer",
+                  render: (r: any) => r.customer,
+                },
+                { key: "scheme", header: "Scheme", render: (r: any) => r.plan },
+                {
+                  key: "type",
+                  header: "Type",
+                  render: (r: any) =>
+                    r.paymentPattern === "FLEXIBLE" ? "Flexible" : "Fixed",
+                },
+                { key: "branch", header: "Branch", render: (r: any) => r.branch },
+                {
+                  key: "progress",
+                  header: "Progress",
+                  render: (r: any) => `${r.progress} / ${r.tenure}`,
+                },
+                {
+                  key: "paid",
+                  header: "Paid",
+                  render: (r: any) => money(r.paid),
+                },
+                {
+                  key: "next",
+                  header: "Next due",
+                  render: (r: any) =>
+                    r.nextDue
+                      ? `${money(r.nextDueAmount ?? r.installment)} · ${r.nextDue}`
+                      : "—",
+                },
+                {
+                  key: "maturity",
+                  header: "Maturity",
+                  render: (r: any) => r.maturity ?? "—",
+                },
+                {
+                  key: "status",
+                  header: "Status",
+                  render: (r: any) => <StatusBadge status={r.status} />,
+                },
+                {
+                  key: "view",
+                  header: "",
+                  render: (r: any) => (
+                    <Button
+                      variant="link"
+                      className="h-auto p-0"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        router.push(`/enrollments/${r.id}`);
+                      }}
+                    >
+                      View
+                    </Button>
+                  ),
+                },
+              ]}
+            />
+          </Surface>
+        </PageTabsPanel>
+      </PageTabs>
     </>
   );
 }

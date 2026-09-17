@@ -23,6 +23,10 @@ import {
 } from "@/src/store/api/admin-api";
 import { useAppDispatch } from "@/src/store/hooks";
 import { clearSession } from "@/src/store/slices/session-slice";
+import {
+  passwordPinReady,
+  sanitizePasswordPinInput,
+} from "@/src/lib/password-validation";
 
 export function SecuritySessionsDialog({
   open,
@@ -113,7 +117,11 @@ export function SecuritySessionsDialog({
                 <Input
                   type="password"
                   value={currentPassword}
-                  onChange={(e) => setCurrentPassword(e.target.value)}
+                  onChange={(e) =>
+                    setCurrentPassword(sanitizePasswordPinInput(e.target.value))
+                  }
+                  inputMode="numeric"
+                  placeholder="Min. 4 digits"
                   autoComplete="current-password"
                 />
               </div>
@@ -122,15 +130,19 @@ export function SecuritySessionsDialog({
                 <Input
                   type="password"
                   value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
+                  onChange={(e) =>
+                    setNewPassword(sanitizePasswordPinInput(e.target.value))
+                  }
+                  inputMode="numeric"
+                  placeholder="Min. 4 digits"
                   autoComplete="new-password"
                 />
               </div>
               <Button
                 disabled={
                   changeState.isLoading ||
-                  !currentPassword.trim() ||
-                  !newPassword.trim()
+                  !passwordPinReady(currentPassword) ||
+                  !passwordPinReady(newPassword)
                 }
                 onClick={async () => {
                   try {

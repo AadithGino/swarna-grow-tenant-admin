@@ -3,9 +3,10 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { Bell, CircleHelp, CreditCard, Home, LogOut, Sparkles, UserRound, WalletCards } from "lucide-react";
+import { readStoredRefreshToken } from "@/src/lib/auth-token-storage";
+import { customerApi, useCustomerLogoutMutation, useGetCustomerHomeQuery } from "@/src/store/api/customer-api";
 import { customerSignedOut } from "@/src/store/slices/customer-session-slice";
 import { useAppDispatch } from "@/src/store/hooks";
-import { useGetCustomerHomeQuery } from "@/src/store/api/customer-api";
 import { cn } from "@/lib/utils";
 import { useCustomerTenant } from "@/src/components/customer/customer-tenant-context";
 import { customerPath } from "@/src/lib/customer-tenant";
@@ -26,6 +27,7 @@ export function CustomerShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const dispatch = useAppDispatch();
   const { tenantSlug } = useCustomerTenant();
+  const [logout] = useCustomerLogoutMutation();
   const { data: home } = useGetCustomerHomeQuery();
   const { customerSelfEnrol, customerAppWriteEnabled, customerAppPaymentsEnabled } = useCustomerPortalCapabilities();
   const unread = home?.unreadNotificationCount ?? 0;
@@ -34,8 +36,15 @@ export function CustomerShell({ children }: { children: React.ReactNode }) {
   const active = (item: (typeof navigation)[number]) => item.exact ? pathname === item.href : pathname.startsWith(item.href);
   const initials = (home?.customer.name ?? "AN").split(/\s+/).map((part) => part[0]).join("").slice(0, 2).toUpperCase();
 
-  const logout = () => {
+  const signOut = async () => {
+    const refreshToken = readStoredRefreshToken("customer") ?? undefined;
+    try {
+      await logout({ refreshToken }).unwrap();
+    } catch {
+      // Always clear local session even if revoke fails.
+    }
     dispatch(customerSignedOut());
+    dispatch(customerApi.util.resetApiState());
     router.push(customerPath(tenantSlug, "login"));
   };
 
@@ -84,7 +93,7 @@ export function CustomerShell({ children }: { children: React.ReactNode }) {
         </div>
       </nav>
 
-      <button type="button" onClick={logout} className="fixed bottom-5 right-5 z-20 hidden items-center gap-2 rounded-full border bg-white px-4 py-2 text-xs font-bold text-[#706b77] shadow-sm xl:flex" aria-label="Sign out"><LogOut className="size-4" />Sign out</button>
+      <button type="button" onClick={signOut} className="fixed bottom-5 right-5 z-20 hidden items-center gap-2 rounded-full border bg-white px-4 py-2 text-xs font-bold text-[#706b77] shadow-sm xl:flex" aria-label="Sign out"><LogOut className="size-4" />Sign out</button>
     </div>
   );
 }

@@ -16,7 +16,17 @@ import {
   agentUser,
   updateMockCashSummary,
 } from "@/src/mocks/agent-data";
-import { AGENT_ACCESS_KEY, AGENT_REFRESH_KEY, clearAgentSession } from "@/src/store/slices/agent-session-slice";
+import {
+  persistAgentTokens,
+  readStoredRefreshToken,
+} from "@/src/lib/auth-token-storage";
+import { parseRefreshTokens } from "@/src/lib/auth-tokens-from-refresh";
+import {
+  AGENT_ACCESS_KEY,
+  AGENT_REFRESH_KEY,
+  clearAgentSession,
+  patchAgentTokens,
+} from "@/src/store/slices/agent-session-slice";
 import type {
   AgentCashSummary,
   AgentCollectionSummary,
@@ -473,21 +483,57 @@ function paymentListMeta(meta: unknown): Pick<AgentPaymentListPage, "nextCursor"
   };
 }
 
-const dynamicBaseQuery: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQueryError> = async (args, api, extra) => {
+type AgentBaseQueryExtra = { _authRetry?: boolean };
+
+const dynamicBaseQuery: BaseQueryFn<
+  string | FetchArgs,
+  unknown,
+  FetchBaseQueryError,
+  AgentBaseQueryExtra
+> = async (args, api, extra) => {
   const request = env.useMocks ? args : withMutationHeaders(args);
-  let result = env.useMocks ? await mockBaseQuery(request, api, extra) : await liveBaseQuery(request, api, extra);
+  let result = env.useMocks
+    ? await mockBaseQuery(request, api, extra)
+    : await liveBaseQuery(request, api, extra);
   const url = pathOf(request);
-  if (!env.useMocks && result.error?.status === 401 && url !== "/auth/refresh" && typeof window !== "undefined") {
-    const refreshToken = localStorage.getItem(AGENT_REFRESH_KEY);
+  const isAuthRefresh = url.includes("/auth/refresh");
+  const isAuthLogin = url.includes("/auth/login");
+  const alreadyRetried = Boolean(extra?._authRetry);
+
+  if (
+    !env.useMocks &&
+    result.error?.status === 401 &&
+    typeof window !== "undefined" &&
+    !isAuthRefresh &&
+    !isAuthLogin &&
+    !alreadyRetried
+  ) {
+    const refreshToken = readStoredRefreshToken("agent");
     if (refreshToken) {
-      const refreshed = await liveBaseQuery({ url: "/auth/refresh", method: "POST", body: { refreshToken } }, api, extra);
-      const payload = (refreshed.data as Envelope<{ accessToken: string; refreshToken: string }> | undefined)?.data;
-      if (payload?.accessToken) {
-        localStorage.setItem(AGENT_ACCESS_KEY, payload.accessToken);
-        localStorage.setItem(AGENT_REFRESH_KEY, payload.refreshToken);
-        result = await liveBaseQuery(request, api, extra);
-      } else api.dispatch(clearAgentSession());
-    } else api.dispatch(clearAgentSession());
+      const refreshed = await liveBaseQuery(
+        { url: "/auth/refresh", method: "POST", body: { refreshToken } },
+        api,
+        extra,
+      );
+      const tokens = parseRefreshTokens(refreshed.data);
+      if (tokens?.accessToken) {
+        persistAgentTokens(tokens.accessToken, tokens.refreshToken);
+        api.dispatch(patchAgentTokens(tokens));
+        result = await liveBaseQuery(request, api, { ...extra, _authRetry: true });
+      } else {
+        api.dispatch(clearAgentSession());
+      }
+    } else {
+      api.dispatch(clearAgentSession());
+    }
+  } else if (
+    !env.useMocks &&
+    result.error?.status === 401 &&
+    typeof window !== "undefined" &&
+    !isAuthRefresh &&
+    !isAuthLogin
+  ) {
+    api.dispatch(clearAgentSession());
   }
   return unwrap(result);
 };

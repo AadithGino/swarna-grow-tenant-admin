@@ -85,7 +85,7 @@ const RemindersPage = dynamic(
 const ReportsPage = dynamic(
   () =>
     import("@/src/features/reports/reports-page").then((m) => m.ReportsPage),
-  options,
+  { loading: () => <PageSkeleton cards={5} />, ssr: false },
 );
 const SchemesPage = dynamic(
   () =>

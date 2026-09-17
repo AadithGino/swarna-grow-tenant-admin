@@ -17,7 +17,6 @@ import {
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { ActionDialog } from "@/src/components/common/action-dialog";
 import { PermissionGate } from "@/src/components/common/permission-gate";
@@ -58,8 +57,10 @@ import {
 import { toastApiError } from "@/src/lib/api-error";
 import { cn } from "@/lib/utils";
 import { env } from "@/src/config/env";
+import { SettingsOperationsPanel } from "@/src/features/settings/settings-operations-panel";
 import { SubscriptionInvoicesPanel } from "@/src/features/settings/subscription-invoices-panel";
 import {
+  useCompleteUploadMutation,
   useGetAvailablePlansQuery,
   useGetSettingsBrandingQuery,
   useGetSettingsOperationsQuery,
@@ -180,6 +181,7 @@ export function SettingsPage({
   const [patchOperations] = usePatchSettingsOperationsMutation();
   const [requestUpgrade] = useRequestSubscriptionUpgradeMutation();
   const [presignUpload, presignState] = usePresignUploadMutation();
+  const [completeUpload] = useCompleteUploadMutation();
   const [logoBusy, setLogoBusy] = useState(false);
 
   const [profileForm, setProfileForm] = useState({
@@ -407,6 +409,42 @@ export function SettingsPage({
         note?: string | null;
       }
     | undefined;
+
+  const saveOperations = async () => {
+    setOpsTouched({
+      receiptPrefix: true,
+      receiptNumberFormat: true,
+      passbookNumberFormat: true,
+      schemeNumberFormat: true,
+      goldPurity: true,
+      weightRoundingMode: true,
+      paymentReversalWindowHours: true,
+      termsAndConditions: true,
+    });
+    const clientErrors = validateSettingsOperationsForm(opsForm);
+    if (Object.keys(clientErrors).length) {
+      setOpsFieldErrors(clientErrors);
+      toast.error("Fix the highlighted fields.");
+      return;
+    }
+    try {
+      await patchOperations({
+        ...opsForm,
+        kycAllowedTypes: operationsQuery.data?.kycAllowedTypes ?? [
+          "AADHAAR",
+          "PAN",
+        ],
+        expectedVersion: operationsQuery.data?.audit?.version,
+      }).unwrap();
+      toast.success("Operations saved");
+      setOpsFieldErrors({});
+    } catch (err) {
+      handleFormApiError(err, {
+        setFieldErrors: setOpsFieldErrors,
+        fallback: "Could not save operations",
+      });
+    }
+  };
 
   return (
     <>
@@ -1019,6 +1057,7 @@ export function SettingsPage({
                               throw new Error("Upload to storage failed");
                             }
                           }
+                          await completeUpload(presign.uploadId).unwrap();
                           const res = await patchBranding({
                             logoUploadId: presign.uploadId,
                             expectedVersion:
@@ -1151,399 +1190,35 @@ export function SettingsPage({
         </PageTabsPanel>
 
         <PageTabsPanel value="operations">
-          <Surface
-            title="Operational rules"
-            description="Enforced on enrolment, payments, receipts and redemptions"
-          >
-            <div className="divide-y divide-[#eaded9]">
-              {(
-                [
-                  [
-                    "multiSchemePerCustomer",
-                    "Allow multiple schemes per customer",
-                    "When off, enrolment fails with ONE_SCHEME_POLICY",
-                  ],
-                  [
-                    "kycMandatory",
-                    "Require KYC before enrolment",
-                    "Blocks enrol until KYC is submitted or verified",
-                  ],
-                  [
-                    "customerSelfEnrolEnabled",
-                    "Customer self-enrol",
-                    "Lets the app enrol into published plans",
-                  ],
-                  [
-                    "customerSelfRegistrationEnabled",
-                    "Customer self-registration",
-                    "Public signup into this tenant",
-                  ],
-                  [
-                    "customerAppWriteEnabled",
-                    "Customer app write access",
-                    "When off, customer app becomes view-only",
-                  ],
-                  [
-                    "customerAppPaymentsEnabled",
-                    "Customer app payments",
-                    "When off, pay/contribute actions are blocked in app",
-                  ],
-                  [
-                    "redemptionApprovalRequired",
-                    "Redemption approval required",
-                    "When off, branch manager can complete without admin",
-                  ],
-                ] as const
-              ).map(([key, title, detail]) => (
-                <div
-                  key={key}
-                  className="flex items-center justify-between gap-5 p-5"
-                >
-                  <div>
-                    <strong>{title}</strong>
-                    <p className="mt-1 text-sm text-muted-foreground">{detail}</p>
-                  </div>
-                  <Switch
-                    checked={Boolean(opsForm[key])}
-                    onCheckedChange={(v) => {
-                      const next = v === true;
-                      if (key === "customerAppWriteEnabled" && !next) {
-                        setOpsForm({
-                          ...opsForm,
-                          customerAppWriteEnabled: false,
-                          customerAppPaymentsEnabled: false,
-                        });
-                        return;
-                      }
-                      if (key === "customerAppPaymentsEnabled" && !opsForm.customerAppWriteEnabled) {
-                        return;
-                      }
-                      setOpsForm({ ...opsForm, [key]: next });
-                    }}
-                    disabled={
-                      key === "customerAppPaymentsEnabled" &&
-                      !opsForm.customerAppWriteEnabled
-                    }
-                  />
-                </div>
-              ))}
-            </div>
-            <div className="grid gap-5 border-t border-[#eaded9] p-6 md:grid-cols-2">
-              <div>
-                <FieldLabel>Customer login mode</FieldLabel>
-                <div className="mt-2 grid grid-cols-2 gap-2">
-                  <Button
-                    type="button"
-                    variant={
-                      opsForm.customerLoginMode === "OTP_ONLY"
-                        ? "default"
-                        : "outline"
-                    }
-                    onClick={() =>
-                      setOpsForm({ ...opsForm, customerLoginMode: "OTP_ONLY" })
-                    }
-                  >
-                    OTP only
-                  </Button>
-                  <Button
-                    type="button"
-                    variant={
-                      opsForm.customerLoginMode === "PASSWORD_ONLY"
-                        ? "default"
-                        : "outline"
-                    }
-                    onClick={() =>
-                      setOpsForm({
-                        ...opsForm,
-                        customerLoginMode: "PASSWORD_ONLY",
-                      })
-                    }
-                  >
-                    Password only
-                  </Button>
-                </div>
-              </div>
-              <div>
-                <FieldLabel>Receipt prefix</FieldLabel>
-                <Input
-                  value={opsForm.receiptPrefix}
-                  onChange={(e) => {
-                    setOpsTouched((p) => ({ ...p, receiptPrefix: true }));
-                    setOpsFieldErrors((p) => {
-                      const next = { ...p };
-                      delete next.receiptPrefix;
-                      return next;
-                    });
-                    setOpsForm({ ...opsForm, receiptPrefix: e.target.value });
-                  }}
-                  className={cn(
-                    opsDisplayError("receiptPrefix") && "border-red-600",
-                  )}
-                  aria-invalid={Boolean(opsDisplayError("receiptPrefix"))}
-                />
-                <FormFieldError message={opsDisplayError("receiptPrefix")} />
-              </div>
-              <div>
-                <FieldLabel>Gold purity</FieldLabel>
-                <Input
-                  value={opsForm.goldPurity}
-                  onChange={(e) => {
-                    setOpsTouched((p) => ({ ...p, goldPurity: true }));
-                    setOpsFieldErrors((p) => {
-                      const next = { ...p };
-                      delete next.goldPurity;
-                      return next;
-                    });
-                    setOpsForm({ ...opsForm, goldPurity: e.target.value });
-                  }}
-                  className={cn(
-                    opsDisplayError("goldPurity") && "border-red-600",
-                  )}
-                  aria-invalid={Boolean(opsDisplayError("goldPurity"))}
-                />
-                <FormFieldError message={opsDisplayError("goldPurity")} />
-              </div>
-              <div>
-                <FieldLabel>Receipt number format</FieldLabel>
-                <Input
-                  value={opsForm.receiptNumberFormat}
-                  onChange={(e) => {
-                    setOpsTouched((p) => ({
-                      ...p,
-                      receiptNumberFormat: true,
-                    }));
-                    setOpsFieldErrors((p) => {
-                      const next = { ...p };
-                      delete next.receiptNumberFormat;
-                      return next;
-                    });
-                    setOpsForm({
-                      ...opsForm,
-                      receiptNumberFormat: e.target.value,
-                    });
-                  }}
-                  className={cn(
-                    "font-mono text-sm",
-                    opsDisplayError("receiptNumberFormat") && "border-red-600",
-                  )}
-                  aria-invalid={Boolean(
-                    opsDisplayError("receiptNumberFormat"),
-                  )}
-                />
-                <FormFieldError
-                  message={opsDisplayError("receiptNumberFormat")}
-                />
-              </div>
-              <div>
-                <FieldLabel>Passbook number format</FieldLabel>
-                <Input
-                  value={opsForm.passbookNumberFormat}
-                  onChange={(e) => {
-                    setOpsTouched((p) => ({
-                      ...p,
-                      passbookNumberFormat: true,
-                    }));
-                    setOpsFieldErrors((p) => {
-                      const next = { ...p };
-                      delete next.passbookNumberFormat;
-                      return next;
-                    });
-                    setOpsForm({
-                      ...opsForm,
-                      passbookNumberFormat: e.target.value,
-                    });
-                  }}
-                  className={cn(
-                    "font-mono text-sm",
-                    opsDisplayError("passbookNumberFormat") && "border-red-600",
-                  )}
-                  aria-invalid={Boolean(
-                    opsDisplayError("passbookNumberFormat"),
-                  )}
-                />
-                <FormFieldError
-                  message={opsDisplayError("passbookNumberFormat")}
-                />
-              </div>
-              <div>
-                <FieldLabel>Scheme number format</FieldLabel>
-                <Input
-                  value={opsForm.schemeNumberFormat}
-                  onChange={(e) => {
-                    setOpsTouched((p) => ({
-                      ...p,
-                      schemeNumberFormat: true,
-                    }));
-                    setOpsFieldErrors((p) => {
-                      const next = { ...p };
-                      delete next.schemeNumberFormat;
-                      return next;
-                    });
-                    setOpsForm({
-                      ...opsForm,
-                      schemeNumberFormat: e.target.value,
-                    });
-                  }}
-                  className={cn(
-                    "font-mono text-sm",
-                    opsDisplayError("schemeNumberFormat") && "border-red-600",
-                  )}
-                  aria-invalid={Boolean(
-                    opsDisplayError("schemeNumberFormat"),
-                  )}
-                />
-                <FormFieldError
-                  message={opsDisplayError("schemeNumberFormat")}
-                />
-              </div>
-              <div>
-                <FieldLabel>Payment reversal window (hours)</FieldLabel>
-                <Input
-                  type="number"
-                  min={0}
-                  max={168}
-                  step={1}
-                  value={opsForm.paymentReversalWindowHours}
-                  onChange={(e) => {
-                    setOpsTouched((p) => ({
-                      ...p,
-                      paymentReversalWindowHours: true,
-                    }));
-                    setOpsFieldErrors((p) => {
-                      const next = { ...p };
-                      delete next.paymentReversalWindowHours;
-                      return next;
-                    });
-                    setOpsForm({
-                      ...opsForm,
-                      paymentReversalWindowHours: Number(e.target.value),
-                    });
-                  }}
-                  className={cn(
-                    opsDisplayError("paymentReversalWindowHours") &&
-                      "border-red-600",
-                  )}
-                  aria-invalid={Boolean(
-                    opsDisplayError("paymentReversalWindowHours"),
-                  )}
-                />
-                <FormFieldError
-                  message={opsDisplayError("paymentReversalWindowHours")}
-                />
-              </div>
-              <div>
-                <FieldLabel>Weight rounding mode</FieldLabel>
-                <Input
-                  value={opsForm.weightRoundingMode}
-                  onChange={(e) => {
-                    setOpsTouched((p) => ({
-                      ...p,
-                      weightRoundingMode: true,
-                    }));
-                    setOpsFieldErrors((p) => {
-                      const next = { ...p };
-                      delete next.weightRoundingMode;
-                      return next;
-                    });
-                    setOpsForm({
-                      ...opsForm,
-                      weightRoundingMode: e.target.value,
-                    });
-                  }}
-                  className={cn(
-                    opsDisplayError("weightRoundingMode") && "border-red-600",
-                  )}
-                  aria-invalid={Boolean(
-                    opsDisplayError("weightRoundingMode"),
-                  )}
-                />
-                <FormFieldError
-                  message={opsDisplayError("weightRoundingMode")}
-                />
-              </div>
-              <div className="md:col-span-2">
-                <FieldLabel>Terms & conditions</FieldLabel>
-                <Textarea
-                  rows={4}
-                  value={opsForm.termsAndConditions}
-                  onChange={(e) => {
-                    setOpsTouched((p) => ({
-                      ...p,
-                      termsAndConditions: true,
-                    }));
-                    setOpsFieldErrors((p) => {
-                      const next = { ...p };
-                      delete next.termsAndConditions;
-                      return next;
-                    });
-                    setOpsForm({
-                      ...opsForm,
-                      termsAndConditions: e.target.value,
-                    });
-                  }}
-                  className={cn(
-                    opsDisplayError("termsAndConditions") && "border-red-600",
-                  )}
-                  aria-invalid={Boolean(
-                    opsDisplayError("termsAndConditions"),
-                  )}
-                />
-                <FormFieldError
-                  message={opsDisplayError("termsAndConditions")}
-                />
-                <p className="mt-2 text-xs text-muted-foreground">
-                  Sequence formats lock after the first document of that type is
-                  issued (SEQUENCE_FORMAT_LOCKED).
-                </p>
-              </div>
-            </div>
-            <div className="flex justify-end border-t border-[#eaded9] px-6 py-4">
+          <SettingsOperationsPanel
+            form={opsForm}
+            onFormChange={setOpsForm}
+            displayError={opsDisplayError}
+            onFieldTouch={(field) =>
+              setOpsTouched((prev) => ({ ...prev, [field]: true }))
+            }
+            onFieldErrorClear={(field) =>
+              setOpsFieldErrors((prev) => {
+                const next = { ...prev };
+                delete next[field];
+                return next;
+              })
+            }
+            saveDisabled={!settingsOperationsFormReady(opsForm)}
+            onSave={saveOperations}
+            saveSlot={
               <PermissionGate permission={ACTION.tenantSettingsWrite}>
                 <Button
+                  className="h-11 shrink-0 gap-2 px-6"
                   disabled={!settingsOperationsFormReady(opsForm)}
-                  onClick={async () => {
-                    setOpsTouched({
-                      receiptPrefix: true,
-                      receiptNumberFormat: true,
-                      passbookNumberFormat: true,
-                      schemeNumberFormat: true,
-                      goldPurity: true,
-                      weightRoundingMode: true,
-                      paymentReversalWindowHours: true,
-                      termsAndConditions: true,
-                    });
-                    const clientErrors = validateSettingsOperationsForm(opsForm);
-                    if (Object.keys(clientErrors).length) {
-                      setOpsFieldErrors(clientErrors);
-                      toast.error("Fix the highlighted fields.");
-                      return;
-                    }
-                    try {
-                      await patchOperations({
-                        ...opsForm,
-                        kycAllowedTypes:
-                          operationsQuery.data?.kycAllowedTypes ?? [
-                            "AADHAAR",
-                            "PAN",
-                          ],
-                        expectedVersion: operationsQuery.data?.audit?.version,
-                      }).unwrap();
-                      toast.success("Operations saved");
-                      setOpsFieldErrors({});
-                    } catch (err) {
-                      handleFormApiError(err, {
-                        setFieldErrors: setOpsFieldErrors,
-                        fallback: "Could not save operations",
-                      });
-                    }
-                  }}
+                  onClick={() => void saveOperations()}
                 >
                   <Save />
                   Save operations
                 </Button>
               </PermissionGate>
-            </div>
-          </Surface>
+            }
+          />
         </PageTabsPanel>
 
         <PageTabsPanel value="subscription">

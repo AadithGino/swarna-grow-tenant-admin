@@ -4,22 +4,16 @@ import { adminApi } from "@/src/store/api/admin-api";
 import { customerApi } from "@/src/store/api/customer-api";
 import { platformApi } from "@/src/store/api/platform-api";
 import { CUSTOMER_ROUTE_SECTIONS } from "@/src/lib/customer-tenant";
+import { clearPlatformTokens } from "@/src/lib/auth-token-storage";
 import { customerSignedOut } from "@/src/store/slices/customer-session-slice";
 import { clearSession } from "@/src/store/slices/session-slice";
-
-const PLATFORM_ACCESS = "swarnagrow.platformAccessToken";
-const PLATFORM_REFRESH = "swarnagrow.platformRefreshToken";
-const PLATFORM_USER = "swarnagrow.platformUser";
 
 let tenantLogoutStarted = false;
 let platformLogoutStarted = false;
 let customerLogoutStarted = false;
 
 export function clearPlatformAuthStorage() {
-  if (typeof window === "undefined") return;
-  localStorage.removeItem(PLATFORM_ACCESS);
-  localStorage.removeItem(PLATFORM_REFRESH);
-  localStorage.removeItem(PLATFORM_USER);
+  clearPlatformTokens();
 }
 
 export function isUnauthorizedFetchError(

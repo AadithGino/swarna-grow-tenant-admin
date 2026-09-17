@@ -12,23 +12,23 @@ export function formatLocalYmd(date: Date): string {
   return `${y}-${m}-${d}`;
 }
 
+/** Business calendar day (IST) — matches backend gold rate / due date logic. */
+export function businessTodayYmd(): string {
+  if (env.useMocks) return DEMO_TODAY;
+  return new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
+}
+
 /** Default “from” for list/report date filters (demo range in mock mode). */
 export function defaultListRangeFrom(): string {
   if (env.useMocks) return DEMO_RANGE_FROM;
-  const now = new Date();
-  return formatLocalYmd(new Date(now.getFullYear(), now.getMonth(), 1));
+  const today = businessTodayYmd();
+  return `${today.slice(0, 7)}-01`;
 }
 
 /** Default “to” for list/report date filters. */
 export function defaultListRangeTo(): string {
   if (env.useMocks) return DEMO_RANGE_TO;
-  return formatLocalYmd(new Date());
-}
-
-/** Business calendar day (IST) — matches backend gold rate / due date logic. */
-export function businessTodayYmd(): string {
-  if (env.useMocks) return DEMO_TODAY;
-  return new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
+  return businessTodayYmd();
 }
 
 /** Calendar “today” highlight (demo day in mock mode). */

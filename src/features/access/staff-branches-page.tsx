@@ -598,8 +598,13 @@ export function StaffBranchesPage() {
                           delete next.password;
                           return next;
                         });
-                        setStaffForm({ ...staffForm, password: e.target.value });
+                        setStaffForm({
+                          ...staffForm,
+                          password: e.target.value.replace(/\D/g, "").slice(0, 128),
+                        });
                       }}
+                      inputMode="numeric"
+                      placeholder="Min. 4 digits"
                       className={cn(
                         staffDisplayError("password") && "border-red-600",
                       )}
@@ -607,7 +612,7 @@ export function StaffBranchesPage() {
                     />
                     <FormFieldError message={staffDisplayError("password")} />
                     <p className="mt-1 text-xs text-muted-foreground">
-                      At least 8 characters (same rule as staff login).
+                      Minimum 4 digits, numbers only (same rule as staff login).
                     </p>
                   </div>
                   <div>

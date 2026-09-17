@@ -25,6 +25,11 @@ import type {
   SchemePlan,
 } from "@/src/types/customer";
 import { handleCustomerUnauthorized } from "@/src/lib/auth-logout";
+import {
+  persistCustomerTokens,
+  readStoredRefreshToken,
+  TOKEN_KEYS,
+} from "@/src/lib/auth-token-storage";
 import { parseRefreshTokens } from "@/src/lib/auth-tokens-from-refresh";
 import { newIdempotencyKey } from "@/src/lib/idempotency";
 import type { AppDispatch } from "@/src/store";
@@ -159,6 +164,24 @@ const mockBaseQuery: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQueryErro
       expiresAt: new Date(Date.now() + 900_000).toISOString(),
     });
   }
+  const appUploadComplete = url.match(/^\/app\/uploads\/([^/]+)\/complete$/);
+  if (appUploadComplete && method === "POST") {
+    return ok({
+      uploadId: appUploadComplete[1],
+      status: "UPLOADED",
+      viewUrl: `/uploads/${appUploadComplete[1]}`,
+    });
+  }
+  const appUploadGet = url.match(/^\/app\/uploads\/([^/]+)$/);
+  if (appUploadGet && method === "GET") {
+    return ok({
+      uploadId: appUploadGet[1],
+      status: "UPLOADED",
+      fileName: "document.jpg",
+      contentType: "image/jpeg",
+      downloadUrl: "https://picsum.photos/seed/swarnagrow-upload/1200/800",
+    });
+  }
   if (url === "/app/scheme-plans") return ok(schemePlans);
   if (url.startsWith("/app/scheme-plans/")) return ok(schemePlans.find((p) => p.id === url.split("/").pop()) ?? schemePlans[0]);
   if (url === "/app/schemes") {
@@ -220,6 +243,9 @@ const mockBaseQuery: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQueryErro
       tokenType: "Bearer",
     });
   }
+  if (url === "/app/auth/logout" && method === "POST") {
+    return ok({ loggedOut: true });
+  }
   if (url === "/app/auth/devices") return ok([{ deviceId: "dev_iphone", platform: "iOS", deviceModel: "iPhone 16", lastUsedAt: "Now", current: true }, { deviceId: "dev_chrome", platform: "Web", deviceModel: "Chrome on macOS", lastUsedAt: "2 days ago", current: false }]);
   if (url === "/app/gold-rate/current") return ok(customerHome.goldRate);
   if (url === "/app/gold-rate/history") return ok([{ ...customerHome.goldRate, effectiveDate: "2026-09-16" }, { ...customerHome.goldRate, ratePerGramPaise: 721000, ratePerGramDisplay: "₹7,210 / g", effectiveDate: "2026-09-15", movement: -0.18 }, { ...customerHome.goldRate, ratePerGramPaise: 722500, ratePerGramDisplay: "₹7,225 / g", effectiveDate: "2026-09-14", movement: 0.31 }]);
@@ -232,7 +258,7 @@ const liveBaseQuery = fetchBaseQuery({
   baseUrl: env.apiBaseUrl,
   prepareHeaders(headers) {
     if (typeof window !== "undefined") {
-      const token = localStorage.getItem("swarnagrow.customer.accessToken");
+      const token = localStorage.getItem(TOKEN_KEYS.customer.access);
       if (token) headers.set("Authorization", `Bearer ${token}`);
     }
     headers.set("Accept", "application/json");
@@ -264,14 +290,6 @@ function unwrapCustomerEnvelope(result: {
   return result;
 }
 
-function storeCustomerTokens(tokens: { accessToken: string; refreshToken?: string }) {
-  if (typeof window === "undefined") return;
-  localStorage.setItem("swarnagrow.customer.accessToken", tokens.accessToken);
-  if (tokens.refreshToken) {
-    localStorage.setItem("swarnagrow.customer.refreshToken", tokens.refreshToken);
-  }
-}
-
 const dynamicBaseQuery: BaseQueryFn<
   string | FetchArgs,
   unknown,
@@ -297,7 +315,7 @@ const dynamicBaseQuery: BaseQueryFn<
     !isPublicAuth &&
     !alreadyRetried
   ) {
-    const refreshToken = localStorage.getItem("swarnagrow.customer.refreshToken");
+    const refreshToken = readStoredRefreshToken("customer");
     if (refreshToken) {
       const refreshResult = await liveBaseQuery(
         {
@@ -310,7 +328,7 @@ const dynamicBaseQuery: BaseQueryFn<
       );
       const tokens = parseRefreshTokens(refreshResult.data);
       if (tokens?.accessToken) {
-        storeCustomerTokens(tokens);
+        persistCustomerTokens(tokens.accessToken, tokens.refreshToken);
         result = await liveBaseQuery(requestArgs, api, {
           ...extra,
           _authRetry: true,
@@ -410,6 +428,21 @@ export const customerApi = createApi({
       { purpose: string; fileName: string; contentType: string; sizeBytes: number }
     >({
       query: (body) => ({ url: "/app/uploads/presign", method: "POST", body }),
+    }),
+    completeCustomerUpload: builder.mutation<
+      { uploadId: string; status: string; viewUrl?: string },
+      string
+    >({
+      query: (uploadId) => ({
+        url: `/app/uploads/${uploadId}/complete`,
+        method: "POST",
+      }),
+    }),
+    getCustomerUploadDownload: builder.query<
+      { uploadId: string; status: string; fileName?: string | null; contentType?: string | null; downloadUrl: string },
+      string
+    >({
+      query: (uploadId) => `/app/uploads/${uploadId}`,
     }),
     submitCustomerKyc: builder.mutation<
       CustomerProfile,
@@ -527,6 +560,22 @@ export const customerApi = createApi({
     replyCustomerGrievance: builder.mutation<Record<string, unknown>, { id: string; body: string; expectedVersion: number }>({ query: ({ id, ...body }) => ({ url: `/app/grievances/${id}/messages`, method: "POST", body }), invalidatesTags: (_r, _e, arg) => [{ type: "CustomerGrievance", id: arg.id }] }),
     getCustomerDevices: builder.query<Array<{ deviceId: string; platform: string; deviceModel: string; lastUsedAt: string; current: boolean }>, void>({ query: () => "/app/auth/devices", providesTags: ["CustomerDevice"] }),
     revokeCustomerDevice: builder.mutation<void, string>({ query: (id) => ({ url: `/app/auth/devices/${id}`, method: "DELETE" }), invalidatesTags: ["CustomerDevice"] }),
+    customerLogout: builder.mutation<
+      { loggedOut: boolean },
+      { refreshToken?: string } | void
+    >({
+      query: (body) => ({
+        url: "/app/auth/logout",
+        method: "POST",
+        body: body?.refreshToken ? { refreshToken: body.refreshToken } : {},
+      }),
+      transformResponse: (raw: unknown) => {
+        if (raw && typeof raw === "object" && "success" in raw) {
+          return (raw as ApiEnvelope<{ loggedOut: boolean }>).data;
+        }
+        return raw as { loggedOut: boolean };
+      },
+    }),
     getCustomerGoldRate: builder.query<CustomerHome["goldRate"], void>({ query: () => "/app/gold-rate/current" }),
     getCustomerGoldHistory: builder.query<Array<CustomerHome["goldRate"]>, void>({ query: () => "/app/gold-rate/history" }),
     getCustomerBranches: builder.query<Array<CustomerProfile["branch"]>, void>({ query: () => "/app/branches" }),
@@ -537,7 +586,7 @@ export const customerApi = createApi({
 export const {
   useResolveTenantQuery, useRequestCustomerOtpMutation, useVerifyCustomerOtpMutation, useLoginCustomerPasswordMutation,
   useGetCustomerHomeQuery, useGetCustomerProfileQuery, useUpdateCustomerProfileMutation,
-  useCompleteCustomerProfileMutation, usePresignCustomerUploadMutation, useSubmitCustomerKycMutation,
+  useCompleteCustomerProfileMutation, usePresignCustomerUploadMutation, useCompleteCustomerUploadMutation, useGetCustomerUploadDownloadQuery, useSubmitCustomerKycMutation,
   useUpdateCustomerNomineeMutation, useRemoveCustomerNomineeMutation,
   useGetCustomerPlansQuery, useGetCustomerPlanQuery, useGetCustomerSchemesQuery, useGetCustomerPastSchemesQuery, useGetCustomerSchemeQuery, useGetCustomerPayableRangeQuery, useLazyGetCustomerPayableRangeQuery,
   useEnrolCustomerSchemeMutation, useInitiateCustomerPaymentMutation, useInitiatePublicPaymentLinkMutation,
@@ -545,6 +594,7 @@ export const {
   useGetCustomerNotificationsQuery, useMarkCustomerNotificationReadMutation, useMarkAllCustomerNotificationsReadMutation,
   useGetCustomerGrievancesQuery, useGetCustomerGrievanceQuery, useCreateCustomerGrievanceMutation,
   useReplyCustomerGrievanceMutation, useGetCustomerDevicesQuery, useRevokeCustomerDeviceMutation,
+  useCustomerLogoutMutation,
   useGetCustomerGoldRateQuery, useGetCustomerGoldHistoryQuery, useGetCustomerBranchesQuery,
   useRequestCustomerRedemptionMutation,
 } = customerApi;

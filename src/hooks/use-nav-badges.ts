@@ -10,7 +10,7 @@ export type NavBadgeKey =
 export function useNavBadges(): Partial<Record<NavBadgeKey, number>> {
   const branchId = useActingBranchId();
   const { data } = useGetNavBadgesQuery(branchId ? { branchId } : {}, {
-    pollingInterval: 120_000,
+    pollingInterval: 60_000,
   });
   if (!data) return {};
   return {

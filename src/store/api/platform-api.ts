@@ -2,6 +2,11 @@ import { createApi, fetchBaseQuery } from "@reduxjs/toolkit/query/react";
 import type { BaseQueryFn, FetchArgs, FetchBaseQueryError } from "@reduxjs/toolkit/query";
 import { apiOrigin, env } from "@/src/config/env";
 import { handlePlatformUnauthorized } from "@/src/lib/auth-logout";
+import {
+  persistPlatformTokens,
+  readStoredRefreshToken,
+  TOKEN_KEYS,
+} from "@/src/lib/auth-token-storage";
 import { normalizeFetchBaseQueryError } from "@/src/lib/api-error";
 import type { AppDispatch } from "@/src/store";
 import { parseRefreshTokens } from "@/src/lib/auth-tokens-from-refresh";
@@ -140,22 +145,12 @@ export type PlatformReadinessHealth = { ok: boolean; database: string; queue: st
 type PlatformArgs = FetchArgs & { mockKey: string; mockParams?: Record<string, unknown> };
 type PlatformBaseQueryExtra = { _authRetry?: boolean };
 
-function storePlatformTokens(tokens: {
-  accessToken: string;
-  refreshToken?: string;
-}) {
-  if (typeof window === "undefined") return;
-  localStorage.setItem("swarnagrow.platformAccessToken", tokens.accessToken);
-  if (tokens.refreshToken) {
-    localStorage.setItem("swarnagrow.platformRefreshToken", tokens.refreshToken);
-  }
-}
 const liveBaseQuery = fetchBaseQuery({
   baseUrl: env.apiBaseUrl,
   responseHandler: readContractResponseBody,
   prepareHeaders: (headers) => {
     if (typeof window !== "undefined") {
-      const token = localStorage.getItem("swarnagrow.platformAccessToken");
+      const token = localStorage.getItem(TOKEN_KEYS.platform.access);
       if (token) headers.set("Authorization", `Bearer ${token}`);
     }
     headers.set("Accept", "application/json");
@@ -190,7 +185,7 @@ const baseQuery: BaseQueryFn<
     !isPlatformLogin &&
     !alreadyRetried
   ) {
-    const refreshToken = localStorage.getItem("swarnagrow.platformRefreshToken");
+    const refreshToken = readStoredRefreshToken("platform");
     if (refreshToken) {
       const refreshResult = await liveBaseQuery(
         {
@@ -203,7 +198,7 @@ const baseQuery: BaseQueryFn<
       );
       const tokens = parseRefreshTokens(refreshResult.data);
       if (tokens?.accessToken) {
-        storePlatformTokens(tokens);
+        persistPlatformTokens(tokens.accessToken, tokens.refreshToken);
         result = await liveBaseQuery({ ...args, headers }, api, {
           ...extra,
           _authRetry: true,

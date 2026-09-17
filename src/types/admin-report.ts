@@ -24,7 +24,9 @@ export type ChartSeriesPoint = {
   x: string;
   y: number;
   yDisplay?: string;
+  xDisplay?: string;
   modeKey?: string;
+  statusKey?: string;
 };
 
 export type ChartSeriesBlock = {
@@ -77,13 +79,15 @@ export const ADMIN_REPORT_KEYS = [
   "OUTSTANDING",
   "MATURITY_REDEMPTION",
   "GOLD_ACCRUAL",
-  "CUSTOMER_LEDGER",
+  "CUSTOMER_PERFORMANCE",
   "STAFF_PERFORMANCE",
   "CASH_HANDOVER",
   "REMINDER_DELIVERY",
   "WHATSAPP_USAGE",
   "SCHEME_REGISTER",
   "DEFAULTER",
+  "BRANCH_PERFORMANCE",
+  "SCHEME_PERFORMANCE",
 ] as const;
 
 export type AdminReportKey = (typeof ADMIN_REPORT_KEYS)[number];
@@ -94,11 +98,13 @@ export const ADMIN_REPORT_LABELS: Record<AdminReportKey, string> = {
   OUTSTANDING: "Outstanding & ageing",
   MATURITY_REDEMPTION: "Maturity & redemption",
   GOLD_ACCRUAL: "Gold accrual & liability",
-  CUSTOMER_LEDGER: "Customer ledger",
+  CUSTOMER_PERFORMANCE: "Customer performance",
   STAFF_PERFORMANCE: "Staff performance",
   CASH_HANDOVER: "Cash handover",
   REMINDER_DELIVERY: "Reminder delivery",
   WHATSAPP_USAGE: "WhatsApp usage",
   SCHEME_REGISTER: "Scheme register",
   DEFAULTER: "Defaulter",
+  BRANCH_PERFORMANCE: "Branch performance",
+  SCHEME_PERFORMANCE: "Scheme performance",
 };

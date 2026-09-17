@@ -1,5 +1,9 @@
 import { createSlice, type PayloadAction } from "@reduxjs/toolkit";
 import { env } from "@/src/config/env";
+import {
+  clearCustomerTokens,
+  persistCustomerTokens,
+} from "@/src/lib/auth-token-storage";
 
 type CustomerSessionState = {
   authenticated: boolean;
@@ -56,9 +60,11 @@ const customerSessionSlice = createSlice({
       state.customerLoginMode = action.payload.customerLoginMode;
       state.customerAppWriteEnabled = action.payload.customerAppWriteEnabled;
       state.customerAppPaymentsEnabled = action.payload.customerAppPaymentsEnabled;
-      if (typeof window !== "undefined") {
-        if (action.payload.accessToken) localStorage.setItem("swarnagrow.customer.accessToken", action.payload.accessToken);
-        if (action.payload.refreshToken) localStorage.setItem("swarnagrow.customer.refreshToken", action.payload.refreshToken);
+      if (typeof window !== "undefined" && action.payload.accessToken) {
+        persistCustomerTokens(
+          action.payload.accessToken,
+          action.payload.refreshToken,
+        );
       }
     },
     customerSignedOut(state) {
@@ -73,8 +79,7 @@ const customerSessionSlice = createSlice({
       state.customerAppWriteEnabled = undefined;
       state.customerAppPaymentsEnabled = undefined;
       if (typeof window !== "undefined") {
-        localStorage.removeItem("swarnagrow.customer.accessToken");
-        localStorage.removeItem("swarnagrow.customer.refreshToken");
+        clearCustomerTokens();
       }
     },
   },

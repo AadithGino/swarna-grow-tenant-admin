@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Loader2 } from "lucide-react";
+import { ArrowRight, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -75,50 +75,63 @@ export function SettlementPreviewDialog({
     { skip: !open },
   );
 
+  const preview = previewQuery.data;
+  const canContinue =
+    type === "MATURITY_REDEMPTION" &&
+    preview?.eligible &&
+    Boolean(onInitiateRedemption);
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className={cn(dialogScrollShellClass, "sm:max-w-2xl")}>
-        <DialogBody className="pb-4">
-          <DialogHeader>
-            <DialogTitle>
+      <DialogContent className={cn(dialogScrollShellClass, "sm:max-w-3xl")}>
+        <DialogBody className="space-y-5 pb-2">
+          <DialogHeader className="space-y-2 text-left">
+            <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#9a6f2a]">
+              Settlement preview
+            </p>
+            <DialogTitle className="text-2xl font-extrabold tracking-tight text-[#241316]">
               {title ??
                 (type === "MATURITY_REDEMPTION"
-                  ? "Maturity settlement preview"
-                  : "Premature closure preview")}
+                  ? "Maturity settlement"
+                  : "Premature closure")}
             </DialogTitle>
-            <DialogDescription>
+            <DialogDescription className="max-w-2xl text-sm leading-6 text-[#776a6d]">
               {description ??
-                "Computed from confirmed payments only — no ledger writes until you submit."}
+                "Computed from confirmed payments only — no ledger writes until you submit redemption or closure."}
             </DialogDescription>
           </DialogHeader>
           {previewQuery.isLoading ? (
-            <PageSkeleton />
+            <PageSkeleton cards={4} />
           ) : previewQuery.isError ? (
-            <p className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-900">
+            <p className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-900">
               Could not load settlement preview. Refresh the page and try again.
             </p>
-          ) : previewQuery.data ? (
-            <SettlementLinesPanel preview={previewQuery.data} />
+          ) : preview ? (
+            <SettlementLinesPanel preview={preview} />
           ) : (
             <p className="text-sm text-muted-foreground">
               Settlement preview is unavailable.
             </p>
           )}
         </DialogBody>
-        <DialogFooter className="sm:justify-between">
+        <DialogFooter className="gap-3 border-t border-[#efe6ea] bg-[#faf7f5]/80 px-6 py-4 sm:justify-between">
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Close
           </Button>
-          {type === "MATURITY_REDEMPTION" &&
-          previewQuery.data?.eligible &&
-          onInitiateRedemption ? (
+          {canContinue ? (
             <Button
+              className="gap-2"
               onClick={() => {
-                onInitiateRedemption();
+                onInitiateRedemption?.();
               }}
             >
               Continue to redeem
+              <ArrowRight className="size-4" />
             </Button>
+          ) : preview && !preview.eligible ? (
+            <p className="text-sm text-[#776a6d]">
+              Resolve blockers above to proceed.
+            </p>
           ) : null}
         </DialogFooter>
       </DialogContent>
@@ -168,11 +181,16 @@ export function RedeemEnrollmentDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className={cn(dialogScrollShellClass, "sm:max-w-lg")}>
-        <DialogBody className="pb-4">
-          <DialogHeader>
-            <DialogTitle>Initiate redemption</DialogTitle>
-            <DialogDescription>
+      <DialogContent className={cn(dialogScrollShellClass, "sm:max-w-3xl")}>
+        <DialogBody className="space-y-5 pb-2">
+          <DialogHeader className="space-y-2 text-left">
+            <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#9a6f2a]">
+              Redemption
+            </p>
+            <DialogTitle className="text-2xl font-extrabold tracking-tight text-[#241316]">
+              Initiate redemption
+            </DialogTitle>
+            <DialogDescription className="max-w-2xl text-sm leading-6 text-[#776a6d]">
               Choose how value is handed over before submitting the redemption
               request.
             </DialogDescription>
@@ -234,11 +252,12 @@ export function RedeemEnrollmentDialog({
             </div>
           )}
         </DialogBody>
-        <DialogFooter>
+        <DialogFooter className="gap-3 border-t border-[#efe6ea] bg-[#faf7f5]/80 px-6 py-4">
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
           <Button
+            className="gap-2"
             disabled={
               !preview?.eligible ||
               redeemState.isLoading ||
@@ -346,10 +365,15 @@ export function PrematureClosureDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className={cn(dialogScrollShellClass, "sm:max-w-2xl")}>
-        <DialogBody className="pb-4">
-          <DialogHeader>
-            <DialogTitle>Close scheme prematurely</DialogTitle>
+      <DialogContent className={cn(dialogScrollShellClass, "sm:max-w-3xl")}>
+        <DialogBody className="space-y-5 pb-2">
+          <DialogHeader className="space-y-2 text-left">
+            <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#9a6f2a]">
+              Early closure
+            </p>
+            <DialogTitle className="text-2xl font-extrabold tracking-tight text-[#241316]">
+              Close scheme prematurely
+            </DialogTitle>
             <DialogDescription>
               Penalty and forfeited benefits must be acknowledged before
               closure.
@@ -470,12 +494,13 @@ export function PrematureClosureDialog({
             </div>
           )}
         </DialogBody>
-        <DialogFooter>
+        <DialogFooter className="gap-3 border-t border-[#efe6ea] bg-[#faf7f5]/80 px-6 py-4">
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
           <Button
             variant="destructive"
+            className="gap-2"
             disabled={
               !preview?.eligible ||
               closeState.isLoading ||

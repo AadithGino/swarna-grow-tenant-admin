@@ -7,6 +7,12 @@ type PresignResult = {
   headers: Record<string, string>;
 };
 
+type UploadCompleteResult = {
+  uploadId: string;
+  status: string;
+  viewUrl?: string;
+};
+
 export async function uploadFileViaPresign(
   file: File,
   presign: (input: {
@@ -16,6 +22,7 @@ export async function uploadFileViaPresign(
     sizeBytes: number;
   }) => Promise<PresignResult>,
   purpose: string,
+  complete?: (uploadId: string) => Promise<UploadCompleteResult>,
 ): Promise<string> {
   const contentType = file.type || "application/octet-stream";
   const result = await presign({
@@ -34,6 +41,9 @@ export async function uploadFileViaPresign(
       body: file,
     });
     if (!put.ok) throw new Error("Upload to storage failed");
+  }
+  if (complete) {
+    await complete(result.uploadId);
   }
   return result.uploadId;
 }

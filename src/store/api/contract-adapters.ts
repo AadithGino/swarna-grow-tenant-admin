@@ -162,18 +162,24 @@ function buildAdminKycDocuments(kyc: Record<string, unknown>) {
     return fromApi.map((doc) => ({
       side: (doc.side as string) ?? "SINGLE",
       label: String(doc.label ?? kycDocumentLabel(String(doc.side ?? "SINGLE"), kyc.type as string)),
+      uploadId: (doc.uploadId as string) ?? undefined,
       previewUrl: (doc.previewUrl ?? doc.viewUrl) as string | undefined,
     }));
   }
-  const docs: Array<{ side: string; label: string; previewUrl?: string }> = [];
+  const docs: Array<{ side: string; label: string; uploadId?: string; previewUrl?: string }> = [];
   if (kyc.frontUploadId) {
     docs.push({
       side: "FRONT",
       label: kycDocumentLabel("FRONT", kyc.type as string),
+      uploadId: String(kyc.frontUploadId),
     });
   }
   if (kyc.backUploadId) {
-    docs.push({ side: "BACK", label: kycDocumentLabel("BACK", kyc.type as string) });
+    docs.push({
+      side: "BACK",
+      label: kycDocumentLabel("BACK", kyc.type as string),
+      uploadId: String(kyc.backUploadId),
+    });
   }
   return docs;
 }
@@ -1868,7 +1874,7 @@ const DASHBOARD_CHART_META: Record<
     seriesName: "Schemes",
   },
   "gold-accrual-trend": {
-    chartType: "area",
+    chartType: "line",
     title: "Gold accrual",
     yAxis: { type: "weight", label: "Weight" },
     seriesKey: "GOLD",
@@ -2778,6 +2784,7 @@ export function adaptDueList(raw: any): {
       raw?.summary?.defaulted ?? meta?.summary?.defaulted ?? derived.defaulted,
     customers:
       raw?.summary?.customers ?? meta?.summary?.customers ?? derived.customers,
+    chart: raw?.summary?.chart ?? meta?.summary?.chart,
   };
 
   return {
@@ -3611,12 +3618,26 @@ export function adaptAdminReport(raw: any) {
 export function adaptCustomerAnalytics(raw: any): {
   summary: import("@/src/types/admin-report").ReportSummaryItem[];
   charts: Record<string, import("@/src/types/admin-report").ChartSeriesBlock>;
+  period?: {
+    from?: string;
+    to?: string;
+    label?: string;
+    comparedTo?: { from?: string; to?: string; label?: string };
+    groupBy?: string;
+  };
+  scope?: { level?: string; label?: string; branchId?: string | null };
+  totals?: Record<string, unknown>;
+  generatedAt?: string;
 } {
   const data = contractPayload<any>(raw) ?? {};
   if (Array.isArray(data?.summary) && data.summary.length && data?.charts) {
     return {
       summary: data.summary,
       charts: data.charts,
+      period: data.period,
+      scope: data.scope,
+      totals: data.totals,
+      generatedAt: data.generatedAt,
     };
   }
 
@@ -3708,7 +3729,19 @@ export function adaptCustomerAnalytics(raw: any): {
     };
   }
 
-  return { summary, charts };
+  return {
+    summary,
+    charts,
+    period: data.period,
+    scope: data.scope,
+    totals: data.totals,
+    generatedAt: data.generatedAt,
+  };
+}
+
+/** Same envelope shape as customer analytics. */
+export function adaptEnrollmentAnalytics(raw: any) {
+  return adaptCustomerAnalytics(raw);
 }
 
 /** Map audit-event list payloads into UI rows (When / Actor / Action / Summary). */
