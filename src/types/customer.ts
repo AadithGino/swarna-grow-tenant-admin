@@ -258,6 +258,7 @@ export type PaymentListItem = {
   receiptDownloadPath?: string;
   channel: "PHONEPE" | "CASH" | "UPI" | "BANK_TRANSFER";
   channelLabel?: string;
+  recordedByLabel?: string;
   paymentPattern: "FIXED" | "FLEXIBLE";
   targetCycle?: string;
   valueBasis?: "CASH" | "GOLD_WEIGHT";

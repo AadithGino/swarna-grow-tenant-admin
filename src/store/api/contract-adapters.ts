@@ -962,13 +962,27 @@ export function adaptPaymentList(raw: any, customerName = ""): Payment[] {
       (item.customerId != null ? String(item.customerId) : null) ??
       (customerName || null) ??
       "—";
-    const sourceRaw = String(item.source ?? "");
+    const sourceRaw = String(item.source ?? "").toUpperCase();
     const source: Payment["source"] =
       sourceRaw === "PORTAL" || sourceRaw === "ADMIN"
         ? "ADMIN"
         : sourceRaw === "STAFF_APP" || sourceRaw === "STAFF"
           ? "STAFF"
           : "PAYMENT_LINK";
+    const recordedBy =
+      sourceRaw === "CUSTOMER_APP"
+        ? "Customer app"
+        : sourceRaw === "STAFF_APP"
+          ? staffName(item) !== "—"
+            ? staffName(item)
+            : "Staff app"
+          : sourceRaw === "PORTAL" || sourceRaw === "ADMIN"
+            ? staffName(item) !== "—"
+              ? staffName(item)
+              : "Admin panel"
+            : staffName(item) === "—" && sourceRaw === "CUSTOMER_APP"
+              ? "Customer app"
+              : staffName(item);
     return {
       id: entityId(item),
       receiptNo: item.receiptNumber ?? item.receiptNo ?? "",
@@ -987,10 +1001,7 @@ export function adaptPaymentList(raw: any, customerName = ""): Payment[] {
       schemeId: String(item.schemeId ?? item.scheme?._id ?? item.scheme?.id ?? ""),
       amount: rupees(item) || rupees(item.amount) || (item.amountPaise ?? 0) / 100,
       mode: item.mode,
-      staff:
-        staffName(item) === "—" && item.source === "CUSTOMER_APP"
-          ? "Online"
-          : staffName(item),
+      staff: recordedBy,
       branch: branchName(item),
       status: item.status,
       source,

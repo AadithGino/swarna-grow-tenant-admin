@@ -97,7 +97,8 @@ export function adaptCustomerPayment(raw: unknown): PaymentListItem {
     receiptNumber,
     receiptDownloadPath,
     channel,
-    channelLabel: String(row.channelLabel ?? channelLabel(channel)),
+    channelLabel: String(row.channelLabel ?? row.recordedByLabel ?? channelLabel(channel)),
+    recordedByLabel: row.recordedByLabel != null ? String(row.recordedByLabel) : undefined,
     paymentPattern:
       String(row.paymentPattern ?? scheme?.paymentPattern ?? "FIXED").toUpperCase() === "FLEXIBLE"
         ? "FLEXIBLE"
@@ -113,6 +114,9 @@ export function adaptCustomerPayment(raw: unknown): PaymentListItem {
 
 export function adaptCustomerPaymentList(raw: unknown): PaymentListItem[] {
   if (Array.isArray(raw)) return raw.map(adaptCustomerPayment);
+  if (raw && typeof raw === "object" && Array.isArray((raw as { data?: unknown[] }).data)) {
+    return (raw as { data: unknown[] }).data.map(adaptCustomerPayment);
+  }
   return [];
 }
 

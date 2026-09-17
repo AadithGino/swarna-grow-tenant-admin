@@ -74,7 +74,11 @@ import {
   useGetStaffQuery,
 } from "@/src/store/api/admin-api";
 
-type StaffRole = "BRANCH_STAFF" | "BRANCH_MANAGER" | "TENANT_ADMIN";
+type StaffRole =
+  | "BRANCH_STAFF"
+  | "BRANCH_MANAGER"
+  | "COLLECTION_AGENT"
+  | "TENANT_ADMIN";
 
 const emptyBranchForm = (): BranchFormFields => ({
   name: "",
@@ -623,6 +627,9 @@ export function StaffBranchesPage() {
                       <SelectContent>
                         <SelectItem value="BRANCH_STAFF">
                           Branch staff
+                        </SelectItem>
+                        <SelectItem value="COLLECTION_AGENT">
+                          Collection agent
                         </SelectItem>
                         <SelectItem value="BRANCH_MANAGER">
                           Branch manager

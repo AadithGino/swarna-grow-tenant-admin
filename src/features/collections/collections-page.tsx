@@ -233,7 +233,12 @@ export function CollectionsPage() {
     {
       key: "source",
       header: "Source",
-      render: (r: (typeof rows)[number]) => r.source.replaceAll("_", " "),
+      render: (r: (typeof rows)[number]) =>
+        r.source === "STAFF"
+          ? "Staff app"
+          : r.source === "ADMIN"
+            ? "Admin panel"
+            : "Customer app",
     },
     {
       key: "status",

@@ -2283,7 +2283,11 @@ export const adminApi = createApi({
         name: string;
         mobile: string;
         password: string;
-        role: "BRANCH_STAFF" | "BRANCH_MANAGER" | "TENANT_ADMIN";
+        role:
+          | "BRANCH_STAFF"
+          | "BRANCH_MANAGER"
+          | "COLLECTION_AGENT"
+          | "TENANT_ADMIN";
         branchId: string;
         scope?: "BRANCH" | "TENANT";
         mustChangePassword?: boolean;

@@ -4,6 +4,7 @@ import dynamic from "next/dynamic";
 import { PageSkeleton } from "@/src/components/common/query-state";
 import { isKnownPortalSection } from "@/src/lib/portal-routes";
 import { CustomerRouter } from "./customer-router";
+import { AgentRouter } from "./agent-router";
 import { CustomerLegacyPayRedirect } from "@/src/features/customer/customer-legacy-pay-redirect";
 
 const options = { loading: () => <PageSkeleton /> };
@@ -211,6 +212,7 @@ function PlatformRouter({ slug }: { slug: string[] }) {
 
 export function PortalRouter({ slug }: { slug: string[] }) {
   if (slug[0] === "customer") return <CustomerRouter slug={slug} />;
+  if (slug[0] === "agent") return <AgentRouter slug={slug} />;
   if (slug[0] === "platform") return <PlatformRouter slug={slug} />;
   if (slug[0] === "pay" && slug[1]) return <CustomerLegacyPayRedirect linkToken={slug[1]} />;
   const [section = "dashboard", id, action] = slug;

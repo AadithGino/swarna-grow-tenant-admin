@@ -1,6 +1,12 @@
 # SwarnaGrow Portals
 
-Production-oriented React tenant-admin, platform-super-admin, and mobile-first customer web portals built from the SwarnaGrow API contracts and supplied UI references.
+Production-oriented React tenant-admin, platform-super-admin, mobile-first customer, and field collection-agent portals built from the SwarnaGrow API contracts and supplied UI references.
+
+## Collection agent portal
+
+Open `/agent/login` to enter the mobile/password flow and choose a jewellery when the staff account belongs to multiple tenants. Mock credentials are `9847012352` / `Swarna@2026`.
+
+The `/agent` workspace includes the branch-scoped dashboard, customer search, fixed/flexible/gold collection flows, live gold-weight preview, receipts, cash-in-hand and branch handovers, collection history, agent-only reports, CSV export and account security. See `docs/AGENT_PORTAL.md` for the integration rules.
 
 ## Customer portal
 
@@ -84,7 +90,8 @@ src/app/                     Portal routing, Redux provider and WebMCP bridge
 src/components/brand/        Replaceable brand assets
 src/components/common/       Tables, charts, async states, surfaces and dialogs
 src/components/layout/       Responsive tenant and platform shells
-src/features/                One folder per business module
+src/components/agent/        Mobile-first collection-agent shell and UI primitives
+src/features/                One folder per business module, including agent workflows
 src/mocks/                   In-memory contract-shaped demo server
 src/store/api/               RTK Query endpoints and contract adapters
 src/store/slices/            Local interface state only

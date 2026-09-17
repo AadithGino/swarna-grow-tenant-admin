@@ -158,7 +158,7 @@ export function CustomerPaymentsPage() {
                   </div>
                   <p className="truncate text-[11px] text-muted-foreground">
                     {payment.schemeNumber ? `${payment.schemeNumber} · ` : ""}
-                    {payment.channelLabel ?? payment.channel}
+                    {payment.recordedByLabel ?? payment.channelLabel ?? payment.channel}
                     {payment.receiptNumber ? ` · ${payment.receiptNumber}` : ""}
                   </p>
                   {paymentHasGoldAccrual(payment) && payment.goldAccrual ? (
@@ -233,7 +233,7 @@ export function CustomerPaymentDetailPage({ id }: { id: string }) {
         <div className="grid gap-4 p-6 sm:grid-cols-2 sm:p-8">
           <DetailField label="Enrolment" value={payment.schemeNumber || "—"} />
           <DetailField label="Paid on" value={formatPaymentDateTime(payment.paidAt ?? payment.createdAt)} />
-          <DetailField label="Channel" value={payment.channelLabel ?? payment.channel} />
+          <DetailField label="Recorded by" value={payment.recordedByLabel ?? payment.channelLabel ?? payment.channel} />
           <DetailField label="Plan type" value={payment.paymentPattern === "FLEXIBLE" ? "Flexible" : "Fixed"} />
           {payment.targetCycle ? <DetailField label="Contribution cycle" value={payment.targetCycle} /> : null}
           {payment.goldAccrual?.weightMg ? (

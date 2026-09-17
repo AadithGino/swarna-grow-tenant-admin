@@ -5,6 +5,7 @@ import { AdminShell } from "@/src/components/layout/admin-shell";
 import { PlatformShell } from "@/src/components/layout/platform-shell";
 import { CustomerShell } from "@/src/components/customer/customer-shell";
 import { CustomerTenantProvider } from "@/src/components/customer/customer-tenant-context";
+import { AgentShell } from "@/src/components/agent/agent-shell";
 import { CUSTOMER_ROUTE_SECTIONS } from "@/src/lib/customer-tenant";
 
 function customerTenantSlugFromPath(pathname: string): string | null {
@@ -35,6 +36,10 @@ export default function PortalLayout({
   const pathname = usePathname();
   if (pathname === "/login") return children;
   if (pathname === "/platform/login") return children;
+  if (pathname === "/agent/login") return children;
+  if (pathname === "/agent" || pathname.startsWith("/agent/")) {
+    return <AgentShell>{children}</AgentShell>;
+  }
   if (isCustomerPortalPath(pathname)) {
     const tenantSlug = customerTenantSlugFromPath(pathname);
     const inner = isCustomerAuthSurface(pathname) ? children : <CustomerShell>{children}</CustomerShell>;

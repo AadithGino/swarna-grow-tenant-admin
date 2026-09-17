@@ -5,6 +5,8 @@ import { adminApi } from "./api/admin-api";
 import { platformApi } from "./api/platform-api";
 import { customerApi } from "./api/customer-api";
 import customerSessionReducer from "./slices/customer-session-slice";
+import agentSessionReducer from "./slices/agent-session-slice";
+import { agentApi } from "./api/agent-api";
 import { branchListener } from "./branch-listener";
 
 export const store = configureStore({
@@ -12,15 +14,18 @@ export const store = configureStore({
     ui: uiReducer,
     session: sessionReducer,
     customerSession: customerSessionReducer,
+    agentSession: agentSessionReducer,
     [adminApi.reducerPath]: adminApi.reducer,
     [platformApi.reducerPath]: platformApi.reducer,
     [customerApi.reducerPath]: customerApi.reducer,
+    [agentApi.reducerPath]: agentApi.reducer,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware()
       .concat(adminApi.middleware)
       .concat(platformApi.middleware)
       .concat(customerApi.middleware)
+      .concat(agentApi.middleware)
       .prepend(branchListener.middleware),
 });
 

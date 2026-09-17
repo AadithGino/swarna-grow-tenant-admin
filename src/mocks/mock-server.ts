@@ -2010,6 +2010,7 @@ export async function mockRequest<T>({
       const role = String(body.role ?? "BRANCH_STAFF");
       const roleLabels: Record<string, string> = {
         BRANCH_STAFF: "Staff",
+        COLLECTION_AGENT: "Collection agent",
         BRANCH_MANAGER: "Branch manager",
         TENANT_ADMIN: "Tenant admin",
       };

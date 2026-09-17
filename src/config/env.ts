@@ -17,6 +17,9 @@ export const env = {
   /** Fallback tenant when URL has no slug (dev only). Must match a real `Tenant.code` in the API. */
   customerTenantCode:
     process.env.NEXT_PUBLIC_CUSTOMER_TENANT_CODE?.trim().toUpperCase() ?? "",
+  /** Optional default tenant code on collection-agent login (e.g. KAIRALI). */
+  agentTenantCode:
+    process.env.NEXT_PUBLIC_AGENT_TENANT_CODE?.trim().toUpperCase() ?? "",
 };
 
 /** Host root for routes outside `/api/v1` (e.g. `/health`). */

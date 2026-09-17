@@ -547,6 +547,23 @@ export function CustomerDetailPage({ id }: { id: string }) {
                   render: (r) => r.mode.replaceAll("_", " "),
                 },
                 {
+                  key: "recordedBy",
+                  header: "Recorded by",
+                  className: "whitespace-nowrap",
+                  render: (r) => r.staff,
+                },
+                {
+                  key: "source",
+                  header: "Source",
+                  className: "whitespace-nowrap",
+                  render: (r) =>
+                    r.source === "STAFF"
+                      ? "Staff app"
+                      : r.source === "ADMIN"
+                        ? "Admin panel"
+                        : "Customer app",
+                },
+                {
                   key: "amount",
                   header: "Amount",
                   className: "whitespace-nowrap text-right",

@@ -28,7 +28,11 @@ export type CreateStaffFormFields = {
   name: string;
   mobile: string;
   password: string;
-  role: "BRANCH_STAFF" | "BRANCH_MANAGER" | "TENANT_ADMIN";
+  role:
+    | "BRANCH_STAFF"
+    | "BRANCH_MANAGER"
+    | "COLLECTION_AGENT"
+    | "TENANT_ADMIN";
   branchId: string;
   scope: "BRANCH" | "TENANT";
 };
@@ -249,6 +253,7 @@ export function staffRequiresBranch(
   return (
     role === "BRANCH_STAFF" ||
     role === "BRANCH_MANAGER" ||
+    role === "COLLECTION_AGENT" ||
     (role === "TENANT_ADMIN" && scope === "BRANCH")
   );
 }
