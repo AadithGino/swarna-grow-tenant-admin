@@ -42,7 +42,9 @@ import { EntityAuditTab } from "@/src/features/audit/entity-audit-tab";
 import { ManageNomineeDialog } from "@/src/features/customers/manage-nominee-dialog";
 import { ReviewKycDialog } from "@/src/features/customers/review-kyc-dialog";
 import { downloadBlobUrl, downloadText } from "@/src/lib/download";
+import { goldLedgerColumns } from "@/src/components/common/gold-payment-columns";
 import { idempotencyKey, money } from "@/src/lib/format";
+import { paymentHasGoldAccrual } from "@/src/lib/gold-payment-display";
 import { emptyPageMeta } from "@/src/lib/cursor-pagination";
 import { useCursorPagination } from "@/src/hooks/use-cursor-pagination";
 import {
@@ -102,6 +104,7 @@ export function CustomerDetailPage({ id }: { id: string }) {
   const schemesOverview = schemesOverviewQuery.data?.items ?? [];
   const schemes = schemesQuery.data?.items ?? [];
   const payments = paymentsQuery.data?.items ?? [];
+  const showGoldLedger = payments.some((p) => paymentHasGoldAccrual(p));
   const messages = messagesQuery.data?.items ?? [];
   const schemePage = schemesQuery.data?.page ?? emptyPageMeta();
   const paymentPage = paymentsQuery.data?.page ?? emptyPageMeta();
@@ -549,6 +552,7 @@ export function CustomerDetailPage({ id }: { id: string }) {
                   className: "whitespace-nowrap text-right",
                   render: (r) => money(r.amount),
                 },
+                ...(showGoldLedger ? goldLedgerColumns<(typeof payments)[number]>() : []),
                 {
                   key: "status",
                   header: "Status",

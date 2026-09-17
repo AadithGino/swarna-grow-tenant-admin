@@ -30,6 +30,7 @@ import {
 import { useAppSelector } from "@/src/store/hooks";
 import { downloadBlobUrl, printBlobUrl } from "@/src/lib/download";
 import { money } from "@/src/lib/format";
+import { formatGoldPurchaseDate } from "@/src/lib/gold-payment-display";
 
 export type PaymentSuccessPayload = {
   paymentId?: string;
@@ -40,6 +41,9 @@ export type PaymentSuccessPayload = {
   mode?: string;
   allocation?: string;
   cashInHand?: number;
+  goldWeightDisplay?: string;
+  goldRateDisplay?: string;
+  goldBookedAt?: string;
   whatsappStatus?: "SENT" | "FAILED" | "QUEUED";
   passbookImageStatus?: "READY" | "GENERATING" | "FAILED";
   passbookImageUrl?: string;
@@ -95,6 +99,11 @@ export function PaymentSuccessSheet({
       `Mode: ${modeLabel(result.mode)}`,
     ];
     if (result.enrollmentNo) lines.push(`Enrollment: ${result.enrollmentNo}`);
+    if (result.goldWeightDisplay) lines.push(`Gold booked: ${result.goldWeightDisplay}`);
+    if (result.goldRateDisplay) lines.push(`Rate: ${result.goldRateDisplay} / g`);
+    if (result.goldBookedAt) {
+      lines.push(`Booking date: ${formatGoldPurchaseDate(result.goldBookedAt)}`);
+    }
     if (result.allocation) lines.push("", result.allocation);
     lines.push("", "Passbook entry image attached ↓");
     return lines.join("\n");
@@ -272,6 +281,24 @@ export function PaymentSuccessSheet({
                 ) : null}
                 {result.mode ? <span>{modeLabel(result.mode)}</span> : null}
               </div>
+              {result.goldWeightDisplay ? (
+                <p className="mt-2 text-sm">
+                  Gold booked:{" "}
+                  <strong className="text-[#8b5f08]">{result.goldWeightDisplay}</strong>
+                  {result.goldRateDisplay ? (
+                    <>
+                      {" "}
+                      at <strong>{result.goldRateDisplay}</strong>/g
+                    </>
+                  ) : null}
+                  {result.goldBookedAt ? (
+                    <span className="text-muted-foreground">
+                      {" "}
+                      · {formatGoldPurchaseDate(result.goldBookedAt)}
+                    </span>
+                  ) : null}
+                </p>
+              ) : null}
               {result.allocation ? (
                 <p className="mt-2 text-sm text-muted-foreground">
                   {result.allocation}

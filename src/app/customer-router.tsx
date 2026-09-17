@@ -26,7 +26,7 @@ const CustomerSupportPage = dynamic(() => import("@/src/features/customer/custom
 const CustomerGrievanceDetailPage = dynamic(() => import("@/src/features/customer/customer-support-pages").then((m) => m.CustomerGrievanceDetailPage), options);
 
 function CustomerRoutes({ slug }: { slug: string[] }) {
-  const { section, id, extra } = parseCustomerSlug(slug);
+  const { section, id } = parseCustomerSlug(slug);
   if (section === "login") return <CustomerLoginPage />;
   if (section === "onboarding") return <CustomerOnboardingPage />;
   if (!section) return <CustomerHomePage />;

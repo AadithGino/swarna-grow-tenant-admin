@@ -344,7 +344,9 @@ export function buildPlanCreatePayload(form: PlanBuilderFormState) {
             : null,
           maxPaymentPerTransactionPaise: form.maxPaymentPerTxn
             ? paise(form.maxPaymentPerTxn)
-            : null,
+            : form.amountMode === "JEWELLER_FIXED"
+              ? paise(form.fixedAmount)
+              : null,
         },
     ...(isFlexible
       ? {
@@ -693,10 +695,8 @@ export function planDetailToForm(detail: Record<string, unknown>): PlanBuilderFo
       avail.maxEnrolments == null || avail.maxEnrolments === undefined
         ? ""
         : Number(avail.maxEnrolments),
-    visibleInCustomerApp: Boolean(avail.visibleInCustomerApp ?? true),
-    customerSelfEnrolAllowed: Boolean(
-      avail.customerSelfEnrolAllowed ?? true,
-    ),
+    visibleInCustomerApp: avail.visibleInCustomerApp !== false,
+    customerSelfEnrolAllowed: avail.customerSelfEnrolAllowed !== false,
     editLocked: Boolean(detail.editLocked),
     planVersion: Number(detail.version ?? base.planVersion),
   };
@@ -732,6 +732,53 @@ export function buildPlanPatchPayload(form: PlanBuilderFormState) {
     unknown
   >;
   return { ...version, ...rest };
+}
+
+export type PlanAvailabilityFormSlice = Pick<
+  PlanBuilderFormState,
+  | "planVersion"
+  | "allBranches"
+  | "branchIds"
+  | "enrolmentOpenFrom"
+  | "enrolmentOpenTo"
+  | "maxEnrolments"
+  | "visibleInCustomerApp"
+  | "customerSelfEnrolAllowed"
+>;
+
+export function availabilitySliceFromPlan(
+  detail: Record<string, unknown>,
+): PlanAvailabilityFormSlice {
+  const form = planDetailToForm(detail);
+  return {
+    planVersion: form.planVersion,
+    allBranches: form.allBranches,
+    branchIds: form.branchIds,
+    enrolmentOpenFrom: form.enrolmentOpenFrom,
+    enrolmentOpenTo: form.enrolmentOpenTo,
+    maxEnrolments: form.maxEnrolments,
+    visibleInCustomerApp: form.visibleInCustomerApp,
+    customerSelfEnrolAllowed: form.customerSelfEnrolAllowed,
+  };
+}
+
+/** PATCH only availability (safe while plan is edit-locked). */
+export function buildPlanAvailabilityPatchPayload(
+  slice: PlanAvailabilityFormSlice,
+) {
+  return {
+    expectedVersion: slice.planVersion,
+    availability: {
+      allBranches: slice.allBranches,
+      branchIds: slice.allBranches ? [] : slice.branchIds,
+      enrolmentOpenFrom: slice.enrolmentOpenFrom || null,
+      enrolmentOpenTo: slice.enrolmentOpenTo || null,
+      maxEnrolments:
+        slice.maxEnrolments === "" ? null : Number(slice.maxEnrolments),
+      visibleInCustomerApp: slice.visibleInCustomerApp,
+      customerSelfEnrolAllowed: slice.customerSelfEnrolAllowed,
+    },
+  };
 }
 
 export function valueBasisLabel(

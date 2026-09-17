@@ -28,6 +28,7 @@ type CustomerTenantContextValue = {
     customerSelfRegistration?: boolean;
     customerSelfEnrol?: boolean;
     multiScheme?: boolean;
+    supportNumber?: string;
   } | null;
   loading: boolean;
   notFound: boolean;
@@ -85,6 +86,7 @@ export function CustomerTenantProvider({
             customerSelfRegistration: tenant.customerSelfRegistration,
             customerSelfEnrol: tenant.customerSelfEnrol,
             multiScheme: tenant.multiScheme,
+            supportNumber: tenant.supportNumber,
           }
         : null,
       loading: Boolean(tenantCode) && isLoading,

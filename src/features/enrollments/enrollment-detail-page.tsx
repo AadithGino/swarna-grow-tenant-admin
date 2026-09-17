@@ -12,6 +12,7 @@ import {
   ReceiptText,
   Scale,
   Send,
+  UserRound,
 } from "lucide-react";
 import { toast } from "sonner";
 import { toastApiError } from "@/src/lib/api-error";
@@ -41,12 +42,15 @@ import {
 } from "@/src/features/enrollments/settlement-dialogs";
 import { PaymentDialog } from "@/src/features/payments/payment-dialog";
 import { EntityAuditTab } from "@/src/features/audit/entity-audit-tab";
+import { goldLedgerColumns } from "@/src/components/common/gold-payment-columns";
 import { downloadJson } from "@/src/lib/download";
 import { grams, idempotencyKey, money } from "@/src/lib/format";
+import { paymentHasGoldAccrual } from "@/src/lib/gold-payment-display";
 import {
   useCreatePaymentLinkMutation,
   useGetEnrollmentQuery,
   useGetPaymentsQuery,
+  useGetSchemeLedgerQuery,
   useGetSettlementPreviewQuery,
   useLazyGetSchemePassbookQuery,
 } from "@/src/store/api/admin-api";
@@ -65,6 +69,7 @@ export function EnrollmentDetailPage({ id }: { id: string }) {
     { schemeId: id, limit: 100 },
     { skip: !id },
   );
+  const ledgerQuery = useGetSchemeLedgerQuery(id, { skip: !id });
   const enrollment = query.data;
   const redemptionInProgress =
     enrollment?.status === "REDEMPTION_PENDING" ||
@@ -86,6 +91,12 @@ export function EnrollmentDetailPage({ id }: { id: string }) {
     );
   const row = query.data;
   const payments = paymentQuery.data?.items ?? [];
+  const ledgerRows = ledgerQuery.data ?? [];
+  const ledgerSource = ledgerRows.length > 0;
+  const showGoldLedger =
+    row.valueBasis === "GOLD_WEIGHT" ||
+    payments.some((p) => paymentHasGoldAccrual(p)) ||
+    ledgerRows.some((p) => paymentHasGoldAccrual(p));
   const displayMode = row.displayMode ?? "FIXED";
   const matured =
     row.status === "MATURED" || row.status === "REDEMPTION_PENDING";
@@ -193,6 +204,14 @@ export function EnrollmentDetailPage({ id }: { id: string }) {
         description={`${row.enrollmentNo} · ${row.customer} · ${row.branch}`}
         actions={
           <>
+            {row.customerId ? (
+              <Button variant="outline" asChild>
+                <Link href={`/customers/${row.customerId}`}>
+                  <UserRound />
+                  View customer
+                </Link>
+              </Button>
+            ) : null}
             <Button
               variant="outline"
               disabled={
@@ -431,41 +450,86 @@ export function EnrollmentDetailPage({ id }: { id: string }) {
         <PageTabsPanel value="payments">
           <Surface
             title="Immutable payment ledger"
-            description="Every balance and receipt traces back to these entries"
+            description={
+              ledgerSource
+                ? "Ledger entries are the source of truth; gold weight and rate are stored on each credit."
+                : "Every balance and receipt traces back to these payment records"
+            }
           >
-            <DataTable
-              rows={payments}
-              emptyTitle="No payments recorded for this enrollment"
-              columns={[
-                { key: "date", header: "Recorded at", render: (r) => r.date },
-                {
-                  key: "receipt",
-                  header: "Receipt",
-                  render: (r) => <strong>{r.receiptNo}</strong>,
-                },
-                {
-                  key: "amount",
-                  header: "Amount",
-                  render: (r) => money(r.amount),
-                },
-                {
-                  key: "mode",
-                  header: "Mode",
-                  render: (r) => r.mode.replaceAll("_", " "),
-                },
-                { key: "staff", header: "Recorded by", render: (r) => r.staff },
-                {
-                  key: "source",
-                  header: "Source",
-                  render: (r) => r.source.replaceAll("_", " "),
-                },
-                {
-                  key: "status",
-                  header: "Status",
-                  render: (r) => <StatusBadge status={r.status} />,
-                },
-              ]}
-            />
+            {ledgerSource ? (
+              <DataTable
+                rows={ledgerRows}
+                emptyTitle="No ledger entries for this enrollment"
+                columns={[
+                  { key: "seq", header: "#", render: (r) => r.sequence ?? "—" },
+                  { key: "date", header: "Recorded at", render: (r) => r.date },
+                  {
+                    key: "type",
+                    header: "Entry",
+                    render: (r) =>
+                      String(r.type ?? "—")
+                        .replaceAll("_", " ")
+                        .toLowerCase(),
+                  },
+                  {
+                    key: "receipt",
+                    header: "Receipt",
+                    render: (r) =>
+                      r.receiptNo && r.receiptNo !== "—" ? (
+                        <strong>{r.receiptNo}</strong>
+                      ) : (
+                        "—"
+                      ),
+                  },
+                  {
+                    key: "amount",
+                    header: "Amount",
+                    render: (r) => money(r.amount),
+                  },
+                  ...(showGoldLedger ? goldLedgerColumns<(typeof ledgerRows)[number]>() : []),
+                  {
+                    key: "mode",
+                    header: "Mode",
+                    render: (r) => (r.mode ? r.mode.replaceAll("_", " ") : "—"),
+                  },
+                ]}
+              />
+            ) : (
+              <DataTable
+                rows={payments}
+                emptyTitle="No payments recorded for this enrollment"
+                columns={[
+                  { key: "date", header: "Recorded at", render: (r) => r.date },
+                  {
+                    key: "receipt",
+                    header: "Receipt",
+                    render: (r) => <strong>{r.receiptNo}</strong>,
+                  },
+                  {
+                    key: "amount",
+                    header: "Amount",
+                    render: (r) => money(r.amount),
+                  },
+                  ...(showGoldLedger ? goldLedgerColumns<(typeof payments)[number]>() : []),
+                  {
+                    key: "mode",
+                    header: "Mode",
+                    render: (r) => r.mode.replaceAll("_", " "),
+                  },
+                  { key: "staff", header: "Recorded by", render: (r) => r.staff },
+                  {
+                    key: "source",
+                    header: "Source",
+                    render: (r) => r.source.replaceAll("_", " "),
+                  },
+                  {
+                    key: "status",
+                    header: "Status",
+                    render: (r) => <StatusBadge status={r.status} />,
+                  },
+                ]}
+              />
+            )}
           </Surface>
         </PageTabsPanel>
         <PageTabsPanel value="maturity">

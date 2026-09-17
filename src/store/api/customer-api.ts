@@ -19,13 +19,21 @@ import type {
   CustomerPastScheme,
   CustomerProfile,
   CustomerSchemeDetail,
+  PayableRange,
   PaymentListItem,
   SchemeCard,
   SchemePlan,
 } from "@/src/types/customer";
+import { handleCustomerUnauthorized } from "@/src/lib/auth-logout";
+import { parseRefreshTokens } from "@/src/lib/auth-tokens-from-refresh";
 import { newIdempotencyKey } from "@/src/lib/idempotency";
+import type { AppDispatch } from "@/src/store";
 import { adaptCustomerSchemePlan, adaptCustomerSchemePlanList } from "@/src/lib/customer-plan-adapter";
-import { adaptCustomerPayment, adaptCustomerPaymentList } from "@/src/lib/customer-payment-adapter";
+import {
+  adaptCustomerPayment,
+  adaptCustomerPaymentList,
+  adaptCustomerSchemeDetail,
+} from "@/src/lib/customer-payment-adapter";
 
 type ApiEnvelope<T> = { success: true; data: T; meta?: { nextCursor: string | null; hasMore: boolean; limit: number; total: number } };
 
@@ -176,6 +184,14 @@ const mockBaseQuery: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQueryErro
   const grievanceMatch = url.match(/^\/app\/grievances\/([^/]+)$/);
   if (grievanceMatch) return ok(customerGrievances.find((g) => g.id === grievanceMatch[1]) ?? customerGrievances[0]);
   if (url.endsWith("/messages")) return ok({ id: `msg_${Date.now()}`, authorType: "CUSTOMER", body: body?.body, createdAt: new Date().toISOString() });
+  if (url === "/app/auth/refresh" && method === "POST") {
+    return ok({
+      accessToken: "mock-customer-access-refreshed",
+      refreshToken: "mock-customer-refresh-refreshed",
+      expiresIn: 1800,
+      tokenType: "Bearer",
+    });
+  }
   if (url === "/app/auth/devices") return ok([{ deviceId: "dev_iphone", platform: "iOS", deviceModel: "iPhone 16", lastUsedAt: "Now", current: true }, { deviceId: "dev_chrome", platform: "Web", deviceModel: "Chrome on macOS", lastUsedAt: "2 days ago", current: false }]);
   if (url === "/app/gold-rate/current") return ok(customerHome.goldRate);
   if (url === "/app/gold-rate/history") return ok([{ ...customerHome.goldRate, effectiveDate: "2026-09-16" }, { ...customerHome.goldRate, ratePerGramPaise: 721000, ratePerGramDisplay: "₹7,210 / g", effectiveDate: "2026-09-15", movement: -0.18 }, { ...customerHome.goldRate, ratePerGramPaise: 722500, ratePerGramDisplay: "₹7,225 / g", effectiveDate: "2026-09-14", movement: 0.31 }]);
@@ -196,11 +212,13 @@ const liveBaseQuery = fetchBaseQuery({
   },
 });
 
-const dynamicBaseQuery: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQueryError> = async (args, api, extra) => {
-  const requestArgs = env.useMocks ? args : withIdempotencyHeader(args);
-  const result = env.useMocks
-    ? await mockBaseQuery(requestArgs, api, extra)
-    : await liveBaseQuery(requestArgs, api, extra);
+type CustomerBaseQueryExtra = { _authRetry?: boolean };
+
+function unwrapCustomerEnvelope(result: {
+  data?: unknown;
+  error?: FetchBaseQueryError;
+  meta?: unknown;
+}) {
   if ("data" in result && result.data && typeof result.data === "object" && "success" in result.data) {
     const envelope = result.data as ApiEnvelope<unknown> & {
       success: boolean;
@@ -209,13 +227,83 @@ const dynamicBaseQuery: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQueryE
     if (envelope.success) return { data: envelope.data, meta: result.meta };
     return {
       error: {
-        status: "CUSTOM_ERROR",
+        status: "CUSTOM_ERROR" as const,
         error: envelope.error?.message ?? "Request failed",
         data: envelope.error,
       },
     };
   }
   return result;
+}
+
+function storeCustomerTokens(tokens: { accessToken: string; refreshToken?: string }) {
+  if (typeof window === "undefined") return;
+  localStorage.setItem("swarnagrow.customer.accessToken", tokens.accessToken);
+  if (tokens.refreshToken) {
+    localStorage.setItem("swarnagrow.customer.refreshToken", tokens.refreshToken);
+  }
+}
+
+const dynamicBaseQuery: BaseQueryFn<
+  string | FetchArgs,
+  unknown,
+  FetchBaseQueryError,
+  CustomerBaseQueryExtra
+> = async (args, api, extra) => {
+  const requestArgs = env.useMocks ? args : withIdempotencyHeader(args);
+  const url = routeOf(requestArgs);
+  const isAuthRefresh = url.includes("/app/auth/refresh");
+  const isPublicAuth = url.startsWith("/public/");
+  const alreadyRetried = Boolean(extra?._authRetry);
+  const dispatch = api.dispatch as AppDispatch;
+
+  let result = env.useMocks
+    ? await mockBaseQuery(requestArgs, api, extra)
+    : await liveBaseQuery(requestArgs, api, extra);
+
+  if (
+    !env.useMocks &&
+    result.error?.status === 401 &&
+    typeof window !== "undefined" &&
+    !isAuthRefresh &&
+    !isPublicAuth &&
+    !alreadyRetried
+  ) {
+    const refreshToken = localStorage.getItem("swarnagrow.customer.refreshToken");
+    if (refreshToken) {
+      const refreshResult = await liveBaseQuery(
+        {
+          url: "/app/auth/refresh",
+          method: "POST",
+          body: { refreshToken },
+        },
+        api,
+        extra,
+      );
+      const tokens = parseRefreshTokens(refreshResult.data);
+      if (tokens?.accessToken) {
+        storeCustomerTokens(tokens);
+        result = await liveBaseQuery(requestArgs, api, {
+          ...extra,
+          _authRetry: true,
+        });
+      } else {
+        handleCustomerUnauthorized(dispatch);
+      }
+    } else {
+      handleCustomerUnauthorized(dispatch);
+    }
+  } else if (
+    !env.useMocks &&
+    result.error?.status === 401 &&
+    typeof window !== "undefined" &&
+    !isAuthRefresh &&
+    !isPublicAuth
+  ) {
+    handleCustomerUnauthorized(dispatch);
+  }
+
+  return unwrapCustomerEnvelope(result);
 };
 
 export const customerApi = createApi({
@@ -302,7 +390,20 @@ export const customerApi = createApi({
       query: () => ({ url: "/app/schemes", params: { group: "PAST" } }),
       providesTags: ["CustomerScheme"],
     }),
-    getCustomerScheme: builder.query<CustomerSchemeDetail, string>({ query: (id) => `/app/schemes/${id}`, providesTags: (_r, _e, id) => [{ type: "CustomerScheme", id }] }),
+    getCustomerScheme: builder.query<CustomerSchemeDetail, string>({
+      query: (id) => `/app/schemes/${id}`,
+      transformResponse: (raw: unknown) => adaptCustomerSchemeDetail(raw),
+      providesTags: (_r, _e, id) => [{ type: "CustomerScheme", id }],
+    }),
+    getCustomerPayableRange: builder.query<
+      PayableRange,
+      { schemeId: string; targetCycle?: string }
+    >({
+      query: ({ schemeId, targetCycle }) => ({
+        url: `/app/schemes/${schemeId}/payable-range`,
+        params: targetCycle ? { targetCycle } : undefined,
+      }),
+    }),
     enrolCustomerScheme: builder.mutation<Record<string, unknown>, { planId: string; installmentAmountPaise?: number; payNow: boolean; redirectUrl?: string }>({ query: (body) => ({ url: "/app/schemes/enrol", method: "POST", body }), invalidatesTags: ["CustomerScheme", "CustomerHome"] }),
     initiatePublicPaymentLink: builder.mutation<
       { gatewayUrl?: string; redirectUrl?: string; paymentId?: string },
@@ -316,15 +417,23 @@ export const customerApi = createApi({
     }),
     initiateCustomerPayment: builder.mutation<
       Record<string, unknown>,
-      { scheme: CustomerSchemeDetail; amountPaise: number; redirectUrl?: string }
+      {
+        scheme: CustomerSchemeDetail;
+        amountPaise: number;
+        redirectUrl?: string;
+        targetCycle?: string;
+        positionVersion?: number;
+      }
     >({
-      query: ({ scheme, amountPaise, redirectUrl }) => {
+      query: ({ scheme, amountPaise, redirectUrl, targetCycle, positionVersion }) => {
         const redirect =
           redirectUrl ??
           (typeof window !== "undefined"
             ? `${window.location.origin}${window.location.pathname.replace(/\/schemes\/[^/]+$/, "")}/pay/status`
             : undefined);
         const shared = { amountPaise, ...(redirect ? { redirectUrl: redirect } : {}) };
+        const cycle = targetCycle ?? scheme.payableRange?.targetCycle;
+        const pos = positionVersion ?? scheme.payableRange?.positionVersion ?? scheme.positionVersion ?? 0;
         return scheme.displayMode === "FIXED"
           ? { url: `/app/schemes/${scheme.id}/pay`, method: "POST", body: shared }
           : {
@@ -332,8 +441,8 @@ export const customerApi = createApi({
               method: "POST",
               body: {
                 ...shared,
-                targetCycle: scheme.payableRange?.targetCycle,
-                expectedPositionVersion: scheme.positionVersion ?? 0,
+                ...(cycle ? { targetCycle: cycle } : {}),
+                expectedPositionVersion: pos,
               },
             };
       },
@@ -369,7 +478,7 @@ export const {
   useGetCustomerHomeQuery, useGetCustomerProfileQuery, useUpdateCustomerProfileMutation,
   useCompleteCustomerProfileMutation, usePresignCustomerUploadMutation, useSubmitCustomerKycMutation,
   useUpdateCustomerNomineeMutation, useRemoveCustomerNomineeMutation,
-  useGetCustomerPlansQuery, useGetCustomerPlanQuery, useGetCustomerSchemesQuery, useGetCustomerPastSchemesQuery, useGetCustomerSchemeQuery,
+  useGetCustomerPlansQuery, useGetCustomerPlanQuery, useGetCustomerSchemesQuery, useGetCustomerPastSchemesQuery, useGetCustomerSchemeQuery, useGetCustomerPayableRangeQuery, useLazyGetCustomerPayableRangeQuery,
   useEnrolCustomerSchemeMutation, useInitiateCustomerPaymentMutation, useInitiatePublicPaymentLinkMutation,
   useGetCustomerPaymentsQuery, useGetCustomerPaymentQuery,
   useGetCustomerNotificationsQuery, useMarkCustomerNotificationReadMutation, useMarkAllCustomerNotificationsReadMutation,

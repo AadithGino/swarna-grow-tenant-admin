@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ArrowLeft,
   CalendarDays,
@@ -20,8 +20,15 @@ import {
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { SchemeModePill, SchemeProgressRing, SchemeProgressVisual } from "@/src/components/customer/customer-ui";
+import { formatCustomerDate, SchemeModePill, SchemeProgressVisual } from "@/src/components/customer/customer-ui";
 import { downloadCustomerPaymentReceipt } from "@/src/lib/customer-receipt";
 import type { CustomerPlanRulesSection } from "@/src/types/customer";
 import { PageSkeleton, QueryError } from "@/src/components/common/query-state";
@@ -29,6 +36,7 @@ import {
   useGetCustomerSchemeQuery,
   useInitiateCustomerPaymentMutation,
   useInitiatePublicPaymentLinkMutation,
+  useLazyGetCustomerPayableRangeQuery,
   useRequestCustomerRedemptionMutation,
 } from "@/src/store/api/customer-api";
 import { openCustomerPaymentTarget } from "@/src/lib/customer-payment-redirect";
@@ -37,11 +45,20 @@ import { useCustomerTenant } from "@/src/components/customer/customer-tenant-con
 import { customerPath } from "@/src/lib/customer-tenant";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { isGoldWeightScheme, useCustomerGoldMetricsVisible } from "@/src/lib/customer-gold-ui";
+import { isGoldWeightScheme } from "@/src/lib/customer-gold-ui";
+import { formatGoldPurchaseDate, paymentHasGoldAccrual } from "@/src/lib/gold-payment-display";
+import { CustomerPayableSummary } from "@/src/components/customer/customer-payable-summary";
+import { FormFieldError } from "@/src/components/common/form-field-error";
+import {
+  livePayableAmountError,
+  paymentAmountReady,
+  payableAmountRangeMessage,
+} from "@/src/lib/payment-form-validation";
+import { payableQuoteBounds } from "@/src/lib/customer-payable-display";
 
 function RulesBlock({ section }: { section: CustomerPlanRulesSection }) {
   return (
-    <div className="rounded-2xl border bg-[#fbf7f4] p-4">
+    <div className="customer-surface p-5">
       <h3 className="text-sm font-black text-[#730321]">{section.title}</h3>
       <ul className="mt-3 space-y-2">
         {section.items.map((item) => (
@@ -58,31 +75,87 @@ function RulesBlock({ section }: { section: CustomerPlanRulesSection }) {
 function PhonePePaymentDialog({ scheme, open, onOpenChange }: { scheme: CustomerSchemeDetail; open: boolean; onOpenChange: (open: boolean) => void }) {
   const router = useRouter();
   const { tenantSlug } = useCustomerTenant();
-  const range = scheme.payableRange;
+  const initialRange = scheme.payableRange;
+  const [range, setRange] = useState(initialRange);
+  const [targetCycle, setTargetCycle] = useState(initialRange?.targetCycle ?? "");
+  const [fetchRange, fetchRangeState] = useLazyGetCustomerPayableRangeQuery();
   const fixed = scheme.displayMode === "FIXED";
   const suggestedPaise = range?.suggested?.amountPaise ?? range?.maxPayable?.amountPaise ?? scheme.nextActionAmount?.amountPaise ?? 0;
   const [amount, setAmount] = useState(String(suggestedPaise / 100));
+  const [amountTouched, setAmountTouched] = useState(false);
   const [initiate, state] = useInitiateCustomerPaymentMutation();
   const [initiatePublicLink] = useInitiatePublicPaymentLinkMutation();
   const amountPaise = Math.round(Number(amount || 0) * 100);
-  const minPaise = range?.minPayable?.amountPaise ?? amountPaise;
-  const maxPaise = range?.maxPayable?.amountPaise ?? amountPaise;
-  const step = range?.multipleOfPaise ?? 1;
-  const valid =
-    !!range &&
-    amountPaise >= minPaise &&
-    amountPaise <= maxPaise &&
-    (step <= 1 || amountPaise % step === 0);
+  const quoteBounds = payableQuoteBounds(range);
+  const numericAmount = amount === "" ? "" : Number(amount);
+  const amountError =
+    amountTouched || amount !== ""
+      ? livePayableAmountError(numericAmount, quoteBounds)
+      : undefined;
+  const valid = !!range && paymentAmountReady(numericAmount, quoteBounds);
 
   useEffect(() => {
-    if (open) setAmount(String(suggestedPaise / 100));
-  }, [open, suggestedPaise]);
+    if (!open) {
+      setAmountTouched(false);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const next = await fetchRange({
+          schemeId: scheme.id,
+          targetCycle: initialRange?.targetCycle,
+        }).unwrap();
+        if (cancelled) return;
+        setRange(next);
+        setTargetCycle(next.targetCycle ?? "");
+        const suggested = next.suggested?.amountPaise ?? next.maxPayable?.amountPaise ?? 0;
+        setAmount(String(suggested / 100));
+      } catch {
+        if (cancelled) return;
+        setRange(initialRange);
+        setTargetCycle(initialRange?.targetCycle ?? "");
+        const suggested =
+          initialRange?.suggested?.amountPaise ?? initialRange?.maxPayable?.amountPaise ?? 0;
+        setAmount(String(suggested / 100));
+        toast.error("Could not refresh payment limits. Showing last known quote.");
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [open, scheme.id, initialRange, fetchRange]);
+
+  useEffect(() => {
+    if (!open || !targetCycle || targetCycle === initialRange?.targetCycle) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const next = await fetchRange({ schemeId: scheme.id, targetCycle }).unwrap();
+        if (cancelled) return;
+        setRange(next);
+        const nextSuggested = next.suggested?.amountPaise ?? next.maxPayable?.amountPaise ?? 0;
+        setAmount(String(nextSuggested / 100));
+      } catch {
+        if (!cancelled) toast.error("Could not load payment quote for that cycle");
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [open, targetCycle, scheme.id, fetchRange, initialRange?.targetCycle]);
+
+  const cycleOptions = useMemo(
+    () => range?.targetCycleOptions ?? [],
+    [range?.targetCycleOptions],
+  );
 
   const pay = async () => {
+    setAmountTouched(true);
     if (!valid || !range) {
       return toast.error(
-        range
-          ? `Enter an amount between ${range.minPayable.amountDisplay} and ${range.maxPayable.amountDisplay}`
+        quoteBounds
+          ? payableAmountRangeMessage(quoteBounds)
           : "Payment quote unavailable. Refresh and try again.",
       );
     }
@@ -93,6 +166,8 @@ function PhonePePaymentDialog({ scheme, open, onOpenChange }: { scheme: Customer
         scheme,
         amountPaise,
         redirectUrl: statusRedirectFull,
+        targetCycle: range.targetCycle ?? targetCycle,
+        positionVersion: range.positionVersion,
       }).unwrap();
       onOpenChange(false);
       await openCustomerPaymentTarget(response, {
@@ -122,20 +197,64 @@ function PhonePePaymentDialog({ scheme, open, onOpenChange }: { scheme: Customer
         <div className="p-5 sm:p-6">
           <DialogHeader>
             <DialogTitle>{scheme.planName}</DialogTitle>
-            <DialogDescription>{fixed ? "Your fixed monthly instalment" : range?.helperText ?? scheme.helperText}</DialogDescription>
+            <DialogDescription>
+              {fixed
+                ? range?.helperText || "Your fixed monthly instalment"
+                : range?.helperText ?? scheme.helperText}
+            </DialogDescription>
           </DialogHeader>
+          {range ? (
+            <div className="mt-4">
+              <CustomerPayableSummary range={range} displayMode={scheme.displayMode} compact />
+            </div>
+          ) : fetchRangeState.isFetching ? (
+            <p className="mt-4 text-xs text-muted-foreground">Loading payment limits…</p>
+          ) : null}
+          {range?.allowFutureCycleSelection && cycleOptions.length > 1 ? (
+            <div className="mt-4">
+              <label className="text-xs font-bold text-muted-foreground">Contribution cycle</label>
+              <Select value={targetCycle} onValueChange={setTargetCycle} disabled={fetchRangeState.isFetching}>
+                <SelectTrigger className="mt-2 h-11 rounded-xl">
+                  <SelectValue placeholder="Choose cycle" />
+                </SelectTrigger>
+                <SelectContent>
+                  {cycleOptions.map((opt) => (
+                    <SelectItem key={opt.cycle} value={opt.cycle}>
+                      {opt.label}
+                      {opt.isCurrentCycle ? " (current)" : ""} · up to {opt.remaining.amountDisplay}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          ) : null}
           <div className="mt-5">
             <label className="text-xs font-bold text-muted-foreground">Amount</label>
-            <div className="mt-2 flex h-14 items-center rounded-xl border bg-white px-4 focus-within:ring-2 focus-within:ring-[#9c5869]">
+            {quoteBounds?.eligible ? (
+              <p className="mt-1 text-[0.68rem] text-muted-foreground">
+                {payableAmountRangeMessage(quoteBounds)}
+              </p>
+            ) : null}
+            <div
+              className={cn(
+                "mt-2 flex h-14 items-center rounded-xl border bg-white px-4 focus-within:ring-2 focus-within:ring-[#9c5869]",
+                amountError && "border-red-300",
+              )}
+            >
               <IndianRupee className="size-5" />
               <Input
                 disabled={fixed}
                 inputMode="decimal"
                 value={amount}
-                onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ""))}
+                onChange={(e) => {
+                  setAmountTouched(true);
+                  setAmount(e.target.value.replace(/[^0-9.]/g, ""));
+                }}
+                onBlur={() => setAmountTouched(true)}
                 className="h-full border-0 text-xl font-black shadow-none focus-visible:ring-0"
               />
             </div>
+            <FormFieldError message={amountError} />
             {!fixed && range?.quickAmounts?.length ? (
               <div className="mt-3 flex flex-wrap gap-2">
                 {range.quickAmounts.map((quick) => (
@@ -161,7 +280,7 @@ function PhonePePaymentDialog({ scheme, open, onOpenChange }: { scheme: Customer
             </div>
             <p className="mt-1">The amount is reserved before PhonePe opens. If payment fails or expires, the reservation is released automatically.</p>
           </div>
-          <Button onClick={pay} disabled={!valid || state.isLoading} className="mt-5 h-12 w-full rounded-xl bg-[#5f259f] text-base font-black hover:bg-[#4e1d82]">
+          <Button onClick={pay} disabled={!valid || state.isLoading || fetchRangeState.isFetching} className="mt-5 h-12 w-full rounded-xl bg-[#5f259f] text-base font-black hover:bg-[#4e1d82]">
             {state.isLoading ? <LoaderCircle className="animate-spin" /> : <>Continue to PhonePe<ChevronRight className="ml-auto" /></>}
           </Button>
         </div>
@@ -175,8 +294,20 @@ export function CustomerSchemeDetailPage({ id }: { id: string }) {
   const { data: scheme, isLoading, isError, refetch } = useGetCustomerSchemeQuery(id);
   const [payOpen, setPayOpen] = useState(false);
   const [redeemOpen, setRedeemOpen] = useState(false);
+  const [redemptionMode, setRedemptionMode] = useState("");
   const [requestRedemption, redemptionState] = useRequestCustomerRedemptionMutation();
-  const { visible: showGoldMetrics } = useCustomerGoldMetricsVisible();
+  const redemptionModeOptions = useMemo(() => {
+    const preferred = scheme?.redemption?.preferredModes ?? [];
+    return preferred.map((entry) =>
+      typeof entry === "string" ? { mode: entry, label: entry.replaceAll("_", " ").toLowerCase() } : entry,
+    );
+  }, [scheme?.redemption?.preferredModes]);
+
+  useEffect(() => {
+    if (redemptionModeOptions.length && !redemptionMode) {
+      setRedemptionMode(redemptionModeOptions[0].mode);
+    }
+  }, [redemptionModeOptions, redemptionMode]);
 
   if (isLoading || !scheme) return <PageSkeleton cards={3} />;
   if (isError) return <QueryError onRetry={refetch} />;
@@ -185,11 +316,9 @@ export function CustomerSchemeDetailPage({ id }: { id: string }) {
   const header = scheme.header ?? { eyebrow: "", title: scheme.planName, description: scheme.subtitle ?? "" };
   const payButton = scheme.payButton ?? { visible: scheme.canPay, enabled: scheme.canPay, label: "Pay" };
   const passbook = scheme.passbookSummary ?? { totalEntries: scheme.payments?.length ?? 0, lastPaymentAt: "", totalPaid };
-  const redemption = scheme.redemption ?? { eligible: false, status: "NOT_ELIGIBLE", preferredModes: [] as string[] };
+  const redemption = scheme.redemption ?? { eligible: false, status: "NOT_ELIGIBLE", preferredModes: [] as Array<{ mode: string; label: string } | string> };
   const schemeIsGold = isGoldWeightScheme(scheme.valueBasis);
-  const statCards = (scheme.statCards ?? []).filter(
-    (card) => (showGoldMetrics && schemeIsGold) || !/gold/i.test(card.label),
-  );
+  const statCards = (scheme.statCards ?? []).filter((card) => schemeIsGold || !/gold/i.test(card.label));
   const payments = scheme.payments ?? [];
   const maturityBenefit = scheme.maturityBenefit ?? {
     title: scheme.benefitLabel || "Maturity benefit",
@@ -198,6 +327,7 @@ export function CustomerSchemeDetailPage({ id }: { id: string }) {
     eligibility: [] as string[],
   };
   const planRuleSections = scheme.planRules?.sections ?? [];
+  const goldBalance = scheme.goldAccumulated ?? scheme.goldAccrued ?? scheme.progressCard.goldAccumulated ?? scheme.progressCard.goldAccrued;
 
   const downloadReceipt = async (payment: (typeof payments)[number]) => {
     if (!payment.receiptDownloadPath) {
@@ -215,9 +345,10 @@ export function CustomerSchemeDetailPage({ id }: { id: string }) {
 
   const redeem = async () => {
     try {
+      if (!redemptionMode) return toast.error("Choose how you would like to redeem");
       await requestRedemption({
         schemeId: scheme.id,
-        preferredMode: "JEWELLERY_PURCHASE",
+        preferredMode: redemptionMode,
         expectedVersion: scheme.version,
       }).unwrap();
       toast.success("Redemption request sent to your jewellery");
@@ -233,77 +364,63 @@ export function CustomerSchemeDetailPage({ id }: { id: string }) {
         <ArrowLeft className="size-4" />
         Back to schemes
       </Link>
-      <section className="relative overflow-hidden rounded-[1.6rem] bg-[#4b0a18] p-5 text-white shadow-lg sm:p-7">
-        <div className="absolute -right-16 -top-24 size-72 rounded-full bg-[#84253a] blur-2xl" />
-        <div className="relative">
-          <div className="flex flex-wrap items-center gap-2">
-            <SchemeModePill mode={scheme.displayMode} />
-            <span className="rounded-full bg-emerald-500/15 px-2.5 py-1 text-[10px] font-bold text-emerald-200">{scheme.statusLabel}</span>
+      <section className="customer-surface overflow-hidden p-5 sm:p-7">
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2"><SchemeModePill mode={scheme.displayMode} /><span className="rounded-full bg-[#eaf9ef] px-3 py-1 text-[0.68rem] font-extrabold text-[#15934b]">{scheme.statusLabel}</span></div>
+            <p className="mt-5 text-[0.72rem] font-extrabold uppercase tracking-[.17em] text-[#9a6b14]">{header.eyebrow}</p>
+            <h1 className="mt-1 text-[1.9rem] font-black tracking-[-.04em] text-[#171722] sm:text-[2.35rem]">{scheme.planName}</h1>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-[#706b77]"><b className="text-[#292732]">{header.title}.</b> {header.description}</p>
           </div>
-          <p className="mt-5 text-xs font-bold tracking-[.16em] text-[#e9c35d]">{header.eyebrow}</p>
-          <h1 className="mt-1 text-2xl font-black sm:text-3xl">{header.title}</h1>
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-white/65">{header.description}</p>
-          <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-2 lg:grid-cols-5">
-            {scheme.passbookNumber ? (
-              <div>
-                <p className="text-[10px] uppercase tracking-wider text-white/50">Passbook</p>
-                <p className="mt-1 font-bold text-[#e9c35d]">{scheme.passbookNumber}</p>
-              </div>
-            ) : null}
-            <div>
-              <p className="text-[10px] uppercase tracking-wider text-white/50">Enrolment</p>
-              <p className="mt-1 font-bold">{scheme.schemeNumber}</p>
-            </div>
-            <div>
-              <p className="text-[10px] uppercase tracking-wider text-white/50">Saved</p>
-              <p className="mt-1 font-bold">{totalPaid.amountDisplay}</p>
-            </div>
-            <div>
-              <p className="text-[10px] uppercase tracking-wider text-white/50">Maturity</p>
-              <p className="mt-1 font-bold">
-                {scheme.maturityDate
-                  ? new Date(scheme.maturityDate).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })
-                  : "—"}
-              </p>
-            </div>
-            <div>
-              <p className="text-[10px] uppercase tracking-wider text-white/50">Phase</p>
-              <p className="mt-1 text-sm font-bold leading-snug">{scheme.progressLabel ?? scheme.statusLabel}</p>
-            </div>
-          </div>
+          <div className="flex shrink-0 items-center gap-3 rounded-2xl border border-[#eadfda] bg-[#faf7f4] px-4 py-3"><span className="grid size-10 place-items-center rounded-full bg-[#fff0c8] text-[#8b5f08]"><CalendarDays className="size-5" /></span><div><p className="text-[0.68rem] text-[#77727c]">Contractual maturity</p><p className="mt-0.5 text-sm font-black">{formatCustomerDate(scheme.maturityDate)}</p></div></div>
+        </div>
+        <div className={`mt-6 grid gap-px overflow-hidden rounded-2xl border border-[#e9e1dc] bg-[#e9e1dc] ${schemeIsGold ? "sm:grid-cols-4" : "sm:grid-cols-3"}`}>
+          <div className="bg-[#fffefd] p-4 sm:p-5"><p className="text-[0.68rem] text-[#77727c]">Enrolment</p><p className="mt-1 text-sm font-black">{scheme.schemeNumber}</p>{scheme.passbookNumber ? <p className="mt-1 text-[0.68rem] text-[#77727c]">Passbook {scheme.passbookNumber}</p> : null}</div>
+          {schemeIsGold && goldBalance ? (
+            <>
+              <div className="bg-[#fffefd] p-4 sm:p-5"><p className="text-[0.68rem] text-[#77727c]">Gold accumulated</p><p className="mt-1 text-xl font-black text-[#8b5f08]">{goldBalance.weightDisplay}</p></div>
+              <div className="bg-[#fffefd] p-4 sm:p-5"><p className="text-[0.68rem] text-[#77727c]">Total contributed</p><p className="mt-1 text-xl font-black text-[#8b5f08]">{totalPaid.amountDisplay}</p></div>
+            </>
+          ) : (
+            <div className="bg-[#fffefd] p-4 sm:p-5"><p className="text-[0.68rem] text-[#77727c]">Total saved</p><p className="mt-1 text-xl font-black text-[#8b5f08]">{totalPaid.amountDisplay}</p></div>
+          )}
+          <div className="bg-[#fffefd] p-4 sm:p-5"><p className="text-[0.68rem] text-[#77727c]">Current phase</p><p className="mt-1 text-sm font-black">{scheme.progressLabel ?? scheme.statusLabel}</p></div>
         </div>
       </section>
-      <div className="mt-5 grid gap-4 lg:grid-cols-[1.35fr_.65fr]">
-        <section className="rounded-[1.4rem] border bg-white p-5 shadow-sm sm:p-6">
-          <div className="mb-5 flex items-start justify-between gap-4">
-            <div>
-              <h2 className="font-black">Scheme progress</h2>
-              {scheme.progressDetail ? (
-                <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{scheme.progressDetail}</p>
-              ) : null}
-            </div>
-            <SchemeProgressRing percent={scheme.progressPercent ?? 0} size={72} />
-          </div>
+      <div className="mt-5 grid gap-4 lg:grid-cols-[1.3fr_.7fr]">
+        <section className="customer-surface p-5 sm:p-6">
+          <div className="mb-5 flex items-end justify-between gap-4"><div><p className="text-[0.7rem] font-extrabold uppercase tracking-[.15em] text-[#996a15]">Your journey</p><h2 className="mt-1 text-xl font-black">Scheme progress</h2>{scheme.progressDetail ? <p className="mt-1 text-xs leading-relaxed text-[#77727c]">{scheme.progressDetail}</p> : null}</div><b className="text-2xl font-black text-[#730321]">{Math.round(scheme.progressPercent ?? 0)}%</b></div>
           <SchemeProgressVisual scheme={scheme} />
         </section>
-        <section className="rounded-[1.4rem] border border-[#e3ce94] bg-[#fffaf0] p-5 shadow-sm sm:p-6">
-          <p className="text-[11px] font-black uppercase tracking-[.15em] text-[#906818]">Next action</p>
+        <section className="rounded-[1.35rem] border border-[#ead9ae] bg-[#fffaf0] p-5 shadow-[0_12px_34px_rgba(75,31,42,.045)] sm:p-6">
+          <p className="text-[0.7rem] font-extrabold uppercase tracking-[.15em] text-[#906818]">Next action</p>
           <h2 className="mt-2 text-xl font-black">{scheme.nextActionLabel ?? "View details"}</h2>
-          {scheme.nextActionAmount?.amountDisplay && (
-            <p className="mt-1 text-3xl font-black text-[#730321]">{scheme.nextActionAmount.amountDisplay}</p>
-          )}
-          <p className="mt-3 text-xs leading-5 text-muted-foreground">{scheme.helperText}</p>
-          {payButton.visible !== false && (
-            <Button disabled={!payButton.enabled} onClick={() => setPayOpen(true)} className="mt-5 h-12 w-full rounded-xl bg-[#730321] font-black">
-              {payButton.label ?? "Pay"}
-            </Button>
-          )}
+          {scheme.nextActionAmount?.amountDisplay ? <p className="mt-1 text-3xl font-black tracking-tight text-[#730321]">{scheme.nextActionAmount.amountDisplay}</p> : null}
+          {scheme.payableRange ? (
+            <div className="mt-4">
+              <CustomerPayableSummary
+                range={scheme.payableRange}
+                displayMode={scheme.displayMode}
+                compact
+              />
+            </div>
+          ) : null}
+          <p className="mt-3 text-xs leading-5 text-[#706b77]">{scheme.helperText}</p>
+          {payButton.visible !== false ? (
+            <>
+              <Button disabled={!payButton.enabled} onClick={() => setPayOpen(true)} className="mt-5 h-12 w-full rounded-xl bg-[#730321] font-black hover:bg-[#5b021a]">{payButton.label ?? "Pay"}</Button>
+              {payButton.helperText ? (
+                <p className="mt-2 text-center text-[0.68rem] leading-relaxed text-amber-800">{payButton.helperText}</p>
+              ) : null}
+            </>
+          ) : null}
+          <p className="mt-3 flex items-center justify-center gap-1 text-[0.68rem] text-[#77727c]"><ShieldCheck className="size-3.5" />Secure PhonePe checkout</p>
         </section>
       </div>
       {statCards.length > 0 && (
         <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-3">
           {statCards.map((card) => (
-            <div key={card.label} className="rounded-2xl border bg-white p-4 shadow-sm">
+            <div key={card.label} className="customer-surface p-4">
               <p className="text-[11px] font-semibold text-muted-foreground">{card.label}</p>
               <p className="mt-1 text-lg font-black">{card.value}</p>
               {card.caption && <p className="mt-1 text-[10px] text-muted-foreground">{card.caption}</p>}
@@ -312,12 +429,12 @@ export function CustomerSchemeDetailPage({ id }: { id: string }) {
         </div>
       )}
       <Tabs defaultValue="passbook" className="mt-6">
-        <TabsList className="w-full justify-start overflow-x-auto rounded-xl bg-[#eee8e5] p-1">
+        <TabsList className="h-auto w-full justify-start overflow-x-auto rounded-2xl border border-[#e5ddd7] bg-white p-1.5 shadow-sm">
           <TabsTrigger value="passbook">Passbook</TabsTrigger>
           <TabsTrigger value="benefit">Maturity benefit</TabsTrigger>
           <TabsTrigger value="rules">Plan rules</TabsTrigger>
         </TabsList>
-        <TabsContent value="passbook" className="mt-4 rounded-[1.4rem] border bg-white p-5 shadow-sm">
+        <TabsContent value="passbook" className="customer-surface mt-4 p-5 sm:p-6">
           <div>
             <h2 className="font-black">Digital passbook</h2>
             <p className="text-xs text-muted-foreground">
@@ -338,6 +455,12 @@ export function CustomerSchemeDetailPage({ id }: { id: string }) {
                       {payment.statusLabel && payment.status !== "SUCCESS" ? ` · ${payment.statusLabel}` : ""}
                       {payment.receiptNumber ? ` · ${payment.receiptNumber}` : ""}
                     </p>
+                    {paymentHasGoldAccrual(payment) && payment.goldAccrual ? (
+                      <p className="text-[10px] font-semibold text-[#8b5f08]">
+                        {payment.goldAccrual.weightDisplay} at {payment.goldAccrual.ratePerGramDisplay}/g ·{" "}
+                        {formatGoldPurchaseDate(payment.goldAccrual.purchasedAt ?? payment.paidAt)}
+                      </p>
+                    ) : null}
                     <p className="text-[10px] text-muted-foreground">
                       {payment.paidAt
                         ? new Date(payment.paidAt).toLocaleDateString("en-IN", {
@@ -371,7 +494,7 @@ export function CustomerSchemeDetailPage({ id }: { id: string }) {
           </div>
         </TabsContent>
         <TabsContent value="benefit" className="mt-4 space-y-4">
-          <section className="rounded-[1.4rem] border bg-white p-5 shadow-sm sm:p-6">
+          <section className="customer-surface p-5 sm:p-6">
             <div className="flex gap-4">
               <span className="grid size-12 shrink-0 place-items-center rounded-2xl bg-[#fff2ce] text-[#946b17]">
                 <Gem className="size-6" />
@@ -381,7 +504,7 @@ export function CustomerSchemeDetailPage({ id }: { id: string }) {
                 <h2 className="mt-1 text-xl font-black">{maturityBenefit.title}</h2>
                 <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
                   Benefits are calculated and confirmed only on contractual maturity.
-                  {showGoldMetrics && schemeIsGold
+                  {schemeIsGold
                     ? " Gold benefits use the published rate on or before the maturity date."
                     : " Your jeweller will confirm settlement when you redeem."}
                 </p>
@@ -428,7 +551,7 @@ export function CustomerSchemeDetailPage({ id }: { id: string }) {
           {planRuleSections.length ? (
             planRuleSections.map((section) => <RulesBlock key={section.title} section={section} />)
           ) : (
-            <section className="rounded-[1.4rem] border bg-white p-5 shadow-sm">
+            <section className="customer-surface p-5">
               <ul className="space-y-3 text-sm">
                 <li className="flex gap-3">
                   <ShieldCheck className="size-5 text-emerald-700" />
@@ -442,15 +565,7 @@ export function CustomerSchemeDetailPage({ id }: { id: string }) {
             </section>
           )}
           {scheme.payableRange ? (
-            <div className="rounded-2xl border border-[#ead49a] bg-[#fff9e9] p-4 text-sm">
-              <p className="font-black text-[#6d551e]">Current payment window</p>
-              <p className="mt-1 text-muted-foreground">
-                {scheme.payableRange.minPayable.amountDisplay} – {scheme.payableRange.maxPayable.amountDisplay}
-                {scheme.payableRange.cycleCap
-                  ? ` · Cycle cap ${scheme.payableRange.cycleCap.amountDisplay}`
-                  : ""}
-              </p>
-            </div>
+            <CustomerPayableSummary range={scheme.payableRange} displayMode={scheme.displayMode} />
           ) : null}
         </TabsContent>
       </Tabs>
@@ -463,7 +578,26 @@ export function CustomerSchemeDetailPage({ id }: { id: string }) {
               This sends a servicing request. No financial ledger entry is created until the jewellery completes settlement.
             </DialogDescription>
           </DialogHeader>
-          <Button disabled={redemptionState.isLoading} onClick={redeem} className="bg-[#730321]">
+          {redemptionModeOptions.length > 1 ? (
+            <div className="mt-2">
+              <label className="text-xs font-bold text-muted-foreground">Preferred settlement</label>
+              <Select value={redemptionMode} onValueChange={setRedemptionMode}>
+                <SelectTrigger className="mt-2 h-11 rounded-xl">
+                  <SelectValue placeholder="Choose mode" />
+                </SelectTrigger>
+                <SelectContent>
+                  {redemptionModeOptions.map((opt) => (
+                    <SelectItem key={opt.mode} value={opt.mode}>
+                      {opt.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          ) : redemptionModeOptions.length === 1 ? (
+            <p className="text-sm text-muted-foreground">Settlement: {redemptionModeOptions[0].label}</p>
+          ) : null}
+          <Button disabled={redemptionState.isLoading || !redemptionMode} onClick={redeem} className="mt-4 bg-[#730321]">
             Submit request
           </Button>
         </DialogContent>
@@ -532,7 +666,7 @@ export function CustomerPaymentStatusPage() {
   }, []);
   return (
     <div className="grid min-h-[70vh] place-items-center">
-      <section className="w-full max-w-md rounded-[1.6rem] border bg-white p-7 text-center shadow-xl">
+      <section className="customer-surface w-full max-w-md p-7 text-center">
         <span className={cn("mx-auto grid size-16 place-items-center rounded-full", stage === "PAID" ? "bg-emerald-50 text-emerald-700" : "bg-[#f3eafb] text-[#5f259f]")}>
           {stage === "PAID" ? <CheckCircle2 className="size-8" /> : <LoaderCircle className="size-8 animate-spin" />}
         </span>

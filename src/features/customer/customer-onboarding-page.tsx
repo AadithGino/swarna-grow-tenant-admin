@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { CheckCircle2, Gem, LoaderCircle, ShieldCheck } from "lucide-react";
+import { CheckCircle2, LoaderCircle, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,6 +14,7 @@ import { useCompleteCustomerProfileMutation, useSubmitCustomerKycMutation } from
 import { customerProfileCompleted } from "@/src/store/slices/customer-session-slice";
 import { useAppDispatch } from "@/src/store/hooks";
 import { toast } from "sonner";
+import { CustomerBrand } from "@/src/components/customer/customer-ui";
 
 type Step = "profile" | "kyc" | "done";
 
@@ -67,12 +68,10 @@ export function CustomerOnboardingPage() {
   };
 
   return (
-    <div className="customer-theme min-h-screen bg-[#fbf8f4] px-5 py-10">
+    <div className="customer-theme min-h-screen px-5 py-10">
       <div className="mx-auto max-w-lg">
-        <div className="mb-8 flex items-center gap-3">
-          <span className="grid size-11 place-items-center rounded-2xl bg-[#730321] text-white">
-            <Gem className="size-5" />
-          </span>
+        <div className="mb-8 flex items-center gap-4">
+          <CustomerBrand compact />
           <div>
             <p className="text-xs font-bold tracking-[.14em] text-[#9a6f2a]">NEW CUSTOMER</p>
             <h1 className="text-xl font-black">Set up your account</h1>
@@ -89,7 +88,7 @@ export function CustomerOnboardingPage() {
         ) : (
           <div className="mb-6 text-[10px] font-bold uppercase tracking-wide text-[#730321]">1 · Profile</div>
         )}
-        <section className="rounded-[1.6rem] border bg-white p-6 shadow-sm sm:p-8">
+        <section className="customer-surface p-6 sm:p-8">
           {step === "profile" ? (
             <>
               <h2 className="text-lg font-black">Tell us about you</h2>

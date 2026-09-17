@@ -14,7 +14,7 @@ function PastSchemeRow({ scheme, tenantSlug }: { scheme: CustomerPastScheme; ten
   return (
     <Link
       href={customerPath(tenantSlug, "schemes", scheme.id)}
-      className="flex flex-col gap-2 rounded-2xl border bg-white p-5 shadow-sm transition hover:border-[#dac17e] sm:flex-row sm:items-center sm:justify-between"
+      className="customer-surface flex flex-col gap-2 p-5 transition hover:border-[#dac17e] sm:flex-row sm:items-center sm:justify-between"
     >
       <div>
         <p className="text-xs font-bold text-muted-foreground">{scheme.schemeNumber}</p>
@@ -57,18 +57,18 @@ export function CustomerSchemesPage() {
         title="Your schemes"
         description="Every contribution, benefit and maturity date in one place."
       />
-      <div className="mb-5 inline-flex rounded-xl bg-[#eee8e5] p-1">
+      <div className="mb-6 inline-flex rounded-2xl border border-[#e5ddd7] bg-white p-1.5 shadow-sm">
         <button
           type="button"
           onClick={() => setTab("ACTIVE")}
-          className={cn("rounded-lg px-5 py-2 text-sm font-bold", tab === "ACTIVE" && "bg-white text-[#730321] shadow-sm")}
+          className={cn("rounded-xl px-5 py-2.5 text-sm font-bold", tab === "ACTIVE" ? "bg-[#730321] text-white shadow-sm" : "text-[#77727c]")}
         >
           Active ({active.length})
         </button>
         <button
           type="button"
           onClick={() => setTab("PAST")}
-          className={cn("rounded-lg px-5 py-2 text-sm font-bold", tab === "PAST" && "bg-white text-[#730321] shadow-sm")}
+          className={cn("rounded-xl px-5 py-2.5 text-sm font-bold", tab === "PAST" ? "bg-[#730321] text-white shadow-sm" : "text-[#77727c]")}
         >
           Past ({past.length})
         </button>
@@ -76,13 +76,13 @@ export function CustomerSchemesPage() {
 
       {tab === "ACTIVE" ? (
         active.length ? (
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
             {active.map((scheme) => (
               <CustomerSchemeCard key={scheme.id} scheme={scheme} />
             ))}
           </div>
         ) : (
-          <div className="rounded-3xl border bg-white p-12 text-center">
+          <div className="customer-surface p-12 text-center">
             <h3 className="font-black">No active schemes yet</h3>
             <p className="mt-2 text-sm text-muted-foreground">Explore plans to start saving with your jeweller.</p>
             <Link href={customerPath(tenantSlug, "plans")} className="mt-4 inline-block text-sm font-bold text-[#730321]">
@@ -93,7 +93,7 @@ export function CustomerSchemesPage() {
       ) : past.length ? (
         <div className="space-y-3">{past.map((scheme) => <PastSchemeRow key={scheme.id} scheme={scheme} tenantSlug={tenantSlug} />)}</div>
       ) : (
-        <div className="rounded-3xl border bg-white p-12 text-center">
+        <div className="customer-surface p-12 text-center">
           <h3 className="font-black">Your completed schemes will appear here</h3>
           <p className="mt-2 text-sm text-muted-foreground">Receipts, benefits and passbooks remain available after closure.</p>
         </div>

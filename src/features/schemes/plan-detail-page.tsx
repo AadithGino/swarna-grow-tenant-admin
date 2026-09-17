@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import {
   BarChart3,
   CalendarClock,
@@ -16,6 +16,7 @@ import {
   Scale,
   ScrollText,
   Shield,
+  Smartphone,
   Sparkles,
   Store,
   X,
@@ -70,6 +71,7 @@ import {
   amountSummaryLabel,
   planDetailToForm,
 } from "@/src/features/schemes/plan-builder-form";
+import { PlanAvailabilityDialog } from "@/src/features/schemes/plan-availability-dialog";
 import { cn } from "@/lib/utils";
 
 function InfoTile({
@@ -154,6 +156,7 @@ function RulesSection({
 
 export function PlanDetailPage({ planId }: { planId: string }) {
   const router = useRouter();
+  const [availabilityOpen, setAvailabilityOpen] = useState(false);
   const planQuery = useGetPlanQuery(planId);
   const statsQuery = useGetPlanStatsQuery(planId);
   const [duplicatePlan] = useDuplicatePlanMutation();
@@ -275,6 +278,13 @@ export function PlanDetailPage({ planId }: { planId: string }) {
         actions={
           <PermissionGate permission={ACTION.planWrite}>
             <div className="flex flex-wrap gap-2">
+              <Button
+                variant="outline"
+                onClick={() => setAvailabilityOpen(true)}
+              >
+                <Smartphone />
+                App & availability
+              </Button>
               {editLocked ? (
                 <Button
                   onClick={() => router.push(`/schemes/${planId}/duplicate`)}
@@ -342,8 +352,15 @@ export function PlanDetailPage({ planId }: { planId: string }) {
             </Badge>
           </div>
           <p className="mt-2 text-[#5c4a2a]">
-            Duplicate this plan to change amounts or schedule. Profile, benefit label, and
-            availability can still be edited on the live plan.
+            Duplicate this plan to change amounts or schedule. Use{" "}
+            <button
+              type="button"
+              className="font-semibold text-[#730321] underline-offset-2 hover:underline"
+              onClick={() => setAvailabilityOpen(true)}
+            >
+              App & availability
+            </button>{" "}
+            to update customer app listing and self-enrol without opening the full editor.
           </p>
         </div>
       ) : status === "DRAFT" ? (
@@ -407,8 +424,8 @@ export function PlanDetailPage({ planId }: { planId: string }) {
         amountLabel={amountLabel}
         benefitLabel={benefitLabel}
         tenureMonths={Number(plan.durationMonths ?? 0)}
-        visibleInApp={Boolean(avail.visibleInCustomerApp ?? true)}
-        selfEnrol={Boolean(avail.customerSelfEnrolAllowed ?? true)}
+        visibleInApp={Boolean(avail.visibleInCustomerApp)}
+        selfEnrol={Boolean(avail.customerSelfEnrolAllowed)}
         prematureOk={Boolean(redemption.prematureClosureAllowed)}
         lockInMonths={Number(redemption.lockInMonths ?? 0)}
       />
@@ -466,10 +483,23 @@ export function PlanDetailPage({ planId }: { planId: string }) {
               />
               <PlanAvailabilitySidebar
                 allBranches={Boolean(avail.allBranches ?? true)}
-                visibleInApp={Boolean(avail.visibleInCustomerApp ?? true)}
-                selfEnrol={Boolean(avail.customerSelfEnrolAllowed ?? true)}
+                visibleInApp={Boolean(avail.visibleInCustomerApp)}
+                selfEnrol={Boolean(avail.customerSelfEnrolAllowed)}
                 windowLabel={enrolWindow}
                 redemptionModes={redemptionModes}
+                action={
+                  <PermissionGate permission={ACTION.planWrite}>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 text-[#730321]"
+                      onClick={() => setAvailabilityOpen(true)}
+                    >
+                      Edit
+                    </Button>
+                  </PermissionGate>
+                }
               />
             </aside>
           </div>
@@ -619,6 +649,14 @@ export function PlanDetailPage({ planId }: { planId: string }) {
           )}
         </PageTabsPanel>
       </PageTabs>
+
+      <PlanAvailabilityDialog
+        key={`${planId}-${String(plan.version ?? 1)}`}
+        plan={plan}
+        planId={planId}
+        open={availabilityOpen}
+        onOpenChange={setAvailabilityOpen}
+      />
     </div>
   );
 }

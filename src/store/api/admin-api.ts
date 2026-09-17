@@ -7,6 +7,7 @@ import type {
 import { env } from "@/src/config/env";
 import { handleTenantUnauthorized } from "@/src/lib/auth-logout";
 import { storeAuthTokens } from "@/src/lib/auth-session";
+import { parseRefreshTokens } from "@/src/lib/auth-tokens-from-refresh";
 import type { AppDispatch } from "@/src/store";
 import {
   fetchAuthorizedBlob,
@@ -56,6 +57,8 @@ import {
   adaptPayableRange,
   adaptPaymentList,
   adaptPayments,
+  adaptSchemeLedgerList,
+  type SchemeLedgerRow,
   adaptDueList,
   adaptMessages,
   adaptRedemptions,
@@ -353,20 +356,7 @@ const appBaseQuery = (async (args, api, extraOptions) => {
         api,
         extraOptions,
       );
-      const refreshEnvelope = refreshResult.data as
-        | {
-            success?: boolean;
-            data?: {
-              accessToken?: string;
-              refreshToken?: string;
-            };
-          }
-        | undefined;
-      const tokens = refreshEnvelope?.success
-        ? refreshEnvelope.data
-        : (refreshResult.data as
-            | { accessToken?: string; refreshToken?: string }
-            | undefined);
+      const tokens = parseRefreshTokens(refreshResult.data);
       if (tokens?.accessToken) {
         storeAuthTokens(tokens.accessToken, tokens.refreshToken);
         result = await rawBaseQuery(requestArgs, api, {
@@ -1075,13 +1065,13 @@ export const adminApi = createApi({
       transformResponse: adaptEnrollment,
       providesTags: (_r, _e, id) => [{ type: "Enrollment", id }],
     }),
-    getSchemeLedger: builder.query<unknown, string>({
+    getSchemeLedger: builder.query<SchemeLedgerRow[], string>({
       query: (schemeId) => ({
         url: `/admin/schemes/${schemeId}/ledger`,
-        params: { schemeId },
+        params: { schemeId, limit: 200 },
         mockKey: "getSchemeLedger",
       }),
-      transformResponse: (raw) => contractPayload(raw),
+      transformResponse: adaptSchemeLedgerList,
       providesTags: (_r, _e, schemeId) => [
         { type: "Enrollment", id: schemeId },
       ],

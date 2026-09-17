@@ -56,7 +56,7 @@ Every response, success or failure, uses the same shape.
 | Token | Lifetime | Delivery |
 |---|---|---|
 | Access token (JWT) | 30 min (web), 60 min (mobile) | `Authorization: Bearer <token>` |
-| Refresh token | 30 days, rotating | Response body; client stores in secure storage |
+| Refresh token | 365 days, rotating | Response body; client stores in secure storage |
 
 Refresh tokens are single-use and rotate on every refresh. Reuse of a consumed refresh token revokes the entire device session family and returns `TOKEN_REUSE_DETECTED`.
 

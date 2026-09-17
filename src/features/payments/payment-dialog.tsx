@@ -40,6 +40,7 @@ import {
   useGetCustomerSchemesQuery,
   useGetEnrollmentQuery,
   useGetEnrollmentsQuery,
+  useGetGoldRateCurrentQuery,
   useGetPayableRangeQuery,
   useRecordPaymentMutation,
 } from "@/src/store/api/admin-api";
@@ -178,6 +179,16 @@ function PaymentDialogInner({
   }, [quote?.schemeId, quote?.positionVersion, quote?.suggested]);
 
   const numericAmount = typeof amount === "number" ? amount : 0;
+  const isGoldScheme = selectedRow?.valueBasis === "GOLD_WEIGHT";
+  const goldRateQuery = useGetGoldRateCurrentQuery(undefined, {
+    skip: !open || !isGoldScheme,
+  });
+  const estimatedGoldGrams = useMemo(() => {
+    const rate = goldRateQuery.data?.ratePerGram ?? 0;
+    if (!isGoldScheme || !rate || !numericAmount) return null;
+    const mg = Math.round((numericAmount * 100 * 1000) / Math.round(rate * 100));
+    return (mg / 1000).toFixed(3);
+  }, [isGoldScheme, goldRateQuery.data?.ratePerGram, numericAmount]);
 
   const enrollmentError =
     fieldErrors.schemeId ??
@@ -315,6 +326,9 @@ function PaymentDialogInner({
               customer: row.customer || selectedRow?.customer,
               enrollmentNo: row.enrollmentNo || selectedRow?.enrollmentNo,
               mode,
+              goldWeightDisplay: row.goldAccrual?.weightDisplay,
+              goldRateDisplay: row.goldAccrual?.ratePerGramDisplay,
+              goldBookedAt: row.goldAccrual?.purchasedAt,
               allocation:
                 displayMode === "FIXED"
                   ? "Allocated to oldest pending installment"
@@ -493,6 +507,17 @@ function PaymentDialogInner({
               ))}
             </div>
             <FormFieldError message={amountError} />
+            {isGoldScheme && goldRateQuery.data?.ratePerGram && estimatedGoldGrams ? (
+              <p className="mt-2 text-xs leading-relaxed text-[#8b5f08]">
+                At today&apos;s rate ({money(goldRateQuery.data.ratePerGram)}/g), this will book about{" "}
+                <strong>{estimatedGoldGrams} g</strong> on the payment record and receipt.
+              </p>
+            ) : null}
+            {isGoldScheme && goldRateQuery.data?.isSetForToday === false ? (
+              <p className="mt-2 text-xs text-amber-900">
+                Today&apos;s gold rate is not published — collection may be blocked until it is set.
+              </p>
+            ) : null}
           </div>
           <div>
             <FieldLabel>Payment mode</FieldLabel>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Loader2, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -64,7 +64,7 @@ function profileToNomineeDetail(profile: CustomerProfile) {
     name: profile.nominee.name,
     relationship: profile.nominee.relationship as NomineeRelationship,
     mobile: profile.nominee.mobile,
-    notes: profile.nominee.notes,
+    notes: profile.nominee.notes ?? undefined,
   };
 }
 
@@ -83,16 +83,8 @@ export function CustomerNomineeDialog({
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const detail = profileToNomineeDetail(profile);
   const hasNominee = Boolean(profile.nominee?.name);
-  const [baseline, setBaseline] = useState<NomineeFormFields>(() => nomineeFormFieldsFromDetail(detail));
+  const [baseline] = useState<NomineeFormFields>(() => nomineeFormFieldsFromDetail(detail));
   const [form, setForm] = useState<NomineeFormFields>(() => nomineeFormFieldsFromDetail(detail));
-
-  useEffect(() => {
-    if (!open) return;
-    const next = nomineeFormFieldsFromDetail(profileToNomineeDetail(profile));
-    setBaseline(next);
-    setForm(next);
-    setFieldErrors({});
-  }, [open, profile]);
 
   const submitDisabled =
     !nomineeFormReadyForSubmit(form) ||

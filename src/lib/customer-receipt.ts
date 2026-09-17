@@ -1,20 +1,32 @@
 import { env } from "@/src/config/env";
+import { refreshCustomerAccessToken } from "@/src/lib/auth-refresh-fetch";
+
+function customerReceiptUrl(receiptDownloadPath: string) {
+  return receiptDownloadPath.startsWith("http")
+    ? receiptDownloadPath
+    : `${env.apiBaseUrl}${receiptDownloadPath.startsWith("/") ? "" : "/"}${receiptDownloadPath}`;
+}
+
+function customerAuthHeaders(): Record<string, string> {
+  const token =
+    typeof window !== "undefined"
+      ? localStorage.getItem("swarnagrow.customer.accessToken")
+      : null;
+  return {
+    Accept: "application/pdf",
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
+}
 
 export async function downloadCustomerPaymentReceipt(
   receiptDownloadPath: string,
   filename = "payment-receipt.pdf",
 ) {
-  const token =
-    typeof window !== "undefined" ? localStorage.getItem("swarnagrow.customer.accessToken") : null;
-  const url = receiptDownloadPath.startsWith("http")
-    ? receiptDownloadPath
-    : `${env.apiBaseUrl}${receiptDownloadPath.startsWith("/") ? "" : "/"}${receiptDownloadPath}`;
-  const response = await fetch(url, {
-    headers: {
-      Accept: "application/pdf",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-  });
+  const url = customerReceiptUrl(receiptDownloadPath);
+  let response = await fetch(url, { headers: customerAuthHeaders() });
+  if (response.status === 401 && (await refreshCustomerAccessToken())) {
+    response = await fetch(url, { headers: customerAuthHeaders() });
+  }
   if (!response.ok) {
     throw new Error("Receipt could not be downloaded");
   }

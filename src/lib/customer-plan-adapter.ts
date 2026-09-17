@@ -1,4 +1,5 @@
 import type { MoneyRef, SchemePlan } from "@/src/types/customer";
+import { mapRawPlanRules } from "@/src/lib/enrol-plan-rules";
 
 type ApiPlan = Record<string, unknown>;
 
@@ -75,22 +76,43 @@ function planRules(raw: ApiPlan, flexible?: SchemePlan["flexibleSummary"]): stri
   return lines;
 }
 
+function readEnrolBlock(raw: ApiPlan) {
+  const enrol = raw.enrol;
+  if (!enrol || typeof enrol !== "object") return null;
+  return enrol as Record<string, unknown>;
+}
+
 function amountBounds(raw: ApiPlan, summary: AmountSummaryObj | null) {
   const rules = (raw.amountRules ?? {}) as Record<string, unknown>;
   const flex = (raw.flexibleRules ?? {}) as Record<string, unknown>;
   const flexPhase = (flex.flexiblePhase ?? {}) as Record<string, unknown>;
+  const fixedFromRules = rules.fixedAmountPaise as number | undefined;
   const minPaise =
     summary?.min?.amountPaise ??
-    (rules.minInstallmentPaise as number | undefined) ??
+    (Number(rules.minInstallmentPaise) > 0
+      ? (rules.minInstallmentPaise as number)
+      : undefined) ??
+    (Number(fixedFromRules) > 0 && rules.amountMode === "JEWELLER_FIXED"
+      ? fixedFromRules
+      : undefined) ??
     (flexPhase.minimumPaymentPaise as number | undefined);
   const maxPaise =
     summary?.max?.amountPaise ??
-    (rules.maxInstallmentPaise as number | undefined) ??
+    (Number(rules.maxInstallmentPaise) > 0
+      ? (rules.maxInstallmentPaise as number)
+      : undefined) ??
+    (Number(fixedFromRules) > 0 && rules.amountMode === "JEWELLER_FIXED"
+      ? fixedFromRules
+      : undefined) ??
     (flexPhase.maximumPaymentPaise as number | undefined);
   const multipleOfPaise =
     summary?.multipleOf?.amountPaise ?? (rules.multipleOfPaise as number | undefined) ?? 100;
   const fixedAmountPaise = rules.fixedAmountPaise as number | undefined;
-  return { minPaise, maxPaise, multipleOfPaise, fixedAmountPaise };
+  const slabsPaise = Array.isArray(rules.slabsPaise)
+    ? (rules.slabsPaise as number[])
+    : undefined;
+  const amountMode = (rules.amountMode ?? summary?.amountMode) as string | undefined;
+  return { minPaise, maxPaise, multipleOfPaise, fixedAmountPaise, slabsPaise, amountMode };
 }
 
 /** Maps GET /app/scheme-plans (contract + backend DTO) into portal UI shape. */
@@ -99,9 +121,44 @@ export function adaptCustomerSchemePlan(raw: unknown): SchemePlan {
   const flexibleSummary = readFlexibleSummary(plan);
   const amountSummaryRaw = plan.amountSummary;
   const summaryObj = readAmountSummary(amountSummaryRaw);
-  const { minPaise, maxPaise, multipleOfPaise, fixedAmountPaise } = amountBounds(plan, summaryObj);
+  const { minPaise, maxPaise, multipleOfPaise, fixedAmountPaise, slabsPaise, amountMode } =
+    amountBounds(plan, summaryObj);
   const contributionDetail = formatAmountSummaryLabel(amountSummaryRaw);
   const benefitSummary = String(plan.benefitSummary ?? plan.benefitLabel ?? "").trim();
+  const enrolBlock = readEnrolBlock(plan);
+  const enrolRules = enrolBlock
+    ? mapRawPlanRules({
+        paymentPattern: plan.paymentPattern ?? planModel(plan),
+        amountRules: plan.amountRules ?? {
+          amountMode,
+          fixedAmountPaise,
+          slabsPaise,
+          minInstallmentPaise: minPaise,
+          maxInstallmentPaise: maxPaise,
+          multipleOfPaise,
+        },
+        scheduleRules: plan.scheduleRules ?? {
+          firstInstallmentModeDefault: enrolBlock.firstInstallmentModeDefault,
+          firstInstallmentModeEditable: enrolBlock.firstInstallmentModeEditable,
+        },
+      })
+    : mapRawPlanRules({
+        paymentPattern: plan.paymentPattern ?? planModel(plan),
+        amountRules: plan.amountRules,
+        scheduleRules: plan.scheduleRules,
+      });
+  const termsText =
+    typeof plan.termsText === "string" && plan.termsText.trim()
+      ? plan.termsText.trim()
+      : typeof enrolBlock?.termsText === "string" && enrolBlock.termsText.trim()
+        ? String(enrolBlock.termsText).trim()
+        : undefined;
+  const firstInstallmentRequired =
+    enrolBlock?.firstInstallmentRequired === false
+      ? false
+      : enrolBlock?.firstInstallmentRequired === true
+        ? true
+        : enrolRules.firstInstallmentModeDefault !== "START_NEXT_CYCLE";
 
   return {
     id: String(plan.id ?? plan._id ?? ""),
@@ -130,6 +187,13 @@ export function adaptCustomerSchemePlan(raw: unknown): SchemePlan {
     amountMaxPaise: maxPaise,
     multipleOfPaise,
     fixedAmountPaise,
+    slabsPaise,
+    amountMode,
+    enrolRules,
+    termsText,
+    firstInstallmentRequired,
+    firstInstallmentModeDefault: enrolRules.firstInstallmentModeDefault,
+    firstInstallmentModeEditable: enrolRules.firstInstallmentModeEditable,
     flexibleSummary,
   };
 }
@@ -155,6 +219,9 @@ export function suggestedEnrolAmountRupee(plan: SchemePlan): string {
 export function validateEnrolAmountRupee(plan: SchemePlan, amountRupee: number): string | null {
   if (!Number.isFinite(amountRupee) || amountRupee <= 0) return "Enter a valid amount";
   const paise = Math.round(amountRupee * 100);
+  if (plan.amountMode === "JEWELLER_SLABS" && plan.slabsPaise?.length) {
+    if (!plan.slabsPaise.includes(paise)) return "Choose one of the plan's installment slabs";
+  }
   if (plan.fixedAmountPaise && paise !== plan.fixedAmountPaise) {
     return `This plan requires ${plan.fixedAmountPaise / 100} per payment`;
   }

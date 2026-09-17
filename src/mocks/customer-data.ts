@@ -60,11 +60,12 @@ const payments: PaymentListItem[] = [
   { id: "pay_02", amount: money(200000), status: "SUCCESS", paidAt: "2026-08-12T08:14:00Z", createdAt: "2026-08-12T08:12:00Z", schemeId: "sch_free", schemeNumber: "ENR-24520", schemeName: "Sampoorna Flex 11", receiptNumber: "RCT-260812-094", channel: "PHONEPE", paymentPattern: "FLEXIBLE" },
   { id: "pay_03", amount: money(150000), status: "SUCCESS", paidAt: "2026-09-03T11:41:00Z", createdAt: "2026-09-03T11:40:00Z", schemeId: "sch_capped", schemeNumber: "ENR-23218", schemeName: "Suvarna Flexible", receiptNumber: "RCT-260903-043", channel: "PHONEPE", paymentPattern: "FLEXIBLE" },
   { id: "pay_04", amount: money(300000), status: "SUCCESS", paidAt: "2026-08-08T09:05:00Z", createdAt: "2026-08-08T09:04:00Z", schemeId: "sch_fixed", schemeNumber: "ENR-24091", schemeName: "Akshaya 12 Month", receiptNumber: "RCT-260808-112", channel: "CASH", paymentPattern: "FIXED" },
+  { id: "pay_05", amount: money(500000), status: "SUCCESS", paidAt: "2026-08-15T09:05:00Z", createdAt: "2026-08-15T09:04:00Z", schemeId: "sch_gold", schemeNumber: "ENR-24308", schemeName: "Suvarna Gold Savings", receiptNumber: "RCT-260815-172", channel: "PHONEPE", paymentPattern: "FIXED" },
 ];
 
 export const customerSchemes: CustomerSchemeDetail[] = [
   {
-    id: "sch_fixed", schemeNumber: "ENR-24091", planName: "Akshaya 12 Month", subtitle: "Fixed monthly gold savings", displayMode: "FIXED", status: "ACTIVE", statusLabel: "Active", progressPercent: 67, progressLabel: "8 of 12 instalments", totalPaid: money(2400000), maturityDate: "2027-01-14", nextActionLabel: "Next payment · 08 Oct", nextActionAmount: money(300000), canPay: true, benefitLabel: "One free instalment on completion",
+    id: "sch_fixed", schemeNumber: "ENR-24091", planName: "Akshaya 12 Month", subtitle: "Fixed monthly gold savings", displayMode: "FIXED", valueBasis: "CASH", status: "ACTIVE", statusLabel: "Active", progressPercent: 67, progressLabel: "8 of 12 instalments", totalPaid: money(2400000), maturityDate: "2027-01-14", nextActionLabel: "Next payment · 08 Oct", nextActionAmount: money(300000), canPay: true, benefitLabel: "One free instalment on completion",
     header: { eyebrow: "FIXED SAVINGS", title: "Your goal is 67% complete", description: "Four instalments remain before your scheme reaches maturity." },
     progressCard: { type: "FIXED", installmentsPaid: 8, installmentsTotal: 12 },
     statCards: [{ label: "Paid so far", value: "₹24,000", caption: "Across 8 instalments" }, { label: "Next payment", value: "₹3,000", caption: "08 October 2026" }, { label: "Matures", value: "14 Jan 2027", caption: "No early maturity" }],
@@ -72,14 +73,22 @@ export const customerSchemes: CustomerSchemeDetail[] = [
     payableRange: { model: "FIXED", phase: "FIXED", contributionIsOptional: false, minPayable: money(300000), maxPayable: money(300000), suggested: money(300000), multipleOfPaise: 100, quickAmounts: [money(300000)], helperText: "Your fixed instalment for this month.", positionVersion: 12, unusedAllowanceCarriesForward: false, paidMoneyNeverExpires: true },
   },
   {
-    id: "sch_free", schemeNumber: "ENR-24520", planName: "Sampoorna Flex 11", subtitle: "Flexible savings · Free window", displayMode: "FLEXIBLE_FREE_WINDOW", status: "ACTIVE", statusLabel: "Free window", progressPercent: 27, progressLabel: "Month 3 of 11", totalPaid: money(620000), maturityDate: "2027-05-20", nextActionLabel: "Contribute any time", canPay: true, benefitLabel: "Cash bonus based on completed cycles",
-    header: { eyebrow: "FLEXIBLE · FREE WINDOW", title: "Save at your own pace", description: "Contribute any permitted amount this month. Contributions are optional." }, progressCard: { type: "FLEXIBLE_FREE_WINDOW", freeWindowMonth: 3, freeWindowMonths: 6 },
+    id: "sch_free", schemeNumber: "ENR-24520", planName: "Sampoorna Flex 11", subtitle: "Flexible savings · Free window", displayMode: "FLEXIBLE_FREE_WINDOW", valueBasis: "CASH", status: "ACTIVE", statusLabel: "Free window", progressPercent: 50, progressPhase: "FREE_WINDOW", progressLabel: "Month 3 of 6", freeWindowMonth: 3, freeWindowMonths: 6, totalPaid: money(620000), maturityDate: "2027-05-20", nextActionLabel: "Contribute any time", canPay: true, benefitLabel: "Cash bonus based on completed cycles",
+    header: { eyebrow: "FLEXIBLE · FREE WINDOW", title: "Save at your own pace", description: "Contribute any permitted amount this month. Contributions are optional." }, progressCard: { type: "FLEXIBLE_FREE_WINDOW", freeWindowMonth: 3, freeWindowMonths: 6, freeWindowMonthsCompleted: 2 },
     statCards: [{ label: "Paid so far", value: "₹6,200", caption: "Money never expires" }, { label: "This month", value: "₹2,000", caption: "Optional contribution" }, { label: "Free window", value: "3 months left", caption: "Cap calculated after month 6" }],
     payButton: { visible: true, enabled: true, label: "Contribute with PhonePe" }, passbookSummary: { totalEntries: 4, lastPaymentAt: "2026-08-12", totalPaid: money(620000) }, redemption: { eligible: false, status: "NOT_ELIGIBLE", preferredModes: ["BANK_TRANSFER"], blocker: "Available after maturity" }, lifecycleActions: ["DOWNLOAD_PASSBOOK", "VIEW_PLAN"], version: 4, positionVersion: 6, helperText: "Unused monthly room does not carry forward. Everything you already paid remains in your balance.", payments: payments.filter((p) => p.schemeId === "sch_free"),
     payableRange: { model: "FLEXIBLE", phase: "FREE", contributionIsOptional: true, minPayable: money(50000), maxPayable: money(1000000), suggested: money(200000), multipleOfPaise: 100, quickAmounts: [money(100000), money(200000), money(500000)], helperText: "Choose any amount from ₹500 to ₹10,000.", positionVersion: 6, unusedAllowanceCarriesForward: false, paidMoneyNeverExpires: true },
   },
   {
-    id: "sch_capped", schemeNumber: "ENR-23218", planName: "Suvarna Flexible", subtitle: "Flexible savings · Capped phase", displayMode: "FLEXIBLE_CAPPED_WINDOW", status: "ACTIVE", statusLabel: "Capped phase", progressPercent: 73, progressLabel: "Month 8 of 11", totalPaid: money(1840000), maturityDate: "2026-12-06", nextActionLabel: "₹1,500 room this month", nextActionAmount: money(150000), canPay: true, benefitLabel: "Gold benefit valued at maturity rate",
+    id: "sch_gold", schemeNumber: "ENR-24308", planName: "Suvarna Gold Savings", subtitle: "Accumulate gold with every contribution", displayMode: "FIXED", valueBasis: "GOLD_WEIGHT", status: "ACTIVE", statusLabel: "Active", progressPercent: 42, progressLabel: "5 of 12 months", totalPaid: money(3250000), goldAccumulated: { weightMg: 4486, weightDisplay: "4.486 g" }, goldAccrued: { weightMg: 4486, weightDisplay: "4.486 g" }, currentValuation: money(3250000), maturityDate: "2027-04-18", nextActionLabel: "Next contribution · 18 Sep", nextActionAmount: money(500000), canPay: true, benefitLabel: "Gold balance available toward jewellery at maturity",
+    header: { eyebrow: "GOLD ACCUMULATION", title: "Your gold balance is growing", description: "Each verified contribution is converted into gold weight using the applicable scheme rate." },
+    progressCard: { type: "FIXED", installmentsPaid: 5, installmentsTotal: 12, goldAccumulated: { weightMg: 4486, weightDisplay: "4.486 g" }, goldAccrued: { weightMg: 4486, weightDisplay: "4.486 g" } },
+    statCards: [{ label: "Gold balance", value: "4.486 g", caption: "Credited from verified payments" }, { label: "Contributed", value: "₹32,500", caption: "Across 5 months" }, { label: "Matures", value: "18 Apr 2027", caption: "Contractual maturity" }],
+    payButton: { visible: true, enabled: true, label: "Add ₹5,000 with PhonePe" }, passbookSummary: { totalEntries: 5, lastPaymentAt: "2026-08-15", totalPaid: money(3250000) }, redemption: { eligible: false, status: "NOT_ELIGIBLE", preferredModes: ["JEWELLERY_PURCHASE", "GOLD"], blocker: "Available after contractual maturity" }, lifecycleActions: ["DOWNLOAD_PASSBOOK", "VIEW_PLAN"], version: 6, positionVersion: 9, helperText: "Gold weight is credited using the applicable scheme rate for each successful contribution.", payments: payments.filter((p) => p.schemeId === "sch_gold"),
+    payableRange: { model: "FIXED", phase: "FIXED", contributionIsOptional: false, minPayable: money(500000), maxPayable: money(500000), suggested: money(500000), multipleOfPaise: 100, quickAmounts: [money(500000)], helperText: "Your fixed contribution for this month.", positionVersion: 9, unusedAllowanceCarriesForward: false, paidMoneyNeverExpires: true },
+  },
+  {
+    id: "sch_capped", schemeNumber: "ENR-23218", planName: "Suvarna Flexible", subtitle: "Flexible savings · Capped phase", displayMode: "FLEXIBLE_CAPPED_WINDOW", valueBasis: "CASH", status: "ACTIVE", statusLabel: "Capped phase", progressPercent: 73, progressPhase: "CAPPED", progressLabel: "Month 8 of 11", totalPaid: money(1840000), cycleCap: money(200000), remainingThisCycle: money(150000), maturityDate: "2026-12-06", nextActionLabel: "₹1,500 room this month", nextActionAmount: money(150000), canPay: true, benefitLabel: "Gold benefit valued at maturity rate",
     header: { eyebrow: "FLEXIBLE · CAPPED PHASE", title: "₹1,500 available this cycle", description: "Your monthly limit is based on the snapshotted free-window average." }, progressCard: { type: "FLEXIBLE_CAPPED_WINDOW", cycleCap: money(200000), remainingThisCycle: money(150000), lockedAverage: money(200000) },
     statCards: [{ label: "Paid so far", value: "₹18,400", caption: "Permanent ledger balance" }, { label: "Monthly limit", value: "₹2,000", caption: "Snapshotted average" }, { label: "Available now", value: "₹1,500", caption: "No carry-forward" }],
     payButton: { visible: true, enabled: true, label: "Contribute up to ₹1,500" }, passbookSummary: { totalEntries: 10, lastPaymentAt: "2026-09-03", totalPaid: money(1840000) }, redemption: { eligible: false, status: "NOT_ELIGIBLE", preferredModes: ["JEWELLERY_PURCHASE", "GOLD"], blocker: "Matures 06 December 2026" }, lifecycleActions: ["DOWNLOAD_PASSBOOK", "VIEW_PLAN"], version: 10, positionVersion: 21, helperText: "This is a contribution limit, not an amount due. Skipping it does not create overdue or default.", payments: payments.filter((p) => p.schemeId === "sch_capped"),
@@ -96,7 +105,7 @@ export const schemePlans: SchemePlan[] = [
 export const customerPayments = payments;
 
 export const customerNotifications: CustomerNotification[] = [
-  { id: "not_1", type: "PAYMENT", title: "Payment received", body: "₹3,000 was added to Akshaya 12 Month.", read: false, createdAt: "2026-09-08T10:24:00Z", deepLink: "/customer/payments", cta: "View receipt" },
+  { id: "not_1", type: "PAYMENT", title: "Payment received", body: "₹3,000 was added to Akshaya 12 Month.", read: false, createdAt: "2026-09-08T10:24:00Z", deepLink: "/payments/pay_1", cta: "View receipt" },
   { id: "not_2", type: "SCHEME", title: "Your monthly contribution window is open", body: "You can contribute up to ₹1,500 to Suvarna Flexible this month.", read: false, createdAt: "2026-09-01T06:00:00Z", deepLink: "/customer/schemes/sch_capped", cta: "View scheme" },
   { id: "not_3", type: "GENERAL", title: "Gold rate updated", body: "Today’s 22K rate is ₹7,240 per gram.", read: true, createdAt: "2026-09-14T04:10:00Z", deepLink: "/customer/gold-rate" },
 ];
@@ -109,10 +118,21 @@ export const customerGrievances: CustomerGrievance[] = [
 export const customerHome: CustomerHome = {
   tenant: customerTenant,
   customer: { id: customerProfile.id, name: "Anjali", profileComplete: true, passbookNumber: customerProfile.passbookNumber },
-  recentPayments: customerPayments.slice(0, 6),
+  recentPayments: customerPayments
+    .filter((payment) => Boolean(payment.paidAt))
+    .slice(0, 6)
+    .map((payment) => ({
+      id: payment.id,
+      amount: payment.amount,
+      paidAt: payment.paidAt!,
+      receiptNumber: payment.receiptNumber,
+      schemeId: payment.schemeId,
+      schemeNumber: payment.schemeNumber,
+      schemeName: payment.schemeName,
+    })),
   hasGoldAccumulationScheme: true,
   greeting: { text: "Good evening, Anjali", subtext: "Your gold savings are growing steadily." },
-  summary: { activeSchemeCount: 3, pastSchemeCount: 1, totalPaid: money(4860000), goldAccumulated: { weightMg: 6820, weightDisplay: "6.820 g" }, currentValuation: money(4937680) },
+  summary: { activeSchemeCount: 4, pastSchemeCount: 1, totalPaid: money(8110000), goldAccumulated: { weightMg: 4486, weightDisplay: "4.486 g" }, currentValuation: money(3247864) },
   goldRate: { ratePerGramPaise: 724000, ratePerGramDisplay: "₹7,240 / g", effectiveDate: "2026-09-16", purity: "22K", movement: 0.42 },
   actionCard: { type: "PAY_DUE", schemeId: "sch_fixed", title: "Your next instalment is ready", priority: 1 },
   activeSchemes: customerSchemes,

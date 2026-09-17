@@ -1,7 +1,10 @@
 import type { FetchBaseQueryError } from "@reduxjs/toolkit/query";
 import type { AppDispatch } from "@/src/store";
 import { adminApi } from "@/src/store/api/admin-api";
+import { customerApi } from "@/src/store/api/customer-api";
 import { platformApi } from "@/src/store/api/platform-api";
+import { CUSTOMER_ROUTE_SECTIONS } from "@/src/lib/customer-tenant";
+import { customerSignedOut } from "@/src/store/slices/customer-session-slice";
 import { clearSession } from "@/src/store/slices/session-slice";
 
 const PLATFORM_ACCESS = "swarnagrow.platformAccessToken";
@@ -10,6 +13,7 @@ const PLATFORM_USER = "swarnagrow.platformUser";
 
 let tenantLogoutStarted = false;
 let platformLogoutStarted = false;
+let customerLogoutStarted = false;
 
 export function clearPlatformAuthStorage() {
   if (typeof window === "undefined") return;
@@ -53,6 +57,30 @@ export function handleTenantUnauthorized(dispatch: AppDispatch) {
   dispatch(clearSession());
   dispatch(adminApi.util.resetApiState());
   window.location.assign(loginPathWithReturn("/login"));
+}
+
+/** Clear customer session, cache, and redirect to customer login. */
+export function handleCustomerUnauthorized(dispatch: AppDispatch) {
+  if (typeof window === "undefined") return;
+  const path = window.location.pathname;
+  if (path.includes("/customer/") && path.endsWith("/login")) return;
+  if (customerLogoutStarted) return;
+  customerLogoutStarted = true;
+
+  dispatch(customerSignedOut());
+  dispatch(customerApi.util.resetApiState());
+
+  const segments = path.split("/").filter(Boolean);
+  const tenantSlug =
+    segments[0] === "customer" &&
+    segments[1] &&
+    !CUSTOMER_ROUTE_SECTIONS.has(segments[1])
+      ? segments[1]
+      : null;
+  const loginBase = tenantSlug
+    ? `/customer/${tenantSlug}/login`
+    : "/customer/login";
+  window.location.assign(loginPathWithReturn(loginBase));
 }
 
 /** Clear platform session, cache, and redirect to platform login. */

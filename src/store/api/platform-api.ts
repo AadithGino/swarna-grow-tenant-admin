@@ -4,6 +4,7 @@ import { apiOrigin, env } from "@/src/config/env";
 import { handlePlatformUnauthorized } from "@/src/lib/auth-logout";
 import { normalizeFetchBaseQueryError } from "@/src/lib/api-error";
 import type { AppDispatch } from "@/src/store";
+import { parseRefreshTokens } from "@/src/lib/auth-tokens-from-refresh";
 import { readContractResponseBody } from "@/src/lib/contract-response";
 import { newIdempotencyKey } from "@/src/lib/idempotency";
 import { platformMockRequest } from "@/src/mocks/platform-server";
@@ -139,31 +140,6 @@ export type PlatformReadinessHealth = { ok: boolean; database: string; queue: st
 type PlatformArgs = FetchArgs & { mockKey: string; mockParams?: Record<string, unknown> };
 type PlatformBaseQueryExtra = { _authRetry?: boolean };
 
-function platformTokensFromRefreshBody(
-  data: unknown,
-): { accessToken: string; refreshToken?: string } | null {
-  if (!data || typeof data !== "object") return null;
-  const envelope = data as {
-    success?: boolean;
-    data?: { accessToken?: string; refreshToken?: string };
-    accessToken?: string;
-    refreshToken?: string;
-  };
-  if (envelope.success && envelope.data?.accessToken) {
-    return {
-      accessToken: envelope.data.accessToken,
-      refreshToken: envelope.data.refreshToken,
-    };
-  }
-  if (envelope.accessToken) {
-    return {
-      accessToken: envelope.accessToken,
-      refreshToken: envelope.refreshToken,
-    };
-  }
-  return null;
-}
-
 function storePlatformTokens(tokens: {
   accessToken: string;
   refreshToken?: string;
@@ -225,7 +201,7 @@ const baseQuery: BaseQueryFn<
         api,
         extra,
       );
-      const tokens = platformTokensFromRefreshBody(refreshResult.data);
+      const tokens = parseRefreshTokens(refreshResult.data);
       if (tokens?.accessToken) {
         storePlatformTokens(tokens);
         result = await liveBaseQuery({ ...args, headers }, api, {

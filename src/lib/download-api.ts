@@ -1,4 +1,5 @@
 import { env } from "@/src/config/env";
+import { refreshTenantAccessToken } from "@/src/lib/auth-refresh-fetch";
 
 function resolveApiUrl(path: string): string {
   if (path.startsWith("http://") || path.startsWith("https://")) return path;
@@ -11,7 +12,7 @@ function resolveApiUrl(path: string): string {
  * Fetches a binary response (PDF/image) with the stored Bearer token.
  * Does not unwrap the JSON contract envelope.
  */
-export async function fetchAuthorizedBlob(path: string): Promise<Blob> {
+function tenantAuthHeaders(): Record<string, string> {
   const token =
     typeof window !== "undefined"
       ? localStorage.getItem("swarnagrow.accessToken")
@@ -20,13 +21,32 @@ export async function fetchAuthorizedBlob(path: string): Promise<Blob> {
     typeof window !== "undefined"
       ? localStorage.getItem("swarnagrow.actingBranch")
       : null;
-  const response = await fetch(resolveApiUrl(path), {
-    headers: {
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...(actingBranch ? { "X-Acting-Branch-Id": actingBranch } : {}),
-      Accept: "application/pdf,image/*,*/*",
-    },
+  return {
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...(actingBranch ? { "X-Acting-Branch-Id": actingBranch } : {}),
+  };
+}
+
+async function fetchWithTenantAuthRetry(
+  path: string,
+  accept: string,
+): Promise<Response> {
+  let response = await fetch(resolveApiUrl(path), {
+    headers: { ...tenantAuthHeaders(), Accept: accept },
   });
+  if (response.status === 401 && (await refreshTenantAccessToken())) {
+    response = await fetch(resolveApiUrl(path), {
+      headers: { ...tenantAuthHeaders(), Accept: accept },
+    });
+  }
+  return response;
+}
+
+export async function fetchAuthorizedBlob(path: string): Promise<Blob> {
+  const response = await fetchWithTenantAuthRetry(
+    path,
+    "application/pdf,image/*,*/*",
+  );
   if (!response.ok) {
     let data: unknown = null;
     try {
@@ -43,21 +63,10 @@ export async function fetchAuthorizedMaybeBlob(path: string): Promise<
   | { kind: "blob"; blob: Blob; contentType: string }
   | { kind: "json"; payload: unknown; meta?: unknown }
 > {
-  const token =
-    typeof window !== "undefined"
-      ? localStorage.getItem("swarnagrow.accessToken")
-      : null;
-  const actingBranch =
-    typeof window !== "undefined"
-      ? localStorage.getItem("swarnagrow.actingBranch")
-      : null;
-  const response = await fetch(resolveApiUrl(path), {
-    headers: {
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...(actingBranch ? { "X-Acting-Branch-Id": actingBranch } : {}),
-      Accept: "application/pdf,application/json,image/*,*/*",
-    },
-  });
+  const response = await fetchWithTenantAuthRetry(
+    path,
+    "application/pdf,application/json,image/*,*/*",
+  );
   if (!response.ok) {
     let data: unknown = null;
     try {

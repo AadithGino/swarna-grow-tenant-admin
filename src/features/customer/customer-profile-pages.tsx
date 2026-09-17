@@ -122,20 +122,20 @@ export function CustomerProfilePage() {
           </Button>
         }
       />
-      <section className="overflow-hidden rounded-[1.5rem] border bg-white shadow-sm">
-        <div className="bg-[#4b0a18] p-6 text-white sm:flex sm:items-center sm:gap-5">
+      <section className="customer-surface overflow-hidden">
+        <div className="border-b border-[#eadfda] bg-[#fffaf0] p-6 sm:flex sm:items-center sm:gap-5">
           <span className="grid size-16 place-items-center rounded-full bg-[#f8e9c7] text-xl font-black text-[#730321]">
             {initials}
           </span>
           <div className="mt-4 sm:mt-0">
             <h1 className="text-2xl font-black">{data.name}</h1>
-            <p className="mt-1 text-sm text-white/60">
+            <p className="mt-1 text-sm text-[#706b77]">
               {data.customerNumber} · Member since{" "}
               {new Date(data.memberSince).toLocaleDateString("en-IN", { month: "short", year: "numeric" })}
             </p>
           </div>
           {kyc ? (
-            <span className="mt-4 inline-flex items-center gap-2 rounded-full bg-emerald-500/15 px-3 py-1.5 text-xs font-bold text-emerald-200 sm:ml-auto sm:mt-0">
+            <span className="mt-4 inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-700 sm:ml-auto sm:mt-0">
               <ShieldCheck className="size-4" />
               {kyc.statusLabel}
             </span>
@@ -161,7 +161,7 @@ export function CustomerProfilePage() {
         </div>
       </section>
 
-      <section className="mt-5 rounded-[1.4rem] border bg-white p-5 shadow-sm">
+      <section className="customer-surface mt-5 p-5">
         <div className="flex items-center justify-between gap-3">
           <div>
             <h2 className="font-black">Past schemes</h2>
@@ -186,7 +186,7 @@ export function CustomerProfilePage() {
 
       <div className={cn("mt-5 grid gap-4", kycEnabled && "lg:grid-cols-2")}>
         {kyc ? (
-          <section className="rounded-[1.4rem] border bg-white p-5 shadow-sm">
+          <section className="customer-surface p-5">
             <div className="flex items-start gap-3">
               <span className="grid size-11 shrink-0 place-items-center rounded-2xl bg-emerald-50 text-emerald-700">
                 <FileCheck2 className="size-5" />
@@ -247,7 +247,7 @@ export function CustomerProfilePage() {
             ) : null}
           </section>
         ) : null}
-        <section className="rounded-[1.4rem] border bg-white p-5 shadow-sm">
+        <section className="customer-surface p-5">
           <div className="flex items-start gap-3">
             <span className="grid size-11 place-items-center rounded-2xl bg-[#f7edef] text-[#730321]">
               <UserRound className="size-5" />
@@ -277,7 +277,7 @@ export function CustomerProfilePage() {
           )}
         </section>
       </div>
-      <div className="mt-5 overflow-hidden rounded-[1.4rem] border bg-white shadow-sm">
+      <div className="customer-surface mt-5 overflow-hidden">
         <Link href={customerPath(tenantSlug, "security")} className="flex items-center gap-3 p-5 hover:bg-[#fcf8f5]">
           <LockKeyhole className="size-5 text-[#730321]" />
           <span>
@@ -341,7 +341,7 @@ export function CustomerProfilePage() {
           </DialogContent>
         </Dialog>
       ) : null}
-      <CustomerNomineeDialog profile={data} open={nomineeOpen} onOpenChange={setNomineeOpen} />
+      <CustomerNomineeDialog key={`nominee-${data.version}-${nomineeOpen}`} profile={data} open={nomineeOpen} onOpenChange={setNomineeOpen} />
     </div>
   );
 }
@@ -354,7 +354,7 @@ export function CustomerSecurityPage() {
   return (
     <div>
       <CustomerPageHeader title="Security & devices" description="Review devices that can access your SwarnaGrow customer account." />
-      <section className="rounded-[1.4rem] border bg-white p-5 shadow-sm">
+      <section className="customer-surface p-5">
         <div className="flex items-start gap-3 rounded-2xl bg-emerald-50 p-4 text-sm text-emerald-900">
           <ShieldCheck className="size-5 shrink-0" />
           <p>

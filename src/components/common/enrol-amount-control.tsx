@@ -16,7 +16,7 @@ import {
 } from "@/src/lib/enrol-plan-rules";
 import { money } from "@/src/lib/format";
 import { cn } from "@/lib/utils";
-import type { SchemePlan } from "@/src/types/domain";
+import type { EnrolPlanRules } from "@/src/lib/enrol-plan-rules";
 
 export function EnrolAmountControl({
   plan,
@@ -24,7 +24,7 @@ export function EnrolAmountControl({
   onAmountChange,
   invalid,
 }: {
-  plan?: SchemePlan;
+  plan?: EnrolPlanRules;
   amount: number;
   onAmountChange: (amount: number) => void;
   invalid?: boolean;

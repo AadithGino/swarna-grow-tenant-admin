@@ -111,6 +111,7 @@ export type ScheduleStatus =
   "PAID" | "DUE" | "PARTIALLY_PAID" | "UPCOMING" | "EXPIRED" | "MATURED";
 
 export interface ScheduleRow {
+  goldAccrual?: import("@/src/types/customer").PaymentGoldAccrual | null;
   id: string;
   cycle: number;
   label: string;
@@ -253,6 +254,7 @@ export interface Payment {
   status: "SUCCESS" | "PENDING" | "FAILED" | "REVERSED";
   source: "ADMIN" | "STAFF" | "PAYMENT_LINK";
   isLateSuccess?: boolean;
+  goldAccrual?: import("@/src/types/customer").PaymentGoldAccrual | null;
 }
 
 export interface DueItem {

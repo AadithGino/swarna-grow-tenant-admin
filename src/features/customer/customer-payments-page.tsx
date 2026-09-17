@@ -28,6 +28,7 @@ import {
 import { summarizeCustomerPayments } from "@/src/lib/customer-payment-adapter";
 import { downloadCustomerPaymentReceipt } from "@/src/lib/customer-receipt";
 import type { PaymentListItem } from "@/src/types/customer";
+import { formatGoldPurchaseDate, paymentHasGoldAccrual } from "@/src/lib/gold-payment-display";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -118,23 +119,23 @@ export function CustomerPaymentsPage() {
         description="A permanent record of every verified contribution."
       />
       <div className="grid gap-3 sm:grid-cols-3">
-        <div className="rounded-2xl bg-[#4b0a18] p-5 text-white">
-          <WalletCards className="size-5 text-[#e8c35e]" />
-          <p className="mt-4 text-xs text-white/55">Total verified</p>
-          <p className="mt-1 text-2xl font-black">{formatInrDisplay(summary.totalPaidPaise)}</p>
+        <div className="customer-surface p-5">
+          <span className="grid size-10 place-items-center rounded-full bg-[#fff0c8] text-[#8b5f08]"><WalletCards className="size-5" /></span>
+          <p className="mt-4 text-xs text-[#77727c]">Total verified</p>
+          <p className="mt-1 text-2xl font-black text-[#8b5f08]">{formatInrDisplay(summary.totalPaidPaise)}</p>
         </div>
-        <div className="rounded-2xl border bg-white p-5">
+        <div className="customer-surface p-5">
           <CheckCircle2 className="size-5 text-emerald-700" />
           <p className="mt-4 text-xs text-muted-foreground">Successful payments</p>
           <p className="mt-1 text-2xl font-black">{summary.successCount}</p>
         </div>
-        <div className="rounded-2xl border bg-white p-5">
+        <div className="customer-surface p-5">
           <Gem className="size-5 text-[#9a6f2a]" />
           <p className="mt-4 text-xs text-muted-foreground">Active schemes</p>
           <p className="mt-1 text-2xl font-black">{activeSchemeCount}</p>
         </div>
       </div>
-      <section className="mt-5 overflow-hidden rounded-[1.4rem] border bg-white shadow-sm">
+      <section className="customer-surface mt-5 overflow-hidden">
         <div className="border-b p-5">
           <h2 className="font-black">Recent transactions</h2>
           <p className="text-xs text-muted-foreground">Open a payment for details or download its receipt</p>
@@ -160,6 +161,12 @@ export function CustomerPaymentsPage() {
                     {payment.channelLabel ?? payment.channel}
                     {payment.receiptNumber ? ` · ${payment.receiptNumber}` : ""}
                   </p>
+                  {paymentHasGoldAccrual(payment) && payment.goldAccrual ? (
+                    <p className="mt-0.5 text-[10px] font-semibold text-[#8b5f08]">
+                      {payment.goldAccrual.weightDisplay} · {payment.goldAccrual.ratePerGramDisplay}/g ·{" "}
+                      {formatGoldPurchaseDate(payment.goldAccrual.purchasedAt ?? payment.paidAt)}
+                    </p>
+                  ) : null}
                 </div>
                 <div className="text-right">
                   <p className="font-black">{payment.amount.amountDisplay}</p>
@@ -212,13 +219,13 @@ export function CustomerPaymentDetailPage({ id }: { id: string }) {
         <ArrowLeft className="size-4" />
         All payments
       </Link>
-      <section className="overflow-hidden rounded-[1.6rem] border bg-white shadow-sm">
-        <div className="bg-[#4b0a18] p-6 text-white sm:p-8">
+      <section className="customer-surface overflow-hidden">
+        <div className="border-b border-[#eadfda] bg-[#fffaf0] p-6 sm:p-8">
           <div className="flex items-start justify-between gap-4">
             <div>
               <StatusBadge payment={payment} />
               <h1 className="mt-3 text-3xl font-black">{payment.amount.amountDisplay}</h1>
-              <p className="mt-2 text-sm text-white/70">{payment.schemeName}</p>
+              <p className="mt-2 text-sm text-[#706b77]">{payment.schemeName}</p>
             </div>
             <PaymentStatusIcon payment={payment} />
           </div>
@@ -229,6 +236,21 @@ export function CustomerPaymentDetailPage({ id }: { id: string }) {
           <DetailField label="Channel" value={payment.channelLabel ?? payment.channel} />
           <DetailField label="Plan type" value={payment.paymentPattern === "FLEXIBLE" ? "Flexible" : "Fixed"} />
           {payment.targetCycle ? <DetailField label="Contribution cycle" value={payment.targetCycle} /> : null}
+          {payment.goldAccrual?.weightMg ? (
+            <>
+              <DetailField label="Gold weight booked" value={payment.goldAccrual.weightDisplay} />
+              <DetailField
+                label="Gold rate on booking date"
+                value={`${payment.goldAccrual.ratePerGramDisplay} / g`}
+              />
+              <DetailField
+                label="Gold booking date"
+                value={formatGoldPurchaseDate(
+                  payment.goldAccrual.purchasedAt ?? payment.paidAt ?? payment.createdAt,
+                )}
+              />
+            </>
+          ) : null}
           <DetailField label="Receipt" value={payment.receiptNumber ?? "Available after confirmation"} />
         </div>
         <div className="flex flex-wrap gap-3 border-t p-6 sm:p-8">

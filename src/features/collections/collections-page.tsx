@@ -32,7 +32,9 @@ import {
 import { useValidatedListDateRange } from "@/src/hooks/use-validated-list-date-range";
 import { StatusBadge } from "@/src/components/common/status-badge";
 import { downloadBlobUrl, downloadCsv, downloadText } from "@/src/lib/download";
+import { goldLedgerColumns } from "@/src/components/common/gold-payment-columns";
 import { money } from "@/src/lib/format";
+import { paymentHasGoldAccrual } from "@/src/lib/gold-payment-display";
 import { emptyPageMeta } from "@/src/lib/cursor-pagination";
 import {
   defaultListRangeFrom,
@@ -139,6 +141,7 @@ export function CollectionsPage() {
     return <QueryError error={query.error} onRetry={query.refetch} />;
   const s = query.data.summary ?? {};
   const rows = query.data.items;
+  const showGoldLedger = rows.some((r) => paymentHasGoldAccrual(r));
   const page = query.data.page ?? emptyPageMeta();
   const byMode = modeMixQuery.data?.byMode ?? query.data.byMode ?? [];
   const donutData = byMode
@@ -216,6 +219,7 @@ export function CollectionsPage() {
       header: "Amount",
       render: (r: (typeof rows)[number]) => <strong>{money(r.amount)}</strong>,
     },
+    ...(showGoldLedger ? goldLedgerColumns<(typeof rows)[number]>() : []),
     {
       key: "mode",
       header: "Mode",

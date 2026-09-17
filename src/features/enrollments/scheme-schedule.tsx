@@ -11,7 +11,9 @@ import { PageSubTabsList, PageTab } from "@/src/components/common/page-tabs";
 import { StatusBadge } from "@/src/components/common/status-badge";
 import { PaymentDialog } from "@/src/features/payments/payment-dialog";
 import { downloadBlobUrl, downloadText } from "@/src/lib/download";
+import { goldLedgerColumns } from "@/src/components/common/gold-payment-columns";
 import { money } from "@/src/lib/format";
+import { paymentHasGoldAccrual } from "@/src/lib/gold-payment-display";
 import { useLazyGetPaymentReceiptQuery } from "@/src/store/api/admin-api";
 import type { Enrollment, ScheduleRow } from "@/src/types/domain";
 
@@ -104,6 +106,9 @@ function SchedulePanelHeader({
 
 export function EnrollmentSchedule({ enrollment }: { enrollment: Enrollment }) {
   const rows = enrollment.schedule ?? [];
+  const showGoldSchedule =
+    enrollment.valueBasis === "GOLD_WEIGHT" ||
+    rows.some((r) => paymentHasGoldAccrual(r));
   const mode = enrollment.displayMode ?? "FIXED";
   const matured =
     enrollment.status === "MATURED" ||
@@ -135,6 +140,7 @@ export function EnrollmentSchedule({ enrollment }: { enrollment: Enrollment }) {
               header: "Receipt",
               render: (r) => r.receipt ?? "—",
             },
+            ...(showGoldSchedule ? goldLedgerColumns<ScheduleRow>() : []),
           ]}
         />
       </Surface>
@@ -372,6 +378,7 @@ export function EnrollmentSchedule({ enrollment }: { enrollment: Enrollment }) {
             header: "Receipt",
             render: (r) => r.receipt ?? "—",
           },
+          ...(showGoldSchedule ? goldLedgerColumns<ScheduleRow>() : []),
           {
             key: "action",
             header: "",

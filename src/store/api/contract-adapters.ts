@@ -25,6 +25,7 @@ import {
   CAPPED_CYCLE_INCREMENT,
   CAPPED_CYCLE_NORMAL_MIN,
 } from "@/src/lib/payment-limits";
+import { readGoldAccrual } from "@/src/lib/gold-payment-display";
 
 export type ContractWrapper<T = unknown> = {
   __contract: true;
@@ -482,6 +483,7 @@ export function adaptEnrollment(raw: any): Enrollment {
         ),
         status: entry.status,
         receipt: entry.payment?.receiptNumber,
+        goldAccrual: readGoldAccrual(entry.payment ?? entry.goldAccrual ?? entry),
         paymentId:
           entry.payment?.id ??
           entry.payment?._id ??
@@ -507,6 +509,7 @@ export function adaptEnrollment(raw: any): Enrollment {
         ),
         status: entry.status,
         receipt: entry.payment?.receiptNumber,
+        goldAccrual: readGoldAccrual(entry.payment ?? entry),
         paymentId:
           entry.payment?.id ??
           entry.payment?._id ??
@@ -662,11 +665,7 @@ export function adaptPayableRange(raw: any): PayableQuote {
 
   const min = cappedBounds?.min ?? normalMin;
   const max = cappedBounds?.max ?? maxFromLive ?? remaining;
-  const suggested =
-    suggestedFromLive ??
-    (item.model === "FIXED" || displayMode === "FIXED"
-      ? max || null
-      : min || null);
+  const suggested = suggestedFromLive ?? min ?? null;
 
   const paymentPattern: PayableQuote["paymentPattern"] =
     item.model === "FLEXIBLE" ||
@@ -898,6 +897,48 @@ function enrollmentSummary(items: Enrollment[]) {
   return enrollmentSummaryFromItems(items);
 }
 
+export type SchemeLedgerRow = {
+  id: string;
+  sequence: number | null;
+  type: string | null;
+  description: string | null;
+  date: string;
+  receiptNo: string;
+  amount: number;
+  mode?: string | null;
+  goldAccrual?: import("@/src/types/customer").PaymentGoldAccrual | null;
+};
+
+export function adaptSchemeLedgerList(raw: unknown): SchemeLedgerRow[] {
+  const payload = contractPayload<any>(raw);
+  const list: any[] = Array.isArray(payload)
+    ? payload
+    : Array.isArray(payload?.data)
+      ? payload.data
+      : Array.isArray(payload?.entries)
+        ? payload.entries
+        : Array.isArray((raw as any)?.data)
+          ? (raw as any).data
+          : [];
+  return list.map((item) => {
+    const amountPaise =
+      item.amount?.amountPaise ??
+      item.amountPaise ??
+      (typeof item.amount === "number" ? Math.round(item.amount * 100) : 0);
+    return {
+      id: entityId(item),
+      sequence: item.sequence ?? null,
+      type: item.type ?? null,
+      description: item.description ?? null,
+      date: dateTime(item.effectiveAt ?? item.createdAt ?? item.paidAt),
+      receiptNo: item.receiptNumber ?? item.receiptNo ?? "—",
+      amount: amountPaise / 100,
+      mode: item.mode ?? null,
+      goldAccrual: readGoldAccrual(item),
+    };
+  });
+}
+
 export function adaptPaymentList(raw: any, customerName = ""): Payment[] {
   if (Array.isArray(raw) && (!raw.length || raw[0]?.receiptNo)) return raw;
   const payload = contractPayload<any>(raw);
@@ -954,6 +995,7 @@ export function adaptPaymentList(raw: any, customerName = ""): Payment[] {
       status: item.status,
       source,
       isLateSuccess: Boolean(item.isLateSuccess),
+      goldAccrual: readGoldAccrual(item),
     } as Payment;
   });
 }

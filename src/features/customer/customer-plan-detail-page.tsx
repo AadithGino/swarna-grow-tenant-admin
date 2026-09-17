@@ -3,10 +3,10 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, Check, Gem, IndianRupee, LoaderCircle, ShieldCheck, Sparkles } from "lucide-react";
+import { ArrowLeft, Check, Gem, LoaderCircle, ShieldCheck, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
+import { EnrolAmountControl } from "@/src/components/common/enrol-amount-control";
 import { PageSkeleton, QueryError } from "@/src/components/common/query-state";
 import { useCustomerTenant } from "@/src/components/customer/customer-tenant-context";
 import {
@@ -15,10 +15,12 @@ import {
   useInitiatePublicPaymentLinkMutation,
 } from "@/src/store/api/customer-api";
 import { customerPath } from "@/src/lib/customer-tenant";
+import { validateEnrolAmountRupee } from "@/src/lib/customer-plan-adapter";
 import {
-  suggestedEnrolAmountRupee,
-  validateEnrolAmountRupee,
-} from "@/src/lib/customer-plan-adapter";
+  customerPlanEnrolRules,
+  defaultCustomerEnrolAmountRupee,
+} from "@/src/lib/customer-enrol-plan";
+import { resolvedFirstInstallmentMode } from "@/src/lib/enrol-plan-rules";
 import { openCustomerPaymentTarget } from "@/src/lib/customer-payment-redirect";
 import { toast } from "sonner";
 
@@ -26,30 +28,19 @@ export function CustomerPlanDetailPage({ id }: { id: string }) {
   const router = useRouter();
   const { tenantSlug, tenant } = useCustomerTenant();
   const { data: plan, isLoading, isError, refetch } = useGetCustomerPlanQuery(id);
-  const [amount, setAmount] = useState("");
+  const enrolRules = useMemo(() => (plan ? customerPlanEnrolRules(plan) : undefined), [plan]);
+  const [amount, setAmount] = useState<number | undefined>(undefined);
   const [payNow, setPayNow] = useState(true);
   const [agreed, setAgreed] = useState(false);
   const [enrol, enrolState] = useEnrolCustomerSchemeMutation();
   const [initiatePublicLink] = useInitiatePublicPaymentLinkMutation();
 
   useEffect(() => {
-    if (plan) setAmount(suggestedEnrolAmountRupee(plan));
-  }, [plan]);
-
-  const amountHint = useMemo(() => {
-    if (!plan) return null;
-    if (plan.fixedAmountPaise) return `Fixed at ${plan.amountSummary}`;
-    const parts: string[] = [];
-    if (plan.amountMinPaise != null && plan.amountMaxPaise != null) {
-      parts.push(
-        `₹${Math.round(plan.amountMinPaise / 100).toLocaleString("en-IN")} – ₹${Math.round(plan.amountMaxPaise / 100).toLocaleString("en-IN")}`,
-      );
-    }
-    if (plan.multipleOfPaise && plan.multipleOfPaise > 100) {
-      parts.push(`multiples of ₹${Math.round(plan.multipleOfPaise / 100).toLocaleString("en-IN")}`);
-    }
-    return parts.length ? parts.join(", ") : null;
-  }, [plan]);
+    if (!plan) return;
+    setAmount((prev) => (prev == null ? defaultCustomerEnrolAmountRupee(plan) : prev));
+    const collectNow = plan.firstInstallmentRequired !== false;
+    setPayNow(collectNow);
+  }, [plan?.id, plan?.firstInstallmentRequired]);
 
   if (isLoading || !plan) return <PageSkeleton cards={3} />;
   if (isError) return <QueryError onRetry={refetch} />;
@@ -57,25 +48,41 @@ export function CustomerPlanDetailPage({ id }: { id: string }) {
   const jewellerName = tenant?.displayName ?? tenant?.appDisplayName ?? "your jeweller";
   const contributionText = plan.contributionDetail ?? plan.amountSummary;
   const benefitText = plan.benefitSummary || "Benefit follows plan rules shown at enrolment";
+  const amountValue = amount ?? defaultCustomerEnrolAmountRupee(plan);
+  const firstMode = resolvedFirstInstallmentMode(
+    enrolRules,
+    payNow ? "COLLECT_NOW" : "START_NEXT_CYCLE",
+  );
+  const showPayNowToggle = plan.firstInstallmentModeEditable !== false;
+  const payNowLocked =
+    plan.firstInstallmentModeEditable === false &&
+    plan.firstInstallmentModeDefault === "COLLECT_NOW";
+  const payNowHidden =
+    plan.firstInstallmentModeEditable === false &&
+    plan.firstInstallmentModeDefault === "START_NEXT_CYCLE";
+  const effectivePayNow = payNowHidden ? false : firstMode === "COLLECT_NOW";
+  const termsParagraphs = plan.termsText
+    ? plan.termsText.split(/\n+/).map((line) => line.replace(/^\d+\.\s*/, "").trim()).filter(Boolean)
+    : [];
 
   const submit = async () => {
     if (!plan.canEnrol) {
       return toast.error(plan.blockedReason ?? "You cannot enrol in this plan right now");
     }
     if (!agreed) return toast.error("Please confirm that you understand the plan rules");
-    const validation = validateEnrolAmountRupee(plan, Number(amount));
+    const validation = validateEnrolAmountRupee(plan, amountValue);
     if (validation) return toast.error(validation);
     try {
       const statusRedirectUrl = customerPath(tenantSlug, "pay", "status");
       const statusRedirectFull = `${window.location.origin}${statusRedirectUrl}`;
       const result = await enrol({
         planId: plan.id,
-        installmentAmountPaise: Math.round(Number(amount) * 100),
-        payNow,
+        installmentAmountPaise: Math.round(amountValue * 100),
+        payNow: effectivePayNow,
         redirectUrl: statusRedirectFull,
       }).unwrap();
       toast.success("Your scheme has been created");
-      if (!payNow) {
+      if (!effectivePayNow) {
         router.push(customerPath(tenantSlug, "schemes"));
         return;
       }
@@ -112,18 +119,18 @@ export function CustomerPlanDetailPage({ id }: { id: string }) {
         All plans
       </Link>
       <div className="grid gap-5 lg:grid-cols-[1.05fr_.95fr]">
-        <section className="overflow-hidden rounded-[1.6rem] border bg-white shadow-sm">
-          <div className="bg-[#4b0a18] p-6 text-white sm:p-8">
-            <span className="grid size-12 place-items-center rounded-2xl bg-white/10 text-[#e8c35e]">
+        <section className="customer-surface overflow-hidden">
+          <div className="border-b border-[#e9e1dc] bg-[#fffaf0] p-6 sm:p-8">
+            <span className="grid size-12 place-items-center rounded-full bg-[#fff0c8] text-[#8b5f08]">
               {plan.model === "FLEXIBLE" ? <Sparkles /> : <Gem />}
             </span>
-            <p className="mt-6 text-xs font-black tracking-[.16em] text-[#e8c35e]">
+            <p className="mt-6 text-xs font-black tracking-[.16em] text-[#946716]">
               {plan.model}
               {plan.valueBasisLabel ? ` · ${plan.valueBasisLabel.toUpperCase()}` : ""} · {plan.durationMonths}{" "}
               MONTHS
             </p>
-            <h1 className="mt-2 text-3xl font-black">{plan.name}</h1>
-            <p className="mt-2 max-w-lg leading-7 text-white/65">
+            <h1 className="mt-2 text-3xl font-black tracking-[-.035em] text-[#171722]">{plan.name}</h1>
+            <p className="mt-2 max-w-lg leading-7 text-[#706b77]">
               {plan.tagline || plan.paymentPatternLabel || "Savings plan tailored by your jeweller"}
             </p>
           </div>
@@ -143,6 +150,16 @@ export function CustomerPlanDetailPage({ id }: { id: string }) {
             ) : (
               <p className="mt-4 text-sm leading-6 text-muted-foreground">{contributionText}</p>
             )}
+            {termsParagraphs.length > 0 ? (
+              <div className="mt-6 rounded-2xl border border-[#e9e1dc] bg-[#faf6f3] p-4">
+                <p className="text-xs font-black uppercase tracking-wide text-[#730321]">Plan terms</p>
+                <ul className="mt-3 space-y-2 text-sm leading-relaxed text-muted-foreground">
+                  {termsParagraphs.map((line) => (
+                    <li key={line}>{line}</li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
             {plan.flexibleSummary?.freeWindowMonths != null && plan.flexibleSummary.lockWindowMonths != null ? (
               <div className="mt-6 grid grid-cols-2 gap-3 text-sm">
                 <div className="rounded-2xl bg-[#f5f0ec] p-4">
@@ -167,7 +184,7 @@ export function CustomerPlanDetailPage({ id }: { id: string }) {
             </div>
           </div>
         </section>
-        <section className="h-fit rounded-[1.6rem] border bg-white p-6 shadow-sm sm:p-8 lg:sticky lg:top-24">
+        <section className="customer-surface h-fit p-6 sm:p-8 lg:sticky lg:top-24">
           <p className="text-[11px] font-black uppercase tracking-[.16em] text-[#9b7224]">Start saving</p>
           <h2 className="mt-1 text-2xl font-black">Create your scheme</h2>
           <p className="mt-2 text-sm leading-6 text-muted-foreground">
@@ -179,27 +196,30 @@ export function CustomerPlanDetailPage({ id }: { id: string }) {
             </p>
           ) : null}
           <div className="mt-6">
-            <label className="text-sm font-bold">
-              {plan.model === "FIXED" ? "Monthly instalment" : "First contribution"}
-            </label>
-            <div className="mt-2 flex h-13 items-center rounded-xl border px-3">
-              <IndianRupee className="size-5 shrink-0" />
-              <Input
-                value={amount}
-                onChange={(e) => setAmount(e.target.value.replace(/\D/g, ""))}
-                disabled={Boolean(plan.fixedAmountPaise) || !plan.canEnrol}
-                className="border-0 text-lg font-black shadow-none focus-visible:ring-0"
+            <EnrolAmountControl
+              plan={enrolRules}
+              amount={amountValue}
+              onAmountChange={setAmount}
+              invalid={Boolean(validateEnrolAmountRupee(plan, amountValue))}
+            />
+          </div>
+          {!payNowHidden && showPayNowToggle ? (
+            <div className="mt-5 flex items-center justify-between rounded-2xl bg-[#faf6f3] p-4">
+              <div>
+                <p className="text-sm font-bold">Pay first contribution now</p>
+                <p className="text-xs text-muted-foreground">Continue securely through PhonePe</p>
+              </div>
+              <Switch
+                checked={payNow}
+                onCheckedChange={setPayNow}
+                disabled={!plan.canEnrol || payNowLocked}
               />
             </div>
-            {amountHint ? <p className="mt-2 text-xs text-muted-foreground">{amountHint}</p> : null}
-          </div>
-          <div className="mt-5 flex items-center justify-between rounded-2xl bg-[#faf6f3] p-4">
-            <div>
-              <p className="text-sm font-bold">Pay first contribution now</p>
-              <p className="text-xs text-muted-foreground">Continue securely through PhonePe</p>
-            </div>
-            <Switch checked={payNow} onCheckedChange={setPayNow} disabled={!plan.canEnrol} />
-          </div>
+          ) : payNowHidden ? (
+            <p className="mt-5 rounded-2xl bg-[#faf6f3] p-4 text-xs leading-relaxed text-muted-foreground">
+              First contribution is scheduled from the next cycle per your jeweller&apos;s plan rules.
+            </p>
+          ) : null}
           <label className="mt-5 flex cursor-pointer gap-3 rounded-2xl border p-4 text-xs leading-5">
             <input
               type="checkbox"
@@ -209,7 +229,9 @@ export function CustomerPlanDetailPage({ id }: { id: string }) {
               className="mt-1 size-4 accent-[#730321]"
             />
             <span>
-              I understand the contribution schedule, benefit eligibility and contractual maturity rules for this plan.
+              {termsParagraphs.length > 0
+                ? "I have read and accept the plan terms and understand benefit eligibility and maturity rules."
+                : "I understand the contribution schedule, benefit eligibility and contractual maturity rules for this plan."}
             </span>
           </label>
           <div className="mt-5 flex items-start gap-2 text-[11px] leading-5 text-muted-foreground">
@@ -218,12 +240,12 @@ export function CustomerPlanDetailPage({ id }: { id: string }) {
           </div>
           <Button
             onClick={submit}
-            disabled={enrolState.isLoading || !Number(amount) || !plan.canEnrol}
+            disabled={enrolState.isLoading || !Number(amountValue) || !plan.canEnrol}
             className="mt-5 h-12 w-full rounded-xl bg-[#730321] text-base font-black"
           >
             {enrolState.isLoading ? (
               <LoaderCircle className="animate-spin" />
-            ) : payNow ? (
+            ) : effectivePayNow ? (
               "Enrol & continue to PhonePe"
             ) : (
               "Create scheme"

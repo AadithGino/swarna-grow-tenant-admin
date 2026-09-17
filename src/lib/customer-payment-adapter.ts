@@ -1,4 +1,5 @@
-import type { MoneyRef, PaymentListItem } from "@/src/types/customer";
+import type { CustomerSchemeDetail, MoneyRef, PaymentListItem } from "@/src/types/customer";
+import { readGoldAccrual } from "@/src/lib/gold-payment-display";
 
 function formatInr(paise: number): string {
   return new Intl.NumberFormat("en-IN", {
@@ -102,12 +103,24 @@ export function adaptCustomerPayment(raw: unknown): PaymentListItem {
         ? "FLEXIBLE"
         : "FIXED",
     targetCycle: row.targetCycle ? String(row.targetCycle) : undefined,
+    valueBasis:
+      row.valueBasis === "GOLD_WEIGHT" || row.valueBasis === "CASH"
+        ? row.valueBasis
+        : undefined,
+    goldAccrual: readGoldAccrual(row),
   };
 }
 
 export function adaptCustomerPaymentList(raw: unknown): PaymentListItem[] {
   if (Array.isArray(raw)) return raw.map(adaptCustomerPayment);
   return [];
+}
+
+/** Normalizes GET /app/schemes/:id (payments need gold accrual flattening). */
+export function adaptCustomerSchemeDetail(raw: unknown): CustomerSchemeDetail {
+  const dto = (raw ?? {}) as CustomerSchemeDetail;
+  const payments = Array.isArray(dto.payments) ? dto.payments.map((p) => adaptCustomerPayment(p)) : [];
+  return { ...dto, payments };
 }
 
 export type CustomerPaymentsSummary = {

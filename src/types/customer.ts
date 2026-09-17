@@ -1,6 +1,14 @@
 export type MoneyRef = { amountPaise: number; amountDisplay: string };
 export type WeightRef = { weightMg: number; weightDisplay: string };
 
+export type PaymentGoldAccrual = {
+  weightMg: number;
+  weightDisplay: string;
+  ratePerGramPaise: number;
+  ratePerGramDisplay: string;
+  purchasedAt?: string;
+};
+
 export type CustomerDisplayMode =
   | "FIXED"
   | "FLEXIBLE_FREE_WINDOW"
@@ -62,7 +70,7 @@ export type TenantBranding = {
   tenantCode: string;
   displayName: string;
   appDisplayName: string;
-  logoUrl?: string;
+  logoUrl?: string | null;
   primaryColor: string;
   accentColor: string;
   foregroundColor: string;
@@ -112,6 +120,14 @@ export type SchemeCard = {
   progressLabel: string;
   progressDetail?: string;
   totalPaid: MoneyRef;
+  /** Present for GOLD_WEIGHT schemes. Some V1 payloads call this `goldAccrued`. */
+  goldAccumulated?: WeightRef;
+  goldAccrued?: WeightRef;
+  currentValuation?: MoneyRef;
+  freeWindowMonth?: number;
+  freeWindowMonths?: number;
+  cycleCap?: MoneyRef;
+  remainingThisCycle?: MoneyRef;
   maturityDate: string;
   nextActionLabel: string;
   nextActionAmount?: MoneyRef;
@@ -120,9 +136,17 @@ export type SchemeCard = {
   recentPayments?: SchemeCardRecentPayment[];
 };
 
+export type PayableRangeTargetCycleOption = {
+  cycle: string;
+  label: string;
+  remaining: MoneyRef;
+  isCurrentCycle?: boolean;
+};
+
 export type PayableRange = {
   model: "FIXED" | "FLEXIBLE";
-  phase: "FIXED" | "FREE" | "CAPPED";
+  phase?: "FIXED" | "FLEXIBLE" | "CAPPED" | null;
+  payable?: boolean;
   contributionIsOptional: boolean;
   targetCycle?: string;
   minPayable: MoneyRef;
@@ -136,6 +160,11 @@ export type PayableRange = {
   positionVersion: number;
   unusedAllowanceCarriesForward: false;
   paidMoneyNeverExpires: true;
+  allowFutureCycleSelection?: boolean;
+  targetCycleOptions?: PayableRangeTargetCycleOption[];
+  advancePaymentAllowed?: boolean;
+  maxAdvanceInstallments?: number | null;
+  partialPaymentAllowed?: boolean;
 };
 
 export type CustomerSchemeDetail = SchemeCard & {
@@ -154,11 +183,18 @@ export type CustomerSchemeDetail = SchemeCard & {
     cycleCap?: MoneyRef;
     remainingThisCycle?: MoneyRef;
     lockedAverage?: MoneyRef;
+    goldAccumulated?: WeightRef;
+    goldAccrued?: WeightRef;
   };
   statCards: Array<{ label: string; value: string; caption: string }>;
-  payButton: { visible: boolean; enabled: boolean; label: string; reason?: string };
+  payButton: { visible: boolean; enabled: boolean; label: string; reason?: string; helperText?: string };
   passbookSummary: { totalEntries: number; lastPaymentAt: string; totalPaid: MoneyRef };
-  redemption: { eligible: boolean; status: string; preferredModes: string[]; blocker?: string };
+  redemption: {
+    eligible: boolean;
+    status: string;
+    preferredModes: Array<string | { mode: string; label: string }>;
+    blocker?: string;
+  };
   lifecycleActions: string[] | Record<string, boolean>;
   planId?: string;
   valueBasis?: "CASH" | "GOLD_WEIGHT";
@@ -192,6 +228,13 @@ export type SchemePlan = {
   amountMaxPaise?: number;
   multipleOfPaise?: number;
   fixedAmountPaise?: number;
+  slabsPaise?: number[];
+  amountMode?: string;
+  enrolRules?: import("@/src/lib/enrol-plan-rules").EnrolPlanRules;
+  termsText?: string;
+  firstInstallmentRequired?: boolean;
+  firstInstallmentModeDefault?: "COLLECT_NOW" | "START_NEXT_CYCLE";
+  firstInstallmentModeEditable?: boolean;
   flexibleSummary?: {
     freeWindowMonths?: number | null;
     lockWindowMonths?: number | null;
@@ -217,6 +260,8 @@ export type PaymentListItem = {
   channelLabel?: string;
   paymentPattern: "FIXED" | "FLEXIBLE";
   targetCycle?: string;
+  valueBasis?: "CASH" | "GOLD_WEIGHT";
+  goldAccrual?: PaymentGoldAccrual | null;
 };
 
 export type CustomerPlanRulesSection = {

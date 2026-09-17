@@ -39,11 +39,17 @@ export function amountRulesFields(rules: Record<string, unknown>): FieldEntry[] 
     },
     {
       label: "Max installment",
-      value: rules.maxInstallmentPaise
-        ? moneyField({
-            amountDisplay: `₹${(Number(rules.maxInstallmentPaise) / 100).toLocaleString("en-IN")}`,
-          })
-        : "—",
+      value:
+        Number(rules.maxInstallmentPaise) > 0
+          ? moneyField({
+              amountDisplay: `₹${(Number(rules.maxInstallmentPaise) / 100).toLocaleString("en-IN")}`,
+            })
+          : Number(rules.fixedAmountPaise) > 0 &&
+              rules.amountMode === "JEWELLER_FIXED"
+            ? moneyField({
+                amountDisplay: `₹${(Number(rules.fixedAmountPaise) / 100).toLocaleString("en-IN")}`,
+              })
+            : "—",
     },
     {
       label: "Multiple of",
@@ -96,11 +102,12 @@ export function paymentRulesFields(payment: Record<string, unknown>): FieldEntry
     },
     {
       label: "Max per transaction",
-      value: payment.maxPaymentPerTransactionPaise
-        ? moneyField({
-            amountDisplay: `₹${(Number(payment.maxPaymentPerTransactionPaise) / 100).toLocaleString("en-IN")}`,
-          })
-        : "—",
+      value:
+        Number(payment.maxPaymentPerTransactionPaise) > 0
+          ? moneyField({
+              amountDisplay: `₹${(Number(payment.maxPaymentPerTransactionPaise) / 100).toLocaleString("en-IN")}`,
+            })
+          : "—",
     },
   ];
 }

@@ -545,12 +545,14 @@ export function PlanAvailabilitySidebar({
   selfEnrol,
   windowLabel,
   redemptionModes,
+  action,
 }: {
   allBranches: boolean;
   visibleInApp: boolean;
   selfEnrol: boolean;
   windowLabel: string;
   redemptionModes: string[];
+  action?: React.ReactNode;
 }) {
   const rows = [
     { icon: MapPin, label: "Branches", value: allBranches ? "All branches" : "Selected" },
@@ -568,7 +570,7 @@ export function PlanAvailabilitySidebar({
   ];
 
   return (
-    <Surface title="Availability & redemption">
+    <Surface title="Availability & redemption" action={action}>
       <ul className="divide-y divide-[#eaded9] px-2">
         {rows.map(({ icon: Icon, label, value }) => (
           <li
