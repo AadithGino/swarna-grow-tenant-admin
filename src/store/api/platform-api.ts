@@ -1,15 +1,20 @@
 import { createApi, fetchBaseQuery } from "@reduxjs/toolkit/query/react";
 import type { BaseQueryFn, FetchArgs, FetchBaseQueryError } from "@reduxjs/toolkit/query";
 import { apiOrigin, env } from "@/src/config/env";
-import { handlePlatformUnauthorized } from "@/src/lib/auth-logout";
 import {
-  persistPlatformTokens,
-  readStoredRefreshToken,
-  TOKEN_KEYS,
-} from "@/src/lib/auth-token-storage";
+  handlePlatformUnauthorized,
+  isUnauthorizedFetchError,
+} from "@/src/lib/auth-logout";
+import { TOKEN_KEYS } from "@/src/lib/auth-token-storage";
 import { normalizeFetchBaseQueryError } from "@/src/lib/api-error";
 import type { AppDispatch } from "@/src/store";
-import { parseRefreshTokens } from "@/src/lib/auth-tokens-from-refresh";
+import {
+  authRefreshGuard,
+  refreshAfterUnauthorized,
+  retryAuthorizedRequest,
+  shouldAttemptAuthRefresh,
+  shouldForceAuthLogout,
+} from "@/src/lib/auth-base-query-refresh";
 import { readContractResponseBody } from "@/src/lib/contract-response";
 import { newIdempotencyKey } from "@/src/lib/idempotency";
 import { platformMockRequest } from "@/src/mocks/platform-server";
@@ -171,49 +176,31 @@ const baseQuery: BaseQueryFn<
   const headers = new Headers(args.headers as HeadersInit | undefined); const method = String(args.method ?? "GET").toUpperCase();
   if (["POST", "PUT", "PATCH", "DELETE"].includes(method)) headers.set("X-Idempotency-Key", newIdempotencyKey());
   const requestUrl = String(args.url ?? "");
-  const isPlatformRefresh = requestUrl.includes("/platform/auth/refresh");
-  const isPlatformLogin = requestUrl.includes("/platform/auth/login");
-  const alreadyRetried = Boolean(extra?._authRetry);
+  const guard = authRefreshGuard(requestUrl, extra, [
+    "/platform/auth/refresh",
+    "/platform/auth/login",
+  ]);
   const dispatch = api.dispatch as AppDispatch;
 
   let result = await liveBaseQuery({ ...args, headers }, api, extra);
 
-  if (
-    result.error?.status === 401 &&
-    typeof window !== "undefined" &&
-    !isPlatformRefresh &&
-    !isPlatformLogin &&
-    !alreadyRetried
-  ) {
-    const refreshToken = readStoredRefreshToken("platform");
-    if (refreshToken) {
-      const refreshResult = await liveBaseQuery(
-        {
-          url: "/platform/auth/refresh",
-          method: "POST",
-          body: { refreshToken },
-        },
+  if (shouldAttemptAuthRefresh(result.error, guard, env.useMocks)) {
+    const refreshed = await refreshAfterUnauthorized("platform", guard);
+    if (refreshed) {
+      result = await retryAuthorizedRequest(
+        liveBaseQuery,
+        { ...args, headers },
         api,
         extra,
       );
-      const tokens = parseRefreshTokens(refreshResult.data);
-      if (tokens?.accessToken) {
-        persistPlatformTokens(tokens.accessToken, tokens.refreshToken);
-        result = await liveBaseQuery({ ...args, headers }, api, {
-          ...extra,
-          _authRetry: true,
-        });
-      } else {
-        handlePlatformUnauthorized(dispatch);
-      }
-    } else {
+    } else if (shouldForceAuthLogout("platform", true)) {
       handlePlatformUnauthorized(dispatch);
     }
   } else if (
-    result.error?.status === 401 &&
-    typeof window !== "undefined" &&
-    !isPlatformRefresh &&
-    !isPlatformLogin
+    !env.useMocks &&
+    isUnauthorizedFetchError(result.error) &&
+    !guard.skipRefresh &&
+    shouldForceAuthLogout("platform", false)
   ) {
     handlePlatformUnauthorized(dispatch);
   }

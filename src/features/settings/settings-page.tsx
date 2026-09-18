@@ -57,6 +57,7 @@ import {
 import { toastApiError } from "@/src/lib/api-error";
 import { cn } from "@/lib/utils";
 import { env } from "@/src/config/env";
+import { CustomerPortalUrlField } from "@/src/features/settings/customer-portal-url-field";
 import { SettingsOperationsPanel } from "@/src/features/settings/settings-operations-panel";
 import { SubscriptionInvoicesPanel } from "@/src/features/settings/subscription-invoices-panel";
 import {
@@ -626,6 +627,9 @@ export function SettingsPage({
                 <FieldLabel>Tenant code</FieldLabel>
                 <Input value={String(profile.tenantCode ?? "")} disabled />
               </div>
+              {profile.tenantCode ? (
+                <CustomerPortalUrlField tenantCode={String(profile.tenantCode)} />
+              ) : null}
               <div>
                 <FieldLabel>Owner mobile</FieldLabel>
                 <Input

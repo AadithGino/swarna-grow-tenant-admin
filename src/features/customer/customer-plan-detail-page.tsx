@@ -105,6 +105,10 @@ export function CustomerPlanDetailPage({ id }: { id: string }) {
       }
       const paymentLink = result.paymentLink as Record<string, unknown> | undefined;
       const paymentIntent = result.paymentIntent as Record<string, unknown> | undefined;
+      const schemeId =
+        typeof (result.scheme as { id?: string } | undefined)?.id === "string"
+          ? (result.scheme as { id: string }).id
+          : undefined;
       await openCustomerPaymentTarget(
         {
           ...paymentLink,
@@ -116,6 +120,7 @@ export function CustomerPlanDetailPage({ id }: { id: string }) {
         {
           tenantSlug,
           statusRedirectUrl,
+          schemeId,
           initiateLink: async (linkToken) =>
             initiatePublicLink({ linkToken, redirectUrl: statusRedirectFull }).unwrap(),
           navigate: (path) => router.push(path),

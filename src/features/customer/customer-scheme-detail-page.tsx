@@ -33,12 +33,17 @@ import { downloadCustomerPaymentReceipt } from "@/src/lib/customer-receipt";
 import type { CustomerPlanRulesSection } from "@/src/types/customer";
 import { PageSkeleton, QueryError } from "@/src/components/common/query-state";
 import {
+  customerApi,
   useGetCustomerSchemeQuery,
   useInitiateCustomerPaymentMutation,
   useInitiatePublicPaymentLinkMutation,
   useLazyGetCustomerPayableRangeQuery,
+  useLazyPollCustomerPaymentIntentQuery,
+  useLazyPollPublicPaymentLinkQuery,
   useRequestCustomerRedemptionMutation,
 } from "@/src/store/api/customer-api";
+import { useDispatch } from "react-redux";
+import { clearCustomerPaymentSession, readCustomerPaymentSession } from "@/src/lib/customer-payment-session";
 import { openCustomerPaymentTarget } from "@/src/lib/customer-payment-redirect";
 import type { CustomerSchemeDetail } from "@/src/types/customer";
 import { useCustomerTenant } from "@/src/components/customer/customer-tenant-context";
@@ -174,6 +179,7 @@ function PhonePePaymentDialog({ scheme, open, onOpenChange }: { scheme: Customer
       await openCustomerPaymentTarget(response, {
         tenantSlug,
         statusRedirectUrl,
+        schemeId: scheme.id,
         initiateLink: async (linkToken) =>
           initiatePublicLink({ linkToken, redirectUrl: statusRedirectFull }).unwrap(),
         navigate: (path) => router.push(path),
@@ -634,6 +640,7 @@ export function CustomerPaymentLinkPage({ linkToken }: { linkToken: string }) {
           {
             tenantSlug,
             statusRedirectUrl,
+            session: { kind: "link", linkToken },
             initiateLink: async (token) =>
               initiatePublicLink({ linkToken: token, redirectUrl: statusRedirectFull }).unwrap(),
             navigate: (path) => router.replace(path),
@@ -668,27 +675,134 @@ export function CustomerPaymentLinkPage({ linkToken }: { linkToken: string }) {
 
 export function CustomerPaymentStatusPage() {
   const router = useRouter();
+  const dispatch = useDispatch();
   const { tenantSlug } = useCustomerTenant();
-  const [stage, setStage] = useState<"PROCESSING" | "PAID">("PROCESSING");
+  const [pollIntent] = useLazyPollCustomerPaymentIntentQuery();
+  const [pollLink] = useLazyPollPublicPaymentLinkQuery();
+  const [stage, setStage] = useState<"PROCESSING" | "PAID" | "FAILED" | "UNKNOWN">("PROCESSING");
+  const [detail, setDetail] = useState<string>("PhonePe is confirming the transaction. Please don’t close this page.");
+  const [receiptNumber, setReceiptNumber] = useState<string | null>(null);
+
   useEffect(() => {
-    const timer = window.setTimeout(() => setStage("PAID"), 1800);
-    return () => window.clearTimeout(timer);
-  }, []);
+    let cancelled = false;
+    let timer: number | undefined;
+
+    const finish = (next: typeof stage, message: string, receipt?: string | null) => {
+      if (cancelled) return;
+      setStage(next);
+      setDetail(message);
+      if (receipt) setReceiptNumber(receipt);
+      if (next === "PAID") {
+        clearCustomerPaymentSession();
+        dispatch(
+          customerApi.util.invalidateTags(["CustomerScheme", "CustomerPayment", "CustomerHome"]),
+        );
+      }
+    };
+
+    const pollOnce = async (): Promise<boolean> => {
+      const session = readCustomerPaymentSession();
+      if (!session) {
+        finish(
+          "UNKNOWN",
+          "We could not find an active payment session. If you completed payment, check your passbook in a minute.",
+        );
+        return true;
+      }
+
+      try {
+        const result =
+          session.kind === "intent" && session.intentId
+            ? await pollIntent(session.intentId).unwrap()
+            : session.linkToken
+              ? await pollLink(session.linkToken).unwrap()
+              : null;
+        if (!result) {
+          finish("UNKNOWN", "Payment status is unavailable. Please check your schemes list.");
+          return true;
+        }
+        if (result.paid) {
+          finish(
+            "PAID",
+            result.receipt?.receiptNumber
+              ? `Receipt ${result.receipt.receiptNumber} is recorded in your passbook.`
+              : "Your contribution is safely recorded in the passbook.",
+            result.receipt?.receiptNumber ?? null,
+          );
+          return true;
+        }
+        if (result.failed || result.status === "EXPIRED" || result.status === "CANCELLED") {
+          finish(
+            "FAILED",
+            result.status === "EXPIRED"
+              ? "This payment session expired before PhonePe confirmed it. You can start a new payment."
+              : "PhonePe reported that the payment did not complete. You were not charged.",
+          );
+          clearCustomerPaymentSession();
+          return true;
+        }
+        const delayMs = Math.max(1500, (result.retryAfterSeconds ?? 3) * 1000);
+        timer = window.setTimeout(() => {
+          void pollOnce();
+        }, delayMs);
+        return false;
+      } catch {
+        finish("FAILED", "We could not confirm the payment status. Check your passbook or try again.");
+        clearCustomerPaymentSession();
+        return true;
+      }
+    };
+
+    void pollOnce();
+
+    return () => {
+      cancelled = true;
+      if (timer) window.clearTimeout(timer);
+    };
+  }, [dispatch, pollIntent, pollLink]);
+
+  const schemeHref = customerPath(tenantSlug, "schemes");
+
   return (
-    <div className="grid min-h-[70vh] place-items-center">
+    <div className="grid min-h-[70vh] place-items-center p-4">
       <section className="customer-surface w-full max-w-md p-7 text-center">
-        <span className={cn("mx-auto grid size-16 place-items-center rounded-full", stage === "PAID" ? "bg-emerald-50 text-emerald-700" : "bg-[#f3eafb] text-[#5f259f]")}>
-          {stage === "PAID" ? <CheckCircle2 className="size-8" /> : <LoaderCircle className="size-8 animate-spin" />}
+        <span
+          className={cn(
+            "mx-auto grid size-16 place-items-center rounded-full",
+            stage === "PAID" && "bg-emerald-50 text-emerald-700",
+            stage === "PROCESSING" && "bg-[#f3eafb] text-[#5f259f]",
+            (stage === "FAILED" || stage === "UNKNOWN") && "bg-red-50 text-red-700",
+          )}
+        >
+          {stage === "PAID" ? (
+            <CheckCircle2 className="size-8" />
+          ) : stage === "PROCESSING" ? (
+            <LoaderCircle className="size-8 animate-spin" />
+          ) : (
+            <ShieldCheck className="size-8" />
+          )}
         </span>
-        <h1 className="mt-5 text-2xl font-black">{stage === "PAID" ? "Payment successful" : "Confirming your payment"}</h1>
-        <p className="mt-2 text-sm leading-6 text-muted-foreground">
-          {stage === "PAID" ? "Your contribution is safely recorded in the passbook." : "PhonePe is confirming the transaction. Please don’t close this page."}
-        </p>
-        {stage === "PAID" && (
-          <Button onClick={() => router.replace(customerPath(tenantSlug, "schemes"))} className="mt-5 w-full bg-[#730321]">
+        <h1 className="mt-5 text-2xl font-black">
+          {stage === "PAID"
+            ? "Payment successful"
+            : stage === "PROCESSING"
+              ? "Confirming your payment"
+              : stage === "FAILED"
+                ? "Payment not completed"
+                : "Payment status unknown"}
+        </h1>
+        <p className="mt-2 text-sm leading-6 text-muted-foreground">{detail}</p>
+        {receiptNumber ? (
+          <p className="mt-2 text-xs font-semibold text-emerald-800">Receipt {receiptNumber}</p>
+        ) : null}
+        {stage !== "PROCESSING" ? (
+          <Button
+            onClick={() => router.replace(schemeHref)}
+            className="mt-5 w-full bg-[#730321]"
+          >
             Back to schemes
           </Button>
-        )}
+        ) : null}
       </section>
     </div>
   );

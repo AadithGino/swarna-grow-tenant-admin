@@ -4,7 +4,9 @@ import { useEffect } from "react";
 import {
   applyCrossTabTokenUpdate,
   onTokensPersisted,
+  realmHasStoredSession,
   TOKEN_KEYS,
+  type AuthRealm,
 } from "@/src/lib/auth-token-storage";
 import {
   handleCustomerUnauthorized,
@@ -45,48 +47,56 @@ function isCustomerAppPath(pathname: string) {
   );
 }
 
+function realmForStorageKey(key: string): AuthRealm | null {
+  for (const realm of Object.keys(TOKEN_KEYS) as AuthRealm[]) {
+    const keys = TOKEN_KEYS[realm];
+    if (keys.access === key) return realm;
+    if ("refresh" in keys && keys.refresh === key) return realm;
+  }
+  return null;
+}
+
+function handleCrossTabLogout(realm: AuthRealm, dispatch: ReturnType<typeof useAppDispatch>) {
+  const pathname = window.location.pathname;
+  if (realm === "tenant" && isTenantAppPath(pathname)) {
+    handleTenantUnauthorized(dispatch);
+    return;
+  }
+  if (realm === "platform" && isPlatformAppPath(pathname)) {
+    handlePlatformUnauthorized(dispatch);
+    return;
+  }
+  if (realm === "customer" && isCustomerAppPath(pathname)) {
+    handleCustomerUnauthorized(dispatch);
+    return;
+  }
+  if (realm === "agent" && isAgentAppPath(pathname)) {
+    window.location.assign("/agent/login");
+  }
+}
+
 export function AuthTokenSyncBridge() {
   const dispatch = useAppDispatch();
 
   useEffect(() => {
     const unsubs = [
       onTokensPersisted("tenant", (tokens) => {
-        dispatch(patchSessionTokens(tokens));
+        queueMicrotask(() => dispatch(patchSessionTokens(tokens)));
       }),
       onTokensPersisted("agent", (tokens) => {
-        dispatch(patchAgentTokens(tokens));
+        queueMicrotask(() => dispatch(patchAgentTokens(tokens)));
       }),
     ];
 
     const onStorage = (event: StorageEvent) => {
       if (!event.key || event.newValue === event.oldValue) return;
 
-      const logoutKeys = new Set<string>([
-        TOKEN_KEYS.tenant.refresh,
-        TOKEN_KEYS.platform.refresh,
-        TOKEN_KEYS.customer.refresh,
-        TOKEN_KEYS.agent.refresh,
-      ]);
-      if (logoutKeys.has(event.key) && !event.newValue) {
-        const pathname = window.location.pathname;
-        if (event.key === TOKEN_KEYS.tenant.refresh && isTenantAppPath(pathname)) {
-          handleTenantUnauthorized(dispatch);
-        } else if (
-          event.key === TOKEN_KEYS.platform.refresh &&
-          isPlatformAppPath(pathname)
-        ) {
-          handlePlatformUnauthorized(dispatch);
-        } else if (
-          event.key === TOKEN_KEYS.customer.refresh &&
-          isCustomerAppPath(pathname)
-        ) {
-          handleCustomerUnauthorized(dispatch);
-        } else if (
-          event.key === TOKEN_KEYS.agent.refresh &&
-          isAgentAppPath(pathname)
-        ) {
-          window.location.assign("/agent/login");
-        }
+      const realm = realmForStorageKey(event.key);
+      if (realm && !event.newValue) {
+        window.setTimeout(() => {
+          if (realmHasStoredSession(realm)) return;
+          handleCrossTabLogout(realm, dispatch);
+        }, 250);
         return;
       }
 

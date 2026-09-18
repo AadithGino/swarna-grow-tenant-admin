@@ -17,10 +17,16 @@ import {
   updateMockCashSummary,
 } from "@/src/mocks/agent-data";
 import {
-  persistAgentTokens,
-  readStoredRefreshToken,
-} from "@/src/lib/auth-token-storage";
-import { parseRefreshTokens } from "@/src/lib/auth-tokens-from-refresh";
+  authRefreshGuard,
+  refreshAfterUnauthorized,
+  retryAuthorizedRequest,
+  shouldAttemptAuthRefresh,
+  shouldForceAuthLogout,
+} from "@/src/lib/auth-base-query-refresh";
+import {
+  normalizeFetchBaseQueryError,
+  readContractResponseBody,
+} from "@/src/lib/contract-response";
 import {
   AGENT_ACCESS_KEY,
   AGENT_REFRESH_KEY,
@@ -58,9 +64,21 @@ const paramsOf = (args: string | FetchArgs) => typeof args === "string" ? {} : (
 
 function idOf(raw: Record<string, unknown>) { return String(raw.id ?? raw._id ?? ""); }
 
-function mapAgentUser(raw: Record<string, unknown>): AgentUser {
+function peelAgentPayload(raw: unknown): Record<string, unknown> {
+  let row = raw;
+  if (row && typeof row === "object" && "success" in row) {
+    const envelope = row as { success?: boolean; data?: unknown };
+    if (envelope.success === true && envelope.data && typeof envelope.data === "object") {
+      row = envelope.data;
+    }
+  }
+  return row && typeof row === "object" ? (row as Record<string, unknown>) : {};
+}
+
+function mapAgentUser(raw: Record<string, unknown> | null | undefined): AgentUser {
+  const row = raw && typeof raw === "object" ? raw : {};
   return {
-    id: idOf(raw),
+    id: idOf(row),
     name: String(raw.name ?? ""),
     mobile: raw.mobile != null ? String(raw.mobile) : undefined,
     role: (raw.role ?? "COLLECTION_AGENT") as AgentUser["role"],
@@ -440,6 +458,7 @@ const mockBaseQuery: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQueryErro
 
 const liveBaseQuery = fetchBaseQuery({
   baseUrl: env.apiBaseUrl,
+  responseHandler: readContractResponseBody,
   prepareHeaders(headers) {
     if (typeof window !== "undefined") {
       const token = localStorage.getItem(AGENT_ACCESS_KEY);
@@ -458,12 +477,20 @@ function withMutationHeaders(args: string | FetchArgs) {
 }
 
 function unwrap(result: { data?: unknown; error?: FetchBaseQueryError; meta?: unknown }) {
+  if (result.error) {
+    return { error: normalizeFetchBaseQueryError(result.error) };
+  }
   const raw = result.data as Envelope<unknown> | AgentError | undefined;
   if (raw && typeof raw === "object" && "success" in raw) {
     if (raw.success) return { data: raw.data, meta: raw.meta };
-    return { error: { status: "CUSTOM_ERROR" as const, error: raw.error.message, data: raw.error } };
+    return {
+      error: normalizeFetchBaseQueryError({
+        status: "CUSTOM_ERROR",
+        error: raw.error.message,
+        data: { success: false, error: raw.error },
+      }),
+    };
   }
-  if (result.error) return { error: result.error };
   return { data: result.data, meta: result.meta };
 }
 
@@ -496,42 +523,31 @@ const dynamicBaseQuery: BaseQueryFn<
     ? await mockBaseQuery(request, api, extra)
     : await liveBaseQuery(request, api, extra);
   const url = pathOf(request);
-  const isAuthRefresh = url.includes("/auth/refresh");
-  const isAuthLogin = url.includes("/auth/login");
-  const alreadyRetried = Boolean(extra?._authRetry);
+  const guard = authRefreshGuard(url, extra, ["/auth/refresh", "/auth/login"]);
 
-  if (
-    !env.useMocks &&
-    result.error?.status === 401 &&
-    typeof window !== "undefined" &&
-    !isAuthRefresh &&
-    !isAuthLogin &&
-    !alreadyRetried
-  ) {
-    const refreshToken = readStoredRefreshToken("agent");
-    if (refreshToken) {
-      const refreshed = await liveBaseQuery(
-        { url: "/auth/refresh", method: "POST", body: { refreshToken } },
-        api,
-        extra,
-      );
-      const tokens = parseRefreshTokens(refreshed.data);
-      if (tokens?.accessToken) {
-        persistAgentTokens(tokens.accessToken, tokens.refreshToken);
-        api.dispatch(patchAgentTokens(tokens));
-        result = await liveBaseQuery(request, api, { ...extra, _authRetry: true });
-      } else {
-        api.dispatch(clearAgentSession());
+  if (shouldAttemptAuthRefresh(result.error, guard, env.useMocks)) {
+    const refreshed = await refreshAfterUnauthorized("agent", guard);
+    if (refreshed) {
+      const accessToken = localStorage.getItem(AGENT_ACCESS_KEY);
+      const refreshToken = localStorage.getItem(AGENT_REFRESH_KEY);
+      if (accessToken) {
+        api.dispatch(
+          patchAgentTokens({
+            accessToken,
+            refreshToken: refreshToken ?? undefined,
+          }),
+        );
       }
-    } else {
+      result = await retryAuthorizedRequest(liveBaseQuery, request, api, extra);
+    } else if (shouldForceAuthLogout("agent", true)) {
       api.dispatch(clearAgentSession());
     }
   } else if (
     !env.useMocks &&
     result.error?.status === 401 &&
     typeof window !== "undefined" &&
-    !isAuthRefresh &&
-    !isAuthLogin
+    !guard.skipRefresh &&
+    shouldForceAuthLogout("agent", false)
   ) {
     api.dispatch(clearAgentSession());
   }
@@ -545,10 +561,21 @@ export const agentApi = createApi({
   endpoints: (builder) => ({
     agentLogin: builder.mutation<AgentLoginResponse, { tenantCode?: string; mobile: string; password: string; deviceId: string; platform: string; appVersion: string }>({
       query: (body) => ({ url: "/auth/login", method: "POST", body }),
-      transformResponse: (raw: AgentLoginResponse & { user: Record<string, unknown> }) => ({
-        ...raw,
-        user: mapAgentUser(raw.user as Record<string, unknown>),
-      }),
+      transformResponse: (raw: unknown) => {
+        const payload = peelAgentPayload(raw);
+        const userRaw = payload.user;
+        return {
+          accessToken: String(payload.accessToken ?? ""),
+          refreshToken: String(payload.refreshToken ?? ""),
+          expiresIn: Number(payload.expiresIn ?? 0),
+          tokenType: (payload.tokenType ?? "Bearer") as "Bearer",
+          user: mapAgentUser(
+            userRaw && typeof userRaw === "object"
+              ? (userRaw as Record<string, unknown>)
+              : undefined,
+          ),
+        };
+      },
     }),
     agentLogout: builder.mutation<{ loggedOut: boolean }, { refreshToken: string }>({ query: (body) => ({ url: "/auth/logout", method: "POST", body }) }),
     getAgentMe: builder.query<AgentUserResult, void>({

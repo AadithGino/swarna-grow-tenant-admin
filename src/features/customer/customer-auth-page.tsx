@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useLoginCustomerPasswordMutation, useRequestCustomerOtpMutation, useVerifyCustomerOtpMutation } from "@/src/store/api/customer-api";
+import { persistCustomerTokens } from "@/src/lib/auth-token-storage";
 import { customerSignedIn } from "@/src/store/slices/customer-session-slice";
 import { useAppDispatch } from "@/src/store/hooks";
 import { toast } from "sonner";
@@ -22,6 +23,7 @@ export function CustomerLoginPage() {
   const router = useRouter();
   const dispatch = useAppDispatch();
   const { tenantCode, tenantSlug, tenant, loading, notFound } = useCustomerTenant();
+  const [mounted, setMounted] = useState(false);
   const [mode, setMode] = useState<AuthMode>("login");
   const [step, setStep] = useState<Step>("mobile");
   const [mobile, setMobile] = useState("9847012345");
@@ -36,6 +38,10 @@ export function CustomerLoginPage() {
   const registrationEnabled = portalCaps.customerSelfRegistration;
   const kycPortalEnabled = portalCaps.kycMandatory;
   const passwordOnlyLogin = portalCaps.customerLoginMode === "PASSWORD_ONLY";
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     if (!seconds) return;
@@ -122,6 +128,7 @@ export function CustomerLoginPage() {
           customerAppPaymentsEnabled: caps.customerAppPaymentsEnabled,
         }),
       );
+      persistCustomerTokens(result.accessToken, result.refreshToken);
       const slug = tenantSlug ?? result.tenant.tenantCode.toLowerCase().replace(/_/g, "-");
       if (!profileComplete) {
         toast.success(mode === "signup" ? "Welcome! Let’s finish your profile." : "Please complete your profile");
@@ -190,6 +197,7 @@ export function CustomerLoginPage() {
           customerAppPaymentsEnabled: caps.customerAppPaymentsEnabled,
         }),
       );
+      persistCustomerTokens(result.accessToken, result.refreshToken);
       const slug = tenantSlug ?? result.tenant.tenantCode.toLowerCase().replace(/_/g, "-");
       if (!profileComplete) {
         router.replace(customerPath(slug, "onboarding"));
@@ -201,7 +209,7 @@ export function CustomerLoginPage() {
     }
   };
 
-  if (loading) {
+  if (!mounted || loading) {
     return (
       <div className="customer-theme grid min-h-screen place-items-center bg-[#fbf8f4]">
         <LoaderCircle className="size-10 animate-spin text-[#730321]" aria-label="Loading" />

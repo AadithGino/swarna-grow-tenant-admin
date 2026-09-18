@@ -14,7 +14,8 @@ function PastSchemeRow({ scheme, tenantSlug }: { scheme: CustomerPastScheme; ten
   return (
     <Link
       href={customerPath(tenantSlug, "schemes", scheme.id)}
-      className="customer-surface flex flex-col gap-2 p-5 transition hover:border-[#dac17e] sm:flex-row sm:items-center sm:justify-between"
+      className="customer-surface flex flex-col gap-2 p-5 transition sm:flex-row sm:items-center sm:justify-between"
+      style={{ borderColor: "rgba(var(--customer-accent-rgb, 201, 162, 39), 0.45)" }}
     >
       <div>
         <p className="text-xs font-bold text-muted-foreground">{scheme.schemeNumber}</p>
@@ -61,14 +62,16 @@ export function CustomerSchemesPage() {
         <button
           type="button"
           onClick={() => setTab("ACTIVE")}
-          className={cn("rounded-xl px-5 py-2.5 text-sm font-bold", tab === "ACTIVE" ? "bg-[#730321] text-white shadow-sm" : "text-[#77727c]")}
+          className={cn("rounded-xl px-5 py-2.5 text-sm font-bold", tab === "ACTIVE" ? "text-white shadow-sm" : "text-[#77727c]")}
+          style={tab === "ACTIVE" ? { background: "var(--customer-primary, #730321)" } : undefined}
         >
           Active ({active.length})
         </button>
         <button
           type="button"
           onClick={() => setTab("PAST")}
-          className={cn("rounded-xl px-5 py-2.5 text-sm font-bold", tab === "PAST" ? "bg-[#730321] text-white shadow-sm" : "text-[#77727c]")}
+          className={cn("rounded-xl px-5 py-2.5 text-sm font-bold", tab === "PAST" ? "text-white shadow-sm" : "text-[#77727c]")}
+          style={tab === "PAST" ? { background: "var(--customer-primary, #730321)" } : undefined}
         >
           Past ({past.length})
         </button>
@@ -85,7 +88,7 @@ export function CustomerSchemesPage() {
           <div className="customer-surface p-12 text-center">
             <h3 className="font-black">No active schemes yet</h3>
             <p className="mt-2 text-sm text-muted-foreground">Explore plans to start saving with your jeweller.</p>
-            <Link href={customerPath(tenantSlug, "plans")} className="mt-4 inline-block text-sm font-bold text-[#730321]">
+            <Link href={customerPath(tenantSlug, "plans")} className="mt-4 inline-block text-sm font-bold text-[var(--customer-primary,#730321)]">
               Browse plans
             </Link>
           </div>

@@ -24,7 +24,8 @@ import type {
 } from "@/src/types/customer";
 import { useCustomerTenant } from "@/src/components/customer/customer-tenant-context";
 import { customerPath } from "@/src/lib/customer-tenant";
-import { useGetCustomerUploadDownloadQuery } from "@/src/store/api/customer-api";
+import { useGetPublicCustomerUploadDownloadQuery } from "@/src/store/api/customer-api";
+import { apiOrigin } from "@/src/config/env";
 
 function uploadIdFromPath(value?: string | null): string | null {
   if (!value) return null;
@@ -32,19 +33,23 @@ function uploadIdFromPath(value?: string | null): string | null {
   return match?.[1] ? decodeURIComponent(match[1]) : null;
 }
 
+function resolveTenantLogoUrl(value?: string | null): string | null {
+  if (!value) return null;
+  if (/^https?:\/\//i.test(value)) return value;
+  if (value.startsWith("/")) return `${apiOrigin()}${value}`;
+  return value;
+}
+
 export function CustomerBrand({ compact = false }: { compact?: boolean }) {
   const { tenant } = useCustomerTenant();
   const logoUploadId = uploadIdFromPath(tenant?.logoUrl);
-  const hasCustomerSession =
-    typeof window !== "undefined" &&
-    Boolean(window.localStorage.getItem("swarnagrow.customer.accessToken"));
-  const { data: logoDownload } = useGetCustomerUploadDownloadQuery(
+  const { data: logoDownload } = useGetPublicCustomerUploadDownloadQuery(
     logoUploadId as string,
-    { skip: !logoUploadId || !hasCustomerSession },
+    { skip: !logoUploadId },
   );
-  const logoSrc = logoUploadId
-    ? (logoDownload?.downloadUrl ?? null)
-    : (tenant?.logoUrl ?? null);
+  const logoSrc =
+    logoDownload?.downloadUrl ??
+    resolveTenantLogoUrl(tenant?.logoUrl);
   const title = tenant?.appDisplayName ?? tenant?.displayName ?? "Kairali Gold Savings";
   const words = title.split(/\s+/);
   const primary = words.slice(0, Math.max(1, words.length - 2)).join(" ") || words[0];
@@ -57,14 +62,25 @@ export function CustomerBrand({ compact = false }: { compact?: boolean }) {
           <Image src={logoSrc} alt="" fill sizes="44px" unoptimized className="object-contain" />
         </span>
       ) : (
-        <span className="relative grid size-11 shrink-0 place-items-center font-serif text-[2.35rem] leading-none text-[#b68a2d]">
+        <span
+          className="relative grid size-11 shrink-0 place-items-center font-serif text-[2.35rem] leading-none"
+          style={{ color: "var(--customer-accent, #b68a2d)" }}
+        >
           K
-          <i className="absolute right-0.5 top-1 h-2.5 w-5 -rotate-[28deg] rounded-[100%_0] bg-[#b68a2d]" />
+          <i
+            className="absolute right-0.5 top-1 h-2.5 w-5 -rotate-28 rounded-[100%_0]"
+            style={{ background: "var(--customer-accent, #b68a2d)" }}
+          />
         </span>
       )}
       {!compact ? (
         <span className="min-w-0 leading-none">
-          <b className="block truncate text-[1.22rem] font-black tracking-tight text-[#730321]">{primary}</b>
+          <b
+            className="block truncate text-[1.22rem] font-black tracking-tight"
+            style={{ color: "var(--customer-primary, #730321)" }}
+          >
+            {primary}
+          </b>
           <small className="mt-1 block truncate text-[0.82rem] font-medium tracking-wide text-[#6f6b78]">{secondary}</small>
         </span>
       ) : null}
@@ -86,7 +102,7 @@ export function CustomerPageHeader({
   return (
     <header className="mb-6 flex flex-col gap-4 sm:mb-8 sm:flex-row sm:items-end sm:justify-between">
       <div className="min-w-0">
-        {eyebrow ? <p className="mb-1.5 text-[0.72rem] font-extrabold uppercase tracking-[.18em] text-[#9a6c17]">{eyebrow}</p> : null}
+        {eyebrow ? <p className="mb-1.5 text-[0.72rem] font-extrabold uppercase tracking-[.18em] text-[var(--customer-accent,#9a6c17)]">{eyebrow}</p> : null}
         <h1 className="text-[1.8rem] font-black tracking-[-.035em] text-[#171722] sm:text-[2.15rem]">{title}</h1>
         {description ? <p className="mt-1.5 max-w-2xl text-sm leading-6 text-[#706b77] sm:text-base">{description}</p> : null}
       </div>
@@ -99,7 +115,7 @@ export function CustomerSectionHeading({ eyebrow, title, action }: { eyebrow?: s
   return (
     <div className="mb-4 flex items-end justify-between gap-4">
       <div>
-        {eyebrow ? <p className="text-[0.7rem] font-extrabold uppercase tracking-[.17em] text-[#976814]">{eyebrow}</p> : null}
+        {eyebrow ? <p className="text-[0.7rem] font-extrabold uppercase tracking-[.17em] text-[var(--customer-accent,#976814)]">{eyebrow}</p> : null}
         <h2 className="mt-0.5 text-[1.45rem] font-black tracking-[-.025em] text-[#171722]">{title}</h2>
       </div>
       {action}
@@ -120,7 +136,18 @@ export function SchemeModePill({ mode }: { mode: SchemeCard["displayMode"] }) {
     FLEXIBLE_CAPPED_WINDOW: "Flexible · Capped",
   };
   return (
-    <span className={cn("inline-flex whitespace-nowrap rounded-full px-3 py-1 text-[0.68rem] font-extrabold", normalized === "FIXED" ? "bg-[#f6edf0] text-[#730321]" : "bg-[#fff2cf] text-[#805b14]")}>
+    <span
+      className={cn(
+        "inline-flex whitespace-nowrap rounded-full px-3 py-1 text-[0.68rem] font-extrabold",
+        normalized === "FIXED" ? "bg-[#f6edf0]" : "bg-[#fff2cf]",
+      )}
+      style={{
+        color:
+          normalized === "FIXED"
+            ? "var(--customer-primary, #730321)"
+            : "var(--customer-accent, #805b14)",
+      }}
+    >
       {map[normalized] ?? mode}
     </span>
   );
@@ -156,7 +183,7 @@ function FlexiblePhaseBar({ scheme }: { scheme: SchemeCard }) {
     return (
       <div>
         <div className="h-2 overflow-hidden rounded-full bg-[#e9e7eb]"><div className="h-full rounded-full bg-[#8a062a]" style={{ width: progressWidth(scheme.progressPercent ?? 0) }} /></div>
-        <p className="mt-2 text-xs font-bold text-[#730321]">{Math.round(scheme.progressPercent ?? 0)}% through this phase</p>
+        <p className="mt-2 text-xs font-bold text-[var(--customer-primary,#730321)]">{Math.round(scheme.progressPercent ?? 0)}% through this phase</p>
       </div>
     );
   }
@@ -164,9 +191,9 @@ function FlexiblePhaseBar({ scheme }: { scheme: SchemeCard }) {
   return (
     <div>
       <div className="grid gap-1.5" style={{ gridTemplateColumns: `repeat(${total}, minmax(0, 1fr))` }}>
-        {Array.from({ length: total }).map((_, index) => <span key={index} className={cn("h-2.5 rounded-full", index < completed ? "bg-[#8a062a]" : index === completed ? "bg-[#bd7588]" : "bg-[#e8e7eb]")} />)}
+        {Array.from({ length: total }).map((_, index) => <span key={index} className={cn("h-2.5 rounded-full", index < completed ? "bg-[var(--customer-primary,#8a062a)]" : index === completed ? "bg-[rgba(var(--customer-primary-rgb,115,3,33),0.45)]" : "bg-[#e8e7eb]")} />)}
       </div>
-      <div className="mt-2 flex items-center justify-between gap-3 text-[0.72rem]"><b className="text-[#730321]">Month {current} of {total}</b><span className="text-[#77727c]">{Math.max(0, total - current)} months left</span></div>
+      <div className="mt-2 flex items-center justify-between gap-3 text-[0.72rem]"><b className="text-[var(--customer-primary,#730321)]">Month {current} of {total}</b><span className="text-[#77727c]">{Math.max(0, total - current)} months left</span></div>
     </div>
   );
 }
@@ -196,24 +223,30 @@ export function CustomerSchemeCard({ scheme, featured = false, className }: { sc
       <div className="mt-5">
         {isGold && goldBalance ? (
           <div className="grid grid-cols-2 gap-4 rounded-2xl border border-[#eee4d7] bg-[#fcfaf6] p-4">
-            <div><p className="text-[0.7rem] font-semibold text-[#77727c]">Gold balance</p><p className="mt-1 text-[1.7rem] font-black tracking-tight text-[#8b5f08]">{goldBalance.weightDisplay}</p></div>
-            <div className="border-l border-[#e5ddd7] pl-4"><p className="text-[0.7rem] font-semibold text-[#77727c]">Contributed</p><p className="mt-1 text-xl font-black text-[#171722]">{totalPaid.amountDisplay}</p></div>
+            <div><p className="text-[0.7rem] font-semibold text-[#77727c]">Gold balance</p><p className="mt-1 text-[1.7rem] font-black tracking-tight text-[var(--customer-accent,#8b5f08)]">{goldBalance.weightDisplay}</p></div>
+            <div className="border-l border-[#e5ddd7] pl-4"><p className="text-[0.7rem] font-semibold text-[#77727c]">Contributed</p><p className="mt-1 text-xl font-black text-[var(--customer-accent,#8b5f08)]">{totalPaid.amountDisplay}</p></div>
           </div>
         ) : (
-          <div className="flex items-end justify-between gap-3"><div><p className="text-[0.72rem] font-semibold text-[#77727c]">Saved so far</p><p className="mt-0.5 text-[1.8rem] font-black tracking-tight text-[#8b5f08]">{totalPaid.amountDisplay}</p></div><div className="text-right"><p className="text-sm font-black text-[#171722]">{scheme.progressLabel}</p>{scheme.progressDetail ? <p className="mt-0.5 line-clamp-1 text-[0.7rem] text-[#77727c]">{scheme.progressDetail}</p> : null}</div></div>
+          <div className="flex items-end justify-between gap-3"><div><p className="text-[0.72rem] font-semibold text-[#77727c]">Saved so far</p><p className="mt-0.5 text-[1.8rem] font-black tracking-tight text-[var(--customer-accent,#8b5f08)]">{totalPaid.amountDisplay}</p></div><div className="text-right"><p className="text-sm font-black text-[#171722]">{scheme.progressLabel}</p>{scheme.progressDetail ? <p className="mt-0.5 line-clamp-1 text-[0.7rem] text-[#77727c]">{scheme.progressDetail}</p> : null}</div></div>
         )}
       </div>
 
       <div className="mt-5">
-        {isFree ? <FlexiblePhaseBar scheme={scheme} /> : <><div className="h-2 overflow-hidden rounded-full bg-[#e8e7eb]"><div className="h-full rounded-full bg-[#8a062a] transition-[width] duration-500" style={{ width: progressWidth(progressPercent) }} /></div><div className="mt-2 flex items-center justify-between gap-3 text-[0.72rem]"><b className="text-[#730321]">{Math.round(progressPercent)}% complete</b><span className="inline-flex items-center gap-1 text-[#77727c]"><CalendarDays className="size-3.5 text-[#a47316]" />{formatCustomerDate(scheme.maturityDate)}</span></div></>}
+        {isFree ? <FlexiblePhaseBar scheme={scheme} /> : <><div className="h-2 overflow-hidden rounded-full bg-[#e8e7eb]"><div className="h-full rounded-full bg-[var(--customer-primary,#8a062a)] transition-[width] duration-500" style={{ width: progressWidth(progressPercent) }} /></div><div className="mt-2 flex items-center justify-between gap-3 text-[0.72rem]"><b className="text-[var(--customer-primary,#730321)]">{Math.round(progressPercent)}% complete</b><span className="inline-flex items-center gap-1 text-[#77727c]"><CalendarDays className="size-3.5 text-[var(--customer-accent,#a47316)]" />{formatCustomerDate(scheme.maturityDate)}</span></div></>}
       </div>
 
-      {isCapped && (remaining || cap) ? <div className="mt-4 flex items-center justify-between gap-3 rounded-xl bg-[#fff6de] px-3.5 py-3 text-xs"><span className="font-semibold text-[#725719]">Monthly contribution limit</span><b className="text-[#5f4812]">{remaining?.amountDisplay ?? cap?.amountDisplay} available</b></div> : null}
-      {isFree ? <p className="mt-4 rounded-xl bg-[#fff6de] px-3.5 py-3 text-xs leading-5 text-[#725719]">Contributions are optional. Your paid balance always stays; unused monthly allowance does not carry forward.</p> : null}
+      {isCapped && (remaining || cap) ? <div className="mt-4 flex items-center justify-between gap-3 rounded-xl px-3.5 py-3 text-xs" style={{ background: "rgba(var(--customer-accent-rgb, 201, 162, 39), 0.14)" }}><span className="font-semibold text-[var(--customer-accent,#725719)]">Monthly contribution limit</span><b className="text-[var(--customer-accent,#5f4812)]">{remaining?.amountDisplay ?? cap?.amountDisplay} available</b></div> : null}
+      {isFree ? <p className="mt-4 rounded-xl px-3.5 py-3 text-xs leading-5 text-[var(--customer-accent,#725719)]" style={{ background: "rgba(var(--customer-accent-rgb, 201, 162, 39), 0.14)" }}>Contributions are optional. Your paid balance always stays; unused monthly allowance does not carry forward.</p> : null}
 
       <div className="mt-auto flex items-center gap-3 pt-5">
-        <span className="inline-flex min-w-0 flex-1 items-center gap-2 text-xs text-[#77727c]"><CalendarDays className="size-4 shrink-0 text-[#a47316]" />Matures <b className="truncate text-[#292732]">{formatCustomerDate(scheme.maturityDate)}</b></span>
-        <Button asChild className="h-10 shrink-0 rounded-xl bg-[#730321] px-5 font-bold hover:bg-[#5b021a]"><Link href={href}>{scheme.canPay ? (isFree || isCapped ? "View & contribute" : "View & pay") : "View"}<ArrowRight className="ml-1 size-4" /></Link></Button>
+        <span className="inline-flex min-w-0 flex-1 items-center gap-2 text-xs text-[#77727c]"><CalendarDays className="size-4 shrink-0 text-[var(--customer-accent,#a47316)]" />Matures <b className="truncate text-[#292732]">{formatCustomerDate(scheme.maturityDate)}</b></span>
+        <Button
+          asChild
+          className="h-10 shrink-0 rounded-xl px-5 font-bold text-white"
+          style={{ background: "var(--customer-primary, #730321)" }}
+        >
+          <Link href={href}>{scheme.canPay ? (isFree || isCapped ? "View & contribute" : "View & pay") : "View"}<ArrowRight className="ml-1 size-4" /></Link>
+        </Button>
       </div>
     </article>
   );
@@ -221,7 +254,7 @@ export function CustomerSchemeCard({ scheme, featured = false, className }: { sc
 
 export function SchemeProgressRing({ percent, className }: { percent: number; size?: number; className?: string }) {
   const clamped = Math.min(100, Math.max(0, Math.round(percent)));
-  return <div className={cn("min-w-28", className)}><div className="h-2 overflow-hidden rounded-full bg-[#e8e7eb]"><div className="h-full rounded-full bg-[#8a062a]" style={{ width: `${clamped}%` }} /></div><p className="mt-1 text-right text-xs font-black text-[#730321]">{clamped}%</p></div>;
+  return <div className={cn("min-w-28", className)}><div className="h-2 overflow-hidden rounded-full bg-[#e8e7eb]"><div className="h-full rounded-full bg-[var(--customer-primary,#8a062a)]" style={{ width: `${clamped}%` }} /></div><p className="mt-1 text-right text-xs font-black text-[var(--customer-primary,#730321)]">{clamped}%</p></div>;
 }
 
 export function SchemeProgressVisual({ scheme }: { scheme: CustomerSchemeDetail }) {

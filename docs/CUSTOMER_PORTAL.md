@@ -59,8 +59,9 @@ The main shell (`CustomerRegistrationGuard`) blocks home/schemes/etc. until `pro
 
 - Fixed schemes call `POST /app/schemes/:schemeId/pay`.
 - Flexible schemes call `POST /app/schemes/:schemeId/payment-intents` with amount, target cycle and `expectedPositionVersion`.
-- The returned PhonePe URL is opened as a gateway redirect.
-- `/customer/pay/status` presents the processing and terminal confirmation state.
+- Fixed links may require `POST /public/pay/:token/initiate` before redirect; flexible intents return a direct PhonePe URL.
+- After PhonePe redirects back, `/customer/:slug/pay/status` polls `GET /app/payment-intents/:id` or `GET /public/pay/:token/status` until paid, failed, or expired.
+- A short-lived payment session is stored in `sessionStorage` so the status page knows which resource to poll.
 - The UI never asks for or stores a UPI PIN.
 
 ## Locked flexible rules represented by the UI

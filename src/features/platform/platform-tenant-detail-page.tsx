@@ -43,13 +43,15 @@ import {
   whatsappVerifyTestMobileForApi,
   type PlatformWhatsappIntegrationForm,
 } from "@/src/lib/platform-whatsapp-integration-form-validation";
+import { apiOrigin } from "@/src/config/env";
 import {
   emptyPhonePeIntegrationForm,
   livePlatformPhonePeIntegrationFieldErrors,
   phonePeIntegrationBodyForApi,
   phonePeIntegrationFormHasInput,
+  phonePeWebhookUrl,
   platformPhonePeIntegrationFormReady,
-  sanitizePhonePeSaltIndexInput,
+  sanitizePhonePeClientVersionInput,
   validatePlatformPhonePeIntegrationForm,
   type PhonePeIntegrationEnvironment,
   type PlatformPhonePeIntegrationForm,
@@ -753,10 +755,11 @@ function PhonePeCard({ tenant }: { tenant: PlatformTenantDetail }) {
     typeof pg.provider === "string" ? pg.provider : "PHONEPE";
   const pgLastVerified =
     typeof pg.lastVerifiedAt === "string" ? pg.lastVerifiedAt : null;
-  const pgMerchantMasked =
-    typeof pg.merchantIdMasked === "string" ? pg.merchantIdMasked : null;
+  const pgClientMasked =
+    typeof pg.clientIdMasked === "string" ? pg.clientIdMasked : null;
   const pgEnvironment =
     typeof pg.environment === "string" ? pg.environment : "PRODUCTION";
+  const webhookUrl = phonePeWebhookUrl(apiOrigin(), tenant.id);
   const [baseline, setBaseline] = useState<PlatformPhonePeIntegrationForm>(() =>
     phonePeFormFromTenant(tenant),
   );
@@ -798,11 +801,12 @@ function PhonePeCard({ tenant }: { tenant: PlatformTenantDetail }) {
 
   const markAllTouched = () => {
     setTouched({
-      merchantId: true,
-      saltKey: true,
-      saltIndex: true,
+      clientId: true,
+      clientSecret: true,
+      clientVersion: true,
+      webhookUsername: true,
+      webhookPassword: true,
       environment: true,
-      callbackUrlOverride: true,
     });
   };
 
@@ -818,7 +822,7 @@ function PhonePeCard({ tenant }: { tenant: PlatformTenantDetail }) {
   return (
     <Surface
       title="PhonePe payment gateway"
-      description="Merchant credentials and callback health"
+      description="SDK credentials, webhook auth, and connection health"
       action={<StatusBadge status={pg.verificationStatus} />}
     >
       <div className="space-y-4 p-5">
@@ -826,62 +830,94 @@ function PhonePeCard({ tenant }: { tenant: PlatformTenantDetail }) {
           <p>
             <strong>Current:</strong>{" "}
             {pg.configured
-              ? `${pgMerchantMasked ?? "Configured"} · ${pgEnvironment}`
+              ? `${pgClientMasked ?? "Configured"} · ${pgEnvironment}`
               : "Not configured"}
           </p>
           <p className="mt-1 text-muted-foreground">
             Last verified: {formatWhen(pgLastVerified)} · Provider {pgProvider}
+            {pg.clientCredentialsConfigured === false && pg.configured
+              ? " · Client secret pending"
+              : ""}
           </p>
           <p className="mt-1 text-muted-foreground">
-            Salt key is write-only and encrypted at rest. Re-enter merchant ID
-            and salt key whenever you save changes.
+            Client secret and webhook password are write-only and encrypted at
+            rest. Re-enter all credentials whenever you save changes.
+          </p>
+        </div>
+        <div className="rounded-xl border border-dashed bg-muted/20 p-4 text-sm">
+          <p className="font-medium">Webhook URL (configure once in PhonePe dashboard)</p>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <code className="break-all rounded bg-background px-2 py-1 text-xs">
+              {webhookUrl}
+            </code>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={async () => {
+                try {
+                  await navigator.clipboard.writeText(webhookUrl);
+                  toast.success("Webhook URL copied");
+                } catch {
+                  toast.error("Could not copy webhook URL");
+                }
+              }}
+            >
+              <ClipboardCopy className="size-4" />
+              Copy
+            </Button>
+          </div>
+          <p className="mt-2 text-muted-foreground">
+            Use the same webhook username and password below in PhonePe →
+            Webhooks. PhonePe sends an Authorization header; the backend
+            validates it against these values.
           </p>
         </div>
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
-            <FieldLabel>Merchant ID *</FieldLabel>
+            <FieldLabel>Client ID *</FieldLabel>
             <Input
-              value={form.merchantId}
+              value={form.clientId}
               onChange={(e) => {
-                setTouched((p) => ({ ...p, merchantId: true }));
-                setField("merchantId", e.target.value);
+                setTouched((p) => ({ ...p, clientId: true }));
+                setField("clientId", e.target.value);
               }}
-              className={inputClass("merchantId")}
-              aria-invalid={Boolean(displayError("merchantId"))}
+              className={inputClass("clientId")}
+              aria-invalid={Boolean(displayError("clientId"))}
             />
-            <FormFieldError message={displayError("merchantId")} />
+            <FormFieldError message={displayError("clientId")} />
           </div>
           <div>
-            <FieldLabel>Salt key *</FieldLabel>
+            <FieldLabel>Client secret *</FieldLabel>
             <Input
               type="password"
               autoComplete="off"
-              value={form.saltKey}
+              value={form.clientSecret}
               onChange={(e) => {
-                setTouched((p) => ({ ...p, saltKey: true }));
-                setField("saltKey", e.target.value);
+                setTouched((p) => ({ ...p, clientSecret: true }));
+                setField("clientSecret", e.target.value);
               }}
-              className={inputClass("saltKey")}
-              aria-invalid={Boolean(displayError("saltKey"))}
+              className={inputClass("clientSecret")}
+              aria-invalid={Boolean(displayError("clientSecret"))}
             />
-            <FormFieldError message={displayError("saltKey")} />
+            <FormFieldError message={displayError("clientSecret")} />
           </div>
           <div>
-            <FieldLabel>Salt index *</FieldLabel>
+            <FieldLabel>Client version *</FieldLabel>
             <Input
               inputMode="numeric"
-              value={String(form.saltIndex)}
+              value={String(form.clientVersion)}
               onChange={(e) => {
-                setTouched((p) => ({ ...p, saltIndex: true }));
+                setTouched((p) => ({ ...p, clientVersion: true }));
                 setField(
-                  "saltIndex",
-                  sanitizePhonePeSaltIndexInput(e.target.value),
+                  "clientVersion",
+                  sanitizePhonePeClientVersionInput(e.target.value),
                 );
               }}
-              className={inputClass("saltIndex")}
-              aria-invalid={Boolean(displayError("saltIndex"))}
+              className={inputClass("clientVersion")}
+              aria-invalid={Boolean(displayError("clientVersion"))}
             />
-            <FormFieldError message={displayError("saltIndex")} />
+            <FormFieldError message={displayError("clientVersion")} />
           </div>
           <div>
             <FieldLabel>Environment</FieldLabel>
@@ -900,20 +936,33 @@ function PhonePeCard({ tenant }: { tenant: PlatformTenantDetail }) {
               </SelectContent>
             </Select>
           </div>
-          <div className="sm:col-span-2">
-            <FieldLabel>Callback URL override</FieldLabel>
+          <div>
+            <FieldLabel>Webhook username *</FieldLabel>
             <Input
-              type="url"
-              placeholder="https://api.example.com/webhooks/phonepe"
-              value={form.callbackUrlOverride}
+              value={form.webhookUsername}
               onChange={(e) => {
-                setTouched((p) => ({ ...p, callbackUrlOverride: true }));
-                setField("callbackUrlOverride", e.target.value);
+                setTouched((p) => ({ ...p, webhookUsername: true }));
+                setField("webhookUsername", e.target.value);
               }}
-              className={inputClass("callbackUrlOverride")}
-              aria-invalid={Boolean(displayError("callbackUrlOverride"))}
+              className={inputClass("webhookUsername")}
+              aria-invalid={Boolean(displayError("webhookUsername"))}
             />
-            <FormFieldError message={displayError("callbackUrlOverride")} />
+            <FormFieldError message={displayError("webhookUsername")} />
+          </div>
+          <div>
+            <FieldLabel>Webhook password *</FieldLabel>
+            <Input
+              type="password"
+              autoComplete="off"
+              value={form.webhookPassword}
+              onChange={(e) => {
+                setTouched((p) => ({ ...p, webhookPassword: true }));
+                setField("webhookPassword", e.target.value);
+              }}
+              className={inputClass("webhookPassword")}
+              aria-invalid={Boolean(displayError("webhookPassword"))}
+            />
+            <FormFieldError message={displayError("webhookPassword")} />
           </div>
         </div>
         <div className="flex flex-wrap justify-end gap-2">
@@ -952,7 +1001,8 @@ function PhonePeCard({ tenant }: { tenant: PlatformTenantDetail }) {
                 toast.success("PhonePe credentials saved");
                 setForm((prev) => ({
                   ...prev,
-                  saltKey: "",
+                  clientSecret: "",
+                  webhookPassword: "",
                 }));
                 setTouched({});
               } catch (err) {

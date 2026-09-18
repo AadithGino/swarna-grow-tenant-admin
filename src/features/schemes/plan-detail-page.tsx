@@ -55,7 +55,7 @@ import {
   PlanInternalMetaCard,
   PlanPerformanceDashboard,
   PlanRuleCard,
-  PlanRulesNav,
+  PlanRulesWorkspace,
   PlanScheduleSection,
   PlanStatusAlert,
   PlanTermsPanel,
@@ -78,6 +78,7 @@ import { PlanAvailabilityDialog } from "@/src/features/schemes/plan-availability
 export function PlanDetailPage({ planId }: { planId: string }) {
   const router = useRouter();
   const [availabilityOpen, setAvailabilityOpen] = useState(false);
+  const [activeRuleSection, setActiveRuleSection] = useState("rules-amount");
   const planQuery = useGetPlanQuery(planId);
   const statsQuery = useGetPlanStatsQuery(planId);
   const [duplicatePlan] = useDuplicatePlanMutation();
@@ -104,6 +105,37 @@ export function PlanDetailPage({ planId }: { planId: string }) {
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- preview when plan payload loads
   }, [planId, planQuery.data]);
+
+  const ruleSections = useMemo(() => {
+    const planData = planQuery.data as Record<string, unknown> | undefined;
+    const flexibleRules = (planData?.flexibleRules ?? null) as Record<string, unknown> | null;
+    const goldRules = (planData?.goldRules ?? null) as Record<string, unknown> | null;
+    const valueBasis = String(planData?.valueBasis ?? "");
+
+    const sections = [
+      { id: "rules-amount", label: "Amount rules", icon: IndianRupee },
+      { id: "rules-schedule", label: "Schedule", icon: CalendarClock },
+      { id: "rules-payments", label: "Payments", icon: Layers3 },
+    ];
+    if (flexibleRules) {
+      sections.push({ id: "rules-flexible", label: "Flexible phases", icon: CalendarClock });
+    }
+    if (goldRules && valueBasis === "GOLD_WEIGHT") {
+      sections.push({ id: "rules-gold", label: "Gold weight", icon: Scale });
+    }
+    sections.push(
+      { id: "rules-benefit", label: "Benefit", icon: Gift },
+      { id: "rules-redemption", label: "Redemption", icon: Shield },
+      { id: "rules-availability", label: "Availability", icon: Store },
+    );
+    return sections;
+  }, [planQuery.data]);
+
+  useEffect(() => {
+    if (!ruleSections.some((section) => section.id === activeRuleSection)) {
+      setActiveRuleSection(ruleSections[0]?.id ?? "rules-amount");
+    }
+  }, [activeRuleSection, ruleSections]);
 
   if (planQuery.isLoading) return <PageSkeleton cards={4} />;
   if (planQuery.isError || !planQuery.data)
@@ -178,26 +210,11 @@ export function PlanDetailPage({ planId }: { planId: string }) {
       : "Always open";
   const maxEnrolments =
     avail.maxEnrolments == null ? "Unlimited" : String(avail.maxEnrolments);
-
-  const ruleSections = useMemo(() => {
-    const sections = [
-      { id: "rules-amount", label: "Amount rules", icon: IndianRupee },
-      { id: "rules-schedule", label: "Schedule", icon: CalendarClock },
-      { id: "rules-payments", label: "Payments", icon: Layers3 },
-    ];
-    if (flexibleRules) {
-      sections.push({ id: "rules-flexible", label: "Flexible phases", icon: CalendarClock });
-    }
-    if (goldRules && String(plan.valueBasis) === "GOLD_WEIGHT") {
-      sections.push({ id: "rules-gold", label: "Gold weight", icon: Scale });
-    }
-    sections.push(
-      { id: "rules-benefit", label: "Benefit", icon: Gift },
-      { id: "rules-redemption", label: "Redemption", icon: Shield },
-      { id: "rules-availability", label: "Availability", icon: Store },
-    );
-    return sections;
-  }, [flexibleRules, goldRules, plan.valueBasis]);
+  const activeRuleIndex = ruleSections.findIndex((section) => section.id === activeRuleSection);
+  const ruleSectionMeta = {
+    sectionIndex: activeRuleIndex >= 0 ? activeRuleIndex + 1 : undefined,
+    sectionTotal: ruleSections.length || undefined,
+  };
 
   const actionMenu = (
     <PermissionGate permission={ACTION.planWrite}>
@@ -419,9 +436,12 @@ export function PlanDetailPage({ planId }: { planId: string }) {
         </PageTabsPanel>
 
         <PageTabsPanel value="rules" flush>
-          <div className="grid gap-6 p-4 sm:p-5 xl:grid-cols-[220px_minmax(0,1fr)]">
-            <PlanRulesNav sections={ruleSections} className="hidden xl:block xl:sticky xl:top-4 xl:self-start" />
-            <div className="space-y-5">
+          <PlanRulesWorkspace
+            sections={ruleSections}
+            activeId={activeRuleSection}
+            onSelect={setActiveRuleSection}
+          >
+            {activeRuleSection === "rules-amount" ? (
               <PlanRuleCard
                 id="rules-amount"
                 icon={IndianRupee}
@@ -429,46 +449,62 @@ export function PlanDetailPage({ planId }: { planId: string }) {
                 description="Minimums, maximums, slabs, and how customers choose instalment size"
                 highlight={amountLabel}
                 entries={amountRulesFields(amountRules)}
+                {...ruleSectionMeta}
               />
+            ) : null}
+            {activeRuleSection === "rules-schedule" ? (
               <PlanRuleCard
                 id="rules-schedule"
                 icon={CalendarClock}
                 title="Schedule"
                 description="Due dates, grace period, and first-instalment behaviour"
                 entries={scheduleRulesFields(scheduleRules)}
+                {...ruleSectionMeta}
               />
+            ) : null}
+            {activeRuleSection === "rules-payments" ? (
               <PlanRuleCard
                 id="rules-payments"
                 icon={Layers3}
                 title="Payments"
                 description="Partial payments, advances, and per-transaction limits"
                 entries={paymentRulesFields(paymentRules)}
+                {...ruleSectionMeta}
               />
-              {flexibleRules ? (
-                <PlanRuleCard
-                  id="rules-flexible"
-                  icon={CalendarClock}
-                  title="Flexible phases"
-                  description="Free window, cap computation, and capped-cycle behaviour"
-                  entries={flexibleRulesFields(flexibleRules)}
-                />
-              ) : null}
-              {goldRules && String(plan.valueBasis) === "GOLD_WEIGHT" ? (
-                <PlanRuleCard
-                  id="rules-gold"
-                  icon={Scale}
-                  title="Gold weight"
-                  description="Rate source and rounding for weight-based plans"
-                  entries={goldRulesFields(goldRules)}
-                />
-              ) : null}
+            ) : null}
+            {activeRuleSection === "rules-flexible" && flexibleRules ? (
+              <PlanRuleCard
+                id="rules-flexible"
+                icon={CalendarClock}
+                title="Flexible phases"
+                description="Free window, cap computation, and capped-cycle behaviour"
+                entries={flexibleRulesFields(flexibleRules)}
+                {...ruleSectionMeta}
+              />
+            ) : null}
+            {activeRuleSection === "rules-gold" &&
+            goldRules &&
+            String(plan.valueBasis) === "GOLD_WEIGHT" ? (
+              <PlanRuleCard
+                id="rules-gold"
+                icon={Scale}
+                title="Gold weight"
+                description="Rate source and rounding for weight-based plans"
+                entries={goldRulesFields(goldRules)}
+                {...ruleSectionMeta}
+              />
+            ) : null}
+            {activeRuleSection === "rules-benefit" ? (
               <PlanRuleCard
                 id="rules-benefit"
                 icon={Gift}
                 title="Benefit"
                 description="What the customer earns at maturity"
                 entries={benefitFields(benefit)}
+                {...ruleSectionMeta}
               />
+            ) : null}
+            {activeRuleSection === "rules-redemption" ? (
               <PlanRuleCard
                 id="rules-redemption"
                 icon={Shield}
@@ -500,7 +536,10 @@ export function PlanDetailPage({ planId }: { planId: string }) {
                     value: redemption.redeemAtAnyBranch ? "Yes" : "Home branch only",
                   },
                 ]}
+                {...ruleSectionMeta}
               />
+            ) : null}
+            {activeRuleSection === "rules-availability" ? (
               <PlanRuleCard
                 id="rules-availability"
                 icon={Store}
@@ -522,9 +561,10 @@ export function PlanDetailPage({ planId }: { planId: string }) {
                     value: avail.customerSelfEnrolAllowed ? "Allowed" : "Staff only",
                   },
                 ]}
+                {...ruleSectionMeta}
               />
-            </div>
-          </div>
+            ) : null}
+          </PlanRulesWorkspace>
         </PageTabsPanel>
 
         <PageTabsPanel value="performance">

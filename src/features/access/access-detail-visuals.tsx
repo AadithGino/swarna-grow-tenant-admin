@@ -3,7 +3,17 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
+import {
   Building2,
+  CalendarRange,
   Check,
   IndianRupee,
   MapPin,
@@ -12,6 +22,7 @@ import {
   Search,
   ShieldCheck,
   Store,
+  TrendingUp,
   UsersRound,
   Wallet,
 } from "lucide-react";
@@ -69,6 +80,53 @@ function SummaryPill({
       <p className="mt-2 text-[0.95rem] font-bold leading-snug text-[#241316]">
         {value}
       </p>
+    </div>
+  );
+}
+
+export function BranchMetricTile({
+  icon: Icon,
+  label,
+  value,
+  detail,
+  tone = "wine",
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
+  value: React.ReactNode;
+  detail?: string;
+  tone?: "wine" | "gold" | "green" | "cream" | "red";
+}) {
+  const iconBg = {
+    wine: "bg-[#f7ecee] text-[#7b0a2b]",
+    gold: "bg-[#fff7df] text-[#bb6200]",
+    green: "bg-emerald-50 text-emerald-700",
+    cream: "bg-[#f7ead0] text-[#815b1d]",
+    red: "bg-[#fff0f0] text-red-600",
+  };
+  return (
+    <div className="group rounded-2xl border border-[#e4d7d2]/90 bg-white p-4 shadow-[0_2px_5px_rgb(67_15_25/3%)] transition hover:border-[#d4c4bf] hover:shadow-md">
+      <div className="flex items-start justify-between gap-3">
+        <div
+          className={cn(
+            "grid size-10 shrink-0 place-items-center rounded-xl",
+            iconBg[tone],
+          )}
+        >
+          <Icon className="size-4" />
+        </div>
+        <div className="min-w-0 flex-1 text-right">
+          <p className="text-[11px] font-bold uppercase tracking-wider text-[#9a8589]">
+            {label}
+          </p>
+          <p className="mt-1 truncate text-xl font-extrabold tracking-tight text-[#28161a]">
+            {value}
+          </p>
+          {detail ? (
+            <p className="mt-0.5 text-xs text-muted-foreground">{detail}</p>
+          ) : null}
+        </div>
+      </div>
     </div>
   );
 }
@@ -197,6 +255,9 @@ export function BranchDetailHero({
   isActive,
   staffCount,
   activeCustomers,
+  activeSchemes,
+  collectionThisMonth,
+  pendingCashInHand,
 }: {
   name: string;
   code: string;
@@ -207,18 +268,21 @@ export function BranchDetailHero({
   isActive: boolean;
   staffCount: number;
   activeCustomers: number;
+  activeSchemes: number;
+  collectionThisMonth?: { amountDisplay?: string };
+  pendingCashInHand?: { amountDisplay?: string };
 }) {
   return (
     <section className="overflow-hidden rounded-2xl border border-[#e4d7d2] bg-white shadow-[0_2px_5px_rgb(67_15_25/3%)]">
-      <div className="grid lg:grid-cols-[1.05fr_0.95fr]">
-        <div className="border-b border-[#eaded9] bg-gradient-to-br from-[#2d191d] via-[#3d2429] to-[#1a1014] px-6 py-8 text-white lg:border-b-0 lg:border-r">
-          <p className="text-xs font-bold uppercase tracking-[0.16em] text-white/60">
+      <div className="grid xl:grid-cols-[minmax(0,1fr)_minmax(320px,1.15fr)]">
+        <div className="border-b border-[#eaded9] bg-gradient-to-br from-[#730321] via-[#8a1030] to-[#5c0218] px-6 py-8 text-white xl:border-b-0 xl:border-r">
+          <p className="text-xs font-bold uppercase tracking-[0.16em] text-white/70">
             Showroom branch
           </p>
           <h2 className="mt-2 text-2xl font-extrabold tracking-tight md:text-[1.65rem]">
             {name}
           </h2>
-          <p className="mt-3 flex items-start gap-2 text-sm leading-relaxed text-white/85">
+          <p className="mt-3 flex items-start gap-2 text-sm leading-relaxed text-white/90">
             <MapPin className="mt-0.5 size-4 shrink-0 opacity-80" />
             <span>
               {[line1, city, pincode].filter((p) => p && p !== "—").length
@@ -229,7 +293,7 @@ export function BranchDetailHero({
                 : "Address not set — edit branch to add showroom details"}
             </span>
           </p>
-          <p className="mt-2 flex items-center gap-2 text-sm text-white/75">
+          <p className="mt-2 flex items-center gap-2 text-sm text-white/80">
             <Phone className="size-4 shrink-0" />
             {contactNumber && contactNumber !== "—"
               ? contactNumber
@@ -245,25 +309,50 @@ export function BranchDetailHero({
             </Badge>
           </div>
         </div>
-        <div className="grid gap-3 p-6 sm:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3">
-          <SummaryPill
-            icon={UsersRound}
-            label="Customers"
-            value={activeCustomers.toLocaleString("en-IN")}
-            accent="wine"
-          />
-          <SummaryPill
-            icon={UsersRound}
-            label="Staff"
-            value={staffCount}
-            accent="gold"
-          />
-          <SummaryPill
-            icon={Store}
-            label="Branch code"
-            value={code}
-            accent="green"
-          />
+        <div className="bg-gradient-to-br from-[#faf7f5] to-white p-5 sm:p-6">
+          <div className="mb-4 flex items-center gap-2">
+            <TrendingUp className="size-4 text-[#730321]" />
+            <p className="text-xs font-bold uppercase tracking-[0.14em] text-[#9a6f2a]">
+              Branch pulse
+            </p>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-2 2xl:grid-cols-3">
+            <BranchMetricTile
+              icon={UsersRound}
+              label="Active customers"
+              value={activeCustomers.toLocaleString("en-IN")}
+              detail="Enrolled at this branch"
+              tone="wine"
+            />
+            <BranchMetricTile
+              icon={Building2}
+              label="Active schemes"
+              value={activeSchemes.toLocaleString("en-IN")}
+              detail="Open enrollments"
+              tone="cream"
+            />
+            <BranchMetricTile
+              icon={UsersRound}
+              label="Staff"
+              value={staffCount}
+              detail="Assigned to branch"
+              tone="gold"
+            />
+            <BranchMetricTile
+              icon={IndianRupee}
+              label="Collection this month"
+              value={<MoneyPair block={collectionThisMonth} fallback="₹0" />}
+              detail="Branch total"
+              tone="green"
+            />
+            <BranchMetricTile
+              icon={Wallet}
+              label="Cash with staff"
+              value={<MoneyPair block={pendingCashInHand} fallback="₹0" />}
+              detail="Awaiting handover"
+              tone="red"
+            />
+          </div>
         </div>
       </div>
     </section>
@@ -337,6 +426,7 @@ export function PerformanceHistoryTable({
   rows,
   footer,
   isLoading,
+  embedded = false,
 }: {
   title: string;
   description: string;
@@ -345,42 +435,62 @@ export function PerformanceHistoryTable({
   rows: React.ReactNode[][];
   footer?: React.ReactNode;
   isLoading?: boolean;
+  embedded?: boolean;
 }) {
-  return (
-    <Surface title={title} description={description}>
-      {isLoading ? (
-        <p className="p-6 text-sm text-muted-foreground">Loading…</p>
-      ) : rows.length === 0 ? (
-        <p className="p-6 text-sm text-muted-foreground">{emptyMessage}</p>
-      ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[520px] text-sm">
-            <thead>
-              <tr className="border-b border-[#eaded9] text-left text-xs font-bold uppercase tracking-wide text-muted-foreground">
-                {headers.map((h) => (
-                  <th key={h} className="px-5 py-3 font-bold">
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((cells, i) => (
-                <tr
-                  key={i}
-                  className="border-b border-[#f3ece8] last:border-0"
-                >
-                  {cells.map((cell, j) => (
-                    <td key={j} className="px-5 py-3 align-top text-[#1a1014]">
-                      {cell}
-                    </td>
-                  ))}
-                </tr>
+  const body = isLoading ? (
+    <p className="p-6 text-sm text-muted-foreground">Loading…</p>
+  ) : rows.length === 0 ? (
+    <div className="flex flex-col items-center justify-center px-6 py-14 text-center">
+      <p className="text-sm font-medium text-[#2d191d]">Nothing in this range</p>
+      <p className="mt-1 max-w-sm text-sm text-muted-foreground">{emptyMessage}</p>
+    </div>
+  ) : (
+    <div className="overflow-x-auto">
+      <table className="w-full min-w-[520px] text-sm">
+        <thead>
+          <tr className="border-b border-[#eaded9] bg-[#faf7f5]/80 text-left text-[11px] font-bold uppercase tracking-wider text-[#9a8589]">
+            {headers.map((h) => (
+              <th key={h} className="px-5 py-3 font-bold">
+                {h}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((cells, i) => (
+            <tr
+              key={i}
+              className="border-b border-[#f3ece8] transition last:border-0 hover:bg-[#faf7f5]/50"
+            >
+              {cells.map((cell, j) => (
+                <td key={j} className="px-5 py-3 align-middle text-[#1a1014]">
+                  {cell}
+                </td>
               ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+
+  if (embedded) {
+    return (
+      <div>
+        {description ? (
+          <p className="border-b border-[#eaded9] bg-white px-5 py-3 text-sm text-muted-foreground">
+            {description}
+          </p>
+        ) : null}
+        {body}
+        {footer}
+      </div>
+    );
+  }
+
+  return (
+    <Surface title={title} description={description} className="overflow-hidden">
+      {body}
       {footer}
     </Surface>
   );
@@ -496,6 +606,7 @@ export function StaffPerformanceSummaryBlock({
 }
 
 type PerformanceSummaryExtras = {
+  trendGroupBy?: "DAY" | "WEEK" | "MONTH" | "YEAR" | string;
   averageTicket?: StaffPerformanceMoneyBlock;
   collectionByMode?: Array<{
     mode?: string;
@@ -504,6 +615,7 @@ type PerformanceSummaryExtras = {
   }>;
   collectionTrend?: Array<{
     date?: string;
+    label?: string;
     count?: number;
     amount?: StaffPerformanceMoneyBlock;
   }>;
@@ -524,6 +636,201 @@ type PerformanceSummaryExtras = {
   }>;
 };
 
+function formatShortDate(iso?: string) {
+  if (!iso) return "—";
+  try {
+    return new Intl.DateTimeFormat("en-IN", {
+      day: "numeric",
+      month: "short",
+    }).format(new Date(iso));
+  } catch {
+    return String(iso);
+  }
+}
+
+function trendAmountRupees(block?: StaffPerformanceMoneyBlock) {
+  return (block?.amountPaise ?? 0) / 100;
+}
+
+export function PerformanceDateRangeBar({
+  draftFrom,
+  draftTo,
+  rangeLabel,
+  applyRangeError,
+  onDraftFromChange,
+  onDraftToChange,
+  onApply,
+  onResetMonth,
+}: {
+  draftFrom: string;
+  draftTo: string;
+  rangeLabel: string;
+  applyRangeError?: string;
+  onDraftFromChange: (value: string) => void;
+  onDraftToChange: (value: string) => void;
+  onApply: () => void;
+  onResetMonth: () => void;
+}) {
+  return (
+    <div className="flex flex-col gap-4 rounded-2xl border border-[#e4d7d2] bg-gradient-to-r from-[#faf7f5] to-white p-4 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between">
+      <div className="min-w-0">
+        <div className="flex items-center gap-2">
+          <CalendarRange className="size-4 text-[#730321]" />
+          <p className="text-xs font-bold uppercase tracking-[0.14em] text-[#9a6f2a]">
+            Performance window
+          </p>
+        </div>
+        <p className="mt-1 text-sm font-semibold text-[#2d191d]">{rangeLabel}</p>
+      </div>
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="mb-1 block text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
+              From
+            </label>
+            <Input
+              type="date"
+              value={draftFrom}
+              onChange={(e) => onDraftFromChange(e.target.value)}
+              className="h-10 bg-white"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
+              To
+            </label>
+            <Input
+              type="date"
+              value={draftTo}
+              onChange={(e) => onDraftToChange(e.target.value)}
+              className="h-10 bg-white"
+            />
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button disabled={Boolean(applyRangeError)} onClick={onApply}>
+            Apply range
+          </Button>
+          <Button variant="outline" onClick={onResetMonth}>
+            This month
+          </Button>
+        </div>
+        {applyRangeError ? (
+          <p className="w-full text-sm text-red-600">{applyRangeError}</p>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+export function BranchPerformanceOverview({
+  rangeLabel,
+  collection,
+  enrolments,
+  customersServed,
+  paymentsCount,
+  averageTicket,
+  cashInHand,
+  cash,
+  cashControlHref,
+}: {
+  rangeLabel: string;
+  collection?: StaffPerformanceMoneyBlock;
+  enrolments: number;
+  customersServed: number;
+  paymentsCount: number;
+  averageTicket?: StaffPerformanceMoneyBlock;
+  cashInHand?: StaffPerformanceMoneyBlock;
+  cash?: {
+    cashPendingAcceptance?: StaffPerformanceMoneyBlock;
+    cashCollected?: StaffPerformanceMoneyBlock;
+    handedOver?: StaffPerformanceMoneyBlock;
+    lastHandoverAt?: string | null;
+  };
+  cashControlHref: string;
+}) {
+  return (
+    <div className="space-y-5">
+      <div className="overflow-hidden rounded-2xl border border-[#e4d7d2] bg-white shadow-sm">
+        <div className="grid lg:grid-cols-[1.1fr_0.9fr]">
+          <div className="border-b border-[#eaded9] bg-gradient-to-br from-[#730321] via-[#8a1030] to-[#5c0218] p-6 text-white lg:border-b-0 lg:border-r">
+            <p className="text-xs font-bold uppercase tracking-[0.16em] text-white/70">
+              Collections in range
+            </p>
+            <p className="mt-2 text-4xl font-extrabold tracking-tight md:text-[2.75rem]">
+              <MoneyPair block={collection} fallback="₹0" />
+            </p>
+            <p className="mt-2 text-sm text-white/85">{rangeLabel}</p>
+            <div className="mt-5 grid gap-3 sm:grid-cols-3">
+              {[
+                ["Payments", paymentsCount.toLocaleString("en-IN")],
+                ["Customers served", customersServed.toLocaleString("en-IN")],
+                ["Enrolments", enrolments.toLocaleString("en-IN")],
+              ].map(([label, value]) => (
+                <div
+                  key={String(label)}
+                  className="rounded-xl border border-white/15 bg-white/10 px-3 py-2.5"
+                >
+                  <p className="text-[10px] font-bold uppercase tracking-wide text-white/70">
+                    {label}
+                  </p>
+                  <p className="mt-1 text-lg font-bold">{value}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="grid gap-4 p-6 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
+            <div className="rounded-2xl border border-[#eadbb5] bg-[#fffdf8] p-4">
+              <p className="text-[11px] font-bold uppercase tracking-wide text-[#805817]">
+                Avg. ticket
+              </p>
+              <p className="mt-2 text-2xl font-extrabold text-[#28161a]">
+                <MoneyPair block={averageTicket} fallback="₹0" />
+              </p>
+            </div>
+            <div className="rounded-2xl border border-amber-200 bg-[#fff8e8] p-4">
+              <p className="text-[11px] font-bold uppercase tracking-wide text-[#805817]">
+                Cash in hand (live)
+              </p>
+              <p className="mt-2 text-2xl font-extrabold text-[#28161a]">
+                <MoneyPair block={cashInHand} fallback="₹0" />
+              </p>
+              <p className="mt-2 text-xs text-muted-foreground">
+                Pending acceptance{" "}
+                <MoneyPair block={cash?.cashPendingAcceptance} fallback="₹0" />
+              </p>
+            </div>
+            <div className="rounded-2xl border border-[#e4d7d2] bg-[#faf7f5] p-4 sm:col-span-2 lg:col-span-1 xl:col-span-2">
+              <p className="text-sm font-semibold text-[#5c3d42]">Cash ledger (all time)</p>
+              <ul className="mt-3 grid gap-2 text-sm sm:grid-cols-3">
+                <li className="rounded-xl bg-white px-3 py-2">
+                  <span className="text-xs text-muted-foreground">Collected</span>
+                  <p className="font-bold">
+                    <MoneyPair block={cash?.cashCollected} fallback="₹0" />
+                  </p>
+                </li>
+                <li className="rounded-xl bg-white px-3 py-2">
+                  <span className="text-xs text-muted-foreground">Handed over</span>
+                  <p className="font-bold">
+                    <MoneyPair block={cash?.handedOver} fallback="₹0" />
+                  </p>
+                </li>
+                <li className="rounded-xl bg-white px-3 py-2">
+                  <span className="text-xs text-muted-foreground">Last handover</span>
+                  <p className="font-bold">{formatWhen(cash?.lastHandoverAt)}</p>
+                </li>
+              </ul>
+              <Button variant="secondary" size="sm" className="mt-4" asChild>
+                <Link href={cashControlHref}>Open cash control</Link>
+              </Button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function PerformanceExtendedInsights({
   summary: summaryInput,
   variant = "staff",
@@ -535,9 +842,19 @@ export function PerformanceExtendedInsights({
   if (!summary) return null;
   const modes = summary.collectionByMode ?? [];
   const trend = summary.collectionTrend ?? [];
+  const trendGroupBy = String(summary.trendGroupBy ?? "DAY").toUpperCase();
   const redemptions = summary.redemptionsCompleted;
   const handovers = summary.handoversInPeriod;
   const top = summary.topCollectors ?? [];
+  const modeTotalPaise = modes.reduce(
+    (sum, row) => sum + (row.amount?.amountPaise ?? 0),
+    0,
+  );
+  const trendChartData = trend.map((row) => ({
+    date: row.label ?? formatShortDate(row.date),
+    amount: trendAmountRupees(row.amount),
+    count: row.count ?? 0,
+  }));
   const hasInsights =
     summary.averageTicket ||
     modes.length > 0 ||
@@ -549,36 +866,26 @@ export function PerformanceExtendedInsights({
 
   return (
     <div className="space-y-5">
-      <Surface
-        title="Performance insights"
-        description="Breakdown for the selected date range"
-      >
-        <div className="grid gap-4 p-6 sm:grid-cols-2 xl:grid-cols-4">
-          <SummaryPill
-            icon={IndianRupee}
-            label="Avg. ticket"
-            value={
-              <MoneyPair block={summary.averageTicket} fallback="₹0" />
-            }
-            accent="cream"
-          />
-          <SummaryPill
-            icon={ShieldCheck}
-            label="Redemptions completed"
-            value={redemptions?.count ?? 0}
-            accent="green"
-          />
-          <SummaryPill
-            icon={Wallet}
-            label="Settlement handed out"
-            value={
-              <MoneyPair
-                block={redemptions?.settlementTotal}
-                fallback="₹0"
+      {(redemptions?.count ?? 0) > 0 || handovers ? (
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          {(redemptions?.count ?? 0) > 0 ? (
+            <>
+              <SummaryPill
+                icon={ShieldCheck}
+                label="Redemptions completed"
+                value={redemptions?.count ?? 0}
+                accent="green"
               />
-            }
-            accent="wine"
-          />
+              <SummaryPill
+                icon={Wallet}
+                label="Settlement handed out"
+                value={
+                  <MoneyPair block={redemptions?.settlementTotal} fallback="₹0" />
+                }
+                accent="wine"
+              />
+            </>
+          ) : null}
           {handovers ? (
             <SummaryPill
               icon={UsersRound}
@@ -588,46 +895,91 @@ export function PerformanceExtendedInsights({
             />
           ) : null}
         </div>
-        {handovers ? (
-          <p className="border-t border-[#eaded9] px-6 pb-4 text-xs text-muted-foreground">
-            Handovers in range: {handovers.accepted ?? 0} accepted ·{" "}
-            {handovers.rejected ?? 0} rejected · {handovers.pending ?? 0}{" "}
-            pending (live)
-          </p>
-        ) : null}
-      </Surface>
-
-      {modes.length > 0 ? (
-        <Surface title="Collections by mode" description="Cash vs digital split">
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[320px] text-sm">
-              <thead>
-                <tr className="border-b bg-[#faf7f5] text-left text-xs uppercase tracking-wide text-muted-foreground">
-                  <th className="px-5 py-3">Mode</th>
-                  <th className="px-5 py-3">Payments</th>
-                  <th className="px-5 py-3">Amount</th>
-                </tr>
-              </thead>
-              <tbody>
-                {modes.map((row) => (
-                  <tr
-                    key={String(row.mode)}
-                    className="border-b border-[#f3ece8] last:border-0"
-                  >
-                    <td className="px-5 py-3 font-medium">
-                      {String(row.mode ?? "—").replaceAll("_", " ")}
-                    </td>
-                    <td className="px-5 py-3 tabular-nums">{row.count ?? 0}</td>
-                    <td className="px-5 py-3 font-semibold">
-                      <MoneyPair block={row.amount} fallback="₹0" />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </Surface>
       ) : null}
+
+      {handovers ? (
+        <p className="rounded-xl border border-[#eaded9] bg-[#faf7f5] px-4 py-3 text-xs text-muted-foreground">
+          Handovers in range: {handovers.accepted ?? 0} accepted ·{" "}
+          {handovers.rejected ?? 0} rejected · {handovers.pending ?? 0} pending (live)
+        </p>
+      ) : null}
+
+      <div className="grid gap-5 xl:grid-cols-2">
+        {trendChartData.length > 0 ? (
+          <Surface
+            title="Collection trend"
+            description={`Grouped by ${trendGroupBy.toLowerCase()} (IST)`}
+          >
+            <div className="h-64 p-4 pt-2">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={trendChartData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#eaded9" vertical={false} />
+                  <XAxis
+                    dataKey="date"
+                    tick={{ fontSize: 11, fill: "#776a6d" }}
+                    axisLine={false}
+                    tickLine={false}
+                  />
+                  <YAxis
+                    tick={{ fontSize: 11, fill: "#776a6d" }}
+                    axisLine={false}
+                    tickLine={false}
+                    tickFormatter={(value: number) =>
+                      value >= 1000 ? `₹${(value / 1000).toFixed(0)}k` : `₹${value}`
+                    }
+                  />
+                  <Tooltip
+                    formatter={(value) => [
+                      `₹${Number(value ?? 0).toLocaleString("en-IN")}`,
+                      "Collected",
+                    ]}
+                    labelFormatter={(label) => String(label)}
+                    contentStyle={{
+                      borderRadius: 12,
+                      border: "1px solid #eaded9",
+                      fontSize: 12,
+                    }}
+                  />
+                  <Bar dataKey="amount" fill="#730321" radius={[6, 6, 0, 0]} maxBarSize={36} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </Surface>
+        ) : null}
+
+        {modes.length > 0 ? (
+          <Surface title="Collections by mode" description="Cash vs digital split">
+            <div className="space-y-4 p-5">
+              {modes.map((row) => {
+                const paise = row.amount?.amountPaise ?? 0;
+                const pct =
+                  modeTotalPaise > 0 ? Math.round((paise / modeTotalPaise) * 100) : 0;
+                return (
+                  <div key={String(row.mode)}>
+                    <div className="mb-1.5 flex items-center justify-between gap-3 text-sm">
+                      <span className="font-semibold text-[#2d191d]">
+                        {String(row.mode ?? "—").replaceAll("_", " ")}
+                      </span>
+                      <span className="shrink-0 font-bold">
+                        <MoneyPair block={row.amount} fallback="₹0" />
+                      </span>
+                    </div>
+                    <div className="h-2 overflow-hidden rounded-full bg-[#f3ece8]">
+                      <div
+                        className="h-full rounded-full bg-gradient-to-r from-[#730321] to-[#bb6200]"
+                        style={{ width: `${Math.max(pct, 4)}%` }}
+                      />
+                    </div>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {row.count ?? 0} payments · {pct}% of total
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
+          </Surface>
+        ) : null}
+      </div>
 
       {variant === "branch" && top.length > 0 ? (
         <Surface
@@ -635,25 +987,31 @@ export function PerformanceExtendedInsights({
           description="Staff ranked by successful collections in this range"
         >
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[360px] text-sm">
+            <table className="w-full min-w-[420px] text-sm">
               <thead>
-                <tr className="border-b bg-[#faf7f5] text-left text-xs uppercase tracking-wide text-muted-foreground">
+                <tr className="border-b border-[#eaded9] bg-[#faf7f5]/80 text-left text-[11px] font-bold uppercase tracking-wider text-[#9a8589]">
+                  <th className="w-16 px-5 py-3">Rank</th>
                   <th className="px-5 py-3">Staff</th>
-                  <th className="px-5 py-3">Payments</th>
-                  <th className="px-5 py-3">Collected</th>
+                  <th className="px-5 py-3 text-right">Payments</th>
+                  <th className="px-5 py-3 text-right">Collected</th>
                 </tr>
               </thead>
               <tbody>
                 {top.map((row, index) => (
                   <tr
                     key={row.staff?.id ?? index}
-                    className="border-b border-[#f3ece8] last:border-0"
+                    className="border-b border-[#f3ece8] last:border-0 hover:bg-[#faf7f5]/50"
                   >
+                    <td className="px-5 py-3">
+                      <span className="inline-grid size-8 place-items-center rounded-lg bg-[#730321] text-xs font-extrabold text-white">
+                        {index + 1}
+                      </span>
+                    </td>
                     <td className="px-5 py-3">
                       {row.staff?.id ? (
                         <Link
                           href={`/staff-branches/staff/${row.staff.id}`}
-                          className="font-medium text-[#730321] hover:underline"
+                          className="font-semibold text-[#2d191d] hover:text-[#730321] hover:underline"
                         >
                           {row.staff.name ?? "Staff"}
                         </Link>
@@ -661,41 +1019,11 @@ export function PerformanceExtendedInsights({
                         "—"
                       )}
                     </td>
-                    <td className="px-5 py-3 tabular-nums">
+                    <td className="px-5 py-3 text-right tabular-nums text-muted-foreground">
                       {row.paymentsCount ?? 0}
                     </td>
-                    <td className="px-5 py-3 font-semibold">
+                    <td className="px-5 py-3 text-right font-bold tabular-nums">
                       <MoneyPair block={row.collectionTotal} fallback="₹0" />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </Surface>
-      ) : null}
-
-      {trend.length > 0 ? (
-        <Surface title="Daily collection trend" description="IST calendar days">
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[320px] text-sm">
-              <thead>
-                <tr className="border-b bg-[#faf7f5] text-left text-xs uppercase tracking-wide text-muted-foreground">
-                  <th className="px-5 py-3">Date</th>
-                  <th className="px-5 py-3">Payments</th>
-                  <th className="px-5 py-3">Amount</th>
-                </tr>
-              </thead>
-              <tbody>
-                {trend.map((row) => (
-                  <tr
-                    key={String(row.date)}
-                    className="border-b border-[#f3ece8] last:border-0"
-                  >
-                    <td className="px-5 py-3 font-medium">{row.date ?? "—"}</td>
-                    <td className="px-5 py-3 tabular-nums">{row.count ?? 0}</td>
-                    <td className="px-5 py-3 font-semibold">
-                      <MoneyPair block={row.amount} fallback="₹0" />
                     </td>
                   </tr>
                 ))}

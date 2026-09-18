@@ -5,6 +5,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useState,
   type ReactNode,
 } from "react";
 import { useResolveTenantQuery } from "@/src/store/api/customer-api";
@@ -24,6 +25,7 @@ type CustomerTenantContextValue = {
     appDisplayName?: string;
     logoUrl?: string | null;
     primaryColor?: string;
+    accentColor?: string;
     kycMandatory?: boolean;
     customerSelfRegistration?: boolean;
     customerSelfEnrol?: boolean;
@@ -41,14 +43,23 @@ const CustomerTenantContext = createContext<CustomerTenantContextValue | null>(
   null,
 );
 
-function resolveSlug(initial: string | null): string | null {
-  if (initial) return initial;
-  if (typeof window !== "undefined") {
-    const stored = localStorage.getItem(CUSTOMER_TENANT_SLUG_STORAGE_KEY);
-    if (stored) return stored;
+function normalizeHexColor(value: string | undefined, fallback: string): string {
+  if (!value) return fallback;
+  const hex = value.trim();
+  if (/^#[0-9A-Fa-f]{6}$/.test(hex)) return hex.toUpperCase();
+  if (/^#[0-9A-Fa-f]{3}$/.test(hex)) {
+    const [, r, g, b] = hex;
+    return `#${r}${r}${g}${g}${b}${b}`.toUpperCase();
   }
-  if (env.customerTenantCode) return tenantCodeToSlug(env.customerTenantCode);
-  return null;
+  return fallback;
+}
+
+function hexToRgb(value: string): string {
+  const clean = value.replace("#", "");
+  const r = Number.parseInt(clean.slice(0, 2), 16);
+  const g = Number.parseInt(clean.slice(2, 4), 16);
+  const b = Number.parseInt(clean.slice(4, 6), 16);
+  return `${r}, ${g}, ${b}`;
 }
 
 export function CustomerTenantProvider({
@@ -58,7 +69,24 @@ export function CustomerTenantProvider({
   tenantSlug: string | null;
   children: ReactNode;
 }) {
-  const tenantSlug = resolveSlug(initialSlug);
+  const fallbackSlug = env.customerTenantCode
+    ? tenantCodeToSlug(env.customerTenantCode)
+    : null;
+  const [tenantSlug, setTenantSlug] = useState(initialSlug ?? fallbackSlug);
+
+  useEffect(() => {
+    if (initialSlug) {
+      setTenantSlug(initialSlug);
+      return;
+    }
+    const stored = localStorage.getItem(CUSTOMER_TENANT_SLUG_STORAGE_KEY);
+    if (stored) {
+      setTenantSlug(stored);
+      return;
+    }
+    setTenantSlug(fallbackSlug);
+  }, [initialSlug, fallbackSlug]);
+
   const tenantCode = tenantSlug ? tenantSlugToCode(tenantSlug) : env.customerTenantCode;
 
   const { data, isLoading, isError } = useResolveTenantQuery(
@@ -68,11 +96,23 @@ export function CustomerTenantProvider({
 
   const tenant = data?.tenants?.[0] ?? null;
 
+  const themePrimary = normalizeHexColor(tenant?.primaryColor, "#730321");
+  const themeAccent = normalizeHexColor(tenant?.accentColor, "#C9A227");
+
   useEffect(() => {
     if (tenantSlug && typeof window !== "undefined") {
       localStorage.setItem(CUSTOMER_TENANT_SLUG_STORAGE_KEY, tenantSlug);
     }
   }, [tenantSlug]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const root = document.documentElement;
+    root.style.setProperty("--customer-primary", themePrimary);
+    root.style.setProperty("--customer-primary-rgb", hexToRgb(themePrimary));
+    root.style.setProperty("--customer-accent", themeAccent);
+    root.style.setProperty("--customer-accent-rgb", hexToRgb(themeAccent));
+  }, [themePrimary, themeAccent]);
 
   const value = useMemo(
     (): CustomerTenantContextValue => ({
@@ -85,6 +125,7 @@ export function CustomerTenantProvider({
             appDisplayName: tenant.appDisplayName,
             logoUrl: tenant.logoUrl,
             primaryColor: tenant.primaryColor,
+            accentColor: tenant.accentColor,
             kycMandatory: tenant.kycMandatory,
             customerSelfRegistration: tenant.customerSelfRegistration,
             customerSelfEnrol: tenant.customerSelfEnrol,

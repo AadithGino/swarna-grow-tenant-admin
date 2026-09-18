@@ -55,18 +55,50 @@ export function CustomerShell({ children }: { children: React.ReactNode }) {
           <Link href={homeHref} aria-label="Customer home" className="min-w-0"><CustomerBrand /></Link>
           <nav className="ml-auto hidden items-center gap-1 lg:flex" aria-label="Customer navigation">
             {navigation.slice(0, 4).map((item) => (
-              <Link key={item.href} href={item.href} className={cn("rounded-xl px-4 py-2.5 text-sm font-bold transition", active(item) ? "bg-[#f7edf0] text-[#730321]" : "text-[#6f6b78] hover:bg-[#f6f2ee] hover:text-[#171722]")}>
+              <Link
+                key={item.href}
+                href={item.href}
+                className={cn(
+                  "rounded-xl px-4 py-2.5 text-sm font-bold transition",
+                  active(item) ? "text-[var(--customer-primary,#730321)]" : "text-[#6f6b78] hover:bg-[#f6f2ee] hover:text-[#171722]",
+                )}
+                style={active(item) ? { background: "rgba(var(--customer-primary-rgb, 115, 3, 33), 0.08)" } : undefined}
+              >
                 {item.label}
               </Link>
             ))}
-            {customerSelfEnrol && customerAppWriteEnabled ? <Link href={customerPath(tenantSlug, "plans")} className="ml-1 inline-flex items-center gap-2 rounded-xl border border-[#eadfda] px-4 py-2.5 text-sm font-bold text-[#730321] hover:bg-[#fff7e5]"><Sparkles className="size-4 text-[#a47316]" />Explore plans</Link> : null}
+            {customerSelfEnrol && customerAppWriteEnabled ? (
+              <Link
+                href={customerPath(tenantSlug, "plans")}
+                className="ml-1 inline-flex items-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-bold hover:bg-[#fff7e5]"
+                style={{
+                  borderColor: "rgba(var(--customer-primary-rgb, 115, 3, 33), 0.18)",
+                  color: "var(--customer-primary, #730321)",
+                }}
+              >
+                <Sparkles className="size-4" style={{ color: "var(--customer-accent, #a47316)" }} />
+                Explore plans
+              </Link>
+            ) : null}
           </nav>
           <div className="ml-auto flex items-center gap-2 lg:ml-4">
-            <Link href={customerPath(tenantSlug, "notifications")} aria-label={`${unread} unread notifications`} className="relative grid size-11 place-items-center rounded-full border border-[#e5ddd7] bg-white text-[#171722] transition hover:border-[#cdbdb5]">
+            <Link
+              href={customerPath(tenantSlug, "notifications")}
+              aria-label={`${unread} unread notifications`}
+              className="relative grid size-11 place-items-center rounded-full border bg-white text-[#171722] transition"
+              style={{ borderColor: "rgba(var(--customer-primary-rgb, 115, 3, 33), 0.18)" }}
+            >
               <Bell className="size-[1.35rem]" />
               {unread > 0 ? <span className="absolute right-1.5 top-1.5 size-2.5 rounded-full bg-[#ef394e] ring-2 ring-white" /> : null}
             </Link>
-            <Link href={customerPath(tenantSlug, "profile")} aria-label="Profile" className="grid size-11 place-items-center rounded-full bg-[#730321] text-sm font-black text-white shadow-sm">{initials}</Link>
+            <Link
+              href={customerPath(tenantSlug, "profile")}
+              aria-label="Profile"
+              className="grid size-11 place-items-center rounded-full text-sm font-black text-white shadow-sm"
+              style={{ background: "var(--customer-primary, #730321)" }}
+            >
+              {initials}
+            </Link>
           </div>
         </div>
       </header>
@@ -85,15 +117,34 @@ export function CustomerShell({ children }: { children: React.ReactNode }) {
       <nav className="customer-bottom-safe fixed inset-x-0 bottom-0 z-40 border-t border-[#e8dfd9] bg-[#fffefd]/97 px-2 pt-2 shadow-[0_-12px_36px_rgba(64,32,40,.08)] backdrop-blur-xl lg:hidden" aria-label="Primary navigation">
         <div className="mx-auto grid max-w-lg grid-cols-5">
           {navigation.map((item) => (
-            <Link key={item.href} href={item.href} className={cn("flex min-w-0 flex-col items-center gap-1 rounded-xl py-1.5 text-[0.68rem] font-semibold transition", active(item) ? "text-[#730321]" : "text-[#817b84]")}>
-              <span className={cn("grid size-9 place-items-center rounded-full", active(item) && "bg-[#fff0c8]")}><item.icon className="size-[1.35rem]" strokeWidth={active(item) ? 2.3 : 2} /></span>
+            <Link
+              key={item.href}
+              href={item.href}
+              className={cn("flex min-w-0 flex-col items-center gap-1 rounded-xl py-1.5 text-[0.68rem] font-semibold transition")}
+              style={{ color: active(item) ? "var(--customer-primary, #730321)" : "#817b84" }}
+            >
+              <span
+                className="grid size-9 place-items-center rounded-full"
+                style={active(item) ? { background: "rgba(var(--customer-accent-rgb, 201, 162, 39), 0.24)" } : undefined}
+              >
+                <item.icon className="size-[1.35rem]" strokeWidth={active(item) ? 2.3 : 2} />
+              </span>
               <span className="truncate">{item.label}</span>
             </Link>
           ))}
         </div>
       </nav>
 
-      <button type="button" onClick={signOut} className="fixed bottom-5 right-5 z-20 hidden items-center gap-2 rounded-full border bg-white px-4 py-2 text-xs font-bold text-[#706b77] shadow-sm xl:flex" aria-label="Sign out"><LogOut className="size-4" />Sign out</button>
+      <button
+        type="button"
+        onClick={signOut}
+        className="fixed bottom-5 right-5 z-20 hidden items-center gap-2 rounded-full border bg-white px-4 py-2 text-xs font-bold text-[#706b77] shadow-sm xl:flex"
+        style={{ borderColor: "rgba(var(--customer-primary-rgb, 115, 3, 33), 0.18)" }}
+        aria-label="Sign out"
+      >
+        <LogOut className="size-4" />
+        Sign out
+      </button>
     </div>
   );
 }

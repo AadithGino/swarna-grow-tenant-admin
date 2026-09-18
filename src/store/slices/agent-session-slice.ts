@@ -1,8 +1,8 @@
 import { createSlice, type PayloadAction } from "@reduxjs/toolkit";
 import {
   clearAgentTokens,
-  persistAgentTokens,
   TOKEN_KEYS,
+  writeAgentTokenStorage,
   type StoredTokens,
 } from "@/src/lib/auth-token-storage";
 import type { AgentSession } from "@/src/types/agent";
@@ -30,13 +30,19 @@ const agentSessionSlice = createSlice({
     hydrateAgentSession(state) {
       state.session = readStored();
       state.hydrated = true;
+      if (typeof window !== "undefined" && state.session?.accessToken) {
+        writeAgentTokenStorage(
+          state.session.accessToken,
+          state.session.refreshToken,
+        );
+      }
     },
     setAgentSession(state, action: PayloadAction<AgentSession>) {
       state.session = action.payload;
       state.hydrated = true;
       if (typeof window !== "undefined") {
         localStorage.setItem(AGENT_SESSION_KEY, JSON.stringify(action.payload));
-        persistAgentTokens(
+        writeAgentTokenStorage(
           action.payload.accessToken,
           action.payload.refreshToken,
         );

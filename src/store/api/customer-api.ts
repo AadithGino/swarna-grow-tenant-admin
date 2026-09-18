@@ -24,13 +24,20 @@ import type {
   SchemeCard,
   SchemePlan,
 } from "@/src/types/customer";
-import { handleCustomerUnauthorized } from "@/src/lib/auth-logout";
 import {
-  persistCustomerTokens,
-  readStoredRefreshToken,
+  handleCustomerUnauthorized,
+  isUnauthorizedFetchError,
+} from "@/src/lib/auth-logout";
+import {
   TOKEN_KEYS,
 } from "@/src/lib/auth-token-storage";
-import { parseRefreshTokens } from "@/src/lib/auth-tokens-from-refresh";
+import {
+  authRefreshGuard,
+  refreshAfterUnauthorized,
+  retryAuthorizedRequest,
+  shouldAttemptAuthRefresh,
+  shouldForceAuthLogout,
+} from "@/src/lib/auth-base-query-refresh";
 import { newIdempotencyKey } from "@/src/lib/idempotency";
 import type { AppDispatch } from "@/src/store";
 import { adaptCustomerSchemePlan, adaptCustomerSchemePlanList } from "@/src/lib/customer-plan-adapter";
@@ -39,6 +46,11 @@ import {
   adaptCustomerPaymentList,
   adaptCustomerSchemeDetail,
 } from "@/src/lib/customer-payment-adapter";
+import {
+  adaptCustomerPaymentPoll,
+  type CustomerPaymentPollResult,
+} from "@/src/lib/customer-payment-poll";
+import { readCustomerPaymentSession } from "@/src/lib/customer-payment-session";
 
 type ApiEnvelope<T> = { success: true; data: T; meta?: { nextCursor: string | null; hasMore: boolean; limit: number; total: number } };
 
@@ -182,6 +194,16 @@ const mockBaseQuery: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQueryErro
       downloadUrl: "https://picsum.photos/seed/swarnagrow-upload/1200/800",
     });
   }
+  const publicUploadGet = url.match(/^\/public\/uploads\/([^/]+)$/);
+  if (publicUploadGet && method === "GET") {
+    return ok({
+      uploadId: publicUploadGet[1],
+      status: "UPLOADED",
+      fileName: "logo.png",
+      contentType: "image/png",
+      downloadUrl: "https://picsum.photos/seed/swarnagrow-logo/480/480",
+    });
+  }
   if (url === "/app/scheme-plans") return ok(schemePlans);
   if (url.startsWith("/app/scheme-plans/")) return ok(schemePlans.find((p) => p.id === url.split("/").pop()) ?? schemePlans[0]);
   if (url === "/app/schemes") {
@@ -224,6 +246,47 @@ const mockBaseQuery: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQueryErro
     return ok({
       gatewayUrl: "https://mercury.phonepe.com/transact/pg?token=mock",
       paymentId: `pay_${Date.now()}`,
+    });
+  }
+  const publicPayStatus = url.match(/^\/public\/pay\/([^/]+)\/status$/);
+  if (publicPayStatus && method === "GET") {
+    const session = readCustomerPaymentSession();
+    const elapsed = session ? Date.now() - session.startedAt : 5000;
+    const paid = elapsed >= 2500;
+    return ok({
+      status: paid ? "PAID" : "PROCESSING",
+      processing: !paid,
+      paid,
+      failed: false,
+      retryAfterSeconds: paid ? null : 2,
+      receipt: paid
+        ? {
+            paymentId: "pay_mock",
+            receiptNumber: "RCP-MOCK-001",
+            paidAt: new Date().toISOString(),
+          }
+        : null,
+    });
+  }
+  const intentPoll = url.match(/^\/app\/payment-intents\/([^/]+)$/);
+  if (intentPoll && method === "GET") {
+    const session = readCustomerPaymentSession();
+    const elapsed = session ? Date.now() - session.startedAt : 5000;
+    const paid = elapsed >= 2500;
+    return ok({
+      id: intentPoll[1],
+      status: paid ? "PAID" : "PROCESSING",
+      processing: !paid,
+      paid,
+      failed: false,
+      retryAfterSeconds: paid ? null : 2,
+      receipt: paid
+        ? {
+            paymentId: "pay_mock",
+            receiptNumber: "RCP-MOCK-001",
+            paidAt: new Date().toISOString(),
+          }
+        : null,
     });
   }
   if (url === "/app/payments") return ok(customerPayments);
@@ -298,53 +361,33 @@ const dynamicBaseQuery: BaseQueryFn<
 > = async (args, api, extra) => {
   const requestArgs = env.useMocks ? args : withIdempotencyHeader(args);
   const url = routeOf(requestArgs);
-  const isAuthRefresh = url.includes("/app/auth/refresh");
-  const isPublicAuth = url.startsWith("/public/");
-  const alreadyRetried = Boolean(extra?._authRetry);
+  const guard = authRefreshGuard(url, extra, [
+    "/app/auth/refresh",
+    "/public/",
+  ]);
   const dispatch = api.dispatch as AppDispatch;
 
   let result = env.useMocks
     ? await mockBaseQuery(requestArgs, api, extra)
     : await liveBaseQuery(requestArgs, api, extra);
 
-  if (
-    !env.useMocks &&
-    result.error?.status === 401 &&
-    typeof window !== "undefined" &&
-    !isAuthRefresh &&
-    !isPublicAuth &&
-    !alreadyRetried
-  ) {
-    const refreshToken = readStoredRefreshToken("customer");
-    if (refreshToken) {
-      const refreshResult = await liveBaseQuery(
-        {
-          url: "/app/auth/refresh",
-          method: "POST",
-          body: { refreshToken },
-        },
+  if (shouldAttemptAuthRefresh(result.error, guard, env.useMocks)) {
+    const refreshed = await refreshAfterUnauthorized("customer", guard);
+    if (refreshed) {
+      result = await retryAuthorizedRequest(
+        liveBaseQuery,
+        requestArgs,
         api,
         extra,
       );
-      const tokens = parseRefreshTokens(refreshResult.data);
-      if (tokens?.accessToken) {
-        persistCustomerTokens(tokens.accessToken, tokens.refreshToken);
-        result = await liveBaseQuery(requestArgs, api, {
-          ...extra,
-          _authRetry: true,
-        });
-      } else {
-        handleCustomerUnauthorized(dispatch);
-      }
-    } else {
+    } else if (shouldForceAuthLogout("customer", true)) {
       handleCustomerUnauthorized(dispatch);
     }
   } else if (
     !env.useMocks &&
-    result.error?.status === 401 &&
-    typeof window !== "undefined" &&
-    !isAuthRefresh &&
-    !isPublicAuth
+    isUnauthorizedFetchError(result.error) &&
+    !guard.skipRefresh &&
+    shouldForceAuthLogout("customer", false)
   ) {
     handleCustomerUnauthorized(dispatch);
   }
@@ -444,6 +487,12 @@ export const customerApi = createApi({
     >({
       query: (uploadId) => `/app/uploads/${uploadId}`,
     }),
+    getPublicCustomerUploadDownload: builder.query<
+      { uploadId: string; status: string; fileName?: string | null; contentType?: string | null; downloadUrl: string },
+      string
+    >({
+      query: (uploadId) => `/public/uploads/${uploadId}`,
+    }),
     submitCustomerKyc: builder.mutation<
       CustomerProfile,
       { type: string; number?: string; numberMasked?: string; frontUploadId?: string; backUploadId?: string }
@@ -508,6 +557,14 @@ export const customerApi = createApi({
         method: "POST",
         body: { redirectUrl },
       }),
+    }),
+    pollCustomerPaymentIntent: builder.query<CustomerPaymentPollResult, string>({
+      query: (intentId) => `/app/payment-intents/${encodeURIComponent(intentId)}`,
+      transformResponse: (raw: unknown) => adaptCustomerPaymentPoll(raw),
+    }),
+    pollPublicPaymentLink: builder.query<CustomerPaymentPollResult, string>({
+      query: (linkToken) => `/public/pay/${encodeURIComponent(linkToken)}/status`,
+      transformResponse: (raw: unknown) => adaptCustomerPaymentPoll(raw),
     }),
     initiateCustomerPayment: builder.mutation<
       Record<string, unknown>,
@@ -586,10 +643,11 @@ export const customerApi = createApi({
 export const {
   useResolveTenantQuery, useRequestCustomerOtpMutation, useVerifyCustomerOtpMutation, useLoginCustomerPasswordMutation,
   useGetCustomerHomeQuery, useGetCustomerProfileQuery, useUpdateCustomerProfileMutation,
-  useCompleteCustomerProfileMutation, usePresignCustomerUploadMutation, useCompleteCustomerUploadMutation, useGetCustomerUploadDownloadQuery, useSubmitCustomerKycMutation,
+  useCompleteCustomerProfileMutation, usePresignCustomerUploadMutation, useCompleteCustomerUploadMutation, useGetCustomerUploadDownloadQuery, useGetPublicCustomerUploadDownloadQuery, useSubmitCustomerKycMutation,
   useUpdateCustomerNomineeMutation, useRemoveCustomerNomineeMutation,
   useGetCustomerPlansQuery, useGetCustomerPlanQuery, useGetCustomerSchemesQuery, useGetCustomerPastSchemesQuery, useGetCustomerSchemeQuery, useGetCustomerPayableRangeQuery, useLazyGetCustomerPayableRangeQuery,
   useEnrolCustomerSchemeMutation, useInitiateCustomerPaymentMutation, useInitiatePublicPaymentLinkMutation,
+  useLazyPollCustomerPaymentIntentQuery, useLazyPollPublicPaymentLinkQuery,
   useGetCustomerPaymentsQuery, useGetCustomerPaymentQuery,
   useGetCustomerNotificationsQuery, useMarkCustomerNotificationReadMutation, useMarkAllCustomerNotificationsReadMutation,
   useGetCustomerGrievancesQuery, useGetCustomerGrievanceQuery, useCreateCustomerGrievanceMutation,

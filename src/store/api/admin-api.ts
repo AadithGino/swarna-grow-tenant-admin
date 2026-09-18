@@ -5,9 +5,18 @@ import type {
   FetchBaseQueryError,
 } from "@reduxjs/toolkit/query";
 import { env } from "@/src/config/env";
-import { handleTenantUnauthorized } from "@/src/lib/auth-logout";
+import {
+  handleTenantUnauthorized,
+  isUnauthorizedFetchError,
+} from "@/src/lib/auth-logout";
 import { storeAuthTokens } from "@/src/lib/auth-session";
-import { parseRefreshTokens } from "@/src/lib/auth-tokens-from-refresh";
+import {
+  authRefreshGuard,
+  refreshAfterUnauthorized,
+  retryAuthorizedRequest,
+  shouldAttemptAuthRefresh,
+  shouldForceAuthLogout,
+} from "@/src/lib/auth-base-query-refresh";
 import type { AppDispatch } from "@/src/store";
 import {
   fetchAuthorizedBlob,
@@ -344,48 +353,30 @@ const appBaseQuery = (async (args, api, extraOptions) => {
   let result = await rawBaseQuery(requestArgs, api, extraOptions);
 
   const requestUrl = typeof requestArgs.url === "string" ? requestArgs.url : "";
-  const isAuthRefresh = requestUrl.includes("/auth/refresh");
-  const isAuthLogin =
-    requestUrl.includes("/auth/login") || requestUrl.includes("/auth/otp");
-  const alreadyRetried = Boolean(extraOptions?._authRetry);
+  const guard = authRefreshGuard(requestUrl, extraOptions, [
+    "/auth/refresh",
+    "/auth/login",
+    "/auth/otp",
+  ]);
   const dispatch = api.dispatch as AppDispatch;
 
-  if (
-    result.error?.status === 401 &&
-    typeof window !== "undefined" &&
-    !isAuthRefresh &&
-    !isAuthLogin &&
-    !alreadyRetried
-  ) {
-    const refreshToken = localStorage.getItem("swarnagrow.refreshToken");
-    if (refreshToken) {
-      const refreshResult = await rawBaseQuery(
-        {
-          url: "/auth/refresh",
-          method: "POST",
-          body: { refreshToken },
-        },
+  if (shouldAttemptAuthRefresh(result.error, guard, env.useMocks)) {
+    const refreshed = await refreshAfterUnauthorized("tenant", guard);
+    if (refreshed) {
+      result = await retryAuthorizedRequest(
+        rawBaseQuery,
+        requestArgs,
         api,
         extraOptions,
       );
-      const tokens = parseRefreshTokens(refreshResult.data);
-      if (tokens?.accessToken) {
-        storeAuthTokens(tokens.accessToken, tokens.refreshToken);
-        result = await rawBaseQuery(requestArgs, api, {
-          ...extraOptions,
-          _authRetry: true,
-        });
-      } else {
-        handleTenantUnauthorized(dispatch);
-      }
-    } else {
+    } else if (shouldForceAuthLogout("tenant", true)) {
       handleTenantUnauthorized(dispatch);
     }
   } else if (
-    result.error?.status === 401 &&
-    typeof window !== "undefined" &&
-    !isAuthRefresh &&
-    !isAuthLogin
+    !env.useMocks &&
+    isUnauthorizedFetchError(result.error) &&
+    !guard.skipRefresh &&
+    shouldForceAuthLogout("tenant", false)
   ) {
     handleTenantUnauthorized(dispatch);
   }
@@ -2449,10 +2440,18 @@ export const adminApi = createApi({
     getStaffPerformanceSummary: builder.query<
       {
         range?: { from?: string; to?: string };
+        trendGroupBy?: "DAY" | "WEEK" | "MONTH" | "YEAR" | string;
         collectionTotal?: { amountDisplay?: string; amountPaise?: number };
+        averageTicket?: { amountDisplay?: string; amountPaise?: number };
         enrolments?: number;
         customersServed?: number;
         paymentsCount?: number;
+        collectionTrend?: Array<{
+          date?: string;
+          label?: string;
+          count?: number;
+          amount?: { amountDisplay?: string; amountPaise?: number };
+        }>;
         cash?: Record<string, unknown>;
       },
       { staffId: string; from?: string; to?: string }
@@ -2582,10 +2581,18 @@ export const adminApi = createApi({
     getBranchPerformanceSummary: builder.query<
       {
         range?: { from?: string; to?: string };
+        trendGroupBy?: "DAY" | "WEEK" | "MONTH" | "YEAR" | string;
         collectionTotal?: { amountDisplay?: string; amountPaise?: number };
+        averageTicket?: { amountDisplay?: string; amountPaise?: number };
         enrolments?: number;
         customersServed?: number;
         paymentsCount?: number;
+        collectionTrend?: Array<{
+          date?: string;
+          label?: string;
+          count?: number;
+          amount?: { amountDisplay?: string; amountPaise?: number };
+        }>;
         cash?: Record<string, unknown>;
       },
       { branchId: string; from?: string; to?: string }

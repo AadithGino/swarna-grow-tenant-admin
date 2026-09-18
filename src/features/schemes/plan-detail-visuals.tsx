@@ -903,6 +903,12 @@ export function PlanTermsPanel({
 
 /* ─── Rules ───────────────────────────────────────────────────────── */
 
+export type PlanRuleSection = {
+  id: string;
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+};
+
 export function PlanRuleCard({
   id,
   icon: Icon,
@@ -912,6 +918,8 @@ export function PlanRuleCard({
   badges,
   entries,
   children,
+  sectionIndex,
+  sectionTotal,
 }: {
   id: string;
   icon: React.ComponentType<{ className?: string }>;
@@ -921,38 +929,57 @@ export function PlanRuleCard({
   badges?: React.ReactNode;
   entries?: FieldEntry[];
   children?: React.ReactNode;
+  sectionIndex?: number;
+  sectionTotal?: number;
 }) {
   return (
-    <section id={id} className="scroll-mt-28 rounded-2xl border border-[#e4d7d2] bg-white shadow-sm">
-      <div className="flex items-start gap-4 border-b border-[#eaded9] px-5 py-4">
-        <div className="grid size-11 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-[#f7ecee] to-white text-[#7b0a2b] ring-1 ring-[#eaded9]">
-          <Icon className="size-5" />
-        </div>
-        <div className="min-w-0 flex-1">
-          <h3 className="text-lg font-bold text-[#2d191d]">{title}</h3>
-          {description ? (
-            <p className="mt-0.5 text-sm text-muted-foreground">{description}</p>
-          ) : null}
-          {badges ? <div className="mt-3 flex flex-wrap gap-2">{badges}</div> : null}
+    <section
+      id={id}
+      className="overflow-hidden rounded-2xl border border-[#e4d7d2] bg-white shadow-sm"
+    >
+      <div className="border-b border-[#eaded9] bg-gradient-to-r from-[#faf7f5] to-white px-5 py-5 sm:px-6">
+        <div className="flex items-start gap-4">
+          <div className="grid size-12 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-[#730321] to-[#9a1a3d] text-white shadow-sm">
+            <Icon className="size-5" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              <h3 className="text-xl font-bold tracking-tight text-[#2d191d]">{title}</h3>
+              {sectionIndex != null && sectionTotal != null ? (
+                <span className="rounded-full bg-[#f3ecee] px-2.5 py-0.5 text-xs font-semibold text-[#730321]">
+                  {sectionIndex} of {sectionTotal}
+                </span>
+              ) : null}
+            </div>
+            {description ? (
+              <p className="mt-1 max-w-2xl text-sm leading-relaxed text-muted-foreground">
+                {description}
+              </p>
+            ) : null}
+            {badges ? <div className="mt-3 flex flex-wrap gap-2">{badges}</div> : null}
+          </div>
         </div>
       </div>
-      <div className="p-5">
+      <div className="p-5 sm:p-6">
         {highlight ? (
-          <p className="mb-4 rounded-xl bg-gradient-to-r from-[#f7ecee] to-white px-4 py-3 text-sm font-bold text-[#730321] ring-1 ring-[#eaded9]">
-            {highlight}
-          </p>
+          <div className="mb-5 flex items-start gap-3 rounded-2xl border border-[#eaded9] bg-gradient-to-r from-[#f7ecee] via-white to-[#faf7f5] px-4 py-3.5">
+            <Sparkles className="mt-0.5 size-4 shrink-0 text-[#730321]" />
+            <p className="text-sm font-semibold leading-relaxed text-[#730321]">{highlight}</p>
+          </div>
         ) : null}
         {entries?.length ? (
-          <dl className="grid gap-4 sm:grid-cols-2">
+          <dl className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
             {entries.map((e) => (
               <div
                 key={e.label}
-                className="rounded-xl border border-[#e4d7d2]/80 bg-[#faf7f5]/50 px-4 py-3"
+                className="group rounded-xl border border-[#e4d7d2]/90 bg-[#faf7f5]/60 px-4 py-3.5 transition hover:border-[#d4c4bf] hover:bg-white"
               >
-                <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                <dt className="text-[11px] font-bold uppercase tracking-wider text-[#9a8589]">
                   {e.label}
                 </dt>
-                <dd className="mt-1 font-semibold text-[#2d191d]">{e.value}</dd>
+                <dd className="mt-1.5 text-base font-semibold leading-snug text-[#2d191d]">
+                  {e.value}
+                </dd>
               </div>
             ))}
           </dl>
@@ -963,11 +990,46 @@ export function PlanRuleCard({
   );
 }
 
+function PlanRulesNavItem({
+  id,
+  label,
+  icon: Icon,
+  active,
+  onSelect,
+  compact,
+}: PlanRuleSection & {
+  active: boolean;
+  onSelect: (id: string) => void;
+  compact?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={() => onSelect(id)}
+      aria-current={active ? "true" : undefined}
+      className={cn(
+        "flex w-full items-center gap-2.5 rounded-xl text-left text-sm font-medium transition",
+        compact ? "shrink-0 px-3.5 py-2" : "px-3 py-2.5",
+        active
+          ? "bg-[#730321] text-white shadow-sm"
+          : "text-[#5c4a4e] hover:bg-white hover:text-[#730321]",
+      )}
+    >
+      <Icon className={cn("size-4 shrink-0", active ? "opacity-100" : "opacity-70")} />
+      <span className="truncate">{label}</span>
+    </button>
+  );
+}
+
 export function PlanRulesNav({
   sections,
+  activeId,
+  onSelect,
   className,
 }: {
-  sections: { id: string; label: string; icon: React.ComponentType<{ className?: string }> }[];
+  sections: PlanRuleSection[];
+  activeId: string;
+  onSelect: (id: string) => void;
   className?: string;
 }) {
   return (
@@ -978,22 +1040,87 @@ export function PlanRulesNav({
       )}
     >
       <p className="px-2 pb-2 text-xs font-bold uppercase tracking-wide text-[#9a6f2a]">
-        Jump to section
+        Rule categories
       </p>
       <ul className="space-y-1">
-        {sections.map(({ id, label, icon: Icon }) => (
-          <li key={id}>
-            <a
-              href={`#${id}`}
-              className="flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-medium text-[#5c4a4e] transition hover:bg-white hover:text-[#730321]"
-            >
-              <Icon className="size-4 shrink-0 opacity-70" />
-              {label}
-            </a>
+        {sections.map((section) => (
+          <li key={section.id}>
+            <PlanRulesNavItem {...section} active={section.id === activeId} onSelect={onSelect} />
           </li>
         ))}
       </ul>
     </nav>
+  );
+}
+
+export function PlanRulesWorkspace({
+  sections,
+  activeId,
+  onSelect,
+  children,
+}: {
+  sections: PlanRuleSection[];
+  activeId: string;
+  onSelect: (id: string) => void;
+  children: React.ReactNode;
+}) {
+  const activeIndex = sections.findIndex((section) => section.id === activeId);
+
+  return (
+    <div className="flex flex-col gap-5 p-4 sm:p-5 xl:flex-row xl:gap-6">
+      <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 xl:hidden">
+        {sections.map((section) => (
+          <PlanRulesNavItem
+            key={section.id}
+            {...section}
+            active={section.id === activeId}
+            onSelect={onSelect}
+            compact
+          />
+        ))}
+      </div>
+
+      <PlanRulesNav
+        sections={sections}
+        activeId={activeId}
+        onSelect={onSelect}
+        className="hidden w-[220px] shrink-0 xl:sticky xl:top-4 xl:block xl:self-start"
+      />
+
+      <div className="min-w-0 flex-1">
+        <div
+          key={activeId}
+          className="animate-in fade-in-0 slide-in-from-right-2 duration-200"
+        >
+          {children}
+        </div>
+        {activeIndex >= 0 && sections.length > 1 ? (
+          <div className="mt-4 flex items-center justify-between gap-3 border-t border-[#eaded9] pt-4">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={activeIndex <= 0}
+              onClick={() => onSelect(sections[activeIndex - 1].id)}
+            >
+              Previous
+            </Button>
+            <p className="text-xs font-medium text-muted-foreground">
+              {activeIndex + 1} / {sections.length}
+            </p>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={activeIndex >= sections.length - 1}
+              onClick={() => onSelect(sections[activeIndex + 1].id)}
+            >
+              Next
+            </Button>
+          </div>
+        ) : null}
+      </div>
+    </div>
   );
 }
 

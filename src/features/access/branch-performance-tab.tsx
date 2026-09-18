@@ -2,21 +2,24 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { CursorPagination } from "@/src/components/common/cursor-pagination";
-import { FieldLabel, Surface } from "@/src/components/common/page-parts";
 import { PageSkeleton } from "@/src/components/common/query-state";
 import { StatusBadge } from "@/src/components/common/status-badge";
 import {
+  PageTab,
+  PageTabs,
+  PageTabsBar,
+  PageTabsPanel,
+} from "@/src/components/common/page-tabs";
+import {
+  BranchPerformanceOverview,
+  PerformanceDateRangeBar,
   PerformanceExtendedInsights,
   PerformanceHistoryTable,
-  StaffPerformanceSummaryBlock,
 } from "@/src/features/access/access-detail-visuals";
 import { MoneyPair } from "@/src/features/access/access-detail-parts";
 import { useCursorPagination } from "@/src/hooks/use-cursor-pagination";
 import { emptyPageMeta } from "@/src/lib/cursor-pagination";
-import { FormFieldError } from "@/src/components/common/form-field-error";
 import { validateListDateRange } from "@/src/lib/list-date-range";
 import {
   useGetBranchPerformanceSectionQuery,
@@ -51,6 +54,9 @@ function rangeLabel(from?: string, to?: string) {
   if (to) return `Until ${to}`;
   return "Current month";
 }
+
+const recordLinkClass =
+  "font-medium text-[#2d191d] hover:text-[#730321] hover:underline";
 
 type PerformanceCollectionRow = {
   paidAt?: string;
@@ -138,6 +144,7 @@ export function BranchPerformanceTab({ branchId }: { branchId: string }) {
   const handoversPage = handoversQuery.data?.page ?? emptyPageMeta();
 
   const cashControlHref = `/cash-control?branchId=${encodeURIComponent(branchId)}`;
+  const currentRangeLabel = rangeLabel(range.from, range.to);
 
   if (summaryQuery.isLoading && !summary) {
     return <PageSkeleton cards={4} />;
@@ -145,59 +152,32 @@ export function BranchPerformanceTab({ branchId }: { branchId: string }) {
 
   return (
     <div className="space-y-5">
-      <Surface
-        title="Date range"
-        description="Branch-wide collections, enrolments and cash handovers"
-      >
-        <div className="flex flex-col gap-4 p-6 sm:flex-row sm:flex-wrap sm:items-end">
-          <div>
-            <FieldLabel>From</FieldLabel>
-            <Input
-              type="date"
-              value={draftFrom}
-              onChange={(e) => setDraftFrom(e.target.value)}
-            />
-          </div>
-          <div>
-            <FieldLabel>To</FieldLabel>
-            <Input
-              type="date"
-              value={draftTo}
-              onChange={(e) => setDraftTo(e.target.value)}
-            />
-          </div>
-          <div className="space-y-1">
-            <Button
-              disabled={Boolean(applyRangeError)}
-              onClick={() => {
-                const err = validateListDateRange(draftFrom, draftTo);
-                if (err) return;
-                setRange({ from: draftFrom, to: draftTo });
-              }}
-            >
-              Apply
-            </Button>
-            <FormFieldError message={applyRangeError} />
-          </div>
-          <Button
-            variant="outline"
-            onClick={() => {
-              setDraftFrom(defaults.from);
-              setDraftTo(defaults.to);
-              setRange(defaults);
-            }}
-          >
-            This month
-          </Button>
-        </div>
-      </Surface>
+      <PerformanceDateRangeBar
+        draftFrom={draftFrom}
+        draftTo={draftTo}
+        rangeLabel={currentRangeLabel}
+        applyRangeError={applyRangeError}
+        onDraftFromChange={setDraftFrom}
+        onDraftToChange={setDraftTo}
+        onApply={() => {
+          const err = validateListDateRange(draftFrom, draftTo);
+          if (err) return;
+          setRange({ from: draftFrom, to: draftTo });
+        }}
+        onResetMonth={() => {
+          setDraftFrom(defaults.from);
+          setDraftTo(defaults.to);
+          setRange(defaults);
+        }}
+      />
 
-      <StaffPerformanceSummaryBlock
-        rangeLabel={rangeLabel(range.from, range.to)}
+      <BranchPerformanceOverview
+        rangeLabel={currentRangeLabel}
         collection={summary?.collectionTotal}
         enrolments={Number(summary?.enrolments ?? 0)}
         customersServed={Number(summary?.customersServed ?? 0)}
         paymentsCount={Number(summary?.paymentsCount ?? 0)}
+        averageTicket={summary?.averageTicket}
         cashInHand={summary?.cash?.cashInHand as { amountDisplay?: string }}
         cash={
           summary?.cash as {
@@ -215,177 +195,198 @@ export function BranchPerformanceTab({ branchId }: { branchId: string }) {
         variant="branch"
       />
 
-      <PerformanceHistoryTable
-        title="Collection history"
-        description={`Payments recorded at this branch · ${rangeLabel(range.from, range.to)}`}
-        emptyMessage="No collections in this date range."
-        isLoading={collectionsQuery.isLoading}
-        headers={[
-          "When",
-          "Receipt",
-          "Customer",
-          "Enrollment",
-          "Collected by",
-          "Mode",
-          "Source",
-          "Amount",
-        ]}
-        rows={collections.map((row) => [
-          formatWhen(row.paidAt as string),
-          <span key="r" className="font-mono text-xs">
-            {String(row.receiptNumber ?? "—")}
-          </span>,
-          (row.customer as { id?: string; name?: string })?.id ? (
-            <Link
-              key="c"
-              href={`/customers/${(row.customer as { id: string }).id}`}
-              className="text-[#730321] hover:underline"
-            >
-              {(row.customer as { name: string }).name}
-            </Link>
-          ) : (
-            ((row.customer as { name?: string })?.name ?? "—")
-          ),
-          (row.scheme as { id?: string; enrollmentNumber?: string })?.id ? (
-            <Link
-              key="enr"
-              href={`/enrollments/${(row.scheme as { id: string }).id}`}
-              className="font-mono text-xs text-[#730321] hover:underline"
-            >
-              {(row.scheme as { enrollmentNumber?: string }).enrollmentNumber ??
-                (row.scheme as { id: string }).id}
-            </Link>
-          ) : (
-            "—"
-          ),
-          (row.collectedBy as { name?: string })?.name ? (
-            <Link
-              key="s"
-              href={`/staff-branches/staff/${(row.collectedBy as { id: string }).id}`}
-              className="text-[#730321] hover:underline"
-            >
-              {(row.collectedBy as { name: string }).name}
-            </Link>
-          ) : (
-            "—"
-          ),
-          String(row.mode ?? "—").replace(/_/g, " "),
-          String((row as { source?: string }).source ?? "—").replace(/_/g, " "),
-          <MoneyPair key="a" block={row.amount as { amountDisplay?: string }} fallback="₹0" />,
-        ])}
-        footer={
-          <CursorPagination
-            page={collectionsPage}
-            pageIndex={collectionsPager.pageIndex}
-            rowCount={collections.length}
-            onNext={() =>
-              collectionsPager.goNext(collectionsPage.nextCursor)
+      <PageTabs defaultValue="collections" className="gap-0">
+        <PageTabsBar
+          sectionLabel="Activity history"
+          listVariant="detailSub"
+          className="h-auto w-full max-w-full flex-wrap"
+        >
+          <PageTab value="collections">Collections</PageTab>
+          <PageTab value="enrolments">Enrolments</PageTab>
+          <PageTab value="handovers">Cash handovers</PageTab>
+        </PageTabsBar>
+
+        <PageTabsPanel value="collections" flush>
+          <PerformanceHistoryTable
+            embedded
+            title="Collection history"
+            description={`Payments recorded at this branch · ${currentRangeLabel}`}
+            emptyMessage="No collections in this date range."
+            isLoading={collectionsQuery.isLoading}
+            headers={[
+              "When",
+              "Receipt",
+              "Customer",
+              "Enrollment",
+              "Collected by",
+              "Mode",
+              "Source",
+              "Amount",
+            ]}
+            rows={collections.map((row) => [
+              formatWhen(row.paidAt as string),
+              <span key="r" className="font-mono text-xs">
+                {String(row.receiptNumber ?? "—")}
+              </span>,
+              (row.customer as { id?: string; name?: string })?.id ? (
+                <Link
+                  key="c"
+                  href={`/customers/${(row.customer as { id: string }).id}`}
+                  className={recordLinkClass}
+                >
+                  {(row.customer as { name: string }).name}
+                </Link>
+              ) : (
+                ((row.customer as { name?: string })?.name ?? "—")
+              ),
+              (row.scheme as { id?: string; enrollmentNumber?: string })?.id ? (
+                <Link
+                  key="enr"
+                  href={`/enrollments/${(row.scheme as { id: string }).id}`}
+                  className={`font-mono text-xs ${recordLinkClass}`}
+                >
+                  {(row.scheme as { enrollmentNumber?: string }).enrollmentNumber ??
+                    (row.scheme as { id: string }).id}
+                </Link>
+              ) : (
+                "—"
+              ),
+              (row.collectedBy as { name?: string })?.name ? (
+                <Link
+                  key="s"
+                  href={`/staff-branches/staff/${(row.collectedBy as { id: string }).id}`}
+                  className={recordLinkClass}
+                >
+                  {(row.collectedBy as { name: string }).name}
+                </Link>
+              ) : (
+                "—"
+              ),
+              String(row.mode ?? "—").replace(/_/g, " "),
+              String((row as { source?: string }).source ?? "—").replace(/_/g, " "),
+              <MoneyPair key="a" block={row.amount as { amountDisplay?: string }} fallback="₹0" />,
+            ])}
+            footer={
+              <CursorPagination
+                page={collectionsPage}
+                pageIndex={collectionsPager.pageIndex}
+                rowCount={collections.length}
+                onNext={() =>
+                  collectionsPager.goNext(collectionsPage.nextCursor)
+                }
+                onPrevious={collectionsPager.goPrevious}
+                canPrevious={collectionsPager.canPrevious}
+              />
             }
-            onPrevious={collectionsPager.goPrevious}
-            canPrevious={collectionsPager.canPrevious}
           />
-        }
-      />
+        </PageTabsPanel>
 
-      <PerformanceHistoryTable
-        title="Enrolments"
-        description={`New schemes at this branch · ${rangeLabel(range.from, range.to)}`}
-        emptyMessage="No enrolments in this date range."
-        isLoading={enrolmentsQuery.isLoading}
-        headers={["When", "Enrollment #", "Customer", "Plan", "Status"]}
-        rows={enrolments.map((row) => [
-          formatWhen(row.createdAt as string),
-          row.id ? (
-            <Link
-              key="e"
-              href={`/enrollments/${row.id}`}
-              className="font-mono text-xs text-[#730321] hover:underline"
-            >
-              {String(row.enrollmentNumber ?? "—")}
-            </Link>
-          ) : (
-            <span key="e" className="font-mono text-xs">
-              {String(row.enrollmentNumber ?? "—")}
-            </span>
-          ),
-          (row.customer as { id?: string; name?: string })?.id ? (
-            <Link
-              key="c"
-              href={`/customers/${(row.customer as { id: string }).id}`}
-              className="text-[#730321] hover:underline"
-            >
-              {(row.customer as { name: string }).name}
-            </Link>
-          ) : (
-            ((row.customer as { name?: string })?.name ?? "—")
-          ),
-          row.plan
-            ? `${(row.plan as { name: string }).name}${
-                (row.plan as { code?: string }).code
-                  ? ` (${(row.plan as { code: string }).code})`
-                  : ""
-              }`
-            : "—",
-          <StatusBadge key="s" status={String(row.status ?? "—")} />,
-        ])}
-        footer={
-          <CursorPagination
-            page={enrolmentsPage}
-            pageIndex={enrolmentsPager.pageIndex}
-            rowCount={enrolments.length}
-            onNext={() => enrolmentsPager.goNext(enrolmentsPage.nextCursor)}
-            onPrevious={enrolmentsPager.goPrevious}
-            canPrevious={enrolmentsPager.canPrevious}
+        <PageTabsPanel value="enrolments" flush>
+          <PerformanceHistoryTable
+            embedded
+            title="Enrolments"
+            description={`New schemes at this branch · ${currentRangeLabel}`}
+            emptyMessage="No enrolments in this date range."
+            isLoading={enrolmentsQuery.isLoading}
+            headers={["When", "Enrollment #", "Customer", "Plan", "Status"]}
+            rows={enrolments.map((row) => [
+              formatWhen(row.createdAt as string),
+              row.id ? (
+                <Link
+                  key="e"
+                  href={`/enrollments/${row.id}`}
+                  className={`font-mono text-xs ${recordLinkClass}`}
+                >
+                  {String(row.enrollmentNumber ?? "—")}
+                </Link>
+              ) : (
+                <span key="e" className="font-mono text-xs">
+                  {String(row.enrollmentNumber ?? "—")}
+                </span>
+              ),
+              (row.customer as { id?: string; name?: string })?.id ? (
+                <Link
+                  key="c"
+                  href={`/customers/${(row.customer as { id: string }).id}`}
+                  className={recordLinkClass}
+                >
+                  {(row.customer as { name: string }).name}
+                </Link>
+              ) : (
+                ((row.customer as { name?: string })?.name ?? "—")
+              ),
+              row.plan
+                ? `${(row.plan as { name: string }).name}${
+                    (row.plan as { code?: string }).code
+                      ? ` (${(row.plan as { code: string }).code})`
+                      : ""
+                  }`
+                : "—",
+              <StatusBadge key="s" status={String(row.status ?? "—")} />,
+            ])}
+            footer={
+              <CursorPagination
+                page={enrolmentsPage}
+                pageIndex={enrolmentsPager.pageIndex}
+                rowCount={enrolments.length}
+                onNext={() => enrolmentsPager.goNext(enrolmentsPage.nextCursor)}
+                onPrevious={enrolmentsPager.goPrevious}
+                canPrevious={enrolmentsPager.canPrevious}
+              />
+            }
           />
-        }
-      />
+        </PageTabsPanel>
 
-      <PerformanceHistoryTable
-        title="Cash submission history"
-        description={`Handovers from this branch · ${rangeLabel(range.from, range.to)}`}
-        emptyMessage="No cash handovers in this date range."
-        isLoading={handoversQuery.isLoading}
-        headers={[
-          "Submitted",
-          "Staff",
-          "Amount",
-          "Accepted",
-          "Status",
-          "Settled",
-        ]}
-        rows={handovers.map((row) => [
-          formatWhen(row.submittedAt as string),
-          (row.staff as { id?: string; name?: string })?.id ? (
-            <Link
-              key="st"
-              href={`/staff-branches/staff/${(row.staff as { id: string }).id}`}
-              className="text-[#730321] hover:underline"
-            >
-              {(row.staff as { name: string }).name}
-            </Link>
-          ) : (
-            ((row.staff as { name?: string })?.name ?? "—")
-          ),
-          <MoneyPair key="a" block={row.amount as { amountDisplay?: string }} fallback="₹0" />,
-          row.acceptedAmount ? (
-            <MoneyPair block={row.acceptedAmount as { amountDisplay?: string }} fallback="—" />
-          ) : (
-            "—"
-          ),
-          <StatusBadge key="s" status={String(row.status ?? "—")} />,
-          formatWhen(row.settledAt as string),
-        ])}
-        footer={
-          <CursorPagination
-            page={handoversPage}
-            pageIndex={handoversPager.pageIndex}
-            rowCount={handovers.length}
-            onNext={() => handoversPager.goNext(handoversPage.nextCursor)}
-            onPrevious={handoversPager.goPrevious}
-            canPrevious={handoversPager.canPrevious}
+        <PageTabsPanel value="handovers" flush>
+          <PerformanceHistoryTable
+            embedded
+            title="Cash submission history"
+            description={`Handovers from this branch · ${currentRangeLabel}`}
+            emptyMessage="No cash handovers in this date range."
+            isLoading={handoversQuery.isLoading}
+            headers={[
+              "Submitted",
+              "Staff",
+              "Amount",
+              "Accepted",
+              "Status",
+              "Settled",
+            ]}
+            rows={handovers.map((row) => [
+              formatWhen(row.submittedAt as string),
+              (row.staff as { id?: string; name?: string })?.id ? (
+                <Link
+                  key="st"
+                  href={`/staff-branches/staff/${(row.staff as { id: string }).id}`}
+                  className={recordLinkClass}
+                >
+                  {(row.staff as { name: string }).name}
+                </Link>
+              ) : (
+                ((row.staff as { name?: string })?.name ?? "—")
+              ),
+              <MoneyPair key="a" block={row.amount as { amountDisplay?: string }} fallback="₹0" />,
+              row.acceptedAmount ? (
+                <MoneyPair block={row.acceptedAmount as { amountDisplay?: string }} fallback="—" />
+              ) : (
+                "—"
+              ),
+              <StatusBadge key="s" status={String(row.status ?? "—")} />,
+              formatWhen(row.settledAt as string),
+            ])}
+            footer={
+              <CursorPagination
+                page={handoversPage}
+                pageIndex={handoversPager.pageIndex}
+                rowCount={handovers.length}
+                onNext={() => handoversPager.goNext(handoversPage.nextCursor)}
+                onPrevious={handoversPager.goPrevious}
+                canPrevious={handoversPager.canPrevious}
+              />
+            }
           />
-        }
-      />
+        </PageTabsPanel>
+      </PageTabs>
     </div>
   );
 }

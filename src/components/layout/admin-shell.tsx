@@ -265,17 +265,6 @@ function Sidebar({ mobile = false }: { mobile?: boolean }) {
         </Button>
       )}
       <Navigation compact={collapsed} mobile={mobile} />
-      {!collapsed && (
-        <div className="border-t border-white/20 p-3">
-          <div className="text-[0.65rem] uppercase tracking-[0.12em] text-[#c59a9f]">
-            Viewing as
-          </div>
-          <div className="mt-2 flex h-11 items-center justify-between rounded-xl border border-white/35 bg-white/10 px-3 text-sm text-white">
-            <span>Tenant admin</span>
-            <ChevronDown className="size-4 opacity-60" />
-          </div>
-        </div>
-      )}
     </aside>
   );
 }

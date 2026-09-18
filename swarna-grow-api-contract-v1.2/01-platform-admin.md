@@ -296,7 +296,7 @@ Returns the full tenant record: profile, branding, subscription, provisioning st
     },
     "integrations": {
       "whatsapp": { "configured": true, "provider": "GUPSHUP", "phoneNumberDisplay": "+91 98465 43211", "wabaIdMasked": "•••• 8821", "lastVerifiedAt": "2026-09-01T10:00:00+05:30" },
-      "paymentGateway": { "configured": true, "provider": "PHONEPE", "merchantIdMasked": "SREE••••PE", "lastVerifiedAt": "2026-09-01T10:02:00+05:30" }
+      "paymentGateway": { "configured": true, "clientCredentialsConfigured": true, "provider": "PHONEPE", "clientIdMasked": "SREE••••SDK", "environment": "PRODUCTION", "verificationStatus": "VERIFIED", "lastVerifiedAt": "2026-09-01T10:02:00+05:30" }
     },
     "templates": { "configured": 7, "required": 8, "missing": ["SCHEME_CLOSED"] },
     "usage": {
@@ -385,14 +385,33 @@ Credentials are write-only. They are never returned in plaintext after being set
 ```
 
 **`PUT .../integrations/payment-gateway`**
+
+PhonePe uses OAuth-style SDK credentials (Developer Settings → API Keys). Webhook username/password are configured in PhonePe → Webhooks and must match the values saved here. Each tenant needs the webhook URL `{PUBLIC_BASE_URL}/api/v1/webhooks/phonepe/{tenantId}` registered once in their PhonePe dashboard.
+
 ```json
 {
   "provider": "PHONEPE",
-  "merchantId": "SREEGOLDONLINE",
-  "saltKey": "0a1b2c3d-4e5f-6789-abcd-ef0123456789",
-  "saltIndex": 1,
-  "environment": "PRODUCTION",
-  "callbackUrlOverride": null
+  "clientId": "CLIENT_ID_FROM_PHONEPE_DASHBOARD",
+  "clientSecret": "CLIENT_SECRET_FROM_PHONEPE_DASHBOARD",
+  "clientVersion": 1,
+  "webhookUsername": "swarnagrow-webhook-user",
+  "webhookPassword": "strong-random-password",
+  "environment": "SANDBOX"
+}
+```
+
+```json
+{
+  "success": true,
+  "data": {
+    "configured": true,
+    "clientCredentialsConfigured": true,
+    "provider": "PHONEPE",
+    "clientIdMasked": "CLIE••••SDK",
+    "environment": "SANDBOX",
+    "verificationStatus": "NOT_VERIFIED",
+    "lastVerifiedAt": null
+  }
 }
 ```
 

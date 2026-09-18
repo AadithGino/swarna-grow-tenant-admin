@@ -112,6 +112,16 @@ export type PlatformTenantListResponse = {
 
 export type UsageMetric = { used: number; limit: number | null; percentage: number; resetDate?: string };
 
+export type PaymentGatewayIntegration = {
+  configured: boolean;
+  clientCredentialsConfigured?: boolean;
+  provider: string;
+  clientIdMasked?: string | null;
+  environment?: string;
+  verificationStatus: string;
+  lastVerifiedAt?: string | null;
+};
+
 export type PlatformTenantDetail = PlatformTenantRow & {
   ownerEmail?: string | null;
   gstin: string;
@@ -122,7 +132,7 @@ export type PlatformTenantDetail = PlatformTenantRow & {
   settings: Record<string, boolean>;
   integrations: {
     whatsapp: Record<string, unknown> & { configured: boolean; verificationStatus: string };
-    paymentGateway: Record<string, unknown> & { configured: boolean; verificationStatus: string };
+    paymentGateway: PaymentGatewayIntegration;
   };
   templates: { configured: number; required: number; missing: string[] };
   usageDetail: Record<string, UsageMetric>;

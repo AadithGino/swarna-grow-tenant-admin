@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
 import {
-  Building2,
   IndianRupee,
   MapPin,
   Pencil,
@@ -29,12 +28,7 @@ import {
 } from "@/src/lib/access-form-validation";
 import { handleFormApiError } from "@/src/lib/form-api-error";
 import { PermissionGate } from "@/src/components/common/permission-gate";
-import {
-  FieldLabel,
-  PageHeader,
-  StatCard,
-  Surface,
-} from "@/src/components/common/page-parts";
+import { FieldLabel, PageHeader, Surface } from "@/src/components/common/page-parts";
 import {
   PageTab,
   PageTabs,
@@ -330,53 +324,6 @@ export function BranchDetailPage({ branchId }: { branchId: string }) {
         />
       ) : null}
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-        <StatCard
-          icon={UsersRound}
-          label="Active customers"
-          value={activeCustomers.toLocaleString("en-IN")}
-          detail="Enrolled at this branch"
-        />
-        <StatCard
-          icon={Building2}
-          label="Active schemes"
-          value={activeSchemes.toLocaleString("en-IN")}
-          detail="Open enrollments"
-          tone="cream"
-        />
-        <StatCard
-          icon={UsersRound}
-          label="Staff"
-          value={staffCount}
-          detail="Assigned to branch"
-          tone="wine"
-        />
-        <StatCard
-          icon={IndianRupee}
-          label="Collection this month"
-          value={
-            <MoneyPair
-              block={
-                stats?.collectionThisMonth as { amountDisplay?: string }
-              }
-            />
-          }
-          detail="Branch total"
-          tone="gold"
-        />
-        <StatCard
-          icon={IndianRupee}
-          label="Cash with staff"
-          value={
-            <MoneyPair
-              block={stats?.pendingCashInHand as { amountDisplay?: string }}
-            />
-          }
-          detail="Awaiting handover"
-          tone="red"
-        />
-      </div>
-
       <BranchDetailHero
         name={branchName}
         code={code}
@@ -387,14 +334,21 @@ export function BranchDetailPage({ branchId }: { branchId: string }) {
         isActive={isActive}
         staffCount={staffCount}
         activeCustomers={activeCustomers}
+        activeSchemes={activeSchemes}
+        collectionThisMonth={
+          stats?.collectionThisMonth as { amountDisplay?: string }
+        }
+        pendingCashInHand={
+          stats?.pendingCashInHand as { amountDisplay?: string }
+        }
       />
 
-      <Surface>
-        <div className="flex flex-col gap-5 p-6 lg:flex-row lg:items-center lg:justify-between">
+      <Surface className="overflow-hidden">
+        <div className="flex flex-col gap-4 border-b border-[#eaded9] bg-[#faf7f5]/60 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h2 className="font-bold text-[#1a1014]">Branch administration</h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Showroom profile, staff roster and deactivation rules
+            <p className="mt-0.5 text-sm text-muted-foreground">
+              Staff roster, cash control and deactivation
             </p>
           </div>
           <div className="flex flex-wrap gap-2">

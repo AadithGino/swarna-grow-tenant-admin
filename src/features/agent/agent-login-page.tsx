@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAgentLoginMutation } from "@/src/store/api/agent-api";
 import { useAppDispatch } from "@/src/store/hooks";
+import { persistAgentTokens } from "@/src/lib/auth-token-storage";
 import { setAgentSession } from "@/src/store/slices/agent-session-slice";
 import { env } from "@/src/config/env";
 import type { AgentTenantChoice } from "@/src/types/agent";
@@ -16,10 +17,27 @@ import {
   passwordPinReady,
   sanitizePasswordPinInput,
 } from "@/src/lib/password-validation";
+import { apiErrorMessage, parseApiError } from "@/src/lib/api-error";
 
 function tenantChoicesFromError(error: unknown): AgentTenantChoice[] {
-  const candidate = error as { data?: { error?: { code?: string; details?: { tenants?: AgentTenantChoice[] } } } };
-  return candidate?.data?.error?.code === "TENANT_SELECTION_REQUIRED" ? candidate.data.error.details?.tenants ?? [] : [];
+  if (parseApiError(error).code !== "TENANT_SELECTION_REQUIRED") return [];
+  const data = (error as { data?: Record<string, unknown> })?.data;
+  if (!data) return [];
+  const details =
+    (data.error as { details?: unknown } | undefined)?.details ?? data.details;
+  if (!details || typeof details !== "object" || Array.isArray(details)) return [];
+  const tenants = (details as { tenants?: AgentTenantChoice[] }).tenants;
+  return Array.isArray(tenants) ? tenants : [];
+}
+
+function isRequestAborted(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const row = error as { name?: string; message?: string; status?: unknown; error?: unknown };
+  return (
+    row.name === "AbortError" ||
+    row.message === "Aborted" ||
+    (row.status === "FETCH_ERROR" && row.error === "Aborted")
+  );
 }
 
 export function AgentLoginPage() {
@@ -51,12 +69,16 @@ export function AgentLoginPage() {
         displayName: result.user.tenantName ?? "Jewellery",
       };
       dispatch(setAgentSession({ ...result, selectedTenant: choice }));
+      persistAgentTokens(result.accessToken, result.refreshToken);
       toast.success(`Welcome to ${choice.displayName}`);
       router.replace("/agent");
     } catch (error) {
+      if (isRequestAborted(error)) return;
       const choices = tenantChoicesFromError(error);
       if (choices.length) { setTenants(choices); setSelectedTenant(null); return; }
-      toast.error("Login failed. Check your details and try again.");
+      toast.error(
+        apiErrorMessage(error, "Login failed. Check your details and try again."),
+      );
     }
   };
 

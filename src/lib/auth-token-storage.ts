@@ -87,7 +87,8 @@ export function clearTenantTokens() {
   localStorage.removeItem(TOKEN_KEYS.tenant.refresh);
 }
 
-export function persistPlatformTokens(
+/** Write platform token keys only — safe inside Redux reducers (no store listeners). */
+export function writePlatformTokenStorage(
   accessToken: string,
   refreshToken?: string,
 ) {
@@ -96,6 +97,14 @@ export function persistPlatformTokens(
   if (refreshToken) {
     localStorage.setItem(TOKEN_KEYS.platform.refresh, refreshToken);
   }
+}
+
+export function persistPlatformTokens(
+  accessToken: string,
+  refreshToken?: string,
+) {
+  if (typeof window === "undefined") return;
+  writePlatformTokenStorage(accessToken, refreshToken);
   emitTokens("platform", { accessToken, refreshToken });
 }
 
@@ -106,7 +115,8 @@ export function clearPlatformTokens() {
   localStorage.removeItem(TOKEN_KEYS.platform.user);
 }
 
-export function persistCustomerTokens(
+/** Write customer token keys only — safe inside Redux reducers (no store listeners). */
+export function writeCustomerTokenStorage(
   accessToken: string,
   refreshToken?: string,
 ) {
@@ -115,6 +125,14 @@ export function persistCustomerTokens(
   if (refreshToken) {
     localStorage.setItem(TOKEN_KEYS.customer.refresh, refreshToken);
   }
+}
+
+export function persistCustomerTokens(
+  accessToken: string,
+  refreshToken?: string,
+) {
+  if (typeof window === "undefined") return;
+  writeCustomerTokenStorage(accessToken, refreshToken);
   emitTokens("customer", { accessToken, refreshToken });
 }
 
@@ -124,7 +142,8 @@ export function clearCustomerTokens() {
   localStorage.removeItem(TOKEN_KEYS.customer.refresh);
 }
 
-export function persistAgentTokens(
+/** Write agent token keys only — safe inside Redux reducers (no store listeners). */
+export function writeAgentTokenStorage(
   accessToken: string,
   refreshToken?: string,
 ) {
@@ -133,6 +152,14 @@ export function persistAgentTokens(
   if (refreshToken) {
     localStorage.setItem(TOKEN_KEYS.agent.refresh, refreshToken);
   }
+}
+
+export function persistAgentTokens(
+  accessToken: string,
+  refreshToken?: string,
+) {
+  if (typeof window === "undefined") return;
+  writeAgentTokenStorage(accessToken, refreshToken);
   patchJsonSession(TOKEN_KEYS.agent.session, (session) => {
     session.accessToken = accessToken;
     if (refreshToken) session.refreshToken = refreshToken;
@@ -160,6 +187,17 @@ export function readStoredRefreshToken(realm: AuthRealm): string | null {
   return "refresh" in keys
     ? localStorage.getItem(keys.refresh)
     : null;
+}
+
+export function readStoredAccessToken(realm: AuthRealm): string | null {
+  if (typeof window === "undefined") return null;
+  return localStorage.getItem(TOKEN_KEYS[realm].access);
+}
+
+export function realmHasStoredSession(realm: AuthRealm): boolean {
+  return Boolean(
+    readStoredAccessToken(realm) || readStoredRefreshToken(realm),
+  );
 }
 
 /** Apply token updates from another tab's storage event. Returns realm if signed out. */

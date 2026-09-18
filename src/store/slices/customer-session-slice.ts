@@ -2,7 +2,8 @@ import { createSlice, type PayloadAction } from "@reduxjs/toolkit";
 import { env } from "@/src/config/env";
 import {
   clearCustomerTokens,
-  persistCustomerTokens,
+  TOKEN_KEYS,
+  writeCustomerTokenStorage,
 } from "@/src/lib/auth-token-storage";
 
 type CustomerSessionState = {
@@ -25,10 +26,29 @@ const initialState: CustomerSessionState = {
   tenantCode: env.useMocks ? "KAI" : undefined,
 };
 
+function hasStoredCustomerAuth(): boolean {
+  if (typeof window === "undefined") return false;
+  return Boolean(
+    localStorage.getItem(TOKEN_KEYS.customer.access) ||
+      localStorage.getItem(TOKEN_KEYS.customer.refresh),
+  );
+}
+
 const customerSessionSlice = createSlice({
   name: "customerSession",
   initialState,
   reducers: {
+    hydrateCustomerSession(state) {
+      if (env.useMocks) return;
+      if (hasStoredCustomerAuth()) {
+        state.authenticated = true;
+        const access = localStorage.getItem(TOKEN_KEYS.customer.access);
+        const refresh = localStorage.getItem(TOKEN_KEYS.customer.refresh);
+        if (access) {
+          writeCustomerTokenStorage(access, refresh ?? undefined);
+        }
+      }
+    },
     customerProfileCompleted(state) {
       state.profileComplete = true;
     },
@@ -61,7 +81,7 @@ const customerSessionSlice = createSlice({
       state.customerAppWriteEnabled = action.payload.customerAppWriteEnabled;
       state.customerAppPaymentsEnabled = action.payload.customerAppPaymentsEnabled;
       if (typeof window !== "undefined" && action.payload.accessToken) {
-        persistCustomerTokens(
+        writeCustomerTokenStorage(
           action.payload.accessToken,
           action.payload.refreshToken,
         );
@@ -85,5 +105,10 @@ const customerSessionSlice = createSlice({
   },
 });
 
-export const { customerSignedIn, customerSignedOut, customerProfileCompleted } = customerSessionSlice.actions;
+export const {
+  customerSignedIn,
+  customerSignedOut,
+  customerProfileCompleted,
+  hydrateCustomerSession,
+} = customerSessionSlice.actions;
 export default customerSessionSlice.reducer;
