@@ -435,10 +435,18 @@ const mockBaseQuery: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQueryErro
   if (url === "/staff/cash/handovers" && method === "GET") return ok(agentHandovers);
   if (url === "/staff/cash/handovers" && method === "POST") {
     const amountPaise = Number(body.amountPaise ?? 0);
-    if (amountPaise > agentCashSummary.cashInHandPaise) return { error: { status: 422, data: { success: false, error: { code: "CASH_HANDOVER_AMOUNT_EXCEEDS_BALANCE", message: "The handover exceeds your cash-in-hand balance.", details: { cashInHandPaise: agentCashSummary.cashInHandPaise } } } satisfies AgentError } };
+    const available =
+      agentCashSummary.availableForHandoverPaise ??
+      Math.max(0, agentCashSummary.cashInHandPaise - agentCashSummary.cashPendingAcceptancePaise);
+    if (amountPaise > available) return { error: { status: 422, data: { success: false, error: { code: "CASH_HANDOVER_AMOUNT_EXCEEDS_BALANCE", message: "The handover exceeds the amount available to submit.", details: { cashInHandPaise: agentCashSummary.cashInHandPaise, availableForHandoverPaise: available } } } satisfies AgentError } };
     const handover: AgentHandover = { id: `agt_ho_${Date.now()}`, amountPaise, status: "PENDING", initiator: "STAFF", remarks: body.remarks ? String(body.remarks) : undefined, submittedAt: new Date().toISOString(), settledAt: null };
     agentHandovers.unshift(handover);
-    updateMockCashSummary({ ...agentCashSummary, cashInHandPaise: agentCashSummary.cashInHandPaise - amountPaise, cashPendingAcceptancePaise: agentCashSummary.cashPendingAcceptancePaise + amountPaise });
+    const pending = agentCashSummary.cashPendingAcceptancePaise + amountPaise;
+    updateMockCashSummary({
+      ...agentCashSummary,
+      cashPendingAcceptancePaise: pending,
+      availableForHandoverPaise: Math.max(0, agentCashSummary.cashInHandPaise - pending),
+    });
     return ok(handover);
   }
   const handoverMatch = url.match(/^\/staff\/cash\/handovers\/([^/]+)$/);
@@ -449,7 +457,12 @@ const mockBaseQuery: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQueryErro
     if (handover?.status === "PENDING") {
       handover.status = "CANCELLED";
       handover.reason = "Cancelled by staff";
-      updateMockCashSummary({ ...agentCashSummary, cashInHandPaise: agentCashSummary.cashInHandPaise + handover.amountPaise, cashPendingAcceptancePaise: Math.max(0, agentCashSummary.cashPendingAcceptancePaise - handover.amountPaise) });
+      const pending = Math.max(0, agentCashSummary.cashPendingAcceptancePaise - handover.amountPaise);
+      updateMockCashSummary({
+        ...agentCashSummary,
+        cashPendingAcceptancePaise: pending,
+        availableForHandoverPaise: Math.max(0, agentCashSummary.cashInHandPaise - pending),
+      });
     }
     return ok(handover ?? agentHandovers[0]);
   }

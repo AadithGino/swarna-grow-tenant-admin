@@ -16,6 +16,11 @@ import {
   YAxis,
 } from "recharts";
 import { cn } from "@/lib/utils";
+import {
+  categoryXAxisSettings,
+  compactCategoryLabel,
+  longestCompactLabel,
+} from "@/src/lib/chart-axis";
 import { compactMoney, money } from "@/src/lib/format";
 
 export const CHART_PALETTE = [
@@ -94,11 +99,13 @@ export function pieSliceLabel(props: {
 }
 
 export function CollectionTrendChart({ data }: { data: any[] }) {
+  const dayLabels = data.map((row) => compactCategoryLabel(String(row.day ?? "")));
+  const xAxis = categoryXAxisSettings(data.length, longestCompactLabel(dayLabels, (v) => String(v)));
   return (
     <ResponsiveContainer width="100%" height="100%">
       <AreaChart
         data={data}
-        margin={{ left: 4, right: 12, top: 12, bottom: 0 }}
+        margin={{ left: 4, right: 12, top: 12, bottom: 4 }}
       >
         <defs>
           <linearGradient id="cashFill" x1="0" y1="0" x2="0" y2="1">
@@ -113,9 +120,15 @@ export function CollectionTrendChart({ data }: { data: any[] }) {
         />
         <XAxis
           dataKey="day"
-          tick={{ fontSize: 12, fill: "#7c7072" }}
+          tick={{ fontSize: 11, fill: "#7c7072" }}
           axisLine={false}
           tickLine={false}
+          interval={xAxis.interval}
+          minTickGap={xAxis.minTickGap}
+          angle={xAxis.angle}
+          textAnchor={xAxis.textAnchor}
+          height={xAxis.height}
+          tickFormatter={(value) => compactCategoryLabel(String(value))}
         />
         <YAxis
           tickFormatter={(v) => compactMoney(Number(v))}

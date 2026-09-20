@@ -3244,6 +3244,8 @@ export const adminApi = createApi({
           paidAt?: string;
         }[];
         cashInHand?: { amountPaise: number };
+        availableForHandover?: { amountPaise: number };
+        cashPendingAcceptance?: { amountPaise: number };
       },
       string
     >({

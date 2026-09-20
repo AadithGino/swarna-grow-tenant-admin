@@ -52,7 +52,21 @@ export type CashStaffRow = {
   name: string;
   branch: string;
   balance: number;
+  availableForHandover?: number;
 };
+
+function staffMaxSubmit(row: CashStaffRow | null | undefined): number | undefined {
+  if (!row) return undefined;
+  return row.availableForHandover ?? row.balance;
+}
+
+function moneyFromPaiseField(
+  field?: { amountPaise?: number } | number,
+): number | undefined {
+  if (field == null) return undefined;
+  if (typeof field === "object") return (field.amountPaise ?? 0) / 100;
+  return Number(field) / 100;
+}
 
 function MarkCashSubmittedDialogInner({
   staffList,
@@ -98,8 +112,9 @@ function MarkCashSubmittedDialogInner({
     }
     if (initialStaff) {
       setStaffId(initialStaff.id);
-      setAmount(initialStaff.balance);
-      setReceiptCount(Math.max(1, Math.round(initialStaff.balance / 2500)));
+      const max = staffMaxSubmit(initialStaff) ?? 0;
+      setAmount(max);
+      setReceiptCount(Math.max(1, Math.round(max / 2500)));
     } else {
       setStaffId("");
       setAmount(0);
@@ -113,14 +128,16 @@ function MarkCashSubmittedDialogInner({
     setFieldErrors({});
   }, [isOpen, initialStaff, staffList]);
 
-  const cashInHand = selected?.balance;
+  const maxSubmit =
+    moneyFromPaiseField(detailQuery.data?.availableForHandover) ??
+    staffMaxSubmit(selected);
   const staffError =
     fieldErrors.staffId ??
     (staffTouched ? validateHandoverStaffId(staffId) : undefined);
   const amountError =
     fieldErrors.amount ??
     (amountTouched || amount > 0
-      ? liveHandoverAmountError(amount, cashInHand)
+      ? liveHandoverAmountError(amount, maxSubmit)
       : undefined);
   const receiptError =
     fieldErrors.receiptCount ??
@@ -133,15 +150,16 @@ function MarkCashSubmittedDialogInner({
     amount,
     receiptCount,
     remarks,
-    cashInHand,
+    maxSubmit,
   });
 
   useEffect(() => {
     if (initialStaff || !isOpen) return;
     const member = staffList.find((s) => s.id === staffId);
     if (member) {
-      setAmount(member.balance);
-      setReceiptCount(Math.max(1, Math.round(member.balance / 2500)));
+      const max = staffMaxSubmit(member) ?? 0;
+      setAmount(max);
+      setReceiptCount(Math.max(1, Math.round(max / 2500)));
     }
   }, [staffId, staffList, initialStaff, isOpen]);
 
@@ -149,12 +167,17 @@ function MarkCashSubmittedDialogInner({
     if (detailQuery.data?.receiptCount && phase === "form") {
       setReceiptCount(Math.max(1, detailQuery.data.receiptCount));
     }
-    const inHand = detailQuery.data?.cashInHand;
-    if (inHand && phase === "form" && !initialStaff) {
-      const rupees = typeof inHand === "object" ? inHand.amountPaise / 100 : Number(inHand) / 100;
-      if (rupees > 0) setAmount(rupees);
+    const available = detailQuery.data?.availableForHandover;
+    if (available && phase === "form" && !initialStaff) {
+      const rupees = moneyFromPaiseField(available);
+      if (rupees != null && rupees > 0) setAmount(rupees);
     }
-  }, [detailQuery.data?.receiptCount, detailQuery.data?.cashInHand, phase, initialStaff]);
+  }, [
+    detailQuery.data?.receiptCount,
+    detailQuery.data?.availableForHandover,
+    phase,
+    initialStaff,
+  ]);
 
   const submitHandover = async () => {
     setStaffTouched(true);
@@ -163,7 +186,7 @@ function MarkCashSubmittedDialogInner({
     const clientErrors: Record<string, string> = {};
     const staffErr = validateHandoverStaffId(staffId);
     if (staffErr) clientErrors.staffId = staffErr;
-    const amtErr = validateHandoverAmount(amount, cashInHand);
+    const amtErr = validateHandoverAmount(amount, maxSubmit);
     if (amtErr) clientErrors.amount = amtErr;
     const rcErr = validateHandoverReceiptCount(receiptCount);
     if (rcErr) clientErrors.receiptCount = rcErr;
@@ -194,7 +217,7 @@ function MarkCashSubmittedDialogInner({
     } catch (err: unknown) {
       toastApiError(
         err,
-        "Could not record cash handover. Check the amount against cash in hand.",
+        "Could not record cash handover. Check the amount against what is available to submit.",
       );
     } finally {
       setBusy(false);
@@ -252,7 +275,17 @@ function MarkCashSubmittedDialogInner({
                   <div className="rounded-xl border border-[#eaded9] bg-[#fbf8f5] px-4 py-3 text-sm">
                     <strong>Cash in hand</strong>
                     <p className="mt-1 text-muted-foreground">
-                      {money(selected.balance)} available to hand over
+                      {money(selected.balance)}
+                      {(staffMaxSubmit(selected) ?? selected.balance) <
+                      selected.balance ? (
+                        <>
+                          {" "}
+                          · {money(staffMaxSubmit(selected) ?? 0)} available to
+                          submit (pending handovers reserved)
+                        </>
+                      ) : (
+                        <> · {money(staffMaxSubmit(selected) ?? selected.balance)} available to submit</>
+                      )}
                     </p>
                   </div>
                 )}

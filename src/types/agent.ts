@@ -32,6 +32,7 @@ export type AgentCashSummary = {
   cashCollectedPaise: number;
   cashInHandPaise: number;
   cashPendingAcceptancePaise: number;
+  availableForHandoverPaise: number;
   collectedPaise: number;
   handedOverPaise: number;
   adjustmentPaise: number;

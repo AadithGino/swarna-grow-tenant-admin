@@ -200,6 +200,7 @@ export function CashControlPage() {
       name: r.name,
       branch: r.branch,
       balance: r.balance ?? r.today ?? 0,
+      availableForHandover: r.availableForHandover ?? r.balance ?? r.today ?? 0,
     }),
   );
 

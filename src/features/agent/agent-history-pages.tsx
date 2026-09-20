@@ -229,7 +229,13 @@ export function AgentHandoverPage() {
   const [amount, setAmount] = useState("");
   const [remarks, setRemarks] = useState("");
   const amountPaise = Math.round(Number(amount || 0) * 100);
-  const max = summary.data?.cashInHandPaise ?? 0;
+  const max =
+    summary.data?.availableForHandoverPaise ??
+    Math.max(
+      0,
+      (summary.data?.cashInHandPaise ?? 0) -
+        (summary.data?.cashPendingAcceptancePaise ?? 0),
+    );
   const submit = async () => {
     if (amountPaise <= 0 || amountPaise > max) return toast.error(`Enter an amount up to ${formatAgentMoney(max)}.`);
     try {
@@ -250,13 +256,16 @@ export function AgentHandoverPage() {
       <AgentPageHeader
         eyebrow="Cash control"
         title="Submit cash to branch"
-        description="The amount is reserved immediately and cleared after your branch accepts it."
+        description="Pending submissions stay in your cash-in-hand until the branch accepts them; you cannot submit the same amount twice."
       />
       <AgentCard className="overflow-hidden">
         <div className="bg-[linear-gradient(120deg,#750321,#4c0317)] p-6 text-white">
           <p className="text-xs font-black uppercase tracking-[.16em] text-[#efc96f]">Available to submit</p>
           <p className="mt-2 text-4xl font-black tracking-[-.04em]">{formatAgentMoney(max)}</p>
-          <p className="mt-2 text-xs text-white/60">Cash currently in your custody</p>
+          <p className="mt-2 text-xs text-white/60">
+            Cash in hand {formatAgentMoney(summary.data?.cashInHandPaise)} · pending{" "}
+            {formatAgentMoney(summary.data?.cashPendingAcceptancePaise)}
+          </p>
         </div>
         <div className="p-5 sm:p-6">
           <Label htmlFor="handover-amount" className="font-bold">
@@ -273,7 +282,7 @@ export function AgentHandoverPage() {
             />
           </div>
           <button type="button" onClick={() => setAmount(String(max / 100))} className="mt-2 text-xs font-black text-[#730321]">
-            Use full cash-in-hand amount
+            Use full available amount
           </button>
           <div className="mt-5">
             <Label htmlFor="handover-remarks" className="font-bold">

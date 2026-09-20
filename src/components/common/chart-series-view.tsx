@@ -17,6 +17,11 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import {
+  categoryXAxisSettings,
+  compactCategoryLabel,
+  longestCompactLabel,
+} from "@/src/lib/chart-axis";
 import { money } from "@/src/lib/format";
 import type { ChartSeriesBlock } from "@/src/types/admin-report";
 import {
@@ -185,7 +190,7 @@ function seriesToRows(block: ChartSeriesBlock) {
   return [...map.values()];
 }
 
-function formatTrendAxisLabel(value: unknown, rows: Record<string, string | number>[]) {
+function fullTrendAxisLabel(value: unknown, rows: Record<string, string | number>[]) {
   const match = rows.find((row) => row.x === value);
   const display = match?.xDisplay;
   if (typeof display === "string" && display.trim()) return display;
@@ -194,15 +199,20 @@ function formatTrendAxisLabel(value: unknown, rows: Record<string, string | numb
     return new Date(`${raw}T12:00:00`).toLocaleDateString("en-IN", {
       day: "numeric",
       month: "short",
+      year: "numeric",
     });
   }
   if (/^\d{4}-\d{2}$/.test(raw)) {
     return new Date(`${raw}-01T12:00:00`).toLocaleDateString("en-IN", {
       month: "short",
-      year: "2-digit",
+      year: "numeric",
     });
   }
   return raw;
+}
+
+function trendAxisTickLabel(value: unknown, rows: Record<string, string | number>[]) {
+  return compactCategoryLabel(fullTrendAxisLabel(value, rows));
 }
 
 export function ChartSeriesView({ chart }: { chart: ChartSeriesBlock }) {
@@ -285,22 +295,24 @@ export function ChartSeriesView({ chart }: { chart: ChartSeriesBlock }) {
   }
 
   if (type === "line") {
-    const denseAxis = rows.length > 14;
+    const tickLabels = rows.map((row) => trendAxisTickLabel(row.x, rows));
+    const xAxis = categoryXAxisSettings(rows.length, longestCompactLabel(tickLabels, (v) => String(v)));
     return (
       <div className="h-[280px] w-full">
       <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={rows} margin={{ left: -8, right: 12, top: 8, bottom: denseAxis ? 8 : 0 }}>
+        <LineChart data={rows} margin={{ left: -8, right: 12, top: 8, bottom: 4 }}>
           <CartesianGrid vertical={false} stroke="#eadfda" strokeDasharray="4 4" />
           <XAxis
             dataKey="x"
             tick={{ fontSize: 11, fill: "#7c7072" }}
             axisLine={false}
             tickLine={false}
-            interval={denseAxis ? "preserveStartEnd" : 0}
-            angle={denseAxis ? -32 : 0}
-            textAnchor={denseAxis ? "end" : "middle"}
-            height={denseAxis ? 56 : 30}
-            tickFormatter={(value) => formatTrendAxisLabel(value, rows)}
+            interval={xAxis.interval}
+            minTickGap={xAxis.minTickGap}
+            angle={xAxis.angle}
+            textAnchor={xAxis.textAnchor}
+            height={xAxis.height}
+            tickFormatter={(value) => trendAxisTickLabel(value, rows)}
           />
           <YAxis
             tickFormatter={(v) => yFormat(yAxis, Number(v))}
@@ -312,7 +324,7 @@ export function ChartSeriesView({ chart }: { chart: ChartSeriesBlock }) {
           />
           <Tooltip
             formatter={(v) => yFormat(yAxis, Number(v))}
-            labelFormatter={(label) => formatTrendAxisLabel(label, rows)}
+            labelFormatter={(label) => fullTrendAxisLabel(label, rows)}
             contentStyle={{ borderRadius: 12, borderColor: "#e4d7d2" }}
           />
           {series.map((s, i) => (
@@ -344,19 +356,35 @@ export function ChartSeriesView({ chart }: { chart: ChartSeriesBlock }) {
   }
 
   if (type === "area") {
+    const tickLabels = rows.map((row) => trendAxisTickLabel(row.x, rows));
+    const xAxis = categoryXAxisSettings(rows.length, longestCompactLabel(tickLabels, (v) => String(v)));
     return (
       <div className="h-[280px] w-full">
       <ResponsiveContainer width="100%" height="100%">
-        <AreaChart data={rows} margin={{ left: -8, right: 12, top: 8 }}>
+        <AreaChart data={rows} margin={{ left: -8, right: 12, top: 8, bottom: 4 }}>
           <CartesianGrid vertical={false} stroke="#eadfda" strokeDasharray="4 4" />
-          <XAxis dataKey="x" tick={{ fontSize: 11, fill: "#7c7072" }} axisLine={false} tickLine={false} />
+          <XAxis
+            dataKey="x"
+            tick={{ fontSize: 11, fill: "#7c7072" }}
+            axisLine={false}
+            tickLine={false}
+            interval={xAxis.interval}
+            minTickGap={xAxis.minTickGap}
+            angle={xAxis.angle}
+            textAnchor={xAxis.textAnchor}
+            height={xAxis.height}
+            tickFormatter={(value) => trendAxisTickLabel(value, rows)}
+          />
           <YAxis
             tickFormatter={(v) => yFormat(yAxis, Number(v))}
             tick={{ fontSize: 11, fill: "#7c7072" }}
             axisLine={false}
             tickLine={false}
           />
-          <Tooltip formatter={(v) => yFormat(yAxis, Number(v))} />
+          <Tooltip
+            formatter={(v) => yFormat(yAxis, Number(v))}
+            labelFormatter={(label) => fullTrendAxisLabel(label, rows)}
+          />
           {series.map((s, i) => (
             <Area
               key={s.key}
@@ -397,7 +425,13 @@ export function ChartSeriesView({ chart }: { chart: ChartSeriesBlock }) {
     grouped ||
     (stacked && categoryCount >= 4) ||
     (stacked && longestCategory > 18);
-  const tiltXLabels = !verticalLayout && categoryCount >= 3;
+  const barCategoryLabels = barRows.map((r) => compactCategoryLabel(String(r.x)));
+  const barLongestCompact = barCategoryLabels.reduce(
+    (m, label) => Math.max(m, label.length),
+    0,
+  );
+  const barXAxis = categoryXAxisSettings(categoryCount, barLongestCompact);
+  const tiltXLabels = !verticalLayout && (categoryCount >= 3 || barLongestCompact > 8);
   const scrollable = !verticalLayout && categoryCount > 3;
   const valueMax = barValueMax(barRows, seriesKeys, stacked);
   const valueTop = niceAxisTop(valueMax);
@@ -547,12 +581,13 @@ export function ChartSeriesView({ chart }: { chart: ChartSeriesBlock }) {
           <>
             <XAxis
               dataKey="x"
-              interval={0}
-              angle={tiltXLabels ? -32 : 0}
-              textAnchor={tiltXLabels ? "end" : "middle"}
-              height={tiltXLabels ? 56 : 30}
+              interval={barXAxis.interval}
+              minTickGap={barXAxis.minTickGap}
+              angle={barXAxis.angle}
+              textAnchor={barXAxis.textAnchor}
+              height={barXAxis.height}
               tick={{ fontSize: 11, fill: "#7c7072" }}
-              tickFormatter={(v) => truncateCategoryLabel(v, 18)}
+              tickFormatter={(v) => compactCategoryLabel(String(v))}
               axisLine={false}
               tickLine={false}
             />

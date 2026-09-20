@@ -45,6 +45,9 @@ export type PlanBuilderFormState = {
   flexiblePhaseCycles: number;
   cappedPhaseCycles: number;
   averagingDivisor: number;
+  capFormula:
+    | "FLEXIBLE_PHASE_TOTAL_DIV_AVERAGING_DIVISOR"
+    | "FLEXIBLE_PHASE_TOTAL_DIV_PAYMENT_COUNT";
   flexMinPayment: number;
   flexMaxPayment: number;
   flexPaymentIncrement: number;
@@ -118,6 +121,7 @@ export const defaultPlanBuilderForm = (): PlanBuilderFormState => ({
   flexiblePhaseCycles: 6,
   cappedPhaseCycles: 5,
   averagingDivisor: 6,
+  capFormula: "FLEXIBLE_PHASE_TOTAL_DIV_AVERAGING_DIVISOR",
   flexMinPayment: 500,
   flexMaxPayment: 100000,
   flexPaymentIncrement: 100,
@@ -367,7 +371,7 @@ export function buildPlanCreatePayload(form: PlanBuilderFormState) {
             paymentsRequiredPerCycle: 0,
           },
           capComputation: {
-            formula: "FLEXIBLE_PHASE_TOTAL_DIV_AVERAGING_DIVISOR",
+            formula: form.capFormula,
             roundingMode: "ROUND_UP",
             roundToNearestPaise: paise(form.capRoundToNearest),
             minCycleCapPaise: paise(form.capMinCycle),
@@ -624,6 +628,9 @@ export function planDetailToForm(detail: Record<string, unknown>): PlanBuilderFo
     flexiblePhaseCycles: Number(flex.flexiblePhaseCycles ?? base.flexiblePhaseCycles),
     cappedPhaseCycles: Number(flex.cappedPhaseCycles ?? base.cappedPhaseCycles),
     averagingDivisor: Number(flex.averagingDivisor ?? base.averagingDivisor),
+    capFormula:
+      (cap.formula as PlanBuilderFormState["capFormula"]) ??
+      base.capFormula,
     flexMinPayment: fromPaise(flexPhase.minimumPaymentPaise as number) || base.flexMinPayment,
     flexMaxPayment: fromPaise(flexPhase.maximumPaymentPaise as number) || base.flexMaxPayment,
     flexPaymentIncrement:

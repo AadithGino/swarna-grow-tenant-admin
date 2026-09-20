@@ -347,12 +347,18 @@ export function ChoiceCard({
 export function FlexiblePhaseTimeline({
   flexibleCycles,
   cappedCycles,
+  capFormula = "FLEXIBLE_PHASE_TOTAL_DIV_AVERAGING_DIVISOR",
   averagingDivisor,
 }: {
   flexibleCycles: number;
   cappedCycles: number;
+  capFormula?:
+    | "FLEXIBLE_PHASE_TOTAL_DIV_AVERAGING_DIVISOR"
+    | "FLEXIBLE_PHASE_TOTAL_DIV_PAYMENT_COUNT";
   averagingDivisor: number;
 }) {
+  const capUsesPaymentCount =
+    capFormula === "FLEXIBLE_PHASE_TOTAL_DIV_PAYMENT_COUNT";
   const total = flexibleCycles + cappedCycles;
   const freePct = total > 0 ? (flexibleCycles / total) * 100 : 50;
   return (
@@ -380,7 +386,12 @@ export function FlexiblePhaseTimeline({
       </div>
       <p className="rounded-lg bg-white/80 px-3 py-2 text-center text-sm text-[#5c4a4e] ring-1 ring-[#e4d7d2]">
         After month {flexibleCycles}, monthly cap ≈{" "}
-        <strong className="text-[#28161a]">total free-phase payments ÷ {averagingDivisor}</strong>
+        <strong className="text-[#28161a]">
+          total free-phase payments ÷{" "}
+          {capUsesPaymentCount
+            ? "number of payments made"
+            : averagingDivisor}
+        </strong>
         , then rounded and clamped to your min/max cap.
       </p>
       <div className="grid gap-3 sm:grid-cols-2">

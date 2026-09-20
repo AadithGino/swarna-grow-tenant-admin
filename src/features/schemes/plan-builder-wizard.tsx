@@ -274,7 +274,11 @@ export function PlanBuilderWizard({
 
   const stepCopy = STEP_COPY[current.id];
   const totalFlexibleMonths = form.flexiblePhaseCycles + form.cappedPhaseCycles;
-  const averageDivisor = Math.max(1, form.averagingDivisor);
+  const capUsesPaymentCount =
+    form.capFormula === "FLEXIBLE_PHASE_TOTAL_DIV_PAYMENT_COUNT";
+  const averageDivisor = capUsesPaymentCount
+    ? Math.max(1, form.flexiblePhaseCycles)
+    : Math.max(1, form.averagingDivisor);
   const roundToNearest = Math.max(1, form.capRoundToNearest);
   const exampleFreeTotal = Math.max(
     form.flexMinTotal,
@@ -750,6 +754,7 @@ export function PlanBuilderWizard({
                         <FlexiblePhaseTimeline
                           flexibleCycles={form.flexiblePhaseCycles}
                           cappedCycles={form.cappedPhaseCycles}
+                          capFormula={form.capFormula}
                           averagingDivisor={form.averagingDivisor}
                         />
                         <div className="border-t border-emerald-200/80 pt-4">
@@ -767,16 +772,49 @@ export function PlanBuilderWizard({
                         tone="capped"
                         hint="Set rounding and cap range after free-window phase ends."
                       >
+                        <div>
+                          <FieldLabel>How to compute the monthly cap</FieldLabel>
+                          <FieldHint>
+                            Applies when the free window ends and the capped phase
+                            starts.
+                          </FieldHint>
+                          <Select
+                            value={form.capFormula}
+                            onValueChange={(v) =>
+                              set({
+                                capFormula:
+                                  v as PlanBuilderFormState["capFormula"],
+                              })
+                            }
+                          >
+                            <SelectTrigger className="h-11">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="FLEXIBLE_PHASE_TOTAL_DIV_AVERAGING_DIVISOR">
+                                Total free-phase payments ÷ averaging divisor
+                                (usually free months)
+                              </SelectItem>
+                              <SelectItem value="FLEXIBLE_PHASE_TOTAL_DIV_PAYMENT_COUNT">
+                                Total free-phase payments ÷ number of payments
+                                made
+                              </SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
                         <div className="grid gap-3 sm:grid-cols-2">
                           <div>
                             <FieldLabel>Averaging divisor</FieldLabel>
                             <FieldHint>
-                              Usually equal to free months.
+                              {capUsesPaymentCount
+                                ? "Not used when dividing by payment count."
+                                : "Usually equal to free months."}
                             </FieldHint>
                             <Input
                               type="number"
                               min={1}
                               value={form.averagingDivisor}
+                              disabled={capUsesPaymentCount}
                               onChange={(e) =>
                                 set({ averagingDivisor: Number(e.target.value) })
                               }
@@ -819,8 +857,11 @@ export function PlanBuilderWizard({
                         <div className="rounded-lg border border-amber-200 bg-white/80 px-3 py-2 text-sm text-[#5c4a2a]">
                           <p className="font-semibold text-[#28161a]">Live example</p>
                           <p className="mt-1">
-                            ₹{exampleFreeTotal.toLocaleString("en-IN")} / {averageDivisor} ={" "}
-                            ₹{rawCap.toLocaleString("en-IN")}
+                            ₹{exampleFreeTotal.toLocaleString("en-IN")} ÷{" "}
+                            {capUsesPaymentCount
+                              ? `${averageDivisor} payments (example: one per free month)`
+                              : `${averageDivisor} (divisor)`}{" "}
+                            = ₹{rawCap.toLocaleString("en-IN")}
                           </p>
                           <p>
                             Rounded to ₹{roundToNearest.toLocaleString("en-IN")} and

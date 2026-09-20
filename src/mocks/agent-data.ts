@@ -44,7 +44,15 @@ export const agentPayments: AgentPayment[] = [
   { id: "agt_pay_4", receiptNumber: "RCP-2026-0001224", amountPaise: 100000, mode: "CASH", status: "SUCCESS", source: "STAFF_APP", paidAt: "2026-09-16T11:30:00.000Z", customer: { id: "agt_cus_2", name: "Ramesh Nair" }, scheme: { id: "agt_flex_free", enrollmentNumber: "ENR-000491", planName: "Sampoorna Flex 11" } },
 ];
 
-export let agentCashSummary: AgentCashSummary = { cashCollectedPaise: 2500000, cashInHandPaise: 1850000, cashPendingAcceptancePaise: 0, collectedPaise: 2500000, handedOverPaise: 650000, adjustmentPaise: 0 };
+export let agentCashSummary: AgentCashSummary = {
+  cashCollectedPaise: 2500000,
+  cashInHandPaise: 1850000,
+  cashPendingAcceptancePaise: 0,
+  availableForHandoverPaise: 1850000,
+  collectedPaise: 2500000,
+  handedOverPaise: 650000,
+  adjustmentPaise: 0,
+};
 export const agentCollectionSummary: AgentCollectionSummary = { amountPaise: 700000, count: 4, byMode: [{ mode: "CASH", label: "Cash", amountPaise: 700000, count: 4 }] };
 export const agentHandovers: AgentHandover[] = [
   { id: "agt_ho_1", amountPaise: 650000, status: "ACCEPTED", initiator: "STAFF", remarks: "Closing handover", submittedAt: "2026-09-16T18:00:00.000Z", settledAt: "2026-09-16T19:15:00.000Z" },

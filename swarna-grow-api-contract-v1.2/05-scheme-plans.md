@@ -240,13 +240,22 @@ These are **per-transaction** bounds, distinct from the per-installment bounds a
 
 `averagingDivisor` is configured independently of `flexiblePhaseCycles`. They are normally equal, but a plan may average six cycles of contribution over a different divisor.
 
+`capComputation.formula` chooses how the divisor is determined:
+
+| Formula | Divisor at lock time |
+|---------|----------------------|
+| `FLEXIBLE_PHASE_TOTAL_DIV_AVERAGING_DIVISOR` (default) | Plan `averagingDivisor` |
+| `FLEXIBLE_PHASE_TOTAL_DIV_PAYMENT_COUNT` | Count of `FREE_WINDOW_PAYMENT` ledger entries on the scheme |
+
 ### How the cycle cap is computed
 
 At the end of `flexiblePhaseCycles`, a background job computes:
 
 ```
-cycleCapPaise = round( flexiblePhaseTotalPaise / averagingDivisor )
+cycleCapPaise = round( flexiblePhaseTotalPaise / divisor )
 ```
+
+where `divisor` comes from the formula above.
 
 `flexiblePhaseTotalPaise` is **derived from the ledger** — the sum of all confirmed `FREE_WINDOW_PAYMENT` entries on that scheme, never a stored running total. Rounding uses `roundingMode` + `roundToNearestPaise`, then clamps to `[minCycleCapPaise, maxCycleCapPaise]`.
 

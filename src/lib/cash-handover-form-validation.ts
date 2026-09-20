@@ -10,23 +10,23 @@ export function validateHandoverStaffId(staffId: string): string | undefined {
 
 export function validateHandoverAmount(
   amount: number,
-  cashInHand?: number,
+  maxSubmit?: number,
 ): string | undefined {
   if (!Number.isFinite(amount) || amount <= 0) {
     return "Enter an amount greater than zero.";
   }
-  if (cashInHand != null && cashInHand >= 0 && amount - 1e-9 > cashInHand) {
-    return `Amount cannot exceed cash in hand (${money(cashInHand)}).`;
+  if (maxSubmit != null && maxSubmit >= 0 && amount - 1e-9 > maxSubmit) {
+    return `Amount cannot exceed available to submit (${money(maxSubmit)}).`;
   }
   return undefined;
 }
 
 export function liveHandoverAmountError(
   amount: number,
-  cashInHand?: number,
+  maxSubmit?: number,
 ): string | undefined {
   if (!amount) return undefined;
-  return validateHandoverAmount(amount, cashInHand);
+  return validateHandoverAmount(amount, maxSubmit);
 }
 
 export function validateHandoverReceiptCount(count: number): string | undefined {
@@ -52,11 +52,11 @@ export function markCashHandoverFormReady(input: {
   amount: number;
   receiptCount: number;
   remarks: string;
-  cashInHand?: number;
+  maxSubmit?: number;
 }): boolean {
   return (
     validateHandoverStaffId(input.staffId) === undefined &&
-    validateHandoverAmount(input.amount, input.cashInHand) === undefined &&
+    validateHandoverAmount(input.amount, input.maxSubmit) === undefined &&
     validateHandoverReceiptCount(input.receiptCount) === undefined &&
     validateHandoverRemarks(input.remarks) === undefined
   );

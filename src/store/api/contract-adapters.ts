@@ -3376,6 +3376,7 @@ export type CashStaffBalanceRow = {
   branch: string;
   today: number;
   balance: number;
+  availableForHandover: number;
   lastSeen: string;
   status: string;
 };
@@ -3392,22 +3393,32 @@ export type CashReportGroupRow = {
 
 function adaptCashStaffBalanceRow(item: any): CashStaffBalanceRow {
   if (item?.id && item?.name && !item?.staff) {
+    const balance = Number(item.balance ?? item.today ?? 0);
+    const available = Number(item.availableForHandover ?? balance);
     return {
       id: entityId(item),
       name: item.name,
       branch: String(item.branch ?? "—"),
       today: Number(item.today ?? 0),
-      balance: Number(item.balance ?? item.today ?? 0),
+      balance,
+      availableForHandover: available,
       lastSeen: String(item.lastSeen ?? "—"),
       status: String(item.status ?? "ACTIVE"),
     };
   }
+  const balance = rupees(item.cashInHand);
+  const pending = rupees(item.cashPendingAcceptance);
+  const available =
+    item.availableForHandover != null
+      ? rupees(item.availableForHandover)
+      : Math.max(0, balance - pending);
   return {
     id: entityId(item.staff) || entityId(item),
     name: item.staff?.name ?? "—",
     branch: branchName(item),
     today: rupees(item.cashCollectedToday),
-    balance: rupees(item.cashInHand),
+    balance,
+    availableForHandover: available,
     lastSeen: item.lastHandoverAt
       ? dateTime(item.lastHandoverAt)
       : item.daysHolding != null

@@ -146,7 +146,16 @@ export function AgentDashboardPage() {
               </Link>
               <Link
                 href="/agent/handover"
-                aria-disabled={!cash.data?.cashInHandPaise}
+                aria-disabled={
+                  !(
+                    cash.data?.availableForHandoverPaise ??
+                    Math.max(
+                      0,
+                      (cash.data?.cashInHandPaise ?? 0) -
+                        (cash.data?.cashPendingAcceptancePaise ?? 0),
+                    )
+                  )
+                }
                 className="inline-flex h-12 items-center gap-2 rounded-xl bg-white/12 px-5 text-sm font-black text-white ring-1 ring-white/25 backdrop-blur-[2px]"
               >
                 Submit cash <HandCoins className="size-4" />
