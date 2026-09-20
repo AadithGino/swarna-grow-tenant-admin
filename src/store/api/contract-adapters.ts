@@ -869,10 +869,16 @@ function enrollmentSummaryFromMeta(
   items: Enrollment[],
 ) {
   if (metaSummary && typeof metaSummary.active === "number") {
+    const activeAndLocked = Number(
+      metaSummary.activeAndLocked ?? metaSummary.active ?? 0,
+    );
+    const defaulted = Number(metaSummary.defaulted ?? 0);
     return {
-      active: Number(metaSummary.active ?? 0),
+      active: activeAndLocked,
+      activeAndLocked,
+      open: Number(metaSummary.open ?? activeAndLocked + defaulted),
       locked: Number(metaSummary.locked ?? 0),
-      defaulted: Number(metaSummary.defaulted ?? 0),
+      defaulted,
       matured: Number(metaSummary.matured ?? 0),
       redeemed: Number(metaSummary.redeemed ?? 0),
       pending: Number(metaSummary.redemptionPending ?? 0),
@@ -2083,8 +2089,11 @@ export function adaptDashboard(
       },
       {
         key: "ACTIVE_SCHEMES",
-        label: "Active schemes",
-        displayValue: String(summary.schemes?.active ?? 0),
+        label: "Open enrollments",
+        displayValue: String(
+          summary.schemes?.open ?? summary.schemes?.active ?? 0,
+        ),
+        secondaryLabel: "Active, capped, and defaulted",
       },
       {
         key: "OVERDUE",
@@ -2127,7 +2136,7 @@ export function adaptDashboard(
         case "ACTIVE_CUSTOMERS":
           return Number(summary.customers?.active ?? 0);
         case "ACTIVE_SCHEMES":
-          return Number(summary.schemes?.active ?? 0);
+          return Number(summary.schemes?.open ?? summary.schemes?.active ?? 0);
         case "OVERDUE":
           return Number(summary.schemes?.overdue ?? 0);
         case "MATURING_THIS_MONTH":

@@ -39,6 +39,7 @@ import {
   shouldForceAuthLogout,
 } from "@/src/lib/auth-base-query-refresh";
 import { newIdempotencyKey } from "@/src/lib/idempotency";
+import { ensureMutationJsonBody } from "@/src/lib/rtk-mutation-body";
 import type { AppDispatch } from "@/src/store";
 import { adaptCustomerSchemePlan, adaptCustomerSchemePlanList } from "@/src/lib/customer-plan-adapter";
 import {
@@ -72,7 +73,7 @@ function withIdempotencyHeader(args: string | FetchArgs): string | FetchArgs {
   if (!headers.has("X-Idempotency-Key")) {
     headers.set("X-Idempotency-Key", newIdempotencyKey());
   }
-  return { ...args, headers };
+  return ensureMutationJsonBody({ ...args, headers });
 }
 
 const mockBaseQuery: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQueryError> = async (args) => {
@@ -210,6 +211,16 @@ const mockBaseQuery: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQueryErro
     const group = typeof args !== "string" ? (args as FetchArgs).params?.group : undefined;
     if (group === "PAST") {
       return ok([
+        {
+          id: "sch_past_2",
+          schemeNumber: "SG-230015",
+          planName: "Golden Eleven",
+          closureType: "REDEEMED",
+          closedAt: "2026-05-18T00:00:00Z",
+          finalValue: money(6184000),
+          benefitReceived: money(684000),
+          passbookAvailable: true,
+        },
         {
           id: "sch_past",
           schemeNumber: "ENR-22001",
@@ -637,6 +648,12 @@ export const customerApi = createApi({
     getCustomerGoldHistory: builder.query<Array<CustomerHome["goldRate"]>, void>({ query: () => "/app/gold-rate/history" }),
     getCustomerBranches: builder.query<Array<CustomerProfile["branch"]>, void>({ query: () => "/app/branches" }),
     requestCustomerRedemption: builder.mutation<Record<string, unknown>, { schemeId: string; preferredMode: string; preferredDate?: string; remarks?: string; expectedVersion: number }>({ query: ({ schemeId, ...body }) => ({ url: `/app/schemes/${schemeId}/redemption-request`, method: "POST", body }), invalidatesTags: ["CustomerScheme"] }),
+    registerCustomerFcmToken: builder.mutation<
+      { registered: boolean; deviceId: string },
+      { fcmToken: string; deviceId: string; platform: "android" | "ios" }
+    >({
+      query: (body) => ({ url: "/app/devices/fcm-token", method: "POST", body }),
+    }),
   }),
 });
 
@@ -655,4 +672,5 @@ export const {
   useCustomerLogoutMutation,
   useGetCustomerGoldRateQuery, useGetCustomerGoldHistoryQuery, useGetCustomerBranchesQuery,
   useRequestCustomerRedemptionMutation,
+  useRegisterCustomerFcmTokenMutation,
 } = customerApi;

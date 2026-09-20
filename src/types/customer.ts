@@ -265,6 +265,7 @@ export type PaymentListItem = {
   targetCycle?: string;
   valueBasis?: "CASH" | "GOLD_WEIGHT";
   goldAccrual?: PaymentGoldAccrual | null;
+  transactionId?: string;
 };
 
 export type CustomerPlanRulesSection = {
@@ -298,11 +299,17 @@ export type GrievanceMessage = {
   createdAt: string;
 };
 
+export type CustomerGrievanceContext = {
+  amountDisplay?: string;
+  schemeName?: string;
+  dateLabel?: string;
+};
+
 export type CustomerGrievance = {
   id: string;
   ticketNumber: string;
   category: string;
-  status: "OPEN" | "IN_PROGRESS" | "RESOLVED" | "CLOSED";
+  status: "OPEN" | "IN_PROGRESS" | "AWAITING_CUSTOMER" | "RESOLVED" | "CLOSED";
   statusLabel: string;
   subject: string;
   description: string;
@@ -313,6 +320,7 @@ export type CustomerGrievance = {
   version: number;
   messages: GrievanceMessage[];
   allowedActions: string[];
+  context?: CustomerGrievanceContext;
 };
 
 export type CustomerHome = {

@@ -11,7 +11,7 @@ const CustomerOnboardingPage = dynamic(() => import("@/src/features/customer/cus
 const CustomerHomePage = dynamic(() => import("@/src/features/customer/customer-home-page").then((m) => m.CustomerHomePage), options);
 const CustomerSchemesPage = dynamic(() => import("@/src/features/customer/customer-schemes-page").then((m) => m.CustomerSchemesPage), options);
 const CustomerSchemeDetailPage = dynamic(() => import("@/src/features/customer/customer-scheme-detail-page").then((m) => m.CustomerSchemeDetailPage), options);
-const CustomerPaymentStatusPage = dynamic(() => import("@/src/features/customer/customer-scheme-detail-page").then((m) => m.CustomerPaymentStatusPage), options);
+const CustomerPaymentStatusPage = dynamic(() => import("@/src/features/customer/customer-payment-status-page").then((m) => m.CustomerPaymentStatusPage), options);
 const CustomerPaymentLinkPage = dynamic(() => import("@/src/features/customer/customer-scheme-detail-page").then((m) => m.CustomerPaymentLinkPage), options);
 const CustomerPlansPage = dynamic(() => import("@/src/features/customer/customer-plans-page").then((m) => m.CustomerPlansPage), options);
 const CustomerPlanDetailPage = dynamic(() => import("@/src/features/customer/customer-plan-detail-page").then((m) => m.CustomerPlanDetailPage), options);
@@ -21,6 +21,8 @@ const CustomerNotificationsPage = dynamic(() => import("@/src/features/customer/
 const CustomerGoldRatePage = dynamic(() => import("@/src/features/customer/customer-activity-pages").then((m) => m.CustomerGoldRatePage), options);
 const CustomerBranchesPage = dynamic(() => import("@/src/features/customer/customer-activity-pages").then((m) => m.CustomerBranchesPage), options);
 const CustomerProfilePage = dynamic(() => import("@/src/features/customer/customer-profile-pages").then((m) => m.CustomerProfilePage), options);
+const CustomerProfileKycPage = dynamic(() => import("@/src/features/customer/customer-profile-kyc-page").then((m) => m.CustomerProfileKycPage), options);
+const CustomerProfileNomineePage = dynamic(() => import("@/src/features/customer/customer-profile-nominee-page").then((m) => m.CustomerProfileNomineePage), options);
 const CustomerSecurityPage = dynamic(() => import("@/src/features/customer/customer-profile-pages").then((m) => m.CustomerSecurityPage), options);
 const CustomerSupportPage = dynamic(() => import("@/src/features/customer/customer-support-pages").then((m) => m.CustomerSupportPage), options);
 const CustomerGrievanceDetailPage = dynamic(() => import("@/src/features/customer/customer-support-pages").then((m) => m.CustomerGrievanceDetailPage), options);
@@ -40,7 +42,11 @@ function CustomerRoutes({ slug }: { slug: string[] }) {
   }
   if (section === "payments") return id ? <CustomerPaymentDetailPage id={id} /> : <CustomerPaymentsPage />;
   if (section === "notifications") return <CustomerNotificationsPage />;
-  if (section === "profile") return <CustomerProfilePage />;
+  if (section === "profile") {
+    if (id === "kyc") return <CustomerProfileKycPage />;
+    if (id === "nominee") return <CustomerProfileNomineePage />;
+    return <CustomerProfilePage />;
+  }
   if (section === "security") return <CustomerSecurityPage />;
   if (section === "support") return id ? <CustomerGrievanceDetailPage id={id} /> : <CustomerSupportPage />;
   if (section === "gold-rate") return <CustomerGoldRatePage />;

@@ -1,103 +1,64 @@
 "use client";
 
-import Link from "next/link";
 import { useState } from "react";
-import { ChevronRight, FileCheck2, FileImage, LockKeyhole, Pencil, ShieldCheck, Smartphone, Store, UserRound } from "lucide-react";
+import {
+  ChevronRight,
+  ClipboardList,
+  Headphones,
+  LoaderCircle,
+  LogOut,
+  MapPin,
+  MessageCircle,
+  Shield,
+  ShieldCheck,
+  Smartphone,
+  UserRound,
+} from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { CustomerKycSubmitForm } from "@/src/components/customer/customer-kyc-submit-form";
-import { CustomerNomineeDialog } from "@/src/components/customer/customer-nominee-dialog";
-import { CustomerPageHeader } from "@/src/components/customer/customer-ui";
 import { PageSkeleton, QueryError } from "@/src/components/common/query-state";
 import { useCustomerTenant } from "@/src/components/customer/customer-tenant-context";
 import { customerPath } from "@/src/lib/customer-tenant";
 import { useCustomerKycEnabled } from "@/src/lib/customer-kyc-enabled";
 import {
-  useGetCustomerUploadDownloadQuery,
   useGetCustomerDevicesQuery,
-  useGetCustomerPastSchemesQuery,
   useGetCustomerProfileQuery,
   useRevokeCustomerDeviceMutation,
-  useSubmitCustomerKycMutation,
   useUpdateCustomerProfileMutation,
 } from "@/src/store/api/customer-api";
+import {
+  formatPassbookLabel,
+  formatProfileCustomerId,
+  kycMenuBadge,
+  maskCustomerMobile,
+  ProfileAccountRow,
+  ProfileMenuAction,
+  ProfileMenuRow,
+} from "@/src/features/customer/customer-profile-shared";
+import { useCustomerSignOut } from "@/src/lib/use-customer-sign-out";
+import Link from "next/link";
 import { toast } from "sonner";
-import { cn } from "@/lib/utils";
-import type { CustomerPastScheme } from "@/src/types/customer";
-
-function KycDocumentLink({
-  uploadId,
-  fileName,
-  fallbackViewUrl,
-}: {
-  uploadId?: string;
-  fileName?: string | null;
-  fallbackViewUrl?: string | null;
-}) {
-  const { data } = useGetCustomerUploadDownloadQuery(uploadId as string, {
-    skip: !uploadId,
-  });
-  const href = data?.downloadUrl ?? fallbackViewUrl ?? null;
-  if (!href) {
-    return <span className="text-xs text-muted-foreground">On file</span>;
-  }
-  return (
-    <a href={href} target="_blank" rel="noreferrer" className="text-xs font-bold text-[#730321] underline">
-      {fileName ? "View document" : "Open document"}
-    </a>
-  );
-}
-
-function kycBadgeClass(status: string) {
-  if (status === "VERIFIED") return "bg-emerald-50 text-emerald-700";
-  if (status === "SUBMITTED" || status === "PENDING") return "bg-amber-50 text-amber-800";
-  if (status === "REJECTED") return "bg-red-50 text-red-700";
-  return "bg-muted text-muted-foreground";
-}
-
-function PastSchemeCompact({
-  scheme,
-  tenantSlug,
-}: {
-  scheme: CustomerPastScheme;
-  tenantSlug: string | null;
-}) {
-  return (
-    <Link
-      href={customerPath(tenantSlug, "schemes", scheme.id)}
-      className="flex items-center justify-between gap-3 rounded-xl border bg-[#fcf8f5] p-4 transition hover:border-[#dac17e]"
-    >
-      <div className="min-w-0">
-        <p className="truncate text-sm font-black">{scheme.planName}</p>
-        <p className="text-xs text-muted-foreground">
-          {scheme.schemeNumber} · {scheme.closureType} ·{" "}
-          {scheme.closedAt ? new Date(scheme.closedAt).toLocaleDateString("en-IN") : "—"}
-        </p>
-      </div>
-      <div className="shrink-0 text-right">
-        <p className="text-sm font-black">{scheme.finalValue.amountDisplay}</p>
-        <ChevronRight className="ml-auto size-4 text-muted-foreground" />
-      </div>
-    </Link>
-  );
-}
 
 export function CustomerProfilePage() {
   const { tenantSlug } = useCustomerTenant();
   const kycEnabled = useCustomerKycEnabled();
   const { data, isLoading, isError, refetch } = useGetCustomerProfileQuery();
-  const pastQuery = useGetCustomerPastSchemesQuery(undefined, { skip: !data });
-  const [editOpen, setEditOpen] = useState(false);
-  const [kycOpen, setKycOpen] = useState(false);
-  const [nomineeOpen, setNomineeOpen] = useState(false);
+  const [whatsappOpen, setWhatsappOpen] = useState(false);
+  const [logoutOpen, setLogoutOpen] = useState(false);
   const [update, updateState] = useUpdateCustomerProfileMutation();
-  const [submitKyc, kycState] = useSubmitCustomerKycMutation();
-  const [email, setEmail] = useState("");
-  const [address, setAddress] = useState("");
   const [whatsapp, setWhatsapp] = useState(true);
+  const { signOut, isSigningOut } = useCustomerSignOut();
 
   if (isLoading || !data) return <PageSkeleton cards={3} />;
   if (isError) return <QueryError onRetry={refetch} />;
@@ -108,293 +69,195 @@ export function CustomerProfilePage() {
     .join("")
     .slice(0, 2)
     .toUpperCase();
-  const kyc = kycEnabled ? data.kyc : undefined;
-  const canSubmitKyc = Boolean(kyc?.canUpdate && kyc.status !== "VERIFIED");
-  const kycSubmitted = kyc
-    ? ["SUBMITTED", "PENDING", "VERIFIED", "REJECTED"].includes(kyc.status)
-    : false;
-  const pastSchemes = pastQuery.data ?? [];
+  const showKycMenu = kycEnabled || Boolean(data.kyc);
+  const kyc = data.kyc;
+  const customerId = formatProfileCustomerId(data.passbookNumber, data.customerNumber);
+  const branchDisplay = (() => {
+    const branch = data.branch;
+    if (!branch) return "—";
+    if (branch.address) {
+      const parts = branch.address.split(",").map((p) => p.trim()).filter(Boolean);
+      if (parts.length >= 2) return `${parts[0]}, ${parts[1]}`;
+      return branch.address;
+    }
+    return branch.name;
+  })();
 
-  const openEdit = () => {
-    setEmail(data.email ?? "");
-    setAddress(typeof data.address === "string" ? data.address : "");
+  const openWhatsapp = () => {
     setWhatsapp(data.whatsappOptIn);
-    setEditOpen(true);
+    setWhatsappOpen(true);
   };
 
-  const save = async () => {
+  const saveWhatsapp = async () => {
     try {
-      await update({ email, address, whatsappOptIn: whatsapp }).unwrap();
-      toast.success("Profile updated");
-      setEditOpen(false);
+      await update({ whatsappOptIn: whatsapp }).unwrap();
+      toast.success("WhatsApp preference updated");
+      setWhatsappOpen(false);
     } catch {
-      toast.error("Could not update profile");
+      toast.error("Could not update preference");
     }
   };
 
   return (
-    <div>
-      <CustomerPageHeader
-        title="Your profile"
-        description={
-          kycEnabled ? "Identity, verification, nominee and closed schemes." : "Your details, nominee and closed schemes."
-        }
-        action={
-          <Button variant="outline" onClick={openEdit}>
-            <Pencil />
-            Edit profile
-          </Button>
-        }
-      />
-      <section className="customer-surface overflow-hidden">
-        <div className="border-b border-[#eadfda] bg-[#fffaf0] p-6 sm:flex sm:items-center sm:gap-5">
-          <span className="grid size-16 place-items-center rounded-full bg-[#f8e9c7] text-xl font-black text-[#730321]">
-            {initials}
-          </span>
-          <div className="mt-4 sm:mt-0">
-            <h1 className="text-2xl font-black">{data.name}</h1>
-            <p className="mt-1 text-sm text-[#706b77]">
-              {data.customerNumber} · Member since{" "}
-              {new Date(data.memberSince).toLocaleDateString("en-IN", { month: "short", year: "numeric" })}
-            </p>
-          </div>
-          {kyc ? (
-            <span className="mt-4 inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-700 sm:ml-auto sm:mt-0">
-              <ShieldCheck className="size-4" />
-              {kyc.statusLabel}
-            </span>
-          ) : null}
-        </div>
-        <div className="grid gap-px bg-border sm:grid-cols-2 lg:grid-cols-3">
-          {[
-            ["Mobile", data.mobile],
-            ["Email", data.email ?? "Not added"],
-            ["Passbook", data.passbookNumber ?? "—"],
-            ["Primary branch", data.branch?.name ?? "—"],
-            ["WhatsApp updates", data.whatsappOptIn ? "Enabled" : "Disabled"],
-          ].map(([label, value]) => (
-            <div key={label} className="bg-white p-5">
-              <p className="text-xs text-muted-foreground">{label}</p>
-              <p className="mt-1 text-sm font-black">{value}</p>
-            </div>
-          ))}
+    <div className="mx-auto max-w-lg pb-6">
+      <h1 className="text-[1.65rem] font-black tracking-[-.03em] text-[#11111b]">Profile</h1>
+
+      <section className="customer-surface mt-4 flex items-center gap-4 p-4">
+        <span className="grid size-14 shrink-0 place-items-center rounded-full bg-[#f6edf0] text-lg font-black text-[var(--customer-primary,#730321)]">
+          {initials}
+        </span>
+        <div className="min-w-0">
+          <p className="truncate text-lg font-black text-[#171722]">{data.name}</p>
+          <p className="text-xs font-semibold text-[#777280]">Customer {customerId}</p>
         </div>
       </section>
 
-      <section className="customer-surface mt-5 p-5">
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <h2 className="font-black">Past schemes</h2>
-            <p className="mt-1 text-xs text-muted-foreground">Redeemed or closed early</p>
-          </div>
-          <Link href={customerPath(tenantSlug, "schemes")} className="text-xs font-bold text-[#730321]">
-            All schemes
-          </Link>
-        </div>
-        {pastQuery.isLoading ? (
-          <p className="mt-4 text-sm text-muted-foreground">Loading…</p>
-        ) : pastSchemes.length ? (
-          <div className="mt-4 space-y-3">
-            {pastSchemes.slice(0, 5).map((scheme) => (
-              <PastSchemeCompact key={scheme.id} scheme={scheme} tenantSlug={tenantSlug} />
-            ))}
-          </div>
-        ) : (
-          <p className="mt-4 text-sm text-muted-foreground">No closed schemes yet.</p>
-        )}
+      <section className="customer-surface mt-4 overflow-hidden py-1">
+        <ProfileAccountRow icon={Smartphone} label="Mobile" value={maskCustomerMobile(data.mobile)} locked />
+        <ProfileAccountRow
+          icon={ClipboardList}
+          label="Passbook"
+          value={formatPassbookLabel(data.passbookNumber, data.customerNumber)}
+        />
+        <ProfileAccountRow icon={MapPin} label="Primary branch" value={branchDisplay} />
+        <ProfileAccountRow
+          icon={MessageCircle}
+          label="WhatsApp updates"
+          value={data.whatsappOptIn ? "On" : "Off"}
+          onClick={openWhatsapp}
+        />
       </section>
 
-      <div className={cn("mt-5 grid gap-4", kycEnabled && "lg:grid-cols-2")}>
-        {kyc ? (
-          <section className="customer-surface p-5">
-            <div className="flex items-start gap-3">
-              <span className="grid size-11 shrink-0 place-items-center rounded-2xl bg-emerald-50 text-emerald-700">
-                <FileCheck2 className="size-5" />
-              </span>
-              <div className="min-w-0 flex-1">
-                <h2 className="font-black">Identity verification</h2>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {kyc.type ? `${kyc.type} · ` : ""}
-                  {kyc.numberMasked ?? "No document number on file"}
-                </p>
-              </div>
-              <span className={cn("rounded-full px-2.5 py-1 text-[10px] font-black uppercase", kycBadgeClass(kyc.status))}>
-                {kyc.statusLabel}
-              </span>
-            </div>
-            {kyc.submittedAt ? (
-              <p className="mt-3 text-xs text-muted-foreground">
-                Submitted {new Date(kyc.submittedAt).toLocaleString("en-IN")}
-              </p>
-            ) : null}
-            {kyc.status === "REJECTED" && kyc.rejectionReason ? (
-              <p className="mt-2 rounded-lg bg-red-50 p-3 text-sm text-red-800">{kyc.rejectionReason}</p>
-            ) : null}
-            <p className="mt-3 text-sm leading-6 text-muted-foreground">
-              {kyc.status === "VERIFIED"
-                ? `Verified on ${kyc.verifiedAt ? new Date(kyc.verifiedAt).toLocaleDateString("en-IN") : "—"}. Contact your branch to update verified documents.`
-                : kyc.status === "SUBMITTED" || kyc.status === "PENDING"
-                  ? "Your documents are with the jeweller for review."
-                  : kyc.status === "REJECTED"
-                    ? "Please submit corrected documents."
-                    : "Submit Aadhaar or PAN so your jeweller can verify your identity."}
-            </p>
-            {kycSubmitted && (kyc.documents?.length ?? 0) > 0 ? (
-              <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                {kyc.documents!.map((doc) => (
-                  <div
-                    key={doc.uploadId}
-                    className="flex min-h-32 flex-col items-center justify-center gap-2 rounded-xl border bg-muted/30 p-4 text-center"
-                  >
-                    <FileImage className="size-8 text-[#730321]" />
-                    <span className="text-sm font-bold">{doc.label}</span>
-                    {doc.fileName ? <span className="text-[10px] text-muted-foreground">{doc.fileName}</span> : null}
-                    <KycDocumentLink
-                      uploadId={doc.uploadId}
-                      fileName={doc.fileName}
-                      fallbackViewUrl={doc.viewUrl}
-                    />
-                  </div>
-                ))}
-              </div>
-            ) : null}
-            {canSubmitKyc ? (
-              <Button onClick={() => setKycOpen(true)} className="mt-4 rounded-xl bg-[#730321]">
-                {kycSubmitted ? "Update documents" : "Submit documents"}
-              </Button>
-            ) : null}
-          </section>
+      <section className="customer-surface mt-4 overflow-hidden py-1">
+        {showKycMenu ? (
+          <ProfileMenuRow
+            icon={Shield}
+            label="KYC & documents"
+            href={customerPath(tenantSlug, "profile", "kyc")}
+            badge={kycMenuBadge(kyc?.status, kyc?.statusLabel)}
+          />
         ) : null}
-        <section className="customer-surface p-5">
-          <div className="flex items-start gap-3">
-            <span className="grid size-11 place-items-center rounded-2xl bg-[#f7edef] text-[#730321]">
-              <UserRound className="size-5" />
-            </span>
-            <div className="flex-1">
-              <h2 className="font-black">Nominee</h2>
-              <p className="mt-1 text-xs text-muted-foreground">
-                {data.nominee?.relationshipLabel ?? data.nominee?.relationship ?? "Not set"}
-              </p>
-            </div>
-            {data.nomineeEditable !== false ? (
-              <Button variant="outline" size="sm" onClick={() => setNomineeOpen(true)}>
-                {data.nominee ? "Update" : "Add"}
-              </Button>
-            ) : null}
-          </div>
-          {data.nominee ? (
-            <>
-              <p className="mt-4 font-black">{data.nominee.name}</p>
-              {data.nominee.mobile ? <p className="text-sm text-muted-foreground">{data.nominee.mobile}</p> : null}
-              {data.nominee.notes ? (
-                <p className="mt-2 text-sm leading-6 text-muted-foreground">{data.nominee.notes}</p>
-              ) : null}
-            </>
-          ) : (
-            <p className="mt-4 text-sm text-muted-foreground">Add a nominee for your account.</p>
-          )}
-        </section>
-      </div>
-      <div className="customer-surface mt-5 overflow-hidden">
-        <Link href={customerPath(tenantSlug, "security")} className="flex items-center gap-3 p-5 hover:bg-[#fcf8f5]">
-          <LockKeyhole className="size-5 text-[#730321]" />
-          <span>
-            <b className="text-sm">Security & devices</b>
-            <small className="block text-muted-foreground">Review signed-in devices</small>
-          </span>
-          <ChevronRight className="ml-auto size-4" />
-        </Link>
-        <Link href={customerPath(tenantSlug, "branches")} className="flex items-center gap-3 border-t p-5 hover:bg-[#fcf8f5]">
-          <Store className="size-5 text-[#730321]" />
-          <span>
-            <b className="text-sm">Branches & contact</b>
-            <small className="block text-muted-foreground">Find your nearest branch</small>
-          </span>
-          <ChevronRight className="ml-auto size-4" />
-        </Link>
-      </div>
-      <Dialog open={editOpen} onOpenChange={setEditOpen}>
-        <DialogContent>
+        <ProfileMenuRow
+          icon={UserRound}
+          label="Nominee"
+          href={customerPath(tenantSlug, "profile", "nominee")}
+        />
+        <ProfileMenuRow
+          icon={Smartphone}
+          label="Security & devices"
+          href={customerPath(tenantSlug, "security")}
+        />
+        <ProfileMenuRow icon={Headphones} label="Support" href={customerPath(tenantSlug, "support")} />
+      </section>
+
+      <section className="customer-surface mt-4 overflow-hidden py-1">
+        <ProfileMenuAction
+          icon={LogOut}
+          label="Log out"
+          hint="Sign out on this device"
+          tone="leave"
+          disabled={isSigningOut}
+          onClick={() => setLogoutOpen(true)}
+        />
+      </section>
+
+      <AlertDialog open={logoutOpen} onOpenChange={setLogoutOpen}>
+        <AlertDialogContent className="max-w-sm rounded-2xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Log out?</AlertDialogTitle>
+            <AlertDialogDescription>
+              You will need your mobile number and OTP to sign in again. Push alerts on this device will stop until you
+              log back in.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="gap-2 sm:gap-2">
+            <AlertDialogCancel disabled={isSigningOut} className="rounded-xl">
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              disabled={isSigningOut}
+              className="rounded-xl border-0 font-bold text-white hover:opacity-95"
+              style={{ background: "var(--customer-primary, #730321)" }}
+              onClick={(event) => {
+                event.preventDefault();
+                void signOut();
+              }}
+            >
+              {isSigningOut ? <LoaderCircle className="size-4 animate-spin" /> : "Log out"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <Dialog open={whatsappOpen} onOpenChange={setWhatsappOpen}>
+        <DialogContent className="max-w-sm rounded-2xl">
           <DialogHeader>
-            <DialogTitle>Edit profile</DialogTitle>
-            <DialogDescription>Your registered mobile number cannot be changed here.</DialogDescription>
+            <DialogTitle>WhatsApp updates</DialogTitle>
+            <DialogDescription>Payment receipts and service notifications from your jeweller.</DialogDescription>
           </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <Label>Email</Label>
-              <Input value={email} onChange={(e) => setEmail(e.target.value)} className="mt-2" />
-            </div>
-            <div>
-              <Label>Address</Label>
-              <Input value={address} onChange={(e) => setAddress(e.target.value)} className="mt-2" />
-            </div>
-            <div className="flex items-center justify-between rounded-xl border p-4">
-              <div>
-                <p className="text-sm font-bold">WhatsApp updates</p>
-                <p className="text-xs text-muted-foreground">Payments and service notifications</p>
-              </div>
-              <Switch checked={whatsapp} onCheckedChange={setWhatsapp} />
-            </div>
-            <Button disabled={updateState.isLoading} onClick={save} className="w-full bg-[#730321]">
-              Save changes
-            </Button>
+          <div className="flex items-center justify-between rounded-xl border border-[#ece6e1] p-4">
+            <p className="text-sm font-bold">Enable WhatsApp updates</p>
+            <Switch checked={whatsapp} onCheckedChange={setWhatsapp} />
           </div>
+          <Button
+            disabled={updateState.isLoading}
+            onClick={saveWhatsapp}
+            className="w-full rounded-xl font-bold text-white"
+            style={{ background: "var(--customer-primary, #730321)" }}
+          >
+            Save
+          </Button>
         </DialogContent>
       </Dialog>
-      {kycEnabled ? (
-        <Dialog open={kycOpen} onOpenChange={setKycOpen}>
-          <DialogContent className="max-w-lg">
-            <DialogHeader>
-              <DialogTitle>{kycSubmitted ? "Update documents" : "Submit documents"}</DialogTitle>
-              <DialogDescription>Upload identity documents for your jeweller to verify.</DialogDescription>
-            </DialogHeader>
-            <CustomerKycSubmitForm
-              submitting={kycState.isLoading}
-              onSubmit={async (payload) => {
-                await submitKyc(payload).unwrap();
-                toast.success("Documents submitted");
-                setKycOpen(false);
-              }}
-            />
-          </DialogContent>
-        </Dialog>
-      ) : null}
-      <CustomerNomineeDialog key={`nominee-${data.version}-${nomineeOpen}`} profile={data} open={nomineeOpen} onOpenChange={setNomineeOpen} />
     </div>
   );
 }
 
 export function CustomerSecurityPage() {
+  const { tenantSlug } = useCustomerTenant();
   const { data, isLoading, isError, refetch } = useGetCustomerDevicesQuery();
   const [revoke] = useRevokeCustomerDeviceMutation();
   if (isLoading || !data) return <PageSkeleton cards={2} />;
   if (isError) return <QueryError onRetry={refetch} />;
   return (
-    <div>
-      <CustomerPageHeader title="Security & devices" description="Review devices that can access your SwarnaGrow customer account." />
-      <section className="customer-surface p-5">
-        <div className="flex items-start gap-3 rounded-2xl bg-emerald-50 p-4 text-sm text-emerald-900">
+    <div className="mx-auto max-w-lg pb-6">
+      <Link
+        href={customerPath(tenantSlug, "profile")}
+        className="mb-4 inline-flex items-center gap-1 text-sm font-bold text-[var(--customer-primary,#730321)]"
+      >
+        Profile
+        <ChevronRight className="size-4" />
+      </Link>
+      <h1 className="text-[1.65rem] font-black tracking-[-.03em] text-[#11111b]">Security & devices</h1>
+      <p className="mt-1 text-sm text-[#777280]">Devices signed in to your customer account.</p>
+      <section className="customer-surface mt-5 p-4">
+        <div className="flex items-start gap-3 rounded-xl bg-emerald-50 p-4 text-sm text-emerald-900">
           <ShieldCheck className="size-5 shrink-0" />
           <p>
             <b>Your account is protected with OTP sign-in.</b>
             <br />
-            <span className="text-xs text-emerald-800/75">Revoking a device also removes its push token and refresh session.</span>
+            <span className="text-xs text-emerald-800/75">Revoking a device removes its push token and session.</span>
           </p>
         </div>
-        <div className="mt-4 divide-y">
+        <div className="mt-4 divide-y divide-[#ece6e1]">
           {data.map((device) => (
             <div key={device.deviceId} className="flex items-center gap-3 py-4">
-              <span className="grid size-11 place-items-center rounded-2xl bg-[#f7edef] text-[#730321]">
+              <span
+                className="grid size-11 place-items-center rounded-2xl text-[var(--customer-primary,#730321)]"
+                style={{ background: "rgba(var(--customer-primary-rgb, 115, 3, 33), 0.08)" }}
+              >
                 <Smartphone className="size-5" />
               </span>
-              <div>
+              <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
                   <p className="text-sm font-black">{device.deviceModel}</p>
                   {device.current ? (
-                    <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[9px] font-bold text-emerald-700">THIS DEVICE</span>
+                    <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[9px] font-bold text-emerald-700">
+                      THIS DEVICE
+                    </span>
                   ) : null}
                 </div>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-xs text-[#777280]">
                   {device.platform} · {device.lastUsedAt}
                 </p>
               </div>
@@ -402,7 +265,7 @@ export function CustomerSecurityPage() {
                 <Button
                   variant="outline"
                   size="sm"
-                  className="ml-auto"
+                  className="shrink-0 rounded-full"
                   onClick={() => revoke(device.deviceId).unwrap().then(() => toast.success("Device access revoked"))}
                 >
                   Revoke

@@ -7,6 +7,10 @@ export type CustomerPaymentSession = {
   intentId?: string;
   linkToken?: string;
   schemeId?: string;
+  schemeName?: string;
+  schemeNumber?: string;
+  amountPaise?: number;
+  cycleLabel?: string;
   startedAt: number;
 };
 

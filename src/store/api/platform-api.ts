@@ -17,6 +17,7 @@ import {
 } from "@/src/lib/auth-base-query-refresh";
 import { readContractResponseBody } from "@/src/lib/contract-response";
 import { newIdempotencyKey } from "@/src/lib/idempotency";
+import { ensureMutationJsonBody } from "@/src/lib/rtk-mutation-body";
 import { platformMockRequest } from "@/src/mocks/platform-server";
 import {
   emptyPageMeta,
@@ -173,8 +174,12 @@ const baseQuery: BaseQueryFn<
     try { return { data: await platformMockRequest({ mockKey: args.mockKey, params: args.mockParams ?? (args.params as Record<string, unknown>), body: args.body as Record<string, unknown> }) }; }
     catch (error) { return { error: { status: "CUSTOM_ERROR", error: error instanceof Error ? error.message : "Mock request failed" } }; }
   }
-  const headers = new Headers(args.headers as HeadersInit | undefined); const method = String(args.method ?? "GET").toUpperCase();
-  if (["POST", "PUT", "PATCH", "DELETE"].includes(method)) headers.set("X-Idempotency-Key", newIdempotencyKey());
+  const headers = new Headers(args.headers as HeadersInit | undefined);
+  const method = String(args.method ?? "GET").toUpperCase();
+  if (["POST", "PUT", "PATCH", "DELETE"].includes(method)) {
+    headers.set("X-Idempotency-Key", newIdempotencyKey());
+  }
+  const preparedArgs = ensureMutationJsonBody({ ...args, headers });
   const requestUrl = String(args.url ?? "");
   const guard = authRefreshGuard(requestUrl, extra, [
     "/platform/auth/refresh",
@@ -182,14 +187,14 @@ const baseQuery: BaseQueryFn<
   ]);
   const dispatch = api.dispatch as AppDispatch;
 
-  let result = await liveBaseQuery({ ...args, headers }, api, extra);
+  let result = await liveBaseQuery(preparedArgs, api, extra);
 
   if (shouldAttemptAuthRefresh(result.error, guard, env.useMocks)) {
     const refreshed = await refreshAfterUnauthorized("platform", guard);
     if (refreshed) {
       result = await retryAuthorizedRequest(
         liveBaseQuery,
-        { ...args, headers },
+        preparedArgs,
         api,
         extra,
       );

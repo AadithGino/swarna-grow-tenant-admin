@@ -44,7 +44,8 @@ import {
 } from "@/src/hooks/use-acting-branch-id";
 
 const ENROLLMENT_STATUS_FILTERS: FilterOption[] = [
-  { value: "ACTIVE", label: "Active" },
+  { value: "OPEN", label: "Open" },
+  { value: "ACTIVE", label: "Active (status)" },
   { value: "LOCKED", label: "Capped / locked" },
   { value: "DEFAULTED", label: "Defaulted" },
   { value: "MATURED", label: "Matured" },
@@ -67,8 +68,8 @@ export function EnrollmentsPage() {
   const query = useGetEnrollmentsQuery(
     {
       q: listSearchQueryForApi(debouncedQ),
-      status: status === "PAST" ? undefined : status,
-      group: status === "PAST" ? "PAST" : undefined,
+      status: status === "PAST" || status === "OPEN" ? undefined : status,
+      group: status === "PAST" ? "PAST" : status === "OPEN" ? "OPEN" : undefined,
       branchId,
       ...pager.queryParams,
     },
@@ -89,6 +90,8 @@ export function EnrollmentsPage() {
   const analyticsTotals = analyticsQuery.data?.totals as
     | {
         activeEnrollments?: number;
+        activeAndLockedEnrollments?: number;
+        openEnrollments?: number;
         lockedEnrollments?: number;
         defaultedEnrollments?: number;
         maturedEnrollments?: number;
@@ -98,12 +101,6 @@ export function EnrollmentsPage() {
   const metric = (key: string) =>
     analyticsSummary.find((m) => m.key === key)?.value;
 
-  const activeCount =
-    typeof analyticsTotals?.activeEnrollments === "number"
-      ? analyticsTotals.activeEnrollments
-      : typeof metric("ACTIVE_ENROLLMENTS") === "number"
-        ? metric("ACTIVE_ENROLLMENTS")
-        : summary.active;
   const lockedCount =
     typeof analyticsTotals?.lockedEnrollments === "number"
       ? analyticsTotals.lockedEnrollments
@@ -114,6 +111,20 @@ export function EnrollmentsPage() {
       : typeof metric("DEFAULTED") === "number"
         ? metric("DEFAULTED")
         : summary.defaulted ?? 0;
+  const activeAndLockedCount =
+    typeof analyticsTotals?.activeAndLockedEnrollments === "number"
+      ? analyticsTotals.activeAndLockedEnrollments
+      : typeof analyticsTotals?.activeEnrollments === "number"
+        ? analyticsTotals.activeEnrollments
+        : typeof metric("ACTIVE_ENROLLMENTS") === "number"
+          ? metric("ACTIVE_ENROLLMENTS")
+          : (summary as { activeAndLocked?: number }).activeAndLocked ??
+            summary.active;
+  const openEnrollmentCount =
+    typeof analyticsTotals?.openEnrollments === "number"
+      ? analyticsTotals.openEnrollments
+      : (summary as { open?: number }).open ??
+        activeAndLockedCount + defaultedCount;
   const maturedCount =
     typeof analyticsTotals?.maturedEnrollments === "number"
       ? analyticsTotals.maturedEnrollments
@@ -145,12 +156,12 @@ export function EnrollmentsPage() {
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
         <StatCard
           icon={Layers3}
-          label="Active"
-          value={activeCount}
+          label="Active & capped"
+          value={activeAndLockedCount}
           detail={
             analyticsQuery.isFetching
               ? "Updating tenant totals…"
-              : "Current snapshot"
+              : `${openEnrollmentCount} open on dashboard (incl. defaulted)`
           }
         />
         <StatCard

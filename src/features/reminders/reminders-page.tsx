@@ -1,5 +1,6 @@
 "use client";
 
+import { useSearchParams } from "next/navigation";
 import { useState } from "react";
 import {
   AlertTriangle,
@@ -55,21 +56,28 @@ import {
 } from "@/src/store/api/admin-api";
 import { MessageDetailDialog } from "@/src/features/reminders/message-detail-dialog";
 import { TemplatePreviewDialog } from "@/src/features/reminders/template-preview-dialog";
+import { ManualPushPanel } from "@/src/features/reminders/manual-push-panel";
 
 export function RemindersPage() {
+  const searchParams = useSearchParams();
+  const broadcastId = searchParams.get("broadcastId") ?? undefined;
+  const channelFilter = searchParams.get("channel") ?? undefined;
+  const defaultTab = searchParams.get("tab") ?? "log";
   const { from, setFrom, to, setTo, dateRangeError, skipForBadDates } =
     useValidatedListDateRange();
   const branchId = useActingBranchId();
   const branchKey = useActingBranchKey();
   const pager = useCursorPagination(
     8,
-    `${from}|${to}|${branchKey}`,
+    `${from}|${to}|${branchKey}|${broadcastId ?? ""}|${channelFilter ?? ""}`,
   );
   const query = useGetMessagesQuery(
     {
       from,
       to,
       branchId,
+      ...(broadcastId ? { broadcastId } : {}),
+      ...(channelFilter ? { channel: channelFilter } : {}),
       ...pager.queryParams,
     },
     { skip: skipForBadDates },
@@ -204,17 +212,22 @@ export function RemindersPage() {
           tone="gold"
         />
       </div>
-      <PageTabs defaultValue="log">
+      <PageTabs defaultValue={defaultTab} key={`${defaultTab}-${broadcastId ?? ""}`}>
         <PageTabsBar sectionLabel="Reminder views">
           <PageTab value="log">Message log</PageTab>
+          <PageTab value="manual-push">Manual push</PageTab>
           <PageTab value="templates">Templates</PageTab>
           <PageTab value="schedule">Schedule</PageTab>
           <PageTab value="quota">Quota</PageTab>
         </PageTabsBar>
         <PageTabsPanel value="log">
           <Surface
-            title="WhatsApp message log"
-            description="Delivery status is updated by the provider webhook"
+            title="Message log"
+            description={
+              broadcastId
+                ? `Filtered to manual push broadcast ${broadcastId}`
+                : "WhatsApp and mobile push — WhatsApp delivery updates via provider webhook"
+            }
           >
             <PaginatedDataTable
               rows={query.data.items}
@@ -298,6 +311,9 @@ export function RemindersPage() {
             />
           </Surface>
         </PageTabsPanel>
+        <PageTabsPanel value="manual-push">
+          <ManualPushPanel />
+        </PageTabsPanel>
         <PageTabsPanel value="templates">
           <div className="grid gap-4 lg:grid-cols-2">
             {(templatesQuery.data?.items ?? []).map((t: any) => (
@@ -342,6 +358,51 @@ export function RemindersPage() {
           </div>
         </PageTabsPanel>
         <PageTabsPanel value="schedule">
+          <Surface
+            title="Mobile push (FCM)"
+            description="Push alerts follow the same schedule unless marked push-only. WhatsApp and push can run together."
+            className="mb-4"
+          >
+            <div className="divide-y">
+              {(
+                [
+                  ["enabled", "Enable push notifications"],
+                  ["dueReminders", "Fixed scheme due reminders"],
+                  ["overdueReminders", "Overdue reminders"],
+                  ["flexibleNudge", "Flexible scheme nudges"],
+                  ["paymentSuccess", "Payment success"],
+                  ["schemeJoined", "Scheme enrolment"],
+                  ["flexiLockApplied", "Flexible lock applied"],
+                  ["schemeMatured", "Scheme matured"],
+                  ["maturityReminders", "Pre-maturity reminders"],
+                ] as const
+              ).map(([key, label]) => (
+                <div key={key} className="flex items-center justify-between gap-4 p-5">
+                  <div>
+                    <strong>{label}</strong>
+                  </div>
+                  <Switch
+                    checked={configQuery.data?.push?.[key] !== false}
+                    aria-label={label}
+                    onCheckedChange={async (enabled) => {
+                      try {
+                        await updateConfig({
+                          ...configQuery.data,
+                          push: {
+                            ...(configQuery.data?.push ?? {}),
+                            [key]: enabled,
+                          },
+                        }).unwrap();
+                        toast.success("Push settings updated");
+                      } catch (err) {
+                        toastApiError(err, "Could not update push settings");
+                      }
+                    }}
+                  />
+                </div>
+              ))}
+            </div>
+          </Surface>
           <Surface
             title="Automated reminder schedule"
             description="Changes affect future queue generation only"

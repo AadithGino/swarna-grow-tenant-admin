@@ -2,6 +2,7 @@ import { createApi, fetchBaseQuery } from "@reduxjs/toolkit/query/react";
 import type { BaseQueryFn, FetchArgs, FetchBaseQueryError } from "@reduxjs/toolkit/query";
 import { env } from "@/src/config/env";
 import { newIdempotencyKey } from "@/src/lib/idempotency";
+import { ensureMutationJsonBody } from "@/src/lib/rtk-mutation-body";
 import { paginateSlice } from "@/src/lib/cursor-pagination";
 import {
   agentCashSummary,
@@ -473,7 +474,7 @@ function withMutationHeaders(args: string | FetchArgs) {
   if (typeof args === "string" || !["POST", "PUT", "PATCH", "DELETE"].includes(String(args.method ?? "GET").toUpperCase())) return args;
   const headers = new Headers(args.headers as HeadersInit | undefined);
   if (!headers.has("X-Idempotency-Key")) headers.set("X-Idempotency-Key", newIdempotencyKey());
-  return { ...args, headers };
+  return ensureMutationJsonBody({ ...args, headers });
 }
 
 function unwrap(result: { data?: unknown; error?: FetchBaseQueryError; meta?: unknown }) {

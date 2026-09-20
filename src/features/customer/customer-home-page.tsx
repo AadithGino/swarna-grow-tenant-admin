@@ -1,38 +1,71 @@
 "use client";
 
 import Link from "next/link";
+import { useMemo, useState } from "react";
 import {
-  ArrowRight,
-  Bell,
-  CalendarDays,
+  AlertTriangle,
+  BarChart3,
+  Check,
   ChevronRight,
-  Coins,
+  Eye,
+  EyeOff,
+  FileText,
   Gem,
   Grid2X2,
   IndianRupee,
   Layers3,
-  ShieldCheck,
   WalletCards,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { CustomerSchemeCard, CustomerSectionHeading } from "@/src/components/customer/customer-ui";
+import { CustomerHomeSchemeCard, formatCustomerDate } from "@/src/components/customer/customer-ui";
+import { CUSTOMER_MOBILE_NAV_DOCK } from "@/src/features/customer/customer-scheme-detail-views";
 import { PageSkeleton, QueryError } from "@/src/components/common/query-state";
-import { useGetCustomerHomeQuery } from "@/src/store/api/customer-api";
+import { useGetCustomerHomeQuery, useGetCustomerProfileQuery } from "@/src/store/api/customer-api";
 import { useCustomerTenant } from "@/src/components/customer/customer-tenant-context";
 import { customerPath } from "@/src/lib/customer-tenant";
 import { useCustomerGoldMetricsVisible } from "@/src/lib/customer-gold-ui";
 import { useCustomerPortalCapabilities } from "@/src/lib/customer-portal-capabilities";
-import type { SchemeCard } from "@/src/types/customer";
+import { useCustomerKycEnabled } from "@/src/lib/customer-kyc-enabled";
+import type { CustomerHome, CustomerProfile, SchemeCard } from "@/src/types/customer";
 
-function firstGoldBalance(schemes: SchemeCard[]) {
-  const gold = schemes.find((scheme) => scheme.valueBasis === "GOLD_WEIGHT");
-  return gold?.goldAccumulated ?? gold?.goldAccrued;
+function savingsCardIdentity(home: CustomerHome, profile?: CustomerProfile | null) {
+  const passbook =
+    home.customer.passbookNumber?.trim() || profile?.passbookNumber?.trim();
+  if (passbook) {
+    return { label: "Passbook no.", value: passbook };
+  }
+  const customerNumber = profile?.customerNumber?.trim();
+  if (customerNumber) {
+    return { label: "Customer no.", value: customerNumber };
+  }
+  return null;
 }
 
-function nextMaturity(schemes: SchemeCard[]) {
-  const values = schemes.map((scheme) => scheme.maturityDate).filter(Boolean).sort();
-  if (!values[0]) return "—";
-  return new Date(`${values[0]}${values[0].includes("T") ? "" : "T00:00:00"}`).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+function payTargetScheme(schemes: SchemeCard[], actionSchemeId?: string | null) {
+  return schemes.find((scheme) => scheme.id === actionSchemeId) ?? schemes.find((scheme) => scheme.canPay) ?? schemes[0];
+}
+
+function GoldRateSparkline({ points }: { points: number[] }) {
+  if (points.length < 2) {
+    return (
+      <svg className="h-10 w-20 text-[var(--customer-accent,#c9a227)]" viewBox="0 0 80 40" fill="none" aria-hidden>
+        <path d="M4 28 L24 22 L44 26 L76 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+      </svg>
+    );
+  }
+  const min = Math.min(...points);
+  const max = Math.max(...points);
+  const range = max - min || 1;
+  const coords = points.map((value, index) => {
+    const x = 4 + (index / (points.length - 1)) * 72;
+    const y = 34 - ((value - min) / range) * 26;
+    return `${x},${y}`;
+  });
+  return (
+    <svg className="h-10 w-20 text-[var(--customer-accent,#c9a227)]" viewBox="0 0 80 40" fill="none" aria-hidden>
+      <polyline points={coords.join(" ")} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
 }
 
 export function CustomerHomePage() {
@@ -40,6 +73,19 @@ export function CustomerHomePage() {
   const { data, isLoading, isError, refetch } = useGetCustomerHomeQuery();
   const { visible: showGoldMetrics } = useCustomerGoldMetricsVisible();
   const { customerSelfEnrol, customerAppPaymentsEnabled } = useCustomerPortalCapabilities();
+  const kycEnabled = useCustomerKycEnabled();
+  const { data: profile } = useGetCustomerProfileQuery();
+  const [amountsVisible, setAmountsVisible] = useState(true);
+
+  const trendPoints = useMemo(() => {
+    const trend = data?.contributionTrend ?? data?.goldAccumulationTrend ?? [];
+    return trend.map((item) => {
+      if ("amountPaise" in item) return item.amountPaise;
+      if ("amount" in item) return item.amount.amountPaise;
+      if ("weight" in item) return item.weight.weightMg;
+      return 0;
+    });
+  }, [data?.contributionTrend, data?.goldAccumulationTrend]);
 
   if (isLoading || !data) return <PageSkeleton cards={3} />;
   if (isError) return <QueryError onRetry={refetch} />;
@@ -47,100 +93,270 @@ export function CustomerHomePage() {
   const schemes = data.activeSchemes ?? [];
   const recentPayments = data.recentPayments ?? [];
   const appName = data.tenant.appDisplayName ?? data.tenant.displayName;
-  const activeCount = data.summary.activeSchemeCount ?? schemes.length;
-  const singleGoldBalance = schemes.length === 1 ? firstGoldBalance(schemes) : undefined;
-  const summaryPrimaryLabel = singleGoldBalance ? "Gold balance" : "Total saved";
-  const summaryPrimaryValue = singleGoldBalance?.weightDisplay ?? data.summary.totalPaid.amountDisplay;
-  const actionScheme = schemes.find((scheme) => scheme.id === data.actionCard?.schemeId) ?? schemes.find((scheme) => scheme.canPay);
+  const actionScheme = payTargetScheme(schemes, data.actionCard?.schemeId);
+  const totalSavings = data.summary.totalPaid.amountDisplay;
+  const goldAccumulated = data.summary.goldAccumulated?.weightDisplay;
+  const currentValue = data.summary.currentValuation?.amountDisplay;
+  const showSavingsBreakdown = Boolean(goldAccumulated && currentValue);
+
+  const cardIdentity = savingsCardIdentity(data, profile);
+  const kycStatus = profile?.kyc?.status;
+  const showKycBanner =
+    kycEnabled && kycStatus && kycStatus !== "VERIFIED";
 
   const quickActions = [
     {
       key: "PAY",
-      label: customerAppPaymentsEnabled
-        ? actionScheme?.displayMode === "FIXED"
-          ? "Pay"
-          : "Contribute"
-        : "View schemes",
+      label: "Pay now",
       icon: IndianRupee,
-      href: actionScheme && customerAppPaymentsEnabled
-        ? customerPath(tenantSlug, "schemes", actionScheme.id)
-        : customerPath(tenantSlug, "schemes"),
+      href:
+        actionScheme && customerAppPaymentsEnabled
+          ? customerPath(tenantSlug, "schemes", actionScheme.id)
+          : customerPath(tenantSlug, "schemes"),
     },
-    ...(customerSelfEnrol ? [{ key: "ENROL", label: "Explore plans", icon: Grid2X2, href: customerPath(tenantSlug, "plans") }] : []),
+    ...(customerSelfEnrol
+      ? [{ key: "ENROL", label: "Explore plans", icon: Grid2X2, href: customerPath(tenantSlug, "plans") }]
+      : []),
     { key: "PASSBOOK", label: "Passbook", icon: WalletCards, href: customerPath(tenantSlug, "payments") },
+    ...(showGoldMetrics
+      ? [{ key: "GOLD", label: "Gold rate", icon: BarChart3, href: customerPath(tenantSlug, "gold-rate") }]
+      : []),
   ];
 
+  const mask = (value: string) => (amountsVisible ? value : "••••••");
+
+  const goldMovement = data.goldRate?.movement ?? 0;
+  const ratePaise = data.goldRate?.ratePerGramPaise ?? 0;
+  const movementRupee =
+    ratePaise > 0 && goldMovement !== 0
+      ? Math.round((Math.abs(goldMovement) / 100) * (ratePaise / 100))
+      : null;
+  const movementLabel =
+    goldMovement === 0
+      ? "No change today"
+      : movementRupee != null && movementRupee > 0
+        ? `${goldMovement > 0 ? "▲" : "▼"} ₹${movementRupee.toLocaleString("en-IN")} today`
+        : `${goldMovement > 0 ? "▲" : "▼"} ${Math.abs(goldMovement)}% today`;
+
   return (
-    <div>
-      <section className="px-1 sm:px-2">
-        <h1 className="text-[2rem] font-black tracking-[-.045em] text-[#11111b] sm:text-[2.65rem]">{data.greeting.text}</h1>
-        <p className="mt-1 text-base text-[#777280] sm:text-lg">{data.greeting.subtext}</p>
+    <div
+      className="mx-auto max-w-lg"
+      style={{ paddingBottom: `calc(${CUSTOMER_MOBILE_NAV_DOCK} + 0.75rem + env(safe-area-inset-bottom, 0px))` }}
+    >
+      <section>
+        <h1 className="text-[1.65rem] font-black tracking-[-.03em] text-[#11111b]">{data.greeting.text}</h1>
+        {data.greeting.subtext ? (
+          <p className="mt-1 text-sm text-[#777280]">{data.greeting.subtext}</p>
+        ) : null}
       </section>
 
-      <section className="customer-surface relative mt-7 overflow-hidden p-5 sm:p-7">
-        <div className="relative z-10 grid gap-5 md:grid-cols-[1fr_1.05fr] md:items-center">
-          <div>
-            <p className="text-sm font-medium text-[#716d7b]">{summaryPrimaryLabel}</p>
-            <p className="mt-1 text-[2.65rem] font-black tracking-[-.045em] text-[var(--customer-accent,#8b5f08)] sm:text-[3.35rem]">{summaryPrimaryValue}</p>
-            {singleGoldBalance ? <p className="mt-1 text-sm font-semibold text-[#706b77]">{data.summary.totalPaid.amountDisplay} contributed</p> : null}
+      {showKycBanner ? (
+        <section
+          className="mt-5 flex flex-col gap-3 rounded-2xl border border-[rgba(var(--customer-primary-rgb,115,3,33),0.28)] bg-[#fff4eb] px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+        >
+          <div className="flex min-w-0 items-center gap-2.5">
+            <AlertTriangle className="size-4 shrink-0 text-[var(--customer-primary,#730321)]" strokeWidth={2.25} />
+            <p className="text-xs leading-snug text-[#706b77] sm:text-sm">
+              <span className="font-black text-[#171722]">KYC pending</span>
+              <span className="hidden sm:inline"> — </span>
+              <span className="block sm:inline">Complete verification to enrol in new plans</span>
+            </p>
           </div>
-          <div className="relative hidden min-h-24 items-center justify-center md:flex">
-            <span className="grid size-20 place-items-center rounded-full border bg-[#fff8e6] text-[var(--customer-accent,#a47316)]" style={{ borderColor: "rgba(var(--customer-accent-rgb, 201, 162, 39), 0.45)" }}><Coins className="size-10" strokeWidth={1.55} /></span>
-            <svg className="absolute inset-x-0 bottom-2 h-12 w-full text-[var(--customer-accent,#d6a73e)]" viewBox="0 0 500 70" fill="none" aria-hidden><path d="M0 45C86 72 138 7 224 32C310 57 360 71 500 10" stroke="currentColor" strokeWidth="1.4" /></svg>
-            <p className="absolute right-1 top-0 max-w-28 text-sm leading-5 text-[var(--customer-accent,#8b5f08)]">Small steps towards a brighter tomorrow</p>
+          <Button
+            asChild
+            variant="outline"
+            className="h-8 shrink-0 rounded-full border-[var(--customer-primary,#730321)] bg-white/80 px-4 text-xs font-bold text-[var(--customer-primary,#730321)] hover:bg-white"
+          >
+            <Link href={customerPath(tenantSlug, "profile", "kyc")}>Complete KYC</Link>
+          </Button>
+        </section>
+      ) : null}
+
+      <section
+        className="relative mt-5 overflow-hidden rounded-[1.35rem] p-5 text-white shadow-[0_16px_40px_rgba(var(--customer-primary-rgb,115,3,33),0.28)] sm:p-6"
+        style={{ background: "var(--customer-primary, #730321)" }}
+      >
+        <svg
+          className="pointer-events-none absolute -bottom-6 -right-4 h-36 w-36 opacity-[0.14]"
+          viewBox="0 0 120 120"
+          fill="none"
+          aria-hidden
+        >
+          <path
+            d="M88 72 L90 82 L100 82 L92 88 L94 98 L88 92 L82 98 L84 88 L76 82 L86 82 Z"
+            stroke="var(--customer-accent, #c9a227)"
+            strokeWidth="1.2"
+            fill="none"
+          />
+          <path
+            d="M98 48 L99 54 L105 54 L100 58 L101 64 L98 61 L95 64 L96 58 L91 54 L97 54 Z"
+            stroke="var(--customer-accent, #c9a227)"
+            strokeWidth="0.9"
+            fill="none"
+            opacity="0.7"
+          />
+        </svg>
+
+        <div className="relative z-10 flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-white/90">Total savings</p>
+            {cardIdentity ? (
+              <p className="mt-1 truncate text-xs font-medium text-white/75">
+                {cardIdentity.label}{" "}
+                <span className="font-bold text-white/95">{cardIdentity.value}</span>
+              </p>
+            ) : null}
           </div>
+          <button
+            type="button"
+            className="grid size-9 shrink-0 place-items-center rounded-full text-white/90 transition hover:bg-white/10"
+            aria-label={amountsVisible ? "Hide amounts" : "Show amounts"}
+            onClick={() => setAmountsVisible((value) => !value)}
+          >
+            {amountsVisible ? <Eye className="size-[1.15rem]" /> : <EyeOff className="size-[1.15rem]" />}
+          </button>
         </div>
-        <div className="relative z-10 mt-6 grid gap-3 border-t border-[#e9e1dc] pt-5 sm:grid-cols-2">
-          <p className="flex items-center gap-2 text-sm text-[#4e4a56]"><Layers3 className="size-5 text-[var(--customer-accent,#9a6b14)]" /><b>{activeCount}</b> active scheme{activeCount === 1 ? "" : "s"}</p>
-          <p className="flex items-center gap-2 text-sm text-[#4e4a56]"><CalendarDays className="size-5 text-[var(--customer-accent,#9a6b14)]" />Next maturity · <b>{nextMaturity(schemes)}</b></p>
-        </div>
+        <p className="relative z-10 mt-2 text-[2.35rem] font-black tracking-[-.04em] sm:text-[2.65rem]">{mask(totalSavings)}</p>
+
+        {showSavingsBreakdown ? (
+          <div className="relative z-10 mt-5 border-t border-white/25 pt-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <p className="text-[11px] font-medium text-white/80">Gold accumulated</p>
+                <p className="mt-1 text-base font-black sm:text-lg">{mask(goldAccumulated!)}</p>
+              </div>
+              <div className="border-l border-white/25 pl-4">
+                <p className="text-[11px] font-medium text-white/80">Current value</p>
+                <p className="mt-1 text-base font-black sm:text-lg">{mask(currentValue!)}</p>
+              </div>
+            </div>
+          </div>
+        ) : null}
       </section>
 
-      <section className={`mt-4 grid gap-3 ${quickActions.length === 2 ? "grid-cols-2" : "grid-cols-3"}`}>
-        {quickActions.map((action, index) => (
-          <Link key={action.key} href={action.href} className="customer-surface group flex min-w-0 flex-col gap-4 p-4 sm:flex-row sm:items-center sm:p-5">
-            <span className={`grid size-11 shrink-0 place-items-center rounded-full ${index === 0 ? "text-white" : index === 1 ? "text-[var(--customer-accent,#8b5f08)]" : "text-[var(--customer-primary,#730321)]"}`} style={index === 0 ? { background: "var(--customer-primary, #8a062a)" } : index === 1 ? { background: "rgba(var(--customer-accent-rgb, 201, 162, 39), 0.18)" } : { background: "rgba(var(--customer-primary-rgb, 115, 3, 33), 0.08)" }}><action.icon className="size-5" /></span>
-            <b className="truncate text-sm sm:text-base">{action.label}</b>
-            <ChevronRight className="ml-auto hidden size-4 transition-transform group-hover:translate-x-0.5 sm:block" />
+      <section
+        className={`mt-4 grid gap-2.5 ${quickActions.length >= 4 ? "grid-cols-4" : quickActions.length === 3 ? "grid-cols-3" : "grid-cols-2"}`}
+      >
+        {quickActions.map((action) => (
+          <Link
+            key={action.key}
+            href={action.href}
+            className="flex min-h-[5.35rem] flex-col items-center justify-center gap-2 rounded-2xl border border-[#f0ebe6] bg-white px-1 py-3.5 text-center shadow-[0_6px_20px_rgba(var(--customer-primary-rgb,115,3,33),0.06)] transition active:scale-[0.98]"
+          >
+            <span className="grid size-11 place-items-center rounded-2xl bg-[#f6edf0] text-[var(--customer-primary,#730321)]">
+              <action.icon className="size-[1.2rem]" strokeWidth={2.15} />
+            </span>
+            <span className="text-[0.6875rem] font-bold leading-tight text-[#292732]">{action.label}</span>
           </Link>
         ))}
       </section>
 
-      {data.actionCard && actionScheme ? (
-        <section className="mt-5 flex flex-col gap-4 rounded-[1.35rem] border border-[#ead9ae] bg-[#fffaf0] p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
-          <div className="flex min-w-0 items-start gap-3.5">
-            <span className="grid size-12 shrink-0 place-items-center rounded-full text-[var(--customer-accent,#8b5f08)]" style={{ background: "rgba(var(--customer-accent-rgb, 201, 162, 39), 0.18)" }}><CalendarDays className="size-5" /></span>
-            <div className="min-w-0"><p className="text-[0.7rem] font-extrabold uppercase tracking-[.15em] text-[var(--customer-accent,#956817)]">{actionScheme.displayMode === "FIXED" ? "Instalment ready" : "Contribute when you choose"}</p><h2 className="mt-1 truncate text-lg font-black">{data.actionCard.title}</h2><p className="mt-0.5 truncate text-sm text-[#6f6b78]">{actionScheme.planName}{actionScheme.nextActionAmount ? ` · ${actionScheme.nextActionAmount.amountDisplay}` : ""}</p></div>
-          </div>
-          <div className="shrink-0"><Button asChild className="h-12 w-full rounded-xl px-6 text-sm font-black text-white sm:w-auto" style={{ background: "var(--customer-primary, #730321)" }}><Link href={customerPath(tenantSlug, "schemes", actionScheme.id)}>{customerAppPaymentsEnabled ? (actionScheme.displayMode === "FIXED" ? "Pay with PhonePe" : "Contribute securely") : "View scheme"}<ArrowRight className="ml-2 size-4" /></Link></Button><p className="mt-2 flex items-center justify-center gap-1 text-[0.7rem] text-[#77727c]"><ShieldCheck className="size-3.5" />{customerAppPaymentsEnabled ? "Secure payment" : "View-only mode enabled"}</p></div>
-        </section>
-      ) : null}
-
       {data.emptyState && schemes.length === 0 ? (
-        <section className="customer-surface mt-7 p-8 text-center"><span className="mx-auto grid size-14 place-items-center rounded-full text-[var(--customer-accent,#8b5f08)]" style={{ background: "rgba(var(--customer-accent-rgb, 201, 162, 39), 0.18)" }}><Gem /></span><h2 className="mt-4 text-xl font-black">Start your savings journey</h2><p className="mx-auto mt-2 max-w-md text-sm leading-6 text-[#706b77]">{data.emptyState.message}</p>{customerSelfEnrol ? <Button asChild className="mt-5 rounded-xl text-white" style={{ background: "var(--customer-primary, #730321)" }}><Link href={customerPath(tenantSlug, "plans")}>{data.emptyState.cta}</Link></Button> : <p className="mt-4 text-sm font-semibold text-[var(--customer-primary,#730321)]">Contact {appName} to enrol.</p>}</section>
+        <section className="customer-surface mt-7 p-8 text-center">
+          <span
+            className="mx-auto grid size-14 place-items-center rounded-full text-[var(--customer-accent,#8b5f08)]"
+            style={{ background: "rgba(var(--customer-accent-rgb, 201, 162, 39), 0.18)" }}
+          >
+            <Layers3 className="size-6" />
+          </span>
+          <h2 className="mt-4 text-xl font-black">Start your savings journey</h2>
+          <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-[#706b77]">{data.emptyState.message}</p>
+          {customerSelfEnrol ? (
+            <Button asChild className="mt-5 rounded-xl text-white" style={{ background: "var(--customer-primary, #730321)" }}>
+              <Link href={customerPath(tenantSlug, "plans")}>{data.emptyState.cta}</Link>
+            </Button>
+          ) : (
+            <p className="mt-4 text-sm font-semibold text-[var(--customer-primary,#730321)]">Contact {appName} to enrol.</p>
+          )}
+        </section>
       ) : null}
 
       {schemes.length > 0 ? (
-        <section className="mt-9">
-          <CustomerSectionHeading eyebrow="Your savings" title={schemes.length === 1 ? "Your scheme" : "Your schemes"} action={<Link href={customerPath(tenantSlug, "schemes")} className="inline-flex items-center gap-1 text-sm font-bold text-[var(--customer-primary,#730321)]">View all<ChevronRight className="size-4" /></Link>} />
-          <div className="customer-scroll-row -mx-4 flex gap-4 overflow-x-auto px-4 pb-3 sm:-mx-6 sm:px-6 lg:mx-0 lg:grid lg:grid-cols-2 lg:overflow-visible lg:px-0 xl:grid-cols-3">
-            {schemes.map((scheme, index) => <CustomerSchemeCard key={scheme.id} scheme={scheme} featured={index === 0 && Boolean(data.actionCard)} className="w-[88vw] shrink-0 sm:w-[520px] lg:w-auto" />)}
+        <section className="mt-7">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <h2 className="text-[1.05rem] font-black text-[#171722]">Active schemes</h2>
+            <Link href={customerPath(tenantSlug, "schemes")} className="inline-flex items-center gap-0.5 text-sm font-bold text-[var(--customer-primary,#730321)]">
+              View all
+              <ChevronRight className="size-4" />
+            </Link>
+          </div>
+          <div className="space-y-3">
+            {schemes.slice(0, 3).map((scheme) => (
+              <CustomerHomeSchemeCard key={scheme.id} scheme={scheme} paymentsEnabled={customerAppPaymentsEnabled} />
+            ))}
           </div>
         </section>
       ) : null}
 
-      <section className="mt-8 grid gap-5 lg:grid-cols-[1fr_330px]">
-        <div>
-          <CustomerSectionHeading title="Recent activity" action={<Link href={customerPath(tenantSlug, "payments")} className="inline-flex items-center gap-1 text-sm font-bold text-[var(--customer-primary,#730321)]">View passbook<ChevronRight className="size-4" /></Link>} />
-          <div className="customer-surface overflow-hidden px-5 sm:px-6">
-            {recentPayments.length ? <ul className="divide-y divide-[#e8dfd9]">{recentPayments.slice(0, 4).map((payment) => <li key={payment.id}><Link href={customerPath(tenantSlug, "payments", payment.id)} className="flex items-center gap-3 py-4"><span className="grid size-11 shrink-0 place-items-center rounded-full bg-[#eafbf3] text-[#0b9860]"><IndianRupee className="size-5" /></span><div className="min-w-0 flex-1"><p className="truncate text-sm font-black">{payment.amount.amountDisplay} received</p><p className="truncate text-xs text-[#77727c]">{payment.schemeName} · {payment.schemeNumber}</p></div><time className="shrink-0 text-xs text-[#77727c]">{payment.paidAt ? new Date(payment.paidAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : "—"}</time></Link></li>)}</ul> : <p className="py-9 text-center text-sm text-[#77727c]">Your verified payments will appear here.</p>}
+      {showGoldMetrics && data.goldRate ? (
+        <Link
+          href={customerPath(tenantSlug, "gold-rate")}
+          className="mt-6 flex items-stretch gap-3 rounded-2xl border border-[rgba(var(--customer-accent-rgb,201,162,39),0.22)] p-4 sm:p-[1.05rem]"
+          style={{ background: "rgba(var(--customer-accent-rgb, 201, 162, 39), 0.11)" }}
+        >
+          <span
+            className="grid size-12 shrink-0 place-items-center self-center rounded-2xl text-[var(--customer-accent,#8b5f08)]"
+            style={{ background: "rgba(var(--customer-accent-rgb, 201, 162, 39), 0.22)" }}
+          >
+            <Gem className="size-5" strokeWidth={2} />
+          </span>
+          <div className="min-w-0 flex-1 self-center">
+            <p className="text-xs font-semibold text-[#77727c]">Today&apos;s gold rate</p>
+            <p className="mt-0.5 text-sm font-black text-[#171722]">
+              {data.goldRate.purity ?? "22K"} · {data.goldRate.ratePerGramDisplay.replace(/\s*\/\s*g/i, "/g")}
+            </p>
+            <p className={`mt-0.5 text-xs font-semibold ${goldMovement >= 0 ? "text-[#0b9860]" : "text-red-600"}`}>
+              {movementLabel}
+            </p>
           </div>
-        </div>
+          <div className="flex shrink-0 flex-col items-end justify-between gap-2 py-0.5">
+            <GoldRateSparkline points={trendPoints} />
+            <p className="inline-flex items-center gap-0.5 text-[0.65rem] font-bold text-[var(--customer-primary,#730321)]">
+              View history
+              <ChevronRight className="size-3.5" />
+            </p>
+          </div>
+        </Link>
+      ) : null}
 
-        <div className="space-y-4">
-          {showGoldMetrics && data.goldRate ? <Link href={customerPath(tenantSlug, "gold-rate")} className="customer-surface flex items-center gap-3 p-5"><span className="grid size-11 place-items-center rounded-full text-[var(--customer-accent,#8b5f08)]" style={{ background: "rgba(var(--customer-accent-rgb, 201, 162, 39), 0.18)" }}><Gem className="size-5" /></span><div><p className="text-xs text-[#77727c]">Today’s {data.goldRate.purity ?? "22K"} rate</p><p className="mt-0.5 text-lg font-black text-[var(--customer-accent,#8b5f08)]">{data.goldRate.ratePerGramDisplay}</p></div><ChevronRight className="ml-auto size-4" /></Link> : null}
-          <Link href={customerPath(tenantSlug, "notifications")} className="customer-surface flex items-center gap-3 p-5"><span className="relative grid size-11 place-items-center rounded-full text-[var(--customer-primary,#730321)]" style={{ background: "rgba(var(--customer-primary-rgb, 115, 3, 33), 0.08)" }}><Bell className="size-5" />{data.unreadNotificationCount > 0 ? <i className="absolute right-0.5 top-0.5 size-2.5 rounded-full bg-[#ef394e] ring-2 ring-white" /> : null}</span><div><p className="text-sm font-black">{data.unreadNotificationCount ? `${data.unreadNotificationCount} new updates` : "You’re all caught up"}</p><p className="text-xs text-[#77727c]">Payments, schemes and support</p></div><ArrowRight className="ml-auto size-4" /></Link>
+      <section className="mt-7">
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <h2 className="text-[1.05rem] font-black text-[#171722]">Recent activity</h2>
+          <Link href={customerPath(tenantSlug, "payments")} className="inline-flex items-center gap-0.5 text-sm font-bold text-[var(--customer-primary,#730321)]">
+            View all
+            <ChevronRight className="size-4" />
+          </Link>
         </div>
+        {recentPayments.length ? (
+          <div className="space-y-3">
+            {recentPayments.slice(0, 3).map((payment) => (
+              <Link
+                key={payment.id}
+                href={customerPath(tenantSlug, "payments", payment.id)}
+                className="flex items-center gap-3.5 rounded-2xl border border-[#f0ebe6] bg-white p-4 shadow-[0_8px_24px_rgba(var(--customer-primary-rgb,115,3,33),0.06)] transition hover:-translate-y-0.5 sm:p-[1.05rem]"
+              >
+                <span className="grid size-11 shrink-0 place-items-center rounded-full bg-[#0b9860] text-white shadow-[0_4px_12px_rgba(11,152,96,0.28)]">
+                  <Check className="size-5" strokeWidth={2.75} />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[0.9375rem] font-bold leading-snug text-[#171722]">Payment successful</p>
+                  <p className="mt-1 truncate text-sm text-[#77727c]">
+                    <span className="font-semibold text-[#5c5763]">{payment.amount.amountDisplay}</span>
+                    <span className="mx-2 text-[#d5ced6]">·</span>
+                    {payment.paidAt ? formatCustomerDate(payment.paidAt) : "—"}
+                  </p>
+                </div>
+                <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-[#f6f2ee] text-[#a59da8]">
+                  <FileText className="size-[1.15rem]" strokeWidth={1.75} />
+                </span>
+              </Link>
+            ))}
+          </div>
+        ) : (
+          <div className="customer-surface px-4 py-9 text-center text-sm text-[#77727c] sm:px-5">
+            Your verified payments will appear here.
+          </div>
+        )}
       </section>
     </div>
   );

@@ -2205,12 +2205,80 @@ export async function mockRequest<T>({
           },
           attachPaymentLink: true,
           paymentLinkValidityHours: 72,
+          push: {
+            enabled: true,
+            dueReminders: true,
+            overdueReminders: true,
+            flexibleNudge: true,
+            paymentSuccess: true,
+            schemeJoined: true,
+            flexiLockApplied: true,
+            schemeMatured: true,
+            maturityReminders: true,
+            schemeClosed: true,
+          },
+          transactional: {
+            schemeJoined: true,
+            paymentSuccess: true,
+            paymentSuccessAttachPassbook: true,
+            flexiLockApplied: true,
+            schemeMatured: true,
+            schemeClosed: true,
+          },
         },
       } as T;
     case "updateRemindersConfig":
       return {
         __contract: true,
         payload: { ...body, auditEventId: "aud_rem_cfg" },
+      } as T;
+    case "pushBroadcastAudiencePreview":
+      return {
+        __contract: true,
+        payload: { eligibleDevices: 1284, subscriptionCap: null },
+      } as T;
+    case "presignPushUpload":
+      return {
+        __contract: true,
+        payload: {
+          uploadId: "upl_push_mock",
+          uploadUrl: "",
+          method: "PUT",
+          headers: {},
+          expiresAt: new Date(Date.now() + 900_000).toISOString(),
+        },
+      } as T;
+    case "completePushUpload":
+      return {
+        __contract: true,
+        payload: { uploadId: params.uploadId ?? "upl_push_mock", status: "UPLOADED", viewUrl: "/uploads/upl_push_mock" },
+      } as T;
+    case "createPushBroadcast":
+      return {
+        __contract: true,
+        payload: {
+          id: "pbc_mock_01",
+          title: body?.title ?? "Mock push",
+          body: body?.body ?? "",
+          status: "QUEUED",
+          stats: { audienceCount: 1284, messagesQueued: 0, delivered: 0, failed: 0, pending: 0 },
+          createdAt: new Date().toISOString(),
+        },
+      } as T;
+    case "pushBroadcasts":
+      return {
+        __contract: true,
+        payload: [
+          {
+            id: "pbc_mock_01",
+            title: "Festival preview",
+            body: "Visit our showroom for exclusive offers.",
+            status: "COMPLETED",
+            stats: { audienceCount: 420, messagesQueued: 420, delivered: 401, failed: 3, pending: 16 },
+            createdAt: "2026-09-10T10:00:00+05:30",
+          },
+        ],
+        meta: { page: { nextCursor: null, hasMore: false } },
       } as T;
     case "messagingTemplates":
       return {

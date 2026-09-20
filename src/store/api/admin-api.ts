@@ -25,6 +25,7 @@ import {
 import { readContractResponseBody } from "@/src/lib/contract-response";
 import { normalizeFetchBaseQueryError } from "@/src/lib/api-error";
 import { newIdempotencyKey } from "@/src/lib/idempotency";
+import { ensureMutationJsonBody } from "@/src/lib/rtk-mutation-body";
 import { businessTodayYmd } from "@/src/lib/list-date-range";
 import { mockRequest } from "@/src/mocks/mock-server";
 import type {
@@ -253,7 +254,7 @@ function withIdempotencyHeader(args: ApiArgs): ApiArgs {
   if (!headers.has("X-Idempotency-Key")) {
     headers.set("X-Idempotency-Key", newIdempotencyKey());
   }
-  return { ...args, headers };
+  return ensureMutationJsonBody({ ...args, headers });
 }
 
 const rawBaseQuery = fetchBaseQuery({
@@ -980,6 +981,7 @@ export const adminApi = createApi({
         url: `/admin/customers/${id}/unblock`,
         method: "POST",
         params: { id },
+        body: {},
         mockKey: "unblockCustomer",
       }),
       invalidatesTags: (_r, _e, { id }) => [
@@ -2005,7 +2007,7 @@ export const adminApi = createApi({
     }),
     getMessages: builder.query<
       ReturnType<typeof adaptMessages>,
-      (ListQueryParams & DateRangeQueryParams) | void
+      (ListQueryParams & DateRangeQueryParams & { broadcastId?: string; channel?: string }) | void
     >({
       query: (params) => ({
         url: "/admin/messaging/messages",
@@ -2800,6 +2802,89 @@ export const adminApi = createApi({
       }),
       transformResponse: (raw) => contractPayload(raw) as any,
       invalidatesTags: ["Message"],
+    }),
+    previewPushBroadcastAudience: builder.mutation<
+      { eligibleDevices: number; subscriptionCap: number | null },
+      { audience: string; branchId?: string; customerIds?: string[] }
+    >({
+      query: (body) => ({
+        url: "/admin/push/broadcasts/audience-preview",
+        method: "POST",
+        body,
+        mockKey: "pushBroadcastAudiencePreview",
+      }),
+      transformResponse: (raw) =>
+        contractPayload(raw) as { eligibleDevices: number; subscriptionCap: number | null },
+    }),
+    presignPushUpload: builder.mutation<
+      {
+        uploadId: string;
+        uploadUrl: string;
+        method: string;
+        headers: Record<string, string>;
+      },
+      { fileName: string; contentType: string; sizeBytes: number }
+    >({
+      query: (body) => ({
+        url: "/admin/push/uploads/presign",
+        method: "POST",
+        body: { ...body, purpose: "PUSH_BROADCAST_IMAGE" },
+        mockKey: "presignPushUpload",
+      }),
+      transformResponse: (raw) =>
+        contractPayload(raw) as {
+          uploadId: string;
+          uploadUrl: string;
+          method: string;
+          headers: Record<string, string>;
+        },
+    }),
+    completePushUpload: builder.mutation<
+      { uploadId: string; status: string; viewUrl?: string },
+      string
+    >({
+      query: (uploadId) => ({
+        url: `/admin/push/uploads/${uploadId}/complete`,
+        method: "POST",
+        mockKey: "completePushUpload",
+      }),
+      transformResponse: (raw) =>
+        contractPayload(raw) as { uploadId: string; status: string; viewUrl?: string },
+    }),
+    createPushBroadcast: builder.mutation<
+      Record<string, unknown>,
+      {
+        title: string;
+        body: string;
+        deepLink?: string;
+        imageUploadId?: string;
+        audience: string;
+        branchId?: string;
+        customerIds?: string[];
+      }
+    >({
+      query: (body) => ({
+        url: "/admin/push/broadcasts",
+        method: "POST",
+        body,
+        mockKey: "createPushBroadcast",
+      }),
+      transformResponse: (raw) => contractPayload(raw) as Record<string, unknown>,
+      invalidatesTags: ["Message"],
+    }),
+    getPushBroadcasts: builder.query<any, ListQueryParams | void>({
+      query: (params) => ({
+        url: "/admin/push/broadcasts",
+        params: params ?? {},
+        mockKey: "pushBroadcasts",
+      }),
+      transformResponse: (raw) => ({
+        items: (contractPayload(raw) as any[]) ?? [],
+        page: contractPage(raw),
+        meta: contractMeta(raw),
+      }),
+      providesTags: ["Message"],
+      refetchOnMountOrArgChange: STALE_TIER_D,
     }),
     getMessagingTemplates: builder.query<any, void>({
       query: () => ({
@@ -3665,6 +3750,11 @@ export const {
   useUpdateGrievanceMutation,
   useGetRemindersConfigQuery,
   useUpdateRemindersConfigMutation,
+  usePreviewPushBroadcastAudienceMutation,
+  usePresignPushUploadMutation,
+  useCompletePushUploadMutation,
+  useCreatePushBroadcastMutation,
+  useGetPushBroadcastsQuery,
   useGetMessagingTemplatesQuery,
   useGetMessagingTemplatePreviewQuery,
   useGetMessagingSummaryQuery,

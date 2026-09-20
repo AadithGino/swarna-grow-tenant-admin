@@ -6,6 +6,7 @@ import {
   ArrowRight,
   CalendarDays,
   Check,
+  ChevronRight,
   Clock3,
   Gem,
   IndianRupee,
@@ -18,6 +19,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type {
   CustomerDisplayMode,
+  CustomerPastScheme,
   CustomerSchemeDetail,
   SchemeCard,
   WeightRef,
@@ -51,9 +53,6 @@ export function CustomerBrand({ compact = false }: { compact?: boolean }) {
     logoDownload?.downloadUrl ??
     resolveTenantLogoUrl(tenant?.logoUrl);
   const title = tenant?.appDisplayName ?? tenant?.displayName ?? "Kairali Gold Savings";
-  const words = title.split(/\s+/);
-  const primary = words.slice(0, Math.max(1, words.length - 2)).join(" ") || words[0];
-  const secondary = words.length > 1 ? words.slice(Math.max(1, words.length - 2)).join(" ") : "Gold Savings";
 
   return (
     <span className="inline-flex min-w-0 items-center gap-3">
@@ -76,12 +75,14 @@ export function CustomerBrand({ compact = false }: { compact?: boolean }) {
       {!compact ? (
         <span className="min-w-0 leading-none">
           <b
-            className="block truncate text-[1.22rem] font-black tracking-tight"
+            className="block truncate text-[1.05rem] font-black tracking-tight sm:text-[1.22rem]"
             style={{ color: "var(--customer-primary, #730321)" }}
           >
-            {primary}
+            {title}
           </b>
-          <small className="mt-1 block truncate text-[0.82rem] font-medium tracking-wide text-[#6f6b78]">{secondary}</small>
+          <small className="mt-0.5 block truncate text-[0.68rem] font-medium text-[#8a8490] sm:text-[0.72rem]">
+            Powered by SwarnaGrow
+          </small>
         </span>
       ) : null}
     </span>
@@ -160,6 +161,300 @@ export function formatCustomerDate(iso?: string) {
 
 function progressWidth(percent: number) {
   return `${Math.min(100, Math.max(0, Math.round(percent)))}%`;
+}
+
+function homeSchemeBadge(mode: SchemeCard["displayMode"]) {
+  const normalized = normalizeDisplayMode(mode);
+  if (normalized === "FIXED") {
+    return { label: "FIXED", filled: true as const, className: "bg-[#f6edf0]", color: "var(--customer-primary, #730321)" };
+  }
+  if (normalized === "FLEXIBLE_LOCK_WINDOW") {
+    return { label: "FLEXIBLE · LOCKED", filled: false as const, className: "bg-[#fff2cf]", color: "var(--customer-accent, #805b14)" };
+  }
+  return { label: "FLEXIBLE", filled: false as const, className: "bg-[#fff2cf]", color: "var(--customer-accent, #805b14)" };
+}
+
+function dueDateFromScheme(scheme: SchemeCard) {
+  const label = scheme.nextActionLabel ?? "";
+  const split = label.split("·").pop()?.trim();
+  if (split && /\d/.test(split)) return split;
+  return formatCustomerDate(scheme.maturityDate);
+}
+
+export function CustomerHomeSchemeCard({
+  scheme,
+  paymentsEnabled,
+}: {
+  scheme: SchemeCard;
+  paymentsEnabled: boolean;
+}) {
+  const { tenantSlug } = useCustomerTenant();
+  const href = customerPath(tenantSlug, "schemes", scheme.id);
+  const normalized = normalizeDisplayMode(scheme.displayMode);
+  const isFixed = normalized === "FIXED";
+  const isCapped = normalized === "FLEXIBLE_LOCK_WINDOW";
+  const badge = homeSchemeBadge(scheme.displayMode);
+  const detail = "progressCard" in scheme ? (scheme as CustomerSchemeDetail) : null;
+  const cap = detail?.progressCard.cycleCap ?? scheme.cycleCap;
+  const remaining = detail?.progressCard.remainingThisCycle ?? scheme.remainingThisCycle;
+  const paid = scheme.totalPaid ?? { amountPaise: 0, amountDisplay: "₹0" };
+  const progressPercent = Math.min(100, Math.max(0, scheme.progressPercent ?? 0));
+  const payLabel = isFixed
+    ? "Pay now"
+    : paymentsEnabled && scheme.canPay
+      ? "Add payment"
+      : "View scheme";
+  const barColor = isCapped ? "var(--customer-accent, #c9a227)" : "var(--customer-primary, #730321)";
+
+  const showPayCta = paymentsEnabled && scheme.canPay;
+
+  const payCta = showPayCta ? (
+    <Link
+      href={href}
+      className="inline-flex h-8 min-w-[5.25rem] items-center justify-center rounded-full px-3.5 text-[0.6875rem] font-bold text-white shadow-[0_4px_12px_rgba(var(--customer-primary-rgb,115,3,33),0.22)]"
+      style={{ background: "var(--customer-primary, #730321)" }}
+    >
+      {payLabel}
+    </Link>
+  ) : (
+    <Link
+      href={href}
+      className="inline-flex h-9 items-center justify-center rounded-full border px-4 text-xs font-bold text-[var(--customer-primary,#730321)]"
+      style={{ borderColor: "rgba(var(--customer-primary-rgb, 115, 3, 33), 0.28)" }}
+    >
+      View
+    </Link>
+  );
+
+  const dueBlock =
+    isFixed && scheme.nextActionAmount ? (
+      <>
+        <p className="text-sm font-black leading-tight text-[#171722]">
+          {scheme.nextActionAmount.amountDisplay} due
+        </p>
+        <p className="mt-0.5 text-xs text-[#77727c]">{dueDateFromScheme(scheme)}</p>
+      </>
+    ) : (
+      <>
+        <p className="text-xs font-semibold text-[#77727c]">Maturity</p>
+        <p className="mt-0.5 text-sm font-black text-[#171722]">{formatCustomerDate(scheme.maturityDate)}</p>
+      </>
+    );
+
+  return (
+    <article className="overflow-hidden rounded-2xl border border-[#f0ebe6] bg-white p-4 shadow-[0_8px_26px_rgba(var(--customer-primary-rgb,115,3,33),0.07)] sm:p-[1.15rem]">
+      <span
+        className={cn(
+          "inline-flex rounded-full px-2.5 py-0.5 text-[0.62rem] font-extrabold tracking-[0.08em]",
+          badge.className,
+        )}
+        style={{ color: badge.color }}
+      >
+        {badge.label}
+      </span>
+
+      <div className="mt-3 grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-1">
+        <div className="min-w-0">
+          <Link href={href} className="block truncate text-[0.9375rem] font-black leading-snug text-[#171722]">
+            {scheme.planName}
+          </Link>
+          <p className="mt-0.5 truncate text-xs text-[#77727c]">Scheme {scheme.schemeNumber}</p>
+        </div>
+        <div className="shrink-0 text-right">{dueBlock}</div>
+      </div>
+
+      {isCapped && cap ? (
+        <div className="mt-3 grid grid-cols-3 gap-2 rounded-xl bg-[#fcfaf6] px-3 py-3 text-center">
+          <div>
+            <p className="text-[0.65rem] font-semibold text-[#77727c]">Cap</p>
+            <p className="mt-0.5 text-xs font-black">{cap.amountDisplay}</p>
+          </div>
+          <div className="border-x border-[#ebe4dc]">
+            <p className="text-[0.65rem] font-semibold text-[#77727c]">Paid</p>
+            <p className="mt-0.5 text-xs font-black">{paid.amountDisplay}</p>
+          </div>
+          <div>
+            <p className="text-[0.65rem] font-semibold text-[#77727c]">Remaining</p>
+            <p className="mt-0.5 text-xs font-black">{remaining?.amountDisplay ?? "—"}</p>
+          </div>
+        </div>
+      ) : null}
+
+      <div className={cn(isCapped && cap ? "mt-3" : "mt-3.5")}>
+        <div className="flex items-center gap-2.5">
+          <div className="h-2.5 min-w-0 flex-1 overflow-hidden rounded-full bg-[#ebebeb]">
+            <div
+              className="h-full rounded-full transition-[width] duration-500"
+              style={{ width: progressWidth(progressPercent), background: barColor }}
+            />
+          </div>
+          <div className="shrink-0">{payCta}</div>
+        </div>
+        <p className="mt-1.5 text-xs font-semibold text-[#706b77]">{scheme.progressLabel}</p>
+      </div>
+    </article>
+  );
+}
+
+const schemeListCardClass =
+  "block rounded-2xl border border-[#e8e2dc] bg-white p-4 shadow-[0_4px_16px_rgba(var(--customer-primary-rgb,115,3,33),0.05)] sm:p-[1.15rem]";
+
+function displaySchemeNumber(schemeNumber: string) {
+  return schemeNumber.replace(/^Scheme\s+/i, "").trim();
+}
+
+function schemeListBadges(mode: SchemeCard["displayMode"]) {
+  const normalized = normalizeDisplayMode(mode);
+  if (normalized === "FIXED") {
+    return [{ key: "fixed", label: "FIXED", className: "bg-[#f6edf0]", color: "var(--customer-primary, #730321)" }];
+  }
+  const badges = [{ key: "flex", label: "FLEXIBLE", className: "bg-[#fff2cf]", color: "#6b4e32" }];
+  if (normalized === "FLEXIBLE_LOCK_WINDOW") {
+    badges.push({ key: "locked", label: "LOCKED", className: "bg-[#fff2cf]", color: "#6b4e32" });
+  }
+  return badges;
+}
+
+function pastClosureLabel(closureType: string) {
+  const value = closureType.trim().toUpperCase();
+  if (value.includes("REDEEM")) return "REDEEMED";
+  if (value.includes("MATUR")) return "MATURED";
+  if (value.includes("CLOSE")) return "CLOSED";
+  return value.replace(/_/g, " ");
+}
+
+export function CustomerSchemesActiveCard({ scheme }: { scheme: SchemeCard }) {
+  const { tenantSlug } = useCustomerTenant();
+  const href = customerPath(tenantSlug, "schemes", scheme.id);
+  const normalized = normalizeDisplayMode(scheme.displayMode);
+  const isFixed = normalized === "FIXED";
+  const isLocked = normalized === "FLEXIBLE_LOCK_WINDOW";
+  const badges = schemeListBadges(scheme.displayMode);
+  const detail = "progressCard" in scheme ? (scheme as CustomerSchemeDetail) : null;
+  const cap = detail?.progressCard.cycleCap ?? scheme.cycleCap;
+  const remaining = detail?.progressCard.remainingThisCycle ?? scheme.remainingThisCycle;
+  const paidTotal = scheme.totalPaid?.amountDisplay ?? "₹0";
+  const progressPercent = Math.min(100, Math.max(0, scheme.progressPercent ?? 0));
+  const barColor = isLocked ? "var(--customer-accent, #c9a227)" : "var(--customer-primary, #730321)";
+
+  const footerLabel = isFixed ? "Next due" : "Maturity date";
+  const footerValue = isFixed
+    ? scheme.nextActionAmount
+      ? `${scheme.nextActionAmount.amountDisplay} · ${dueDateFromScheme(scheme)}`
+      : dueDateFromScheme(scheme)
+    : formatCustomerDate(scheme.maturityDate);
+
+  const capPaise = cap?.amountPaise ?? 0;
+  const remainingPaise = remaining?.amountPaise ?? 0;
+  const paidInCycle =
+    cap && remaining
+      ? new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(
+          Math.max(0, capPaise - remainingPaise) / 100,
+        )
+      : "—";
+
+  return (
+    <Link href={href} className={schemeListCardClass}>
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex flex-wrap gap-1.5">
+          {badges.map((badge) => (
+            <span
+              key={badge.key}
+              className={cn(
+                "inline-flex rounded-full px-2.5 py-0.5 text-[0.62rem] font-extrabold tracking-[0.06em]",
+                badge.className,
+              )}
+              style={{ color: badge.color }}
+            >
+              {badge.label}
+            </span>
+          ))}
+        </div>
+        <ChevronRight className="size-[1.15rem] shrink-0 text-[var(--customer-primary,#730321)]" strokeWidth={2.5} />
+      </div>
+
+      <div className="mt-2.5 min-w-0">
+        <h3 className="truncate text-[1.0625rem] font-black leading-snug text-[#171722]">{scheme.planName}</h3>
+        <p className="mt-0.5 truncate text-xs font-medium text-[#77727c]">{displaySchemeNumber(scheme.schemeNumber)}</p>
+      </div>
+
+      <p className="mt-3.5 text-[1.375rem] font-black tracking-tight text-[#171722]">
+        {paidTotal}
+        <span className="ml-1.5 text-[0.9375rem] font-semibold text-[#77727c]">paid</span>
+      </p>
+
+      {isLocked && cap ? (
+        <div className="mt-3.5 grid grid-cols-3 gap-1 rounded-xl bg-[#fcfaf6] px-2 py-3 text-center">
+          <div>
+            <p className="text-[0.65rem] font-semibold text-[#77727c]">Cap</p>
+            <p className="mt-0.5 text-xs font-black text-[#171722]">{cap.amountDisplay}</p>
+          </div>
+          <div className="border-x border-[#ebe4dc]">
+            <p className="text-[0.65rem] font-semibold text-[#77727c]">Paid</p>
+            <p className="mt-0.5 text-xs font-black text-[#171722]">{paidInCycle}</p>
+          </div>
+          <div>
+            <p className="text-[0.65rem] font-semibold text-[#77727c]">Left</p>
+            <p className="mt-0.5 text-xs font-black text-[#171722]">{remaining?.amountDisplay ?? "—"}</p>
+          </div>
+        </div>
+      ) : (
+        <div className="mt-3.5">
+          <div className="h-2.5 overflow-hidden rounded-full bg-[#ebebeb]">
+            <div
+              className="h-full rounded-full transition-[width] duration-500"
+              style={{ width: progressWidth(progressPercent), background: barColor }}
+            />
+          </div>
+          <p className="mt-1.5 text-xs font-semibold text-[#706b77]">{scheme.progressLabel}</p>
+        </div>
+      )}
+
+      <div className="mt-4 flex items-stretch gap-3 border-t border-[#ece6e0] pt-3.5">
+        <div className="min-w-0 flex-1">
+          <p className="text-[0.65rem] font-semibold text-[#77727c]">{footerLabel}</p>
+          <p className="mt-0.5 text-sm font-bold leading-snug text-[#171722]">{footerValue}</p>
+        </div>
+        <div className="w-px shrink-0 self-stretch bg-[#ece6e0]" aria-hidden />
+        <span className="inline-flex shrink-0 items-center gap-0.5 self-center text-sm font-bold text-[var(--customer-primary,#730321)]">
+          View scheme
+          <ChevronRight className="size-4" strokeWidth={2.5} />
+        </span>
+      </div>
+    </Link>
+  );
+}
+
+export function CustomerSchemesPastCard({ scheme }: { scheme: CustomerPastScheme }) {
+  const { tenantSlug } = useCustomerTenant();
+  const href = customerPath(tenantSlug, "schemes", scheme.id);
+  const badge = pastClosureLabel(scheme.closureType);
+
+  return (
+    <Link href={href} className={schemeListCardClass}>
+      <span className="inline-flex rounded-full bg-[#f0ece8] px-2.5 py-0.5 text-[0.62rem] font-extrabold tracking-[0.06em] text-[#6f6b78]">
+        {badge}
+      </span>
+      <div className="mt-2.5 min-w-0">
+        <h3 className="truncate text-base font-black text-[#171722]">{scheme.planName}</h3>
+        <p className="mt-0.5 truncate text-xs font-medium text-[#77727c]">{displaySchemeNumber(scheme.schemeNumber)}</p>
+      </div>
+      <div className="mt-3.5 grid grid-cols-3 gap-1 text-center">
+        <div>
+          <p className="text-[0.65rem] font-semibold text-[#77727c]">Final value</p>
+          <p className="mt-1 text-xs font-black text-[#171722] sm:text-sm">{scheme.finalValue.amountDisplay}</p>
+        </div>
+        <div className="border-x border-[#ebe4dc]">
+          <p className="text-[0.65rem] font-semibold text-[#77727c]">Benefit</p>
+          <p className="mt-1 text-xs font-black text-[#171722] sm:text-sm">{scheme.benefitReceived.amountDisplay}</p>
+        </div>
+        <div>
+          <p className="text-[0.65rem] font-semibold text-[#77727c]">Closed on</p>
+          <p className="mt-1 text-xs font-black text-[#171722] sm:text-sm">{formatCustomerDate(scheme.closedAt)}</p>
+        </div>
+      </div>
+    </Link>
+  );
 }
 
 function findGoldBalance(scheme: SchemeCard): WeightRef | undefined {

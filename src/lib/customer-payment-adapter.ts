@@ -109,6 +109,12 @@ export function adaptCustomerPayment(raw: unknown): PaymentListItem {
         ? row.valueBasis
         : undefined,
     goldAccrual: readGoldAccrual(row),
+    transactionId:
+      row.transactionId != null
+        ? String(row.transactionId)
+        : row.providerTransactionId != null
+          ? String(row.providerTransactionId)
+          : undefined,
   };
 }
 
