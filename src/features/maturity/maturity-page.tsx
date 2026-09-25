@@ -86,7 +86,7 @@ function openListForMaturityDate(
 }
 
 function maturitySettlementAction(
-  row: { id: string; status?: string },
+  row: { id: string; status?: string; pendingRedemption?: unknown },
   openSettlement: (schemeId: string) => void,
   goToRedemptions: () => void,
 ) {
@@ -98,7 +98,7 @@ function maturitySettlementAction(
       </Button>
     );
   }
-  if (status === "REDEMPTION_PENDING") {
+  if (row.pendingRedemption) {
     return (
       <Button size="sm" variant="outline" onClick={goToRedemptions}>
         Redemption queue

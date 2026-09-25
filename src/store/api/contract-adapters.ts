@@ -394,8 +394,8 @@ export function adaptEnrollmentList(
       plan: plan.name ?? item.planName ?? "—",
       branch: branchName(item),
       progress:
-        item.progress?.paidCycles ??
         item.progress?.installmentsPaid ??
+        item.progress?.paidCycles ??
         paidInstallments,
       tenure:
         item.progress?.installmentsTotal ??
@@ -444,14 +444,14 @@ export function adaptEnrollmentList(
       version: item.version ?? item.audit?.version ?? 1,
       canRecordPayment:
         item.actions?.canRecordPayment ??
-        ["ACTIVE", "LOCKED", "DEFAULTED"].includes(
-          String(item.uiStatus ?? item.status ?? "").toUpperCase(),
-        ),
+        (item.uiStatus ?? item.status) === "ACTIVE",
       canRedeem:
         item.actions?.canRedeem ??
         (item.uiStatus ?? item.status) === "MATURED",
       pendingRedemption: item.pendingRedemption ?? null,
       completedRedemption: item.completedRedemption ?? null,
+      allowedRedemptionModes:
+        plan.redemptionRules?.allowedModes ?? item.allowedRedemptionModes,
     };
   }) as Enrollment[];
 }
@@ -584,21 +584,17 @@ export function adaptEnrollment(raw: any): Enrollment {
     explainerText:
       flexible.capSnapshot?.explainerText ?? flexible.projectedLock?.note,
     currentCycleCap: rupees(
-      position.currentCycleCapPaise ??
-        position.currentCycleCap ??
-        flexible.capSnapshot?.cycleCapPaise ??
-        flexible.capSnapshot?.cycleCap,
+      position.currentCycleCap ?? flexible.capSnapshot?.cycleCap,
     ),
-    confirmedThisCycle: rupees(
-      position.confirmedThisCyclePaise ?? position.confirmedThisCycle,
-    ),
-    remainingThisCycle: rupees(
-      position.remainingThisCyclePaise ?? position.remainingThisCycle,
-    ),
+    confirmedThisCycle: rupees(position.confirmedThisCycle),
+    remainingThisCycle: rupees(position.remainingThisCycle),
     lockDate: flexible.freeWindow?.lockDate,
     daysToLock: flexible.freeWindow?.daysToLock,
     projectedMonthly: rupees(flexible.projectedLock?.ifWindowClosedToday),
     phase: flexible.phase,
+    allowedRedemptionModes:
+      item.planSnapshot?.redemptionRules?.allowedModes ??
+      row.allowedRedemptionModes,
     monthlyBreakdown: (flexible.freeWindow?.monthlyBreakdown ?? []).map(
       (m: any) => ({
         month: m.month,
@@ -693,10 +689,7 @@ export function adaptPayableRange(raw: any): PayableQuote {
     schemeId: item.schemeId ?? "",
     paymentPattern,
     displayMode,
-    eligible:
-      item.payable !== false &&
-      item.eligible !== false &&
-      (max ?? 0) > 0,
+    eligible: item.payable !== false && item.eligible !== false,
     helperText: item.helperText ?? item.warnings?.[0]?.message ?? "",
     suggested:
       suggested != null
@@ -978,6 +971,18 @@ export function adaptPaymentList(raw: any, customerName = ""): Payment[] {
             ? [payload]
             : [];
   return list.map((item: any) => {
+    const grossAmount = rupees(item.grossAmount ?? { amountPaise: item.amountPaise ?? 0 });
+    const refundedAmount = rupees(
+      item.refundedAmount ?? { amountPaise: item.refundedAmountPaise ?? 0 },
+    );
+    const netAmount = rupees(
+      item.netAmount ?? {
+        amountPaise: Math.max(
+          0,
+          Number(item.amountPaise ?? 0) - Number(item.refundedAmountPaise ?? 0),
+        ),
+      },
+    );
     const customer =
       item.customer?.name ??
       (typeof item.customer === "string" && item.customer
@@ -1023,7 +1028,15 @@ export function adaptPaymentList(raw: any, customerName = ""): Payment[] {
         item.schemeNumber ??
         "—",
       schemeId: String(item.schemeId ?? item.scheme?._id ?? item.scheme?.id ?? ""),
-      amount: rupees(item) || rupees(item.amount) || (item.amountPaise ?? 0) / 100,
+      amount: netAmount,
+      grossAmount,
+      refundedAmount,
+      netAmount,
+      gatewayRefundReservedAmount: rupees(
+        item.gatewayRefundReservedAmount ?? {
+          amountPaise: item.gatewayRefundReservedPaise ?? 0,
+        },
+      ),
       mode: item.mode,
       staff: recordedBy,
       branch: branchName(item),
@@ -1038,11 +1051,11 @@ export function adaptPaymentList(raw: any, customerName = ""): Payment[] {
 function byModeFromSuccessfulItems(items: Payment[]) {
   const buckets = new Map<string, { count: number; amount: number }>();
   for (const row of items) {
-    if (row.status !== "SUCCESS") continue;
+    if (!["SUCCESS", "PARTIALLY_REFUNDED"].includes(row.status)) continue;
     const mode = row.mode ?? "CASH";
     const prev = buckets.get(mode) ?? { count: 0, amount: 0 };
     prev.count += 1;
-    prev.amount += Number(row.amount ?? 0);
+    prev.amount += Number(row.netAmount ?? row.amount ?? 0);
     buckets.set(mode, prev);
   }
   return [...buckets.entries()]
@@ -1058,14 +1071,21 @@ function byModeFromSuccessfulItems(items: Payment[]) {
 function paymentSummaryFromItems(items: Payment[]) {
   const sum = (predicate: (p: Payment) => boolean) =>
     items.filter(predicate).reduce((total, row) => total + Number(row.amount ?? 0), 0);
-  const collected = sum((p) => p.status === "SUCCESS");
-  const cash = sum((p) => p.status === "SUCCESS" && p.mode === "CASH");
-  const card = sum((p) => p.status === "SUCCESS" && p.mode === "CARD");
-  const upi = sum((p) => p.status === "SUCCESS" && p.mode === "UPI");
+  const isCollected = (p: Payment) =>
+    p.status === "SUCCESS" || p.status === "PARTIALLY_REFUNDED";
+  const sumNet = (predicate: (p: Payment) => boolean) =>
+    items
+      .filter(predicate)
+      .reduce((total, row) => total + Number(row.netAmount ?? row.amount ?? 0), 0);
+  const collected = sumNet(isCollected);
+  const cash = sumNet((p) => isCollected(p) && p.mode === "CASH");
+  const card = sumNet((p) => isCollected(p) && p.mode === "CARD");
+  const upi = sumNet((p) => isCollected(p) && p.mode === "UPI");
   const online = sum(
     (p) =>
-      p.status === "SUCCESS" &&
-      (p.mode === "ONLINE_GATEWAY" || p.mode === "BANK_TRANSFER"),
+      isCollected(p) &&
+      (p.mode === "ONLINE_GATEWAY" ||
+        p.mode === "BANK_TRANSFER"),
   );
   return {
     collected,
@@ -1076,6 +1096,10 @@ function paymentSummaryFromItems(items: Payment[]) {
     digital: card + upi + online,
     pending: sum((p) => p.status === "PENDING"),
     reversed: sum((p) => p.status === "REVERSED"),
+    refunded: items.reduce(
+      (total, row) => total + Number(row.refundedAmount ?? 0),
+      0,
+    ),
     failed: items.filter((p) => p.status === "FAILED").length,
     lateSuccess: sum((p) => Boolean(p.isLateSuccess)),
   };
@@ -1096,6 +1120,10 @@ export function adaptPayments(raw: any) {
       digital: raw.summary?.digital ?? derived.digital,
       pending: raw.summary?.pending ?? derived.pending,
       reversed: raw.summary?.reversed ?? derived.reversed,
+      refunded:
+        raw.summary?.refunded ??
+        rupees(raw.summary?.totalRefundedAmount ?? raw.summary?.refundedAmount) ??
+        derived.refunded,
       failed: raw.summary?.failed ?? derived.failed,
       lateSuccess: raw.summary?.lateSuccess ?? derived.lateSuccess,
     };
@@ -1104,7 +1132,7 @@ export function adaptPayments(raw: any) {
   const items = adaptPaymentList(raw);
   const meta = contractMeta(raw)?.summary ?? {};
   const derived = paymentSummaryFromItems(items);
-  let byModeRows = (meta.byMode ?? []).map((x: any) => ({
+  let byModeRows: Array<{ mode: string; label: string; count: number; amount: number }> = (meta.byMode ?? []).map((x: any) => ({
     mode: x.mode,
     label: x.label ?? x.mode,
     count: x.count ?? 0,
@@ -1122,7 +1150,8 @@ export function adaptPayments(raw: any) {
   const card = byMode.CARD ?? derived.card;
   const upi = byMode.UPI ?? derived.upi;
   const onlineFromModes =
-    (byMode.ONLINE_GATEWAY ?? 0) + (byMode.BANK_TRANSFER ?? 0);
+    (byMode.ONLINE_GATEWAY ?? 0) +
+    (byMode.BANK_TRANSFER ?? 0);
   const online = onlineFromModes || derived.online;
   const digital =
     Object.entries(byMode)
@@ -1154,6 +1183,9 @@ export function adaptPayments(raw: any) {
         ) || derived.pending,
       failed: meta.failedCount ?? derived.failed,
       reversed: rupees(meta.reversedAmount) || derived.reversed,
+      refunded:
+        rupees(meta.totalRefundedAmount ?? meta.refundedAmount) ||
+        derived.refunded,
       lateSuccess: derived.lateSuccess,
     },
   };
@@ -1496,7 +1528,7 @@ export function adaptSubscriptionInvoice(row: unknown): Record<string, unknown> 
   const amountRaw = inv.amount as Record<string, unknown> | undefined;
   return {
     id: entityId(inv),
-    number: inv.number ?? inv.reference ?? entityId(inv),
+    number: inv.invoiceNumber ?? inv.number ?? inv.reference ?? entityId(inv),
     periodLabel: inv.periodLabel ?? inv.dueDate ?? "—",
     amount:
       amountRaw?.amountDisplay != null
@@ -2565,6 +2597,9 @@ function mapDueWorkboardRow(
     amount?: number;
     status?: string;
     graceEndsAt?: string;
+    paymentPattern?: string;
+    flexiblePhase?: string;
+    targetCycle?: string;
   },
   context: {
     schemeId: string;
@@ -2611,10 +2646,15 @@ function mapDueWorkboardRow(
     amount,
     overdueDays: daysPastDue(dueDateRaw),
     status,
-    installmentNumber: context.installmentNumber,
-    targetCycle: context.targetCycle,
-    paymentPattern: context.paymentPattern,
-    flexiblePhase: context.flexiblePhase,
+    paymentPattern:
+      inst.paymentPattern === "FLEXIBLE" ? "FLEXIBLE" : "FIXED",
+    flexiblePhase:
+      inst.flexiblePhase === "CAPPED"
+        ? "CAPPED"
+        : inst.flexiblePhase === "FLEXIBLE"
+          ? "FLEXIBLE"
+          : undefined,
+    targetCycle: inst.targetCycle ? String(inst.targetCycle) : undefined,
   };
 }
 
@@ -2663,14 +2703,11 @@ function flattenDueInstallments(schemes: any[]): any[] {
             amountPaise: dp.amountPaise,
             paidPaise: dp.paidPaise ?? 0,
             status: dp.status,
-          },
-          {
-            ...context,
-            installmentNumber: dp.installmentNumber,
+            paymentPattern: dp.paymentPattern,
+            flexiblePhase: dp.flexiblePhase,
             targetCycle: dp.targetCycle,
-            paymentPattern: dp.paymentPattern ?? scheme.paymentPattern,
-            flexiblePhase: dp.flexiblePhase ?? scheme.flexiblePhase,
           },
+          context,
         ),
       );
       continue;
@@ -3055,7 +3092,6 @@ export type RedemptionDetailView = {
   closureTypeLabel: string;
   mode: string;
   modeLabel: string;
-  billNumber?: string;
   version: number;
   requestedAt: string;
   approvedAt?: string;
@@ -3183,10 +3219,6 @@ export function adaptRedemptionDetail(raw: unknown): RedemptionDetailView {
       REDEMPTION_CLOSURE_LABELS[closureType] ?? closureType.replace(/_/g, " "),
     mode,
     modeLabel: REDEMPTION_MODE_LABELS[mode] ?? mode,
-    billNumber:
-      typeof item.modeDetails?.billNumber === "string"
-        ? item.modeDetails.billNumber
-        : undefined,
     version: Number(item.version ?? 0),
     requestedAt: dateTime(item.requestedAt ?? item.createdAt),
     approvedAt: item.approvedAt ? dateTime(item.approvedAt) : undefined,
@@ -3367,8 +3399,8 @@ function deriveMaturitySummary(items: any[]): Record<string, number> {
         : typeof maturityRaw === "string" && /^\d{4}-\d{2}-\d{2}/.test(maturityRaw)
           ? maturityRaw.slice(0, 10)
           : null;
-    if (status === "MATURED" || status === "REDEMPTION_PENDING") notRedeemed += 1;
-    if (status === "TERM_ENDED") incomplete += 1;
+    if (status === "MATURED" || row.pendingRedemption) notRedeemed += 1;
+    if (status === "DEFAULTED") incomplete += 1;
     if (maturityIso === today) maturedToday += 1;
     if (maturityIso && maturityIso >= today && maturityIso <= in30) upcoming += 1;
     liability += Number(row.paid ?? 0);

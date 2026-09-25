@@ -46,19 +46,3 @@ export function prematureClosureRemarksReady(remarks: string): boolean {
 export function redeemRemarksReady(remarks: string): boolean {
   return validateSettlementRemarks(remarks, { required: false }) === undefined;
 }
-
-const BILL_NUMBER_MAX = 64;
-
-export function validatePurchaseAdjustmentBillNumber(billNumber: string): string | undefined {
-  const trimmed = billNumber.trim();
-  if (!trimmed) return "Bill / invoice number is required for purchase adjustment.";
-  if (trimmed.length > BILL_NUMBER_MAX) {
-    return `Bill number must be ${BILL_NUMBER_MAX} characters or fewer.`;
-  }
-  return undefined;
-}
-
-export function purchaseAdjustmentBillReady(mode: string, billNumber: string): boolean {
-  if (mode !== "PURCHASE_ADJUSTMENT") return true;
-  return validatePurchaseAdjustmentBillNumber(billNumber) === undefined;
-}

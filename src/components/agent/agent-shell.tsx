@@ -8,7 +8,6 @@ import { cn } from "@/lib/utils";
 import { useAppDispatch, useAppSelector } from "@/src/store/hooks";
 import { clearAgentSession, hydrateAgentSession } from "@/src/store/slices/agent-session-slice";
 import { useAgentLogoutMutation, useGetAgentMeQuery } from "@/src/store/api/agent-api";
-import { agentSignInRedirectPath } from "@/src/lib/agent-tenant";
 
 const nav = [
   { href: "/agent", label: "Home", icon: Home, exact: true },
@@ -27,17 +26,13 @@ export function AgentShell({ children }: { children: React.ReactNode }) {
   const { data: me } = useGetAgentMeQuery(undefined, { skip: !session });
 
   useEffect(() => { if (!hydrated) dispatch(hydrateAgentSession()); }, [dispatch, hydrated]);
-  useEffect(() => {
-    if (hydrated && !session) {
-      router.replace(agentSignInRedirectPath(session));
-    }
-  }, [hydrated, router, session]);
+  useEffect(() => { if (hydrated && !session) router.replace("/agent/login"); }, [hydrated, router, session]);
   const active = (item: (typeof nav)[number]) => item.exact ? pathname === item.href : pathname.startsWith(item.href);
 
   const signOut = async () => {
     if (session?.refreshToken) await logout({ refreshToken: session.refreshToken }).catch(() => undefined);
     dispatch(clearAgentSession());
-    router.replace(agentSignInRedirectPath(session));
+    router.replace("/agent/login");
   };
 
   if (!hydrated || !session) return <div className="agent-theme grid min-h-screen place-items-center"><div className="size-10 animate-spin rounded-full border-4 border-[#ecd8dd] border-t-[#730321]" /></div>;

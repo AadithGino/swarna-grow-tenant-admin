@@ -23,7 +23,6 @@ import {
   Surface,
 } from "@/src/components/common/page-parts";
 import { parseApiError } from "@/src/lib/api-error";
-import { flexiblePhaseTargetMonths } from "@/src/lib/flexible-plan-phase-target";
 import {
   validatePlanBuilderFull,
   validatePlanBuilderStep,
@@ -290,9 +289,7 @@ export function PlanBuilderWizard({
     form.capMinCycle,
     Math.min(form.capMaxCycle, roundedCap),
   );
-  const flexiblePaymentMonths = flexiblePhaseTargetMonths(form);
-  const splitMatchesPaymentMonths =
-    totalFlexibleMonths === flexiblePaymentMonths;
+  const splitMatchesDuration = totalFlexibleMonths === form.durationMonths;
   const freeBoundsValid =
     form.flexMinPayment > 0 && form.flexMaxPayment >= form.flexMinPayment;
   const capBandValid = form.capMinCycle > 0 && form.capMaxCycle >= form.capMinCycle;
@@ -427,6 +424,41 @@ export function PlanBuilderWizard({
                         set({ blockPaymentIfRateNotSet: v })
                       }
                     />
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div>
+                        <FieldLabel>Weight rounding</FieldLabel>
+                        <FieldHint>Applied when payment money converts to milligrams.</FieldHint>
+                        <Select
+                          value={form.weightRoundingMode}
+                          onValueChange={(value) =>
+                            set({
+                              weightRoundingMode:
+                                value as PlanBuilderFormState["weightRoundingMode"],
+                            })
+                          }
+                        >
+                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="HALF_UP">Half up</SelectItem>
+                            <SelectItem value="ROUND_DOWN">Round down</SelectItem>
+                            <SelectItem value="ROUND_UP">Round up</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <FieldLabel>Weight precision (mg)</FieldLabel>
+                        <FieldHint>Round weight to this milligram step.</FieldHint>
+                        <Input
+                          type="number"
+                          min={1}
+                          step={1}
+                          value={form.weightPrecisionMg}
+                          onChange={(event) =>
+                            set({ weightPrecisionMg: Number(event.target.value) })
+                          }
+                        />
+                      </div>
+                    </div>
                   </FormSection>
                 )}
                 <FormSection
@@ -479,12 +511,12 @@ export function PlanBuilderWizard({
             {current.id === "duration" && (
               <FormSection
                 title="Scheme length"
-                hint="Duration is calendar tenure to maturity. Installment count is how many payment periods you schedule (e.g. 12 months duration, 11 installments for a free final month)."
+                hint="Usually duration and installment count match (e.g. 11 months, 11 installments)."
               >
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div>
                     <FieldLabel>Duration (months)</FieldLabel>
-                    <FieldHint>Maturity calendar — scheme becomes MATURED after this many months.</FieldHint>
+                    <FieldHint>Total scheme tenure from enrolment to maturity.</FieldHint>
                     <Input
                       type="number"
                       min={1}
@@ -511,13 +543,12 @@ export function PlanBuilderWizard({
                 </div>
                 {form.paymentPattern === "FLEXIBLE_AVERAGE" &&
                 form.flexiblePhaseCycles + form.cappedPhaseCycles !==
-                  flexiblePaymentMonths ? (
+                  form.installmentCount ? (
                   <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950">
                     Tip: free + capped months (
                     {form.flexiblePhaseCycles + form.cappedPhaseCycles}) should
-                    equal installment count ({flexiblePaymentMonths}) — adjust on
-                    Flexible rules. Duration ({form.durationMonths}) is maturity
-                    only when it differs.
+                    equal contribution cycles ({form.installmentCount}) — adjust on Flexible
+                    rules.
                   </p>
                 ) : null}
               </FormSection>
@@ -997,15 +1028,8 @@ export function PlanBuilderWizard({
                         Configuration health
                       </p>
                       <ul className="mt-2 space-y-1.5 text-sm">
-                        <li
-                          className={
-                            splitMatchesPaymentMonths
-                              ? "text-emerald-700"
-                              : "text-amber-700"
-                          }
-                        >
-                          {splitMatchesPaymentMonths ? "OK" : "Check"}: free +
-                          capped = installment count ({flexiblePaymentMonths})
+                        <li className={splitMatchesDuration ? "text-emerald-700" : "text-amber-700"}>
+                          {splitMatchesDuration ? "OK" : "Check"}: free + capped months
                         </li>
                         <li className={freeBoundsValid ? "text-emerald-700" : "text-amber-700"}>
                           {freeBoundsValid ? "OK" : "Check"}: free payment min/max

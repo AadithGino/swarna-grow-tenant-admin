@@ -43,13 +43,6 @@ import {
   type ScheduleRow,
   type ScheduleStatus,
 } from "@/src/features/customer/customer-scheme-schedule";
-import {
-  cappedCyclePaidPaise,
-  flexibleFreeTimeline,
-  formatInrPaise,
-  paidThisCyclePaise,
-  resolveTotalPaidPaise,
-} from "@/src/features/customer/customer-scheme-progress";
 
 export function normalizeSchemeMode(mode: CustomerDisplayMode): CustomerDisplayMode {
   return mode === "FLEXIBLE_CAPPED_WINDOW" ? "FLEXIBLE_LOCK_WINDOW" : mode;
@@ -137,7 +130,7 @@ function scheduleIconWrap(status: ScheduleStatus) {
 function FixedHero({ scheme, schemeIsGold }: { scheme: CustomerSchemeDetail; schemeIsGold?: boolean }) {
   const paid = scheme.progressCard.installmentsPaid ?? 0;
   const total = scheme.progressCard.installmentsTotal ?? 0;
-  const totalPaid = formatInrPaise(resolveTotalPaidPaise(scheme));
+  const totalPaid = scheme.totalPaid?.amountDisplay ?? "₹0";
   const goldBalance =
     scheme.goldAccumulated ?? scheme.goldAccrued ?? scheme.progressCard.goldAccumulated ?? scheme.progressCard.goldAccrued;
   const progress = total ? (paid / total) * 100 : scheme.progressPercent ?? 0;
@@ -181,9 +174,9 @@ function FixedHero({ scheme, schemeIsGold }: { scheme: CustomerSchemeDetail; sch
 }
 
 function FlexibleFreeHero({ scheme }: { scheme: CustomerSchemeDetail }) {
-  const totalPaid = formatInrPaise(resolveTotalPaidPaise(scheme));
-  const { freeMonths, cappedMonths, planMonths, currentMonth } =
-    flexibleFreeTimeline(scheme);
+  const totalPaid = scheme.totalPaid?.amountDisplay ?? "₹0";
+  const month = scheme.progressCard.freeWindowMonth ?? scheme.freeWindowMonth ?? 0;
+  const months = scheme.progressCard.freeWindowMonths ?? scheme.freeWindowMonths ?? 0;
 
   return (
     <section
@@ -200,33 +193,19 @@ function FlexibleFreeHero({ scheme }: { scheme: CustomerSchemeDetail }) {
         {totalPaid}
         <span className="ml-2 text-base font-semibold text-white/80">saved</span>
       </p>
-      <p className="relative z-10 mt-4 text-xs font-semibold text-white/85">
-        {scheme.progressLabel ??
-          (freeMonths
-            ? `Free window · month ${currentMonth} of ${freeMonths}`
-            : "Flexible free window")}
-      </p>
-      {scheme.progressDetail ? (
-        <p className="relative z-10 mt-1 text-[0.68rem] leading-snug text-white/70">
-          {scheme.progressDetail}
+      {month && months ? (
+        <p className="relative z-10 mt-4 text-xs font-semibold text-white/85">
+          Month {month} of {months}
         </p>
-      ) : cappedMonths ? (
-        <p className="relative z-10 mt-1 text-[0.68rem] leading-snug text-white/70">
-          {cappedMonths}-month capped phase follows the free window
-          {planMonths ? ` · ${planMonths}-month plan` : ""}
-        </p>
-      ) : null}
-      {scheme.maturityDate ? (
-        <p className="relative z-10 mt-2 text-[0.65rem] text-white/65">
-          Matures {formatCustomerDate(scheme.maturityDate)}
-        </p>
-      ) : null}
+      ) : (
+        <p className="relative z-10 mt-4 text-xs font-semibold text-white/85">{scheme.progressLabel}</p>
+      )}
     </section>
   );
 }
 
 function FlexibleLockedHero({ scheme }: { scheme: CustomerSchemeDetail }) {
-  const totalPaid = formatInrPaise(resolveTotalPaidPaise(scheme));
+  const totalPaid = scheme.totalPaid?.amountDisplay ?? "₹0";
 
   return (
     <section
@@ -240,12 +219,6 @@ function FlexibleLockedHero({ scheme }: { scheme: CustomerSchemeDetail }) {
       </span>
       <h2 className="relative z-10 mt-4 text-xl font-black">{scheme.planName}</h2>
       <p className="relative z-10 mt-1 text-sm text-white/75">Scheme no. {displaySchemeNumber(scheme.schemeNumber)}</p>
-      {scheme.progressLabel ? (
-        <p className="relative z-10 mt-4 text-xs font-semibold text-white/85">{scheme.progressLabel}</p>
-      ) : null}
-      {scheme.progressDetail ? (
-        <p className="relative z-10 mt-1 text-[0.68rem] leading-snug text-white/70">{scheme.progressDetail}</p>
-      ) : null}
       <div className="relative z-10 mt-5 grid grid-cols-2 gap-4 border-t border-white/20 pt-4">
         <div>
           <p className="text-xs text-white/75">Total saved</p>
@@ -621,13 +594,17 @@ function FreeWindowBlocks({
   const range = scheme.payableRange;
   const min = range?.minPayable?.amountDisplay ?? "—";
   const max = range?.maxPayable?.amountDisplay ?? "—";
-  const { freeMonths, cappedMonths, currentMonth, completed } =
-    flexibleFreeTimeline(scheme);
+  const month = scheme.progressCard.freeWindowMonth ?? scheme.freeWindowMonth ?? 1;
+  const months = scheme.progressCard.freeWindowMonths ?? scheme.freeWindowMonths ?? 6;
+  const completed = scheme.progressCard.freeWindowMonthsCompleted ?? Math.max(0, month - 1);
   const lockedAverage = scheme.progressCard.lockedAverage?.amountDisplay;
-  const targetCycle = range?.targetCycle;
-  const paidCyclePaise = paidThisCyclePaise(scheme.payments ?? [], targetCycle);
-  const paidCycleDisplay = formatInrPaise(paidCyclePaise);
-  const maxPerPaymentPaise = range?.maxPayable?.amountPaise ?? 0;
+  const remaining = range?.remainingThisCycle?.amountPaise ?? range?.maxPayable?.amountPaise ?? 0;
+  const paidCycle = range?.cycleCap?.amountPaise
+    ? range.cycleCap.amountPaise - (range.remainingThisCycle?.amountPaise ?? 0)
+    : 0;
+  const paidCycleDisplay = new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(
+    Math.max(0, paidCycle) / 100,
+  );
 
   return (
     <>
@@ -651,11 +628,8 @@ function FreeWindowBlocks({
       </section>
 
       <section className="customer-surface mt-4 p-4 sm:p-5">
-        <p className="mb-3 text-[0.65rem] font-bold uppercase tracking-wide text-[#8a8490]">
-          Free window · month {currentMonth} of {freeMonths || "—"}
-        </p>
         <div className="flex items-center justify-between gap-2 overflow-x-auto pb-2">
-          {Array.from({ length: Math.min(freeMonths || 0, 8) }).map((_, index) => {
+          {Array.from({ length: Math.min(months, 8) }).map((_, index) => {
             const done = index < completed;
             const current = index === completed;
             return (
@@ -676,19 +650,6 @@ function FreeWindowBlocks({
               </div>
             );
           })}
-          {cappedMonths && cappedMonths > 0 ? (
-            <>
-              <span className="mx-1 shrink-0 text-[0.55rem] font-bold uppercase text-[#b0a9b3]">→</span>
-              {Array.from({ length: Math.min(cappedMonths, 6) }).map((_, index) => (
-                <div key={`cap-${index}`} className="flex min-w-[2.75rem] flex-col items-center gap-1 opacity-80">
-                  <span className="grid size-7 place-items-center rounded-full border border-dashed border-[#c9c2bb] bg-[#faf7f5] text-[#b0a9b3]">
-                    <LockKeyhole className="size-3" />
-                  </span>
-                  <span className="text-[0.55rem] font-bold text-[#b0a9b3]">Cap {index + 1}</span>
-                </div>
-              ))}
-            </>
-          ) : null}
         </div>
       </section>
 
@@ -711,9 +672,10 @@ function FreeWindowBlocks({
           <div>
             <p className="text-xs text-[#77727c]">This month</p>
             <p className="mt-1 text-2xl font-black text-[#171722]">{paidCycleDisplay} paid</p>
-            {maxPerPaymentPaise > 0 ? (
+            {remaining > 0 ? (
               <p className="mt-1 text-sm text-[#706b77]">
-                Up to {formatInrPaise(maxPerPaymentPaise)} per contribution this cycle
+                You can add up to{" "}
+                {new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(remaining / 100)}
               </p>
             ) : null}
           </div>
@@ -747,15 +709,9 @@ function LockedCycleBlock({
 }) {
   const cap = scheme.progressCard.cycleCap ?? scheme.cycleCap;
   const remaining = scheme.progressCard.remainingThisCycle ?? scheme.remainingThisCycle;
-  const capPaise =
-    cap?.amountPaise ??
-    scheme.payableRange?.cycleCap?.amountPaise ??
-    0;
-  const remainingPaise =
-    remaining?.amountPaise ??
-    scheme.payableRange?.remainingThisCycle?.amountPaise ??
-    0;
-  const paidPaise = cappedCyclePaidPaise(scheme);
+  const capPaise = cap?.amountPaise ?? 0;
+  const remainingPaise = remaining?.amountPaise ?? 0;
+  const paidPaise = Math.max(0, capPaise - remainingPaise);
   const usedPercent = capPaise ? Math.round((paidPaise / capPaise) * 100) : 0;
   const paidDisplay = new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(
     paidPaise / 100,
@@ -768,20 +724,20 @@ function LockedCycleBlock({
     <>
       <section className="customer-surface mt-4 p-4 sm:p-5">
         <div className="flex items-center justify-between gap-2">
-          <h3 className="text-sm font-black text-[#171722]">This month · optional limit</h3>
-          <p className="text-[0.65rem] text-[#77727c]">{cycleLabel}</p>
+          <h3 className="text-sm font-black capitalize text-[#171722]">{cycleLabel} cycle</h3>
+          <p className="text-[0.65rem] text-[#77727c]">Cycle ends end of month</p>
         </div>
         <div className="mt-4 grid grid-cols-3 gap-2 text-center">
           <div>
-            <p className="text-[0.65rem] font-semibold text-[#77727c]">Monthly limit</p>
+            <p className="text-[0.65rem] font-semibold text-[#77727c]">Cycle cap</p>
             <p className="mt-1 text-sm font-black">{cap?.amountDisplay ?? "—"}</p>
           </div>
           <div className="border-x border-[#ebe4dc]">
-            <p className="text-[0.65rem] font-semibold text-[#77727c]">Paid this month</p>
+            <p className="text-[0.65rem] font-semibold text-[#77727c]">Paid</p>
             <p className="mt-1 text-sm font-black">{paidDisplay}</p>
           </div>
           <div>
-            <p className="text-[0.65rem] font-semibold text-[#77727c]">Can still add</p>
+            <p className="text-[0.65rem] font-semibold text-[#77727c]">Remaining</p>
             <p className="mt-1 text-sm font-black text-[var(--customer-primary,#730321)]">{remaining?.amountDisplay ?? "—"}</p>
           </div>
         </div>
@@ -791,9 +747,7 @@ function LockedCycleBlock({
           </div>
           <span className="text-xs font-bold text-[#706b77]">{usedPercent}%</span>
         </div>
-        <p className="mt-2 text-[0.65rem] leading-4 text-[#77727c]">
-          Separate from your total saved in the scheme. Limit is based on your free-window average and resets each month.
-        </p>
+        <p className="mt-2 text-[0.65rem] text-[#77727c]">Cap based on your free-window average</p>
         <Button
           disabled={!payEnabled}
           onClick={onPay}
@@ -846,7 +800,7 @@ export function FixedSchemeSummaryDock({ scheme }: { scheme: CustomerSchemeDetai
 }
 
 export function FixedSchemeTotalsCard({ scheme }: { scheme: CustomerSchemeDetail }) {
-  const totalPaid = formatInrPaise(resolveTotalPaidPaise(scheme));
+  const totalPaid = scheme.totalPaid?.amountDisplay ?? "₹0";
   const paid = scheme.progressCard.installmentsPaid ?? 0;
   const total = scheme.progressCard.installmentsTotal ?? 0;
   const remainingCount = Math.max(0, total - paid);

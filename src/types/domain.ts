@@ -98,13 +98,11 @@ export interface Customer {
 export type DisplayMode =
   "FIXED" | "FLEXIBLE_FREE_WINDOW" | "FLEXIBLE_LOCK_WINDOW";
 export type SchemeStatus =
+  | "PENDING_PAYMENT"
+  | "ENROLMENT_EXPIRED"
   | "ACTIVE"
   | "LOCKED"
-  | "PENDING_ACTIVATION"
-  | "PAUSED"
-  | "TERM_ENDED"
   | "MATURED"
-  | "REDEMPTION_PENDING"
   | "DEFAULTED"
   | "REDEEMED"
   | "CLOSED_PREMATURE";
@@ -210,6 +208,7 @@ export interface Enrollment {
   payableSuggested?: number | null;
   positionVersion?: number;
   targetCycle?: string;
+  allowedRedemptionModes?: Array<"CASH" | "GOLD_HANDOVER" | "PURCHASE_ADJUSTMENT">;
   cycleLabel?: string;
   formulaLabel?: string;
   explainerText?: string;
@@ -251,7 +250,20 @@ export interface Payment {
     | "ONLINE_GATEWAY";
   staff: string;
   branch: string;
-  status: "SUCCESS" | "PENDING" | "FAILED" | "REVERSED";
+  status:
+    | "PENDING"
+    | "SUCCESS"
+    | "FAILED"
+    | "AMOUNT_MISMATCH_PENDING_REVIEW"
+    | "UNALLOCATED_PENDING_REVIEW"
+    | "PARTIALLY_REFUNDED"
+    | "REVERSED";
+  grossAmount?: number;
+  refundedAmount?: number;
+  netAmount?: number;
+  gatewayRefundReservedAmount?: number;
+  requiresReview?: boolean;
+  reviewReason?: string | null;
   source: "ADMIN" | "STAFF" | "PAYMENT_LINK";
   isLateSuccess?: boolean;
   goldAccrual?: import("@/src/types/customer").PaymentGoldAccrual | null;
@@ -271,6 +283,10 @@ export interface DueItem {
   amount: number;
   overdueDays: number;
   status: "DUE" | "OVERDUE" | "GRACE" | "DEFAULTED";
+  /** Present for flexible capped-cycle dues returned by the latest backend. */
+  paymentPattern?: "FIXED" | "FLEXIBLE";
+  flexiblePhase?: "FLEXIBLE" | "CAPPED";
+  targetCycle?: string;
 }
 
 export interface GoldRate {

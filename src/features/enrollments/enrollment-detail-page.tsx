@@ -49,7 +49,6 @@ import { paymentHasGoldAccrual } from "@/src/lib/gold-payment-display";
 import {
   useCreatePaymentLinkMutation,
   useGetEnrollmentQuery,
-  useGetMaturityProjectionQuery,
   useGetPaymentsQuery,
   useGetSchemeLedgerQuery,
   useGetSettlementPreviewQuery,
@@ -71,20 +70,15 @@ export function EnrollmentDetailPage({ id }: { id: string }) {
     { skip: !id },
   );
   const ledgerQuery = useGetSchemeLedgerQuery(id, { skip: !id });
-  const maturityProjectionQuery = useGetMaturityProjectionQuery(id, {
-    skip: !id,
-  });
   const enrollment = query.data;
-  const redemptionInProgress =
-    enrollment?.status === "REDEMPTION_PENDING" ||
-    Boolean(enrollment?.pendingRedemption);
+  const redemptionInProgress = Boolean(enrollment?.pendingRedemption);
   const maturedForPreview =
     enrollment?.status === "MATURED" || redemptionInProgress;
   const maturityPreview = useGetSettlementPreviewQuery(
     {
       schemeId: id,
       type: "MATURITY_REDEMPTION",
-      mode: "CASH",
+      mode: enrollment?.allowedRedemptionModes?.[0],
     },
     { skip: !enrollment || (!maturedForPreview && !enrollment.canRedeem) },
   );
@@ -103,13 +97,12 @@ export function EnrollmentDetailPage({ id }: { id: string }) {
   const ledgerSource = ledgerRows.length > 0;
   const showGoldLedger =
     row.valueBasis === "GOLD_WEIGHT" ||
-    payments.some((p) => paymentHasGoldAccrual(p)) ||
+    payments.some((p: import("@/src/types/domain").Payment) => paymentHasGoldAccrual(p)) ||
     ledgerRows.some((p) => paymentHasGoldAccrual(p));
   const displayMode = row.displayMode ?? "FIXED";
   const matured =
-    row.status === "MATURED" || row.status === "REDEMPTION_PENDING";
-  const inProgress =
-    row.status === "REDEMPTION_PENDING" || Boolean(row.pendingRedemption);
+    row.status === "MATURED" || Boolean(row.pendingRedemption);
+  const inProgress = Boolean(row.pendingRedemption);
   const closedOut =
     row.status === "REDEEMED" || row.status === "CLOSED_PREMATURE";
   const canCloseEarly =
@@ -117,7 +110,7 @@ export function EnrollmentDetailPage({ id }: { id: string }) {
     !closedOut &&
     (row.status === "ACTIVE" ||
       row.status === "LOCKED" ||
-      row.status === "PENDING_ACTIVATION");
+      row.status === "PENDING_PAYMENT");
   const settlementDisplayPaise =
     row.pendingRedemption?.settlementPaise ??
     row.completedRedemption?.settlementPaise;
@@ -176,6 +169,7 @@ export function EnrollmentDetailPage({ id }: { id: string }) {
       <SettlementPreviewDialog
         schemeId={row.id}
         type={previewType}
+        mode={row.allowedRedemptionModes?.[0]}
         open={previewOpen}
         onOpenChange={setPreviewOpen}
         onInitiateRedemption={
@@ -544,7 +538,6 @@ export function EnrollmentDetailPage({ id }: { id: string }) {
           <EnrollmentMaturityTab
             enrollment={row}
             maturityPreview={maturityPreview.data}
-            maturityProjection={maturityProjectionQuery.data}
             onMaturityPreview={() => {
               setPreviewType("MATURITY_REDEMPTION");
               setPreviewOpen(true);

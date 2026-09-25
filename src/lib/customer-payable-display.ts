@@ -1,8 +1,4 @@
-import type {
-  CustomerDisplayMode,
-  CustomerSchemeDetail,
-  PayableRange,
-} from "@/src/types/customer";
+import type { CustomerDisplayMode, PayableRange } from "@/src/types/customer";
 import type { PayableQuoteBounds } from "@/src/lib/payment-form-validation";
 
 /** True when the customer may type a custom amount (flexible, or fixed with partial/advance). */
@@ -14,19 +10,6 @@ export function customerPayableAmountIsEditable(
     return true;
   }
   return range.minPayable.amountPaise !== range.maxPayable.amountPaise;
-}
-
-/** Optimistic concurrency token for flexible payment-intents (must match latest payable-range). */
-export function payablePositionVersion(
-  range: PayableRange | undefined | null,
-  scheme?: Pick<CustomerSchemeDetail, "positionVersion">,
-): number {
-  return (
-    range?.expectedPositionVersion ??
-    range?.positionVersion ??
-    scheme?.positionVersion ??
-    0
-  );
 }
 
 export function payableQuoteBounds(range?: PayableRange | null): PayableQuoteBounds | undefined {

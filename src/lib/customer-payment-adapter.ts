@@ -126,50 +126,11 @@ export function adaptCustomerPaymentList(raw: unknown): PaymentListItem[] {
   return [];
 }
 
-function readTotalPaidFromPayments(payments: PaymentListItem[]): number {
-  return payments
-    .filter((p) => p.status === "SUCCESS")
-    .reduce((sum, p) => sum + p.amount.amountPaise, 0);
-}
-
 /** Normalizes GET /app/schemes/:id (payments need gold accrual flattening). */
 export function adaptCustomerSchemeDetail(raw: unknown): CustomerSchemeDetail {
   const dto = (raw ?? {}) as CustomerSchemeDetail;
-  const payments = Array.isArray(dto.payments)
-    ? dto.payments.map((p) => adaptCustomerPayment(p))
-    : [];
-
-  const paidFromLedger =
-    dto.totalPaid?.amountPaise ??
-    dto.passbookSummary?.totalPaid?.amountPaise ??
-    readTotalPaidFromPayments(payments);
-  const totalPaid = readMoney(dto.totalPaid, paidFromLedger);
-
-  const progressCard = dto.progressCard
-    ? {
-        ...dto.progressCard,
-        freeWindowMonth:
-          dto.progressCard.freeWindowMonth ?? dto.freeWindowMonth,
-        freeWindowMonths:
-          dto.progressCard.freeWindowMonths ?? dto.freeWindowMonths,
-        cycleCap: dto.progressCard.cycleCap ?? dto.cycleCap,
-        remainingThisCycle:
-          dto.progressCard.remainingThisCycle ?? dto.remainingThisCycle,
-      }
-    : dto.progressCard;
-
-  return {
-    ...dto,
-    payments,
-    totalPaid,
-    progressCard,
-    passbookSummary: dto.passbookSummary
-      ? {
-          ...dto.passbookSummary,
-          totalPaid: readMoney(dto.passbookSummary.totalPaid, paidFromLedger),
-        }
-      : dto.passbookSummary,
-  };
+  const payments = Array.isArray(dto.payments) ? dto.payments.map((p) => adaptCustomerPayment(p)) : [];
+  return { ...dto, payments };
 }
 
 export type CustomerPaymentsSummary = {

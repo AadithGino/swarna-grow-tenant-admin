@@ -216,6 +216,9 @@ export function SettingsPage({
   const [opsForm, setOpsForm] = useState({
     multiSchemePerCustomer: true,
     kycMandatory: false,
+    requireKycForRedemption: false,
+    customerAppMaintenance: false,
+    kycAllowedTypes: ["AADHAAR", "PAN"] as Array<"AADHAAR" | "PAN">,
     customerSelfEnrolEnabled: true,
     customerSelfRegistrationEnabled: true,
     customerLoginMode: "OTP_ONLY" as "OTP_ONLY" | "PASSWORD_ONLY",
@@ -332,6 +335,14 @@ export function SettingsPage({
     setOpsForm({
       multiSchemePerCustomer: Boolean(o.multiSchemePerCustomer),
       kycMandatory: Boolean(o.kycMandatory),
+      requireKycForRedemption: Boolean(o.requireKycForRedemption),
+      customerAppMaintenance: Boolean(o.customerAppMaintenance),
+      kycAllowedTypes: Array.isArray(o.kycAllowedTypes)
+        ? o.kycAllowedTypes.filter(
+            (value: string): value is "AADHAAR" | "PAN" =>
+              value === "AADHAAR" || value === "PAN",
+          )
+        : ["AADHAAR", "PAN"],
       customerSelfEnrolEnabled: Boolean(o.customerSelfEnrolEnabled),
       customerSelfRegistrationEnabled: Boolean(
         o.customerSelfRegistrationEnabled,
@@ -431,10 +442,6 @@ export function SettingsPage({
     try {
       await patchOperations({
         ...opsForm,
-        kycAllowedTypes: operationsQuery.data?.kycAllowedTypes ?? [
-          "AADHAAR",
-          "PAN",
-        ],
         expectedVersion: operationsQuery.data?.audit?.version,
       }).unwrap();
       toast.success("Operations saved");

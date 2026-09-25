@@ -44,7 +44,7 @@ export type AgentCollectionSummary = {
   byMode: Array<{ mode: string; label: string; amountPaise: number; count: number }>;
 };
 
-export type AgentManualPaymentMode = "CASH" | "UPI" | "CARD" | "BANK_TRANSFER";
+export type AgentManualPaymentMode = "CASH" | "UPI" | "CARD" | "BANK_TRANSFER" | "CHEQUE";
 
 export type AgentSchemeSummary = {
   id: string;
@@ -62,10 +62,6 @@ export type AgentSchemeSummary = {
   payableLabel?: string;
   payable?: boolean;
   maturityDate?: string;
-  targetCycle?: string;
-  cycleCapPaise?: number;
-  paidThisCyclePaise?: number;
-  remainingThisCyclePaise?: number;
 };
 
 export type AgentCustomer = {
@@ -106,9 +102,6 @@ export type AgentPayableRange = {
   positionVersion?: number;
   payable: boolean;
   nextCycleAction?: string;
-  capPaise?: number;
-  paidPaise?: number;
-  remainingPaise?: number;
 };
 
 export type AgentGoldRate = {

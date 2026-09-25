@@ -33,12 +33,6 @@ export function amountUsesSlabs(plan: EnrolPlanRules | undefined): boolean {
   return plan?.amountMode === "JEWELLER_SLABS";
 }
 
-export function isFlexibleEnrolPlan(
-  plan: Pick<EnrolPlanRules, "paymentPattern"> | undefined,
-): boolean {
-  return plan?.paymentPattern === "FLEXIBLE_AVERAGE";
-}
-
 export function resolvedFirstInstallmentMode(
   plan: EnrolPlanRules | undefined,
   selected: "COLLECT_NOW" | "START_NEXT_CYCLE",

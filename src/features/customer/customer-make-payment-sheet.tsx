@@ -23,19 +23,13 @@ import {
 import { customerPath } from "@/src/lib/customer-tenant";
 import { openCustomerPaymentTarget } from "@/src/lib/customer-payment-redirect";
 import { pollSessionFromInitResponse } from "@/src/lib/customer-payment-session";
-import {
-  payablePositionVersion,
-  payableQuoteBounds,
-} from "@/src/lib/customer-payable-display";
-import { apiErrorCode } from "@/src/lib/api-error";
+import { payableQuoteBounds } from "@/src/lib/customer-payable-display";
 import {
   livePayableAmountError,
   paymentAmountReady,
   payableAmountRangeMessage,
 } from "@/src/lib/payment-form-validation";
 import { money } from "@/src/lib/format";
-import { CyclePaymentProgress } from "@/src/components/common/cycle-payment-progress";
-import { formatInrPaise } from "@/src/features/customer/customer-scheme-progress";
 import type { CustomerSchemeDetail, PayableRangeTargetCycleOption } from "@/src/types/customer";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -112,13 +106,10 @@ export function CustomerMakePaymentSheet({
     let cancelled = false;
     (async () => {
       try {
-        const next = await fetchRange(
-          {
-            schemeId: scheme.id,
-            targetCycle: initialRange?.targetCycle,
-          },
-          false,
-        ).unwrap();
+        const next = await fetchRange({
+          schemeId: scheme.id,
+          targetCycle: initialRange?.targetCycle,
+        }).unwrap();
         if (cancelled) return;
         setRange(next);
         setTargetCycle(next.targetCycle ?? "");
@@ -144,10 +135,7 @@ export function CustomerMakePaymentSheet({
     let cancelled = false;
     (async () => {
       try {
-        const next = await fetchRange(
-          { schemeId: scheme.id, targetCycle },
-          false,
-        ).unwrap();
+        const next = await fetchRange({ schemeId: scheme.id, targetCycle }).unwrap();
         if (cancelled) return;
         setRange(next);
         const nextSuggested = next.suggested?.amountPaise ?? next.maxPayable?.amountPaise ?? 0;
@@ -187,29 +175,14 @@ export function CustomerMakePaymentSheet({
       );
     }
     try {
-      const cycle = range.targetCycle ?? targetCycle;
-      const freshRange = await fetchRange(
-        { schemeId: scheme.id, targetCycle: cycle || undefined },
-        false,
-      ).unwrap();
-      setRange(freshRange);
-      const freshBounds = payableQuoteBounds(freshRange);
-      if (!paymentAmountReady(numericAmount, freshBounds)) {
-        toast.error(
-          freshBounds
-            ? payableAmountRangeMessage(freshBounds)
-            : "Payment quote changed. Adjust the amount and try again.",
-        );
-        return;
-      }
       const statusRedirectUrl = customerPath(tenantSlug, "pay", "status");
       const statusRedirectFull = `${window.location.origin}${statusRedirectUrl}`;
       const response = await initiate({
         scheme,
         amountPaise,
         redirectUrl: statusRedirectFull,
-        targetCycle: freshRange.targetCycle ?? cycle,
-        positionVersion: payablePositionVersion(freshRange, scheme),
+        targetCycle: range.targetCycle ?? targetCycle,
+        positionVersion: range.positionVersion,
       }).unwrap();
       const baseSession = pollSessionFromInitResponse(response, scheme.id);
       onOpenChange(false);
@@ -230,28 +203,7 @@ export function CustomerMakePaymentSheet({
           initiatePublicLink({ linkToken, redirectUrl: statusRedirectFull }).unwrap(),
         navigate: (path) => router.push(path),
       });
-    } catch (err) {
-      if (apiErrorCode(err) === "PAYMENT_POSITION_CHANGED") {
-        try {
-          const fresh = await fetchRange(
-            {
-              schemeId: scheme.id,
-              targetCycle: (range.targetCycle ?? targetCycle) || undefined,
-            },
-            false,
-          ).unwrap();
-          setRange(fresh);
-          const suggested =
-            fresh.suggested?.amountPaise ?? fresh.maxPayable?.amountPaise ?? 0;
-          setAmount(String(suggested / 100));
-        } catch {
-          /* keep existing range */
-        }
-        toast.error(
-          "Your scheme balance changed (e.g. after a branch payment). Limits were refreshed — review the amount and tap pay again.",
-        );
-        return;
-      }
+    } catch {
       toast.error("PhonePe could not be started. Your account was not charged.");
     }
   };
@@ -259,15 +211,6 @@ export function CustomerMakePaymentSheet({
   const payableDisplay = money(amountPaise / 100);
   const minDisplay = range ? range.minPayable.amountDisplay : "—";
   const maxDisplay = range ? range.maxPayable.amountDisplay : "—";
-  const cappedCycle =
-    range?.phase === "CAPPED" &&
-    range.cycleCap?.amountPaise != null &&
-    (range.paidThisCycle?.amountPaise != null || range.remainingThisCycle?.amountPaise != null);
-  const cycleCapPaise = cappedCycle ? range!.cycleCap!.amountPaise : 0;
-  const cycleRemainingPaise = cappedCycle ? range!.remainingThisCycle!.amountPaise : 0;
-  const cyclePaidPaise = cappedCycle
-    ? (range!.paidThisCycle?.amountPaise ?? Math.max(0, cycleCapPaise - cycleRemainingPaise))
-    : 0;
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -318,19 +261,6 @@ export function CustomerMakePaymentSheet({
                   ))}
                 </SelectContent>
               </Select>
-            </div>
-          ) : null}
-
-          {cappedCycle ? (
-            <div className="rounded-2xl border border-[#ece6e1] bg-white p-4">
-              <CyclePaymentProgress
-                capPaise={cycleCapPaise}
-                paidPaise={cyclePaidPaise}
-                remainingPaise={cycleRemainingPaise}
-                targetCycle={range?.targetCycle}
-                formatMoney={formatInrPaise}
-                audience="customer"
-              />
             </div>
           ) : null}
 

@@ -6,10 +6,6 @@ import { PlatformShell } from "@/src/components/layout/platform-shell";
 import { CustomerShell } from "@/src/components/customer/customer-shell";
 import { CustomerTenantProvider } from "@/src/components/customer/customer-tenant-context";
 import { AgentShell } from "@/src/components/agent/agent-shell";
-import { AgentTenantProvider } from "@/src/components/agent/agent-tenant-context";
-import {
-  agentTenantSlugFromPathname,
-} from "@/src/lib/agent-tenant";
 import { CUSTOMER_ROUTE_SECTIONS } from "@/src/lib/customer-tenant";
 
 function customerTenantSlugFromPath(pathname: string): string | null {
@@ -40,17 +36,7 @@ export default function PortalLayout({
   const pathname = usePathname();
   if (pathname === "/login") return children;
   if (pathname === "/platform/login") return children;
-  if (
-    pathname === "/agent/login" ||
-    /^\/agent\/[^/]+\/login\/?$/.test(pathname)
-  ) {
-    const tenantSlug = agentTenantSlugFromPathname(pathname);
-    return (
-      <AgentTenantProvider tenantSlug={tenantSlug}>
-        {children}
-      </AgentTenantProvider>
-    );
-  }
+  if (pathname === "/agent/login") return children;
   if (pathname === "/agent" || pathname.startsWith("/agent/")) {
     return <AgentShell>{children}</AgentShell>;
   }

@@ -48,12 +48,10 @@ import { downloadCsv } from "@/src/lib/download";
 import { idempotencyKey, money } from "@/src/lib/format";
 import { emptyPageMeta } from "@/src/lib/cursor-pagination";
 import {
-  applyWideListRangePreset,
   defaultListRangeFrom,
   defaultListRangeTo,
   listSearchQueryForApi,
   shouldSkipListSearchQuery,
-  wideListRangePresetLabel,
 } from "@/src/lib/list-date-range";
 import { FormFieldError } from "@/src/components/common/form-field-error";
 import { useValidatedListDateRange } from "@/src/hooks/use-validated-list-date-range";
@@ -247,18 +245,6 @@ export function DuesPage() {
               ) : null}
             </div>
             <Button
-              variant="ghost"
-              className="shrink-0"
-              onClick={() => {
-                setRangeMode("CUSTOM");
-                const next = applyWideListRangePreset();
-                setFrom(next.from);
-                setTo(next.to);
-              }}
-            >
-              {wideListRangePresetLabel()}
-            </Button>
-            <Button
               variant="outline"
               onClick={() =>
                 downloadCsv(
@@ -436,11 +422,8 @@ export function DuesPage() {
                   >
                     <PaymentDialog
                       customer={r.customer}
-                      customerId={r.customerId}
                       schemeId={r.schemeId}
                       lockScheme
-                      targetCycle={r.targetCycle}
-                      suggestedAmountRupees={Number(r.amount) || undefined}
                       trigger={
                         <Button
                           size="sm"
@@ -469,6 +452,7 @@ export function DuesPage() {
                             const link = await createPaymentLink({
                               schemeId: r.schemeId,
                               amount: r.amount,
+                              targetCycle: r.targetCycle,
                               idempotencyKey: idempotencyKey(),
                             }).unwrap();
                             const path = link.url ?? "";

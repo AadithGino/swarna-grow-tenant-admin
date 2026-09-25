@@ -57,6 +57,59 @@ import {
 import { MessageDetailDialog } from "@/src/features/reminders/message-detail-dialog";
 import { TemplatePreviewDialog } from "@/src/features/reminders/template-preview-dialog";
 import { ManualPushPanel } from "@/src/features/reminders/manual-push-panel";
+import { InboundMessagesPanel } from "@/src/features/reminders/inbound-messages-panel";
+
+function reminderConfigWriteBody(
+  config: Record<string, any> | undefined,
+  patch: Record<string, unknown>,
+) {
+  const source = { ...(config ?? {}), ...patch };
+  const offsets = Array.isArray(source.offsets)
+    ? source.offsets.map((row: Record<string, unknown>) => ({
+        key: String(row.key ?? ""),
+        days: Number(row.days ?? 0),
+        enabled: row.enabled !== false,
+      }))
+    : undefined;
+  const sendWindow = source.sendWindow
+    ? {
+        startTime: source.sendWindow.startTime,
+        endTime: source.sendWindow.endTime,
+      }
+    : undefined;
+  const push = source.push
+    ? Object.fromEntries(
+        Object.entries(source.push).filter(([, value]) => typeof value === "boolean"),
+      )
+    : undefined;
+  return {
+    ...(source.version != null || source.expectedVersion != null
+      ? { expectedVersion: Number(source.expectedVersion ?? source.version) }
+      : {}),
+    ...(["enabled", "attachPaymentLink"] as const).reduce(
+      (out, key) =>
+        typeof source[key] === "boolean" ? { ...out, [key]: source[key] } : out,
+      {} as Record<string, unknown>,
+    ),
+    ...([
+      "maxRemindersPerInstallment",
+      "paymentLinkValidityHours",
+      "flexibleNudgeInactiveDays",
+      "maxPushPerCustomerPerDay",
+      "maxWhatsAppPerCustomerPerDay",
+    ] as const).reduce(
+      (out, key) =>
+        Number.isFinite(Number(source[key])) ? { ...out, [key]: Number(source[key]) } : out,
+      {} as Record<string, unknown>,
+    ),
+    ...(offsets ? { offsets } : {}),
+    ...(sendWindow ? { sendWindow } : {}),
+    ...(push ? { push } : {}),
+    ...(Array.isArray(source.skipDays)
+      ? { skipDays: source.skipDays.map(Number) }
+      : {}),
+  };
+}
 
 export function RemindersPage() {
   const searchParams = useSearchParams();
@@ -108,7 +161,9 @@ export function RemindersPage() {
       return;
     }
     try {
-      await updateConfig({ ...configQuery.data, offsets }).unwrap();
+      await updateConfig(
+        reminderConfigWriteBody(configQuery.data, { offsets }),
+      ).unwrap();
       toast.success("Schedule updated");
     } catch (err) {
       toastApiError(err, "Could not update reminder schedule");
@@ -216,6 +271,7 @@ export function RemindersPage() {
         <PageTabsBar sectionLabel="Reminder views">
           <PageTab value="log">Message log</PageTab>
           <PageTab value="manual-push">Manual push</PageTab>
+          <PageTab value="inbound">Inbound</PageTab>
           <PageTab value="templates">Templates</PageTab>
           <PageTab value="schedule">Schedule</PageTab>
           <PageTab value="quota">Quota</PageTab>
@@ -314,6 +370,9 @@ export function RemindersPage() {
         <PageTabsPanel value="manual-push">
           <ManualPushPanel />
         </PageTabsPanel>
+        <PageTabsPanel value="inbound">
+          <InboundMessagesPanel />
+        </PageTabsPanel>
         <PageTabsPanel value="templates">
           <div className="grid gap-4 lg:grid-cols-2">
             {(templatesQuery.data?.items ?? []).map((t: any) => (
@@ -386,13 +445,12 @@ export function RemindersPage() {
                     aria-label={label}
                     onCheckedChange={async (enabled) => {
                       try {
-                        await updateConfig({
-                          ...configQuery.data,
+                        await updateConfig(reminderConfigWriteBody(configQuery.data, {
                           push: {
                             ...(configQuery.data?.push ?? {}),
                             [key]: enabled,
                           },
-                        }).unwrap();
+                        })).unwrap();
                         toast.success("Push settings updated");
                       } catch (err) {
                         toastApiError(err, "Could not update push settings");

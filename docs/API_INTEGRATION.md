@@ -2,8 +2,6 @@
 
 The API prefix comes from `NEXT_PUBLIC_API_BASE_URL`. Paths below are relative to `/api/v1`.
 
-**Contract source of truth:** `swarnagrow-backend` at commit `7582ac6` or later (`docs/API_CONTRACT_ADMIN.md`). The local `swarna-grow-api-contract-v1.2/` folder is legacy; see [BACKEND_V1_ALIGNMENT.md](./BACKEND_V1_ALIGNMENT.md) for enum and field deltas the portal implements.
-
 | Portal module      | Primary contract endpoints                                                                                                   |
 | ------------------ | ---------------------------------------------------------------------------------------------------------------------------- |
 | Authentication     | `POST /auth/login`, `POST /auth/refresh`, `GET /auth/me`, `POST /auth/logout`, device/session endpoints                      |

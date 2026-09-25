@@ -111,6 +111,10 @@ function liveEmailError(email: string): string | undefined {
 }
 
 function liveAddressError(address: string): string | undefined {
+  const trimmed = address.trim();
+  if (trimmed && trimmed.length < 3) {
+    return "Address must be at least 3 characters.";
+  }
   if (address.length > 1000) {
     return "Address must be 1000 characters or fewer.";
   }
@@ -185,7 +189,11 @@ export function validateCustomerForm(
     errors.branchId = "Select a primary branch.";
   }
 
-  if (address.length > 1000) {
+  if (!address) {
+    errors.address = "Address is required.";
+  } else if (address.length < 3) {
+    errors.address = "Address must be at least 3 characters.";
+  } else if (address.length > 1000) {
     errors.address = "Address must be 1000 characters or fewer.";
   }
 

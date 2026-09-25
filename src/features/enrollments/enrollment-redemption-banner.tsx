@@ -45,8 +45,7 @@ export function EnrollmentRedemptionStatus({
 }) {
   const pending = enrollment.pendingRedemption;
   const completed = enrollment.completedRedemption;
-  const inProgress =
-    enrollment.status === "REDEMPTION_PENDING" || Boolean(pending);
+  const inProgress = Boolean(pending);
   const redeemed = enrollment.status === "REDEEMED";
   const closedEarly = enrollment.status === "CLOSED_PREMATURE";
 

@@ -138,7 +138,7 @@ export function CustomerAddressInput({
 }: CustomerAddressInputProps) {
   return (
     <FormFieldShell
-      label="Address (optional)"
+      label="Address"
       error={error}
       hint={
         !error && value.length > 900

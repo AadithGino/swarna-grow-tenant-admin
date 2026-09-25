@@ -74,13 +74,10 @@ export type EnrolSubmitReadinessInput = {
   apiBlockers: unknown[];
   validateLoading: boolean;
   plansLoading?: boolean;
-  /** When false, first-payment-at-enrolment fields are incomplete. Omit when not applicable. */
-  firstPaymentReady?: boolean;
 };
 
 export function enrolSubmitReady(input: EnrolSubmitReadinessInput): boolean {
   if (input.plansLoading || input.validateLoading) return false;
-  if (input.firstPaymentReady === false) return false;
   if (input.customerId !== undefined && validateEnrolCustomerId(input.customerId)) {
     return false;
   }

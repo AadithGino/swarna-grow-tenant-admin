@@ -48,16 +48,15 @@ import { useActingBranchId } from "@/src/hooks/use-acting-branch-id";
 import { useAppDispatch, useAppSelector } from "@/src/store/hooks";
 import { showPaymentSuccess } from "@/src/store/slices/ui-slice";
 import type { Payment } from "@/src/types/domain";
-import { V1_MANUAL_PAYMENT_MODES } from "@/src/lib/v1-payment-modes";
 
-const MODES = V1_MANUAL_PAYMENT_MODES as { value: Payment["mode"]; label: string }[];
+const MODES: { value: Payment["mode"]; label: string }[] = [
+  { value: "CASH", label: "Cash" },
+  { value: "CARD", label: "Card / POS" },
+  { value: "UPI", label: "UPI" },
+  { value: "BANK_TRANSFER", label: "Bank transfer" },
+];
 
 const PAYABLE_STATUSES = new Set(["ACTIVE", "LOCKED", "DEFAULTED"]);
-
-function calendarCycleKey() {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-}
 
 function isPayableEnrollment(row: {
   status?: string;
@@ -82,8 +81,6 @@ function PaymentDialogInner({
   trigger,
   disabled,
   lockScheme = false,
-  targetCycle: targetCycleHint,
-  suggestedAmountRupees,
 }: {
   schemeId?: string;
   customerId?: string;
@@ -92,10 +89,6 @@ function PaymentDialogInner({
   disabled?: boolean;
   /** When true, enrollment is fixed (enrollment detail / dues row). */
   lockScheme?: boolean;
-  /** Payable-range hint from dues workboard (flexible capped month). */
-  targetCycle?: string;
-  /** Due row amount (rupees) — seeds the amount field when within payable bounds. */
-  suggestedAmountRupees?: number;
 }) {
   const dispatch = useAppDispatch();
   const caps = useAppSelector((s) => s.session.session?.capabilities);
@@ -128,16 +121,8 @@ function PaymentDialogInner({
   const selectedRow =
     options.find((row: any) => row.id === selectedId) ??
     (lockScheme && lockedEnrollment.data ? lockedEnrollment.data : undefined);
-  const cappedTargetCycle =
-    targetCycleHint ??
-    (selectedRow?.displayMode === "FLEXIBLE_LOCK_WINDOW"
-      ? selectedRow.targetCycle ?? calendarCycleKey()
-      : undefined);
   const quoteQuery = useGetPayableRangeQuery(
-    {
-      schemeId: selectedId,
-      ...(cappedTargetCycle ? { targetCycle: cappedTargetCycle } : {}),
-    },
+    { schemeId: selectedId },
     { skip: !open || !selectedId },
   );
   const quote = quoteQuery.data;
@@ -189,23 +174,8 @@ function PaymentDialogInner({
 
   useEffect(() => {
     if (!quote) return;
-    const bounds = quoteBounds;
-    const seed =
-      suggestedAmountRupees != null &&
-      bounds &&
-      suggestedAmountRupees >= bounds.min &&
-      suggestedAmountRupees <= bounds.max
-        ? suggestedAmountRupees
-        : quote.suggested ?? "";
-    setAmount(seed);
-  }, [
-    quote?.schemeId,
-    quote?.positionVersion,
-    quote?.suggested,
-    suggestedAmountRupees,
-    quoteBounds?.min,
-    quoteBounds?.max,
-  ]);
+    setAmount(quote.suggested ?? "");
+  }, [quote?.schemeId, quote?.positionVersion, quote?.suggested]);
 
   const numericAmount = typeof amount === "number" ? amount : 0;
   const isGoldScheme = selectedRow?.valueBasis === "GOLD_WEIGHT";
@@ -584,7 +554,7 @@ function PaymentDialogInner({
                   return next;
                 });
               }}
-              placeholder="UTR, transfer ref., or approval code"
+              placeholder="UTR, cheque no., or approval code"
             />
             <FormFieldError message={referenceError} />
           </div>

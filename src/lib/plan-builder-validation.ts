@@ -1,6 +1,5 @@
 import type { PlanBuilderFormState } from "@/src/features/schemes/plan-builder-form";
 import type { StepId } from "@/src/features/schemes/plan-builder-wizard-types";
-import { flexiblePhaseTargetMonths } from "@/src/lib/flexible-plan-phase-target";
 
 export const PLAN_CODE_PATTERN = /^[A-Z0-9_-]{2,20}$/;
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -51,11 +50,17 @@ export function validatePlanDuration(
   if (form.installmentCount < 1 || form.installmentCount > 120) {
     errors.installmentCount = "Installment count must be between 1 and 120.";
   }
-  if (form.installmentCount > form.durationMonths) {
-    errors.installmentCount =
-      "Installment count cannot exceed duration (maturity months).";
-  }
   return errors;
+}
+
+export function validatePlanGoldRules(
+  form: PlanBuilderFormState,
+): Record<string, string> {
+  if (form.valueBasis !== "GOLD_WEIGHT") return {};
+  if (!Number.isInteger(form.weightPrecisionMg) || form.weightPrecisionMg < 1) {
+    return { weightPrecisionMg: "Weight precision must be a positive whole milligram." };
+  }
+  return {};
 }
 
 export function validatePlanAmountRules(
@@ -100,6 +105,10 @@ export function validatePlanSchedule(
   if (form.graceDays < 0 || form.graceDays > 90) {
     errors.graceDays = "Grace days must be between 0 and 90.";
   }
+  if (form.advancePaymentAllowed && form.maxAdvanceInstallments < 1) {
+    errors.maxAdvanceInstallments =
+      "Choose at least one future installment when advance payment is enabled.";
+  }
   return errors;
 }
 
@@ -112,10 +121,12 @@ export function validatePlanFlexible(
   if (form.flexiblePhaseCycles < 1 || form.cappedPhaseCycles < 1) {
     errors.flexiblePhaseCycles = "Free and capped phases must each be at least 1 month.";
   }
-  const paymentMonths = flexiblePhaseTargetMonths(form);
-  if (form.flexiblePhaseCycles + form.cappedPhaseCycles !== paymentMonths) {
-    errors.flexiblePhaseCycles =
-      "Free + capped months must equal installment count (payment months).";
+  if (
+    form.flexiblePhaseCycles + form.cappedPhaseCycles !==
+    form.installmentCount
+  ) {
+    errors.installmentCount =
+      "Free + capped months must equal the contribution-cycle count.";
   }
   if (form.flexMinPayment <= 0) {
     errors.flexMinPayment = "Minimum free-window payment must be greater than zero.";
@@ -128,6 +139,16 @@ export function validatePlanFlexible(
   }
   if (form.capMinCycle <= 0 || form.capMaxCycle < form.capMinCycle) {
     errors.capMaxCycle = "Cap band min/max must be valid.";
+  }
+  if (form.flexPaymentIncrement <= 0) {
+    errors.flexPaymentIncrement = "Payment increment must be greater than zero.";
+  }
+  if (
+    !form.allowFinalRemainderBelowMinimum &&
+    form.cappedMinPayment > form.capMinCycle
+  ) {
+    errors.cappedMinPayment =
+      "Capped minimum cannot exceed the minimum cycle cap unless final remainder is allowed.";
   }
   return errors;
 }
@@ -206,7 +227,7 @@ export function validatePlanBuilderStep(
     case "basics":
       return validatePlanBasics(form, options);
     case "type":
-      return {};
+      return validatePlanGoldRules(form);
     case "duration":
       return validatePlanDuration(form);
     case "amount":
@@ -235,6 +256,7 @@ export function validatePlanBuilderFull(
   return {
     ...validatePlanBasics(form, options),
     ...validatePlanDuration(form),
+    ...validatePlanGoldRules(form),
     ...validatePlanAmountRules(form),
     ...validatePlanSchedule(form),
     ...validatePlanFlexible(form),

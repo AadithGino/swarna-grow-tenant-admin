@@ -20,6 +20,9 @@ import { cn } from "@/lib/utils";
 export type OperationsFormState = {
   multiSchemePerCustomer: boolean;
   kycMandatory: boolean;
+  requireKycForRedemption: boolean;
+  customerAppMaintenance: boolean;
+  kycAllowedTypes: Array<"AADHAAR" | "PAN">;
   customerSelfEnrolEnabled: boolean;
   customerSelfRegistrationEnabled: boolean;
   customerLoginMode: "OTP_ONLY" | "PASSWORD_ONLY";
@@ -40,6 +43,8 @@ type PolicyKey = keyof Pick<
   OperationsFormState,
   | "multiSchemePerCustomer"
   | "kycMandatory"
+  | "requireKycForRedemption"
+  | "customerAppMaintenance"
   | "customerSelfEnrolEnabled"
   | "customerSelfRegistrationEnabled"
   | "customerAppWriteEnabled"
@@ -89,6 +94,11 @@ const POLICY_SECTIONS: PolicySection[] = [
         title: "KYC before enrolment",
         detail: "Blocks enrol until KYC is submitted or verified",
       },
+      {
+        key: "requireKycForRedemption",
+        title: "KYC before redemption",
+        detail: "Blocks settlement until customer KYC is verified",
+      },
     ],
   },
   {
@@ -113,6 +123,11 @@ const POLICY_SECTIONS: PolicySection[] = [
         key: "customerAppPaymentsEnabled",
         title: "In-app payments",
         detail: "Requires write access",
+      },
+      {
+        key: "customerAppMaintenance",
+        title: "Customer app maintenance",
+        detail: "Temporarily returns a maintenance response for customer-app requests",
       },
     ],
   },
@@ -285,6 +300,29 @@ export function SettingsOperationsPanel({
               </div>
             </div>
           </div>
+          <div>
+            <SectionLabel>Allowed KYC documents</SectionLabel>
+            <div className="flex flex-wrap gap-4 px-4 py-3 sm:px-5">
+              {(["AADHAAR", "PAN"] as const).map((type) => {
+                const checked = form.kycAllowedTypes.includes(type);
+                return (
+                  <label key={type} className="flex items-center gap-2 text-sm font-medium">
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => {
+                        const next = checked
+                          ? form.kycAllowedTypes.filter((value) => value !== type)
+                          : [...form.kycAllowedTypes, type];
+                        if (next.length) patchForm({ kycAllowedTypes: next });
+                      }}
+                    />
+                    {type === "AADHAAR" ? "Aadhaar" : "PAN"}
+                  </label>
+                );
+              })}
+            </div>
+          </div>
         </div>
 
         <div className="border-t border-[#efe6ea] p-4 sm:p-5">
@@ -309,12 +347,9 @@ export function SettingsOperationsPanel({
             <div>
               <FieldLabel>Gold purity</FieldLabel>
               <Input
-                value={form.goldPurity}
-                onChange={(e) => {
-                  onFieldTouch("goldPurity");
-                  onFieldErrorClear("goldPurity");
-                  patchForm({ goldPurity: e.target.value });
-                }}
+                value="22K"
+                readOnly
+                aria-readonly="true"
                 className={cn(
                   fieldClass,
                   displayError("goldPurity") && "border-red-600",

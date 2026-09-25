@@ -112,7 +112,7 @@ export function EnrollmentSchedule({ enrollment }: { enrollment: Enrollment }) {
   const mode = enrollment.displayMode ?? "FIXED";
   const matured =
     enrollment.status === "MATURED" ||
-    enrollment.status === "REDEMPTION_PENDING";
+    Boolean(enrollment.pendingRedemption);
 
   if (matured) {
     return (

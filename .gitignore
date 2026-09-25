@@ -40,6 +40,8 @@ next-env.d.ts
 *.tsbuildinfo
 /dist/
 /.wrangler/
+/netlify-dist/
+/netlify-deploy.zip
 # Checkout-local execution profile and tool state; never publish them.
 /.sites-runtime/
 /.agents/

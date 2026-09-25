@@ -1,7 +1,5 @@
 /** Form state aligned with POST /admin/scheme-plans (05-scheme-plans.md). */
 
-import type { V1BenefitTreatment, V1RedemptionMode } from "@/src/lib/v1-payment-modes";
-
 export type BenefitType =
   | "ONE_FREE_INSTALLMENT"
   | "FIXED_BONUS_AMOUNT"
@@ -11,9 +9,12 @@ export type BonusBasis = "FLAT" | "PERCENT_OF_PAID";
 
 export type PenaltyMode = "NONE" | "FLAT" | "PERCENT_OF_PAID";
 
-export type BenefitTreatment = V1BenefitTreatment;
+export type BenefitTreatment = "FORFEIT" | "FULL";
 
-export type RedemptionMode = V1RedemptionMode;
+export type RedemptionMode =
+  | "CASH"
+  | "GOLD_HANDOVER"
+  | "PURCHASE_ADJUSTMENT";
 
 export type PlanBuilderFormState = {
   name: string;
@@ -61,6 +62,8 @@ export type PlanBuilderFormState = {
   allowFutureCyclePayment: boolean;
   maxAdvanceCycles: number;
   blockPaymentIfRateNotSet: boolean;
+  weightRoundingMode: "HALF_UP" | "ROUND_DOWN" | "ROUND_UP";
+  weightPrecisionMg: number;
   benefitType: BenefitType;
   benefitDisplayLabel: string;
   requireAllInstallmentsPaid: boolean;
@@ -135,6 +138,8 @@ export const defaultPlanBuilderForm = (): PlanBuilderFormState => ({
   allowFutureCyclePayment: false,
   maxAdvanceCycles: 0,
   blockPaymentIfRateNotSet: true,
+  weightRoundingMode: "HALF_UP",
+  weightPrecisionMg: 1,
   benefitType: "ONE_FREE_INSTALLMENT",
   benefitDisplayLabel: "12th installment free",
   requireAllInstallmentsPaid: true,
@@ -151,7 +156,11 @@ export const defaultPlanBuilderForm = (): PlanBuilderFormState => ({
   penaltyPercent: 2,
   penaltyFlat: 500,
   benefitTreatment: "FORFEIT",
-  allowedRedemptionModes: ["CASH", "GOLD_HANDOVER", "PURCHASE_ADJUSTMENT"],
+  allowedRedemptionModes: [
+    "CASH",
+    "GOLD_HANDOVER",
+    "PURCHASE_ADJUSTMENT",
+  ],
   redeemAtAnyBranch: false,
   allBranches: true,
   branchIds: [],
@@ -325,12 +334,7 @@ export function buildPlanCreatePayload(form: PlanBuilderFormState) {
           partialPaymentAllowed: true,
           advancePaymentAllowed: false,
           maxAdvanceInstallments: 0,
-          minPaymentPaise: form.minPaymentPerTxn
-            ? paise(form.minPaymentPerTxn)
-            : paise(form.flexMinPayment),
-          maxPaymentPerTransactionPaise: form.maxPaymentPerTxn
-            ? paise(form.maxPaymentPerTxn)
-            : paise(form.flexMaxPayment),
+          minPaymentPaise: paise(form.flexMinPayment),
         }
       : {
           partialPaymentAllowed: form.partialPaymentAllowed,
@@ -358,7 +362,7 @@ export function buildPlanCreatePayload(form: PlanBuilderFormState) {
           flexiblePhase: {
             minimumPaymentPaise: paise(form.flexMinPayment),
             maximumPaymentPaise: paise(form.flexMaxPayment),
-            paymentIncrementPaise: 1,
+            paymentIncrementPaise: paise(form.flexPaymentIncrement),
             minTotalPaise: paise(form.flexMinTotal),
             maxPaymentsPerCycle: null,
             paymentsRequiredPerCycle: 0,
@@ -374,7 +378,7 @@ export function buildPlanCreatePayload(form: PlanBuilderFormState) {
           },
           cappedPhase: {
             minimumPaymentPaise: paise(form.cappedMinPayment),
-            paymentIncrementPaise: 1,
+            paymentIncrementPaise: paise(form.flexPaymentIncrement),
             allowFinalRemainderBelowMinimum:
               form.allowFinalRemainderBelowMinimum,
             allowFutureCyclePayment: form.allowFutureCyclePayment,
@@ -418,8 +422,8 @@ export function buildPlanCreatePayload(form: PlanBuilderFormState) {
   if (form.valueBasis === "GOLD_WEIGHT") {
     payload.goldRules = {
       rateSource: "TENANT_DAILY_RATE",
-      weightRoundingMode: "HALF_UP",
-      weightPrecisionMg: 1,
+      weightRoundingMode: form.weightRoundingMode,
+      weightPrecisionMg: form.weightPrecisionMg,
       blockPaymentIfRateNotSet: form.blockPaymentIfRateNotSet,
     };
   }
@@ -650,6 +654,12 @@ export function planDetailToForm(detail: Record<string, unknown>): PlanBuilderFo
     blockPaymentIfRateNotSet: Boolean(
       gold.blockPaymentIfRateNotSet ?? true,
     ),
+    weightRoundingMode:
+      (gold.weightRoundingMode as PlanBuilderFormState["weightRoundingMode"]) ??
+      base.weightRoundingMode,
+    weightPrecisionMg: Number(
+      gold.weightPrecisionMg ?? base.weightPrecisionMg,
+    ),
     benefitType:
       (benefit.type as BenefitType) ?? base.benefitType,
     benefitDisplayLabel: String(benefit.displayLabel ?? base.benefitDisplayLabel),
@@ -680,14 +690,9 @@ export function planDetailToForm(detail: Record<string, unknown>): PlanBuilderFo
       fromPaise(penalty.value as number) ||
       base.penaltyFlat,
     benefitTreatment:
-      penalty.benefitTreatment === "PRORATE"
-        ? "FORFEIT"
-        : ((penalty.benefitTreatment as BenefitTreatment) ?? base.benefitTreatment),
+      (penalty.benefitTreatment as BenefitTreatment) ?? base.benefitTreatment,
     allowedRedemptionModes: Array.isArray(redemption.allowedModes)
-      ? (redemption.allowedModes as string[])
-          .filter((m): m is RedemptionMode =>
-            (["CASH", "GOLD_HANDOVER", "PURCHASE_ADJUSTMENT"] as string[]).includes(m),
-          )
+      ? (redemption.allowedModes as RedemptionMode[])
       : base.allowedRedemptionModes,
     redeemAtAnyBranch: Boolean(redemption.redeemAtAnyBranch),
     allBranches: Boolean(avail.allBranches ?? true),
@@ -736,6 +741,13 @@ export function buildPlanPatchPayload(form: PlanBuilderFormState) {
     string,
     unknown
   >;
+  if (form.paymentPattern === "FLEXIBLE_AVERAGE") {
+    rest.paymentRules = {
+      ...((rest.paymentRules as Record<string, unknown>) ?? {}),
+      // Explicitly clear a fixed-plan cap during FIXED → FLEXIBLE PATCH.
+      maxPaymentPerTransactionPaise: null,
+    };
+  }
   return { ...version, ...rest };
 }
 

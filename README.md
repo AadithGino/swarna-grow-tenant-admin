@@ -4,7 +4,7 @@ Production-oriented React tenant-admin, platform-super-admin, mobile-first custo
 
 ## Collection agent portal
 
-Open `/agent/kairali/login` (jeweller slug in the URL, like the customer portal). Mock credentials are `9847012352` / `2026`.
+Open `/agent/login` to enter the mobile/password flow and choose a jewellery when the staff account belongs to multiple tenants. Mock credentials are `9847012352` / `2026`.
 
 The `/agent` workspace includes the branch-scoped dashboard, customer search, fixed/flexible/gold collection flows, live gold-weight preview, receipts, cash-in-hand and branch handovers, collection history, agent-only reports, CSV export and account security. See `docs/AGENT_PORTAL.md` for the integration rules.
 

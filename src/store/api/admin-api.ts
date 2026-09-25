@@ -27,10 +27,6 @@ import { normalizeFetchBaseQueryError } from "@/src/lib/api-error";
 import { newIdempotencyKey } from "@/src/lib/idempotency";
 import { ensureMutationJsonBody } from "@/src/lib/rtk-mutation-body";
 import { businessTodayYmd } from "@/src/lib/list-date-range";
-import {
-  adaptMaturityProjection,
-  type MaturityProjection,
-} from "@/src/lib/v1-maturity-projection";
 import { mockRequest } from "@/src/mocks/mock-server";
 import type {
   CashHandover,
@@ -108,6 +104,7 @@ import {
 export type ListQueryParams = {
   cursor?: string;
   limit?: number;
+  branchId?: string;
 };
 
 export type DateRangeQueryParams = {
@@ -1142,14 +1139,14 @@ export const adminApi = createApi({
         { type: "Enrollment", id: schemeId },
       ],
     }),
-    getMaturityProjection: builder.query<MaturityProjection | null, string>({
+    getMaturityProjection: builder.query<Record<string, unknown>, string>({
       query: (schemeId) => ({
         url: `/admin/schemes/${schemeId}/maturity-projection`,
         params: { schemeId },
         mockKey: "getMaturityProjection",
       }),
       transformResponse: (raw) =>
-        adaptMaturityProjection(contractPayload(raw)),
+        contractPayload(raw) as Record<string, unknown>,
     }),
     getSchemePaymentIntents: builder.query<
       ReturnType<typeof adaptListBundle>,
@@ -1203,16 +1200,11 @@ export const adminApi = createApi({
     }),
     getSettlementPreview: builder.query<
       SettlementPreview,
-      {
-        schemeId: string;
-        type: SettlementPreviewType;
-        /** Required for `GOLD_WEIGHT` on the backend; defaults to CASH for preview loads. */
-        mode?: string;
-      }
+      { schemeId: string; type: SettlementPreviewType; mode?: string }
     >({
       query: ({ schemeId, type, mode }) => ({
         url: `/admin/schemes/${schemeId}/settlement-preview`,
-        params: { id: schemeId, type, mode: mode ?? "CASH" },
+        params: { id: schemeId, type, ...(mode ? { mode } : {}) },
         mockKey: "settlementPreview",
       }),
       transformResponse: (raw, _meta, arg) =>
@@ -1361,9 +1353,9 @@ export const adminApi = createApi({
           | "CREATE_PAYMENT_LINK";
         payment?: {
           amountPaise: number;
-          mode: Payment["mode"];
+          mode: "CASH" | "CARD" | "UPI" | "BANK_TRANSFER";
           reference?: string;
-          expectedPositionVersion?: number;
+          remarks?: string;
         };
       }
     >({
@@ -1520,6 +1512,7 @@ export const adminApi = createApi({
         paymentId: string;
         paymentStatus: string;
         providerState: string | null;
+        reconciledAt: string;
         outcome: string;
         requiresReview: boolean;
         reviewReason: string | null;
@@ -1537,6 +1530,7 @@ export const adminApi = createApi({
           paymentId: string;
           paymentStatus: string;
           providerState: string | null;
+          reconciledAt: string;
           outcome: string;
           requiresReview: boolean;
           reviewReason: string | null;
@@ -1544,50 +1538,64 @@ export const adminApi = createApi({
       invalidatesTags: ["Payment"],
     }),
     initiatePaymentRefund: builder.mutation<
-      { refundId: string; status: string; reused: boolean },
-      {
-        paymentId: string;
-        amountPaise: number;
-        reason: string;
-      }
+      Record<string, any>,
+      { paymentId: string; amountPaise: number; reason: string; idempotencyKey: string }
     >({
-      query: ({ paymentId, ...body }) => ({
+      query: ({ paymentId, idempotencyKey, ...body }) => ({
         url: `/admin/payments/${paymentId}/refunds`,
         method: "POST",
-        params: { paymentId },
         body,
+        headers: { "X-Idempotency-Key": idempotencyKey },
         mockKey: "initiatePaymentRefund",
       }),
-      transformResponse: (raw) =>
-        contractPayload(raw) as {
-          refundId: string;
-          status: string;
-          reused: boolean;
-        },
-      invalidatesTags: ["Payment", "Enrollment", "Report"],
+      transformResponse: (raw) => contractPayload(raw) as Record<string, any>,
+      invalidatesTags: ["Payment", "Enrollment", "Dashboard", "Report"],
     }),
-    listPaymentRefunds: builder.query<
-      Array<{
-        id: string;
-        amountPaise: number;
-        status: string;
-        reason?: string;
-      }>,
-      string
-    >({
+    listPaymentRefunds: builder.query<Record<string, any>[], string>({
       query: (paymentId) => ({
         url: `/admin/payments/${paymentId}/refunds`,
-        params: { paymentId },
         mockKey: "listPaymentRefunds",
       }),
-      transformResponse: (raw) =>
-        contractPayload(raw) as Array<{
-          id: string;
-          amountPaise: number;
-          status: string;
-          reason?: string;
-        }>,
+      transformResponse: (raw) => {
+        const value = contractPayload<any>(raw) ?? [];
+        return Array.isArray(value) ? value : value.items ?? value.data ?? [];
+      },
       providesTags: ["Payment"],
+    }),
+    reconcilePaymentRefund: builder.mutation<
+      Record<string, any>,
+      { paymentId: string; refundId: string; idempotencyKey: string }
+    >({
+      query: ({ paymentId, refundId, idempotencyKey }) => ({
+        url: `/admin/payments/${paymentId}/refunds/${refundId}/reconcile`,
+        method: "POST",
+        body: {},
+        headers: { "X-Idempotency-Key": idempotencyKey },
+        mockKey: "reconcilePaymentRefund",
+      }),
+      transformResponse: (raw) => contractPayload(raw) as Record<string, any>,
+      invalidatesTags: ["Payment"],
+    }),
+    releasePaymentRefundReservation: builder.mutation<
+      Record<string, any>,
+      {
+        paymentId: string;
+        refundId: string;
+        reason: string;
+        evidence?: string;
+        providerConfirmedNotAccepted?: boolean;
+        idempotencyKey: string;
+      }
+    >({
+      query: ({ paymentId, refundId, idempotencyKey, ...body }) => ({
+        url: `/admin/payments/${paymentId}/refunds/${refundId}/release`,
+        method: "POST",
+        body,
+        headers: { "X-Idempotency-Key": idempotencyKey },
+        mockKey: "releasePaymentRefundReservation",
+      }),
+      transformResponse: (raw) => contractPayload(raw) as Record<string, any>,
+      invalidatesTags: ["Payment"],
     }),
     reconcilePayment: builder.mutation<unknown, string>({
       query: (paymentId) => ({
@@ -1822,26 +1830,21 @@ export const adminApi = createApi({
       CashHandover,
       {
         id: string;
-        remarks?: string;
-        expectedVersion?: number;
         acceptedAmountPaise?: number;
       }
     >({
-      query: ({ id, remarks, ...body }) => ({
+      query: ({ id, ...body }) => ({
         url: `/admin/cash/handovers/${id}/accept`,
         method: "POST",
         params: { id },
-        body: {
-          ...body,
-          ...(remarks ? { reason: remarks } : {}),
-        },
+        body,
         mockKey: "acceptHandover",
       }),
       invalidatesTags: ["Cash", "Dashboard", "Report"],
     }),
     rejectHandover: builder.mutation<
       CashHandover,
-      { id: string; reason: string; expectedVersion?: number }
+      { id: string; reason: string }
     >({
       query: ({ id, ...body }) => ({
         url: `/admin/cash/handovers/${id}/reject`,
@@ -1857,20 +1860,17 @@ export const adminApi = createApi({
       {
         id: string;
         acceptedAmountPaise: number;
-        remarks: string;
-        expectedVersion?: number;
+        reason?: string;
       }
     >({
-      query: ({ id, acceptedAmountPaise, remarks, expectedVersion }) => ({
+      query: ({ id, acceptedAmountPaise, reason }) => ({
         url: `/admin/cash/handovers/${id}/resolve-discrepancy`,
         method: "POST",
         params: { id },
         body: {
           accepted: true,
           acceptedAmountPaise,
-          remarks,
-          reason: remarks,
-          expectedVersion,
+          ...(reason ? { reason } : {}),
         },
         mockKey: "resolveHandoverDiscrepancy",
       }),
@@ -2489,26 +2489,23 @@ export const adminApi = createApi({
         contactNumber?: string;
       }
     >({
-      query: (body) => {
-        const address = {
-          ...(body.address?.line1 ? { line1: body.address.line1 } : {}),
-          ...(body.address?.city ? { city: body.address.city } : {}),
-          ...(body.address?.pincode ? { pincode: body.address.pincode } : {}),
-        };
-        return {
-          url: "/admin/branches",
-          method: "POST",
-          body: {
-            name: body.name,
-            code: body.code,
-            ...(body.contactNumber
-              ? { mobile: body.contactNumber, contactNumber: body.contactNumber }
-              : {}),
-            ...(Object.keys(address).length ? { address } : {}),
-          },
-          mockKey: "createBranch",
-        };
-      },
+      query: (body) => ({
+        url: "/admin/branches",
+        method: "POST",
+        body: {
+          name: body.name,
+          code: body.code,
+          mobile: body.contactNumber,
+          address: [
+            body.address?.line1,
+            body.address?.city,
+            body.address?.pincode,
+          ]
+            .filter(Boolean)
+            .join(", "),
+        },
+        mockKey: "createBranch",
+      }),
       transformResponse: (raw) => contractPayload(raw) as any,
       invalidatesTags: ["Access"],
     }),
@@ -3277,16 +3274,13 @@ export const adminApi = createApi({
     }),
     completeRedemption: builder.mutation<
       unknown,
-      { id: string; remarks?: string; billNumber?: string }
+      { id: string; remarks?: string }
     >({
-      query: ({ id, remarks, billNumber }) => ({
+      query: ({ id, ...body }) => ({
         url: `/admin/redemptions/${id}/complete`,
         method: "POST",
         params: { id },
-        body: {
-          ...(remarks ? { remarks } : {}),
-          ...(billNumber ? { modeDetails: { billNumber } } : {}),
-        },
+        body,
         mockKey: "completeRedemption",
       }),
       invalidatesTags: ["Enrollment", "Dashboard", "Report"],
@@ -3503,6 +3497,115 @@ export const adminApi = createApi({
       transformResponse: adaptListBundle,
       providesTags: ["Message"],
       refetchOnMountOrArgChange: STALE_TIER_D,
+    }),
+    getMessagingInboundDetail: builder.query<Record<string, any>, string>({
+      query: (id) => ({
+        url: `/admin/messaging/inbound/${id}`,
+        mockKey: "getMessagingInboundDetail",
+      }),
+      transformResponse: (raw) => contractPayload(raw) as Record<string, any>,
+      providesTags: ["Message"],
+    }),
+    markMessagingInboundRead: builder.mutation<Record<string, any>, string>({
+      query: (id) => ({
+        url: `/admin/messaging/inbound/${id}/read`,
+        method: "POST",
+        body: {},
+        mockKey: "markMessagingInboundRead",
+      }),
+      transformResponse: (raw) => contractPayload(raw) as Record<string, any>,
+      invalidatesTags: ["Message"],
+    }),
+    getGatewaySettlementRuns: builder.query<
+      Record<string, any>[],
+      { limit?: number; cursor?: string } | void
+    >({
+      query: (params) => ({
+        url: "/admin/gateway/settlement-runs",
+        params: params ?? {},
+        mockKey: "getGatewaySettlementRuns",
+      }),
+      transformResponse: (raw) => {
+        const value = contractPayload<any>(raw) ?? [];
+        return Array.isArray(value) ? value : value.data ?? value.items ?? [];
+      },
+      providesTags: ["Payment"],
+    }),
+    getGatewaySettlementMismatches: builder.query<
+      Record<string, any>[],
+      { status?: string; limit?: number; cursor?: string } | void
+    >({
+      query: (params) => ({
+        url: "/admin/gateway/settlement-mismatches",
+        params: params ?? {},
+        mockKey: "getGatewaySettlementMismatches",
+      }),
+      transformResponse: (raw) => {
+        const value = contractPayload<any>(raw) ?? [];
+        return Array.isArray(value) ? value : value.data ?? value.items ?? [];
+      },
+      providesTags: ["Payment"],
+    }),
+    uploadGatewaySettlement: builder.mutation<
+      Record<string, any>,
+      {
+        businessDate: string;
+        contentType: "CSV" | "JSON";
+        sourceFileName?: string;
+        items: Array<{
+          providerTransactionId?: string;
+          providerRefundId?: string;
+          expectedAmountPaise?: number;
+          settledAmountPaise: number;
+          matchedPaymentId?: string;
+          matchedRefundId?: string;
+        }>;
+        idempotencyKey: string;
+      }
+    >({
+      query: ({ idempotencyKey, ...body }) => ({
+        url: "/admin/gateway/settlement-runs/upload",
+        method: "POST",
+        body,
+        headers: { "X-Idempotency-Key": idempotencyKey },
+        mockKey: "uploadGatewaySettlement",
+      }),
+      transformResponse: (raw) => contractPayload(raw) as Record<string, any>,
+      invalidatesTags: ["Payment", "Dashboard", "Report"],
+    }),
+    resolveGatewaySettlementMismatch: builder.mutation<
+      Record<string, any>,
+      {
+        mismatchId: string;
+        category: string;
+        reason: string;
+        expectedVersion?: number;
+        idempotencyKey: string;
+      }
+    >({
+      query: ({ mismatchId, idempotencyKey, ...body }) => ({
+        url: `/admin/gateway/settlement-mismatches/${mismatchId}/resolve`,
+        method: "POST",
+        body,
+        headers: { "X-Idempotency-Key": idempotencyKey },
+        mockKey: "resolveGatewaySettlementMismatch",
+      }),
+      transformResponse: (raw) => contractPayload(raw) as Record<string, any>,
+      invalidatesTags: ["Payment"],
+    }),
+    reopenGatewaySettlementMismatch: builder.mutation<
+      Record<string, any>,
+      { mismatchId: string; reason: string; idempotencyKey: string }
+    >({
+      query: ({ mismatchId, idempotencyKey, ...body }) => ({
+        url: `/admin/gateway/settlement-mismatches/${mismatchId}/reopen`,
+        method: "POST",
+        body,
+        headers: { "X-Idempotency-Key": idempotencyKey },
+        mockKey: "reopenGatewaySettlementMismatch",
+      }),
+      transformResponse: (raw) => contractPayload(raw) as Record<string, any>,
+      invalidatesTags: ["Payment"],
     }),
     getDashboardActivity: builder.query<
       ReturnType<typeof adaptListBundle>,
@@ -3883,6 +3986,17 @@ export const {
   useGetMessagingDeadLetterQuery,
   useRequeueDeadLetterMutation,
   useGetMessagingInboundQuery,
+  useGetMessagingInboundDetailQuery,
+  useMarkMessagingInboundReadMutation,
+  useInitiatePaymentRefundMutation,
+  useListPaymentRefundsQuery,
+  useReconcilePaymentRefundMutation,
+  useReleasePaymentRefundReservationMutation,
+  useGetGatewaySettlementRunsQuery,
+  useGetGatewaySettlementMismatchesQuery,
+  useUploadGatewaySettlementMutation,
+  useResolveGatewaySettlementMismatchMutation,
+  useReopenGatewaySettlementMismatchMutation,
   useGetDashboardActivityQuery,
   useGetCollectionsSummaryQuery,
   useGetSubscriptionUsageQuery,

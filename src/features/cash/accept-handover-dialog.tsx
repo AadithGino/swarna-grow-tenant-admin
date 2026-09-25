@@ -205,7 +205,7 @@ export function AcceptHandoverDialog({
                     await resolve({
                       id: handover.id,
                       acceptedAmountPaise: Math.round(acceptedRupee * 100),
-                      remarks: remarks.trim() || "Resolved",
+                      reason: remarks.trim() || "Resolved",
                     }).unwrap();
                     toast.success("Discrepancy resolved");
                     onOpenChange(false);
@@ -235,12 +235,10 @@ export function AcceptHandoverDialog({
                       await accept({
                         id: handover.id,
                         acceptedAmountPaise: amountPaise,
-                        remarks: remarks.trim() || "Accepted with variance",
                       }).unwrap();
                     } else {
                       await accept({
                         id: handover.id,
-                        remarks: remarks.trim() || undefined,
                       }).unwrap();
                     }
                     toast.success("Handover accepted");

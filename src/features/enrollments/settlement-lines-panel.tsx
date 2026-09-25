@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import { StatCard, Surface } from "@/src/components/common/page-parts";
 import { StatusBadge } from "@/src/components/common/status-badge";
-import { formatIsoDate, moneyExact } from "@/src/lib/format";
+import { formatIsoDate, money } from "@/src/lib/format";
 import type { SettlementLine, SettlementPreview } from "@/src/types/domain";
 import { cn } from "@/lib/utils";
 
@@ -137,16 +137,14 @@ function SettlementSummaryStrip({ preview }: { preview: SettlementPreview }) {
       <StatCard
         icon={IndianRupee}
         label="Total credits"
-        value={moneyExact(credits)}
-        valueClassName="whitespace-normal text-xl leading-snug"
+        value={money(credits)}
         detail="Paid installments & benefits"
         tone="green"
       />
       <StatCard
         icon={Minus}
         label="Deductions"
-        value={moneyExact(debits)}
-        valueClassName="whitespace-normal text-xl leading-snug"
+        value={money(debits)}
         detail="Penalties & adjustments"
         tone={debits > 0 ? "red" : "cream"}
       />
@@ -164,8 +162,7 @@ function SettlementSummaryStrip({ preview }: { preview: SettlementPreview }) {
       <StatCard
         icon={Scale}
         label="Final settlement"
-        value={moneyExact(preview.finalValue)}
-        valueClassName="whitespace-normal text-xl leading-snug"
+        value={money(preview.finalValue)}
         detail={
           preview.finalWeightDisplay
             ? preview.finalWeightDisplay
@@ -234,7 +231,7 @@ function SettlementLineRow({ line }: { line: SettlementLine }) {
         >
           {line.weightDisplay && !line.amount
             ? line.weightDisplay
-            : `${line.sign}${moneyExact(line.amount)}`}
+            : `${line.sign}${money(line.amount)}`}
         </p>
         {line.forfeited ? (
           <p className="mt-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
@@ -362,7 +359,7 @@ export function SettlementLinesPanel({
               </div>
               <div className="text-left sm:text-right">
                 <p className="text-2xl font-extrabold tabular-nums tracking-tight text-[#730321]">
-                  {moneyExact(preview.finalValue)}
+                  {money(preview.finalValue)}
                 </p>
                 {preview.finalWeightDisplay ? (
                   <p className="mt-1 text-sm font-semibold text-[#9a6f2a]">

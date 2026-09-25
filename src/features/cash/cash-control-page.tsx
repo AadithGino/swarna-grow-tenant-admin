@@ -506,7 +506,7 @@ export function CashControlPage() {
                             await resolveDiscrepancy({
                               id: r.id,
                               acceptedAmountPaise: Math.round(r.amount * 100),
-                              remarks: "Accepted with noted difference",
+                              reason: "Accepted with noted difference",
                             }).unwrap();
                             toast.success(
                               `${r.handoverNo} discrepancy resolved`,

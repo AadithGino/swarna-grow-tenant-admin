@@ -16,7 +16,6 @@ import { Surface } from "@/src/components/common/page-parts";
 import { StatusBadge } from "@/src/components/common/status-badge";
 import { SettlementLinesPanel } from "@/src/features/enrollments/settlement-lines-panel";
 import { money } from "@/src/lib/format";
-import type { MaturityProjection } from "@/src/lib/v1-maturity-projection";
 import type { Enrollment, SettlementPreview } from "@/src/types/domain";
 import { cn } from "@/lib/utils";
 
@@ -29,7 +28,7 @@ const WORKFLOW_STEPS = [
 
 function redemptionHeadline(enrollment: Enrollment) {
   const { status } = enrollment;
-  if (status === "REDEMPTION_PENDING") return "Redemption in progress";
+  if (enrollment.pendingRedemption) return "Redemption in progress";
   if (status === "REDEEMED") return "Redeemed";
   if (status === "CLOSED_PREMATURE") return "Closed early";
   if (status === "MATURED") return "Ready to redeem";
@@ -38,7 +37,7 @@ function redemptionHeadline(enrollment: Enrollment) {
 
 function redemptionSubcopy(enrollment: Enrollment) {
   const pending = enrollment.pendingRedemption;
-  if (enrollment.status === "REDEMPTION_PENDING" && pending) {
+  if (pending) {
     if (pending.status === "APPROVED") {
       return "Approved — complete customer handover from the redemption queue.";
     }
@@ -64,7 +63,7 @@ function workflowStepIndex(enrollment: Enrollment) {
   if (enrollment.status === "REDEEMED" || enrollment.status === "CLOSED_PREMATURE") {
     return 4;
   }
-  if (enrollment.status === "REDEMPTION_PENDING" && pending) {
+  if (pending) {
     if (pending.status === "APPROVED") return 3;
     return 2;
   }
@@ -75,7 +74,6 @@ function workflowStepIndex(enrollment: Enrollment) {
 export function EnrollmentMaturityTab({
   enrollment,
   maturityPreview,
-  maturityProjection,
   onMaturityPreview,
   onPrematurePreview,
   onRedeem,
@@ -83,7 +81,6 @@ export function EnrollmentMaturityTab({
 }: {
   enrollment: Enrollment;
   maturityPreview?: SettlementPreview;
-  maturityProjection?: MaturityProjection | null;
   onMaturityPreview: () => void;
   onPrematurePreview: () => void;
   onRedeem: () => void;
@@ -92,8 +89,7 @@ export function EnrollmentMaturityTab({
   const row = enrollment;
   const pending = row.pendingRedemption;
   const completed = row.completedRedemption;
-  const redemptionInProgress =
-    row.status === "REDEMPTION_PENDING" || Boolean(pending);
+  const redemptionInProgress = Boolean(pending);
   const redemptionComplete =
     row.status === "REDEEMED" || row.status === "CLOSED_PREMATURE";
   const canCloseEarly =
@@ -101,7 +97,7 @@ export function EnrollmentMaturityTab({
     !redemptionComplete &&
     (row.status === "ACTIVE" ||
       row.status === "LOCKED" ||
-      row.status === "PENDING_ACTIVATION");
+      row.status === "PENDING_PAYMENT");
   const canRedeem =
     !redemptionInProgress &&
     !redemptionComplete &&
@@ -112,15 +108,7 @@ export function EnrollmentMaturityTab({
     (row.progress / Math.max(row.tenure, 1)) * 100,
   );
   const cyclesRemaining = Math.max(row.tenure - row.progress, 0);
-  const projectedFromApi =
-    maturityProjection && maturityProjection.projectedAmountPaise > 0
-      ? maturityProjection.projectedAmountPaise / 100
-      : null;
-  const projected = projectedFromApi ?? row.installment * row.tenure;
-  const projectedLabel =
-    projectedFromApi != null
-      ? "Projected at maturity"
-      : "Projected contribution";
+  const projected = row.installment * row.tenure;
   const showTermProgress = !redemptionComplete;
 
   return (
@@ -214,7 +202,7 @@ export function EnrollmentMaturityTab({
             {[
               {
                 icon: Scale,
-                label: projectedLabel,
+                label: "Projected contribution",
                 value: money(projected),
                 tone: "text-[#241316]",
               },

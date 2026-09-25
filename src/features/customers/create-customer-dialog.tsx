@@ -129,7 +129,7 @@ export function CreateCustomerDialog({
           phone,
           email: email || undefined,
           branchId: form.branchId.trim() || undefined,
-          address: form.address.trim() || undefined,
+          address: form.address.trim(),
         }).unwrap();
 
         toast.success(`${created.name} created`);

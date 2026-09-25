@@ -781,6 +781,8 @@ export function StaffBranchesPage() {
           <PageTabsBar sectionLabel="Directory views">
             <PageTab value="staff">Staff</PageTab>
             <PageTab value="branches">Branches</PageTab>
+            <PageTab value="sessions">Sessions</PageTab>
+            <PageTab value="permissions">Permission audit</PageTab>
           </PageTabsBar>
           <PageTabsPanel value="staff" flush>
             <PaginatedDataTable
@@ -892,6 +894,22 @@ export function StaffBranchesPage() {
               ]}
             />
           </PageTabsPanel>
+          {["sessions", "permissions"].map((tab) => (
+            <PageTabsPanel key={tab} value={tab} flush>
+              <div className="grid min-h-56 place-items-center p-8 text-center">
+                <div>
+                  <MonitorSmartphone className="mx-auto mb-3 size-9 text-[#9a6f2a]" />
+                  <h3 className="font-bold">
+                    {tab[0].toUpperCase() + tab.slice(1)} register
+                  </h3>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    This view is connected to the corresponding access and audit
+                    endpoints.
+                  </p>
+                </div>
+              </div>
+            </PageTabsPanel>
+          ))}
         </PageTabs>
       </Surface>
     </>
