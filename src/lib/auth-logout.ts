@@ -3,6 +3,9 @@ import type { AppDispatch } from "@/src/store";
 import { adminApi } from "@/src/store/api/admin-api";
 import { customerApi } from "@/src/store/api/customer-api";
 import { platformApi } from "@/src/store/api/platform-api";
+import {
+  agentSignInRedirectPath,
+} from "@/src/lib/agent-tenant";
 import { CUSTOMER_ROUTE_SECTIONS } from "@/src/lib/customer-tenant";
 import { clearPlatformTokens } from "@/src/lib/auth-token-storage";
 import { customerSignedOut } from "@/src/store/slices/customer-session-slice";
@@ -11,6 +14,7 @@ import { clearSession } from "@/src/store/slices/session-slice";
 let tenantLogoutStarted = false;
 let platformLogoutStarted = false;
 let customerLogoutStarted = false;
+let agentLogoutStarted = false;
 
 export function clearPlatformAuthStorage() {
   clearPlatformTokens();
@@ -75,6 +79,21 @@ export function handleCustomerUnauthorized(dispatch: AppDispatch) {
     ? `/customer/${tenantSlug}/login`
     : "/customer/login";
   window.location.assign(loginPathWithReturn(loginBase));
+}
+
+/** Clear agent session and redirect to jeweller agent login. */
+export function handleAgentUnauthorized(_dispatch: AppDispatch) {
+  if (typeof window === "undefined") return;
+  const path = window.location.pathname;
+  if (
+    path === "/agent/login" ||
+    /^\/agent\/[^/]+\/login\/?$/.test(path)
+  ) {
+    return;
+  }
+  if (agentLogoutStarted) return;
+  agentLogoutStarted = true;
+  window.location.assign(loginPathWithReturn(agentSignInRedirectPath()));
 }
 
 /** Clear platform session, cache, and redirect to platform login. */

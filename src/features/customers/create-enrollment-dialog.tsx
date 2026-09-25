@@ -17,12 +17,22 @@ import { EnrolFormShell } from "@/src/components/common/enrol-form-shell";
 import { FormFieldError } from "@/src/components/common/form-field-error";
 import { FieldLabel } from "@/src/components/common/page-parts";
 import { PageSkeleton } from "@/src/components/common/query-state";
-import { money } from "@/src/lib/format";
+import { idempotencyKey, money } from "@/src/lib/format";
 import { PermissionGate } from "@/src/components/common/permission-gate";
 import { ACTION } from "@/src/lib/action-permissions";
 import { hasCapability } from "@/src/lib/permissions";
+import { EnrolFirstPaymentAtEnrolment } from "@/src/components/common/enrol-first-payment-at-enrolment";
+import {
+  DEFAULT_ENROL_FIRST_PAYMENT,
+  buildEnrolFirstPaymentRequest,
+  enrolFirstPaymentSubmitReady,
+  enrolFlexiblePaymentLinkPositionVersion,
+  validateEnrolFirstPaymentFields,
+} from "@/src/lib/enrol-first-payment";
+import { toastApiError } from "@/src/lib/api-error";
 import {
   defaultAmountForPlan,
+  isFlexibleEnrolPlan,
   resolvedFirstInstallmentMode,
 } from "@/src/lib/enrol-plan-rules";
 import {
@@ -35,6 +45,7 @@ import { handleFormApiError } from "@/src/lib/form-api-error";
 import { useDebouncedValue } from "@/src/hooks/use-debounced-value";
 import {
   useCreateEnrollmentMutation,
+  useCreatePaymentLinkMutation,
   useGetPlansQuery,
   useValidateEnrolmentMutation,
 } from "@/src/store/api/admin-api";
@@ -85,13 +96,12 @@ function CreateEnrollmentDialogInner({
   );
   const onlinePayments = caps?.onlinePayments !== false;
   const [createEnrollment] = useCreateEnrollmentMutation();
+  const [createPaymentLink] = useCreatePaymentLinkMutation();
   const [form, setForm] = useState({
     planId: "",
     amount: 0,
     firstInstallmentMode: "COLLECT_NOW" as "COLLECT_NOW" | "START_NEXT_CYCLE",
-    firstInstallmentAction: "RECORD_MANUAL_PAYMENT" as
-      | "RECORD_MANUAL_PAYMENT"
-      | "CREATE_PAYMENT_LINK",
+    ...DEFAULT_ENROL_FIRST_PAYMENT,
   });
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [planTouched, setPlanTouched] = useState(false);
@@ -130,7 +140,7 @@ function CreateEnrollmentDialogInner({
         planId: "",
         amount: 0,
         firstInstallmentMode: "COLLECT_NOW",
-        firstInstallmentAction: "RECORD_MANUAL_PAYMENT",
+        ...DEFAULT_ENROL_FIRST_PAYMENT,
       });
       setFieldErrors({});
       setPlanTouched(false);
@@ -156,6 +166,7 @@ function CreateEnrollmentDialogInner({
         : undefined,
     );
 
+  const collectNow = effectiveFirstMode === "COLLECT_NOW";
   const submitDisabled = !enrolSubmitReady({
     planId: form.planId,
     plan: selectedPlan,
@@ -163,6 +174,11 @@ function CreateEnrollmentDialogInner({
     apiBlockers: blockers,
     validateLoading: validateState.isLoading,
     plansLoading: plansQuery.isLoading,
+    firstPaymentReady: enrolFirstPaymentSubmitReady(collectNow, {
+      firstInstallmentAction: form.firstInstallmentAction,
+      paymentMode: form.paymentMode,
+      paymentReference: form.paymentReference,
+    }),
   });
 
   return (
@@ -205,14 +221,60 @@ function CreateEnrollmentDialogInner({
         }
         if (!selectedPlan) return false;
 
+        const firstPaymentErrors = validateEnrolFirstPaymentFields(collectNow, {
+          firstInstallmentAction: form.firstInstallmentAction,
+          paymentMode: form.paymentMode,
+          paymentReference: form.paymentReference,
+        });
+        if (Object.keys(firstPaymentErrors).length) {
+          setFieldErrors((prev) => ({ ...prev, ...firstPaymentErrors }));
+          toast.error("Complete first payment details.");
+          return false;
+        }
+
+        const flexiblePlan = isFlexibleEnrolPlan(selectedPlan);
+        const firstPayment = buildEnrolFirstPaymentRequest(
+          collectNow,
+          debouncedAmount,
+          {
+            firstInstallmentAction: form.firstInstallmentAction,
+            paymentMode: form.paymentMode,
+            paymentReference: form.paymentReference,
+          },
+          { isFlexiblePlan: flexiblePlan },
+        );
         const row = await createEnrollment({
           customerId: customer.id,
           planId: form.planId,
           amount: debouncedAmount,
           firstInstallmentMode: effectiveFirstMode,
-          firstInstallmentAction: form.firstInstallmentAction,
+          ...firstPayment,
         }).unwrap();
-        toast.success(`${row.enrollmentNo} created`);
+        if (
+          collectNow &&
+          form.firstInstallmentAction === "CREATE_PAYMENT_LINK" &&
+          onlinePayments
+        ) {
+          try {
+            const link = await createPaymentLink({
+              schemeId: row.id,
+              amount: debouncedAmount,
+              expectedPositionVersion:
+                enrolFlexiblePaymentLinkPositionVersion(flexiblePlan),
+              idempotencyKey: idempotencyKey(),
+            }).unwrap();
+            toast.success(
+              `${row.enrollmentNo} created · link sent (expires ${link.expiresAt})`,
+            );
+          } catch (err) {
+            toastApiError(
+              err,
+              `${row.enrollmentNo} created, but payment link failed`,
+            );
+          }
+        } else {
+          toast.success(`${row.enrollmentNo} created`);
+        }
         router.push(`/enrollments/${row.id}`);
       }}
     >
@@ -295,45 +357,26 @@ function CreateEnrollmentDialogInner({
             }}
           />
           <FormFieldError message={displayAmountError()} />
-          {selectedPlan?.paymentPattern === "FIXED_DATE" ? (
-            <EnrolFirstInstallmentControl
-              plan={selectedPlan}
-              value={form.firstInstallmentMode}
-              onChange={(firstInstallmentMode) =>
-                setForm({ ...form, firstInstallmentMode })
+          <EnrolFirstInstallmentControl
+            plan={selectedPlan}
+            value={form.firstInstallmentMode}
+            onChange={(firstInstallmentMode) =>
+              setForm({ ...form, firstInstallmentMode })
+            }
+          />
+          {collectNow ? (
+            <EnrolFirstPaymentAtEnrolment
+              onlinePayments={onlinePayments}
+              value={{
+                firstInstallmentAction: form.firstInstallmentAction,
+                paymentMode: form.paymentMode,
+                paymentReference: form.paymentReference,
+              }}
+              onChange={(firstPayment) =>
+                setForm({ ...form, ...firstPayment })
               }
+              fieldErrors={fieldErrors}
             />
-          ) : null}
-          {effectiveFirstMode === "COLLECT_NOW" ? (
-            <div>
-              <FieldLabel>First payment at enrolment</FieldLabel>
-              <div className="mt-2 grid gap-2 sm:grid-cols-2">
-                {(
-                  [
-                    ["RECORD_MANUAL_PAYMENT", "Record manual payment now"] as const,
-                    ...(onlinePayments
-                      ? ([["CREATE_PAYMENT_LINK", "Send payment link only"]] as const)
-                      : []),
-                  ] satisfies ReadonlyArray<readonly [string, string]>
-                ).map(([value, label]) => (
-                  <button
-                    key={value}
-                    type="button"
-                    className={cn(
-                      "rounded-xl border p-3 text-left text-sm transition-colors",
-                      form.firstInstallmentAction === value
-                        ? "border-[#730321] bg-[#fff5f7]"
-                        : "border-[#e3d5d0] hover:border-[#9f6673]",
-                    )}
-                    onClick={() =>
-                      setForm({ ...form, firstInstallmentAction: value })
-                    }
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-            </div>
           ) : null}
         </EnrolFormShell>
       )}

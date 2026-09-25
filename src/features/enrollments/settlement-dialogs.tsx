@@ -22,14 +22,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { FormFieldError } from "@/src/components/common/form-field-error";
 import { FieldLabel } from "@/src/components/common/page-parts";
 import {
   liveSettlementRemarksError,
   prematureClosureRemarksReady,
+  purchaseAdjustmentBillReady,
   redeemRemarksReady,
   SETTLEMENT_REMARKS_MAX,
+  validatePurchaseAdjustmentBillNumber,
   validateSettlementRemarks,
 } from "@/src/lib/settlement-form-validation";
 import { PageSkeleton } from "@/src/components/common/query-state";
@@ -70,8 +73,16 @@ export function SettlementPreviewDialog({
   description?: string;
   onInitiateRedemption?: () => void;
 }) {
+  const [previewMode, setPreviewMode] = useState("CASH");
+  const enrollmentQuery = useGetEnrollmentQuery(schemeId, { skip: !open });
+  const isGoldWeight = enrollmentQuery.data?.valueBasis === "GOLD_WEIGHT";
+
+  useEffect(() => {
+    if (!open) setPreviewMode("CASH");
+  }, [open, schemeId]);
+
   const previewQuery = useGetSettlementPreviewQuery(
-    { schemeId, type },
+    { schemeId, type, mode: previewMode },
     { skip: !open },
   );
 
@@ -104,10 +115,39 @@ export function SettlementPreviewDialog({
             <PageSkeleton cards={4} />
           ) : previewQuery.isError ? (
             <p className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-900">
-              Could not load settlement preview. Refresh the page and try again.
+              {apiErrorMessage(
+                previewQuery.error,
+                "Could not load settlement preview. Refresh the page and try again.",
+              )}
             </p>
           ) : preview ? (
-            <SettlementLinesPanel preview={preview} />
+            <>
+              {isGoldWeight && preview.allowedModes.length > 0 ? (
+                <div>
+                  <FieldLabel>Settlement basis (gold plan)</FieldLabel>
+                  <Select value={previewMode} onValueChange={setPreviewMode}>
+                    <SelectTrigger className="w-full sm:max-w-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {preview.allowedModes
+                        .filter((m) => m.available)
+                        .map((m) => (
+                          <SelectItem key={m.mode} value={m.mode}>
+                            {m.label}
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                  {preview.modePreviews?.[previewMode]?.note ? (
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      {preview.modePreviews[previewMode].note}
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
+              <SettlementLinesPanel preview={preview} />
+            </>
           ) : (
             <p className="text-sm text-muted-foreground">
               Settlement preview is unavailable.
@@ -148,18 +188,26 @@ export function RedeemEnrollmentDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
-  const previewQuery = useGetSettlementPreviewQuery(
-    { schemeId, type: "MATURITY_REDEMPTION" },
-    { skip: !open },
-  );
   const enrollmentQuery = useGetEnrollmentQuery(schemeId, { skip: !open });
   const [redeem, redeemState] = useRedeemEnrollmentMutation();
   const [mode, setMode] = useState("CASH");
+  const [billNumber, setBillNumber] = useState("");
+  const [billNumberTouched, setBillNumberTouched] = useState(false);
   const [remarks, setRemarks] = useState("");
   const [remarksTouched, setRemarksTouched] = useState(false);
-  const preview = previewQuery.data;
   const expectedVersion = enrollmentQuery.data?.version ?? 1;
   const [submitError, setSubmitError] = useState<string | null>(null);
+
+  const previewQuery = useGetSettlementPreviewQuery(
+    { schemeId, type: "MATURITY_REDEMPTION", mode },
+    { skip: !open },
+  );
+  const preview = previewQuery.data;
+
+  const billNumberDisplayError =
+    mode === "PURCHASE_ADJUSTMENT" && billNumberTouched
+      ? validatePurchaseAdjustmentBillNumber(billNumber)
+      : undefined;
 
   const remarksDisplayError =
     submitError && submitError.includes("Remarks")
@@ -169,15 +217,25 @@ export function RedeemEnrollmentDialog({
   useEffect(() => {
     if (!open) return;
     setMode("CASH");
+    setBillNumber("");
+    setBillNumberTouched(false);
     setRemarks("");
     setRemarksTouched(false);
     setSubmitError(null);
   }, [open, schemeId]);
 
   useEffect(() => {
-    const first = preview?.allowedModes.find((m) => m.available);
-    if (first) setMode(first.mode);
-  }, [preview]);
+    const available = preview?.allowedModes.filter((item) => item.available) ?? [];
+    if (available.length && !available.some((item) => item.mode === mode)) {
+      setMode(available[0].mode);
+    }
+  }, [preview, mode]);
+
+  useEffect(() => {
+    if (mode !== "PURCHASE_ADJUSTMENT") {
+      setBillNumberTouched(false);
+    }
+  }, [mode]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -232,6 +290,22 @@ export function RedeemEnrollmentDialog({
                   </p>
                 ) : null}
               </div>
+              {mode === "PURCHASE_ADJUSTMENT" ? (
+                <div>
+                  <FieldLabel>Bill / invoice number</FieldLabel>
+                  <Input
+                    value={billNumber}
+                    onChange={(e) => setBillNumber(e.target.value)}
+                    onBlur={() => setBillNumberTouched(true)}
+                    placeholder="e.g. INV-2026-0042"
+                    className={cn(
+                      billNumberTouched && billNumberDisplayError && "border-red-600",
+                    )}
+                    aria-invalid={Boolean(billNumberDisplayError)}
+                  />
+                  <FormFieldError message={billNumberDisplayError} />
+                </div>
+              ) : null}
               <div>
                 <FieldLabel>Remarks (optional)</FieldLabel>
                 <Textarea
@@ -262,16 +336,22 @@ export function RedeemEnrollmentDialog({
               !preview?.eligible ||
               redeemState.isLoading ||
               !mode ||
-              !redeemRemarksReady(remarks)
+              !redeemRemarksReady(remarks) ||
+              !purchaseAdjustmentBillReady(mode, billNumber)
             }
             onClick={async () => {
               if (!preview) return;
               setRemarksTouched(true);
+              if (mode === "PURCHASE_ADJUSTMENT") setBillNumberTouched(true);
+              const billErr =
+                mode === "PURCHASE_ADJUSTMENT"
+                  ? validatePurchaseAdjustmentBillNumber(billNumber)
+                  : undefined;
               const remarksErr = validateSettlementRemarks(remarks, {
                 required: false,
               });
-              if (remarksErr) {
-                setSubmitError(remarksErr);
+              if (billErr || remarksErr) {
+                setSubmitError(billErr ?? remarksErr ?? null);
                 toast.error("Fix the highlighted fields.");
                 return;
               }
@@ -283,6 +363,10 @@ export function RedeemEnrollmentDialog({
                   expectedVersion,
                   expectedFinalValue: preview.finalValue,
                   remarks: remarks.trim() || undefined,
+                  billNumber:
+                    mode === "PURCHASE_ADJUSTMENT"
+                      ? billNumber.trim()
+                      : undefined,
                 }).unwrap();
                 toast.success(
                   preview.approvalRequired
@@ -322,21 +406,24 @@ export function PrematureClosureDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
-  const previewQuery = useGetSettlementPreviewQuery(
-    { schemeId, type: "PREMATURE_CLOSURE" },
-    { skip: !open },
-  );
   const enrollmentQuery = useGetEnrollmentQuery(schemeId, { skip: !open });
   const [closePremature, closeState] = useClosePrematureEnrollmentMutation();
   const [mode, setMode] = useState("CASH");
+  const [billNumber, setBillNumber] = useState("");
+  const [billNumberTouched, setBillNumberTouched] = useState(false);
   const [reason, setReason] = useState("CUSTOMER_REQUEST");
   const [remarks, setRemarks] = useState("");
   const [remarksTouched, setRemarksTouched] = useState(false);
   const [ackPenalty, setAckPenalty] = useState(false);
   const [ackForfeit, setAckForfeit] = useState(false);
-  const preview = previewQuery.data;
   const expectedVersion = enrollmentQuery.data?.version ?? 1;
   const [submitError, setSubmitError] = useState<string | null>(null);
+
+  const previewQuery = useGetSettlementPreviewQuery(
+    { schemeId, type: "PREMATURE_CLOSURE", mode },
+    { skip: !open },
+  );
+  const preview = previewQuery.data;
 
   useEffect(() => {
     if (!open) return;
@@ -347,12 +434,27 @@ export function PrematureClosureDialog({
     setRemarks("");
     setRemarksTouched(false);
     setMode("CASH");
+    setBillNumber("");
+    setBillNumberTouched(false);
   }, [open, schemeId]);
 
   useEffect(() => {
-    const first = preview?.allowedModes.find((m) => m.available);
-    if (first) setMode(first.mode);
-  }, [preview]);
+    const available = preview?.allowedModes.filter((item) => item.available) ?? [];
+    if (available.length && !available.some((item) => item.mode === mode)) {
+      setMode(available[0].mode);
+    }
+  }, [preview, mode]);
+
+  useEffect(() => {
+    if (mode !== "PURCHASE_ADJUSTMENT") {
+      setBillNumberTouched(false);
+    }
+  }, [mode]);
+
+  const billNumberDisplayError =
+    mode === "PURCHASE_ADJUSTMENT" && billNumberTouched
+      ? validatePurchaseAdjustmentBillNumber(billNumber)
+      : undefined;
 
   const remarksDisplayError = liveSettlementRemarksError(remarks, {
     required: true,
@@ -429,6 +531,24 @@ export function PrematureClosureDialog({
                       </Select>
                     </div>
                   </div>
+                  {mode === "PURCHASE_ADJUSTMENT" ? (
+                    <div>
+                      <FieldLabel>Bill / invoice number</FieldLabel>
+                      <Input
+                        value={billNumber}
+                        onChange={(e) => setBillNumber(e.target.value)}
+                        onBlur={() => setBillNumberTouched(true)}
+                        placeholder="e.g. INV-2026-0042"
+                        className={cn(
+                          billNumberTouched &&
+                            billNumberDisplayError &&
+                            "border-red-600",
+                        )}
+                        aria-invalid={Boolean(billNumberDisplayError)}
+                      />
+                      <FormFieldError message={billNumberDisplayError} />
+                    </div>
+                  ) : null}
                   <div>
                     <FieldLabel>Remarks</FieldLabel>
                     <Textarea
@@ -506,16 +626,22 @@ export function PrematureClosureDialog({
               closeState.isLoading ||
               (needsPenaltyAck && !ackPenalty) ||
               (needsForfeitAck && !ackForfeit) ||
-              !prematureClosureRemarksReady(remarks)
+              !prematureClosureRemarksReady(remarks) ||
+              !purchaseAdjustmentBillReady(mode, billNumber)
             }
             onClick={async () => {
               if (!preview) return;
               setRemarksTouched(true);
+              if (mode === "PURCHASE_ADJUSTMENT") setBillNumberTouched(true);
+              const billErr =
+                mode === "PURCHASE_ADJUSTMENT"
+                  ? validatePurchaseAdjustmentBillNumber(billNumber)
+                  : undefined;
               const remarksErr = validateSettlementRemarks(remarks, {
                 required: true,
               });
-              if (remarksErr) {
-                setSubmitError(remarksErr);
+              if (billErr || remarksErr) {
+                setSubmitError(billErr ?? remarksErr ?? null);
                 toast.error("Fix the highlighted fields.");
                 return;
               }
@@ -530,6 +656,10 @@ export function PrematureClosureDialog({
                   acknowledgePenalty: needsPenaltyAck ? ackPenalty : true,
                   acknowledgeBenefitForfeit: ackForfeit,
                   expectedFinalValue: preview.finalValue,
+                  billNumber:
+                    mode === "PURCHASE_ADJUSTMENT"
+                      ? billNumber.trim()
+                      : undefined,
                 }).unwrap();
                 toast.success(
                   result.redemptionNumber

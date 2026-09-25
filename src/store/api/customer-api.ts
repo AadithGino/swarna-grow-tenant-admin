@@ -47,11 +47,14 @@ import {
   adaptCustomerPaymentList,
   adaptCustomerSchemeDetail,
 } from "@/src/lib/customer-payment-adapter";
+import { adaptSettlementPreview } from "@/src/store/api/contract-adapters";
+import type { SettlementPreview } from "@/src/types/domain";
 import {
   adaptCustomerPaymentPoll,
   type CustomerPaymentPollResult,
 } from "@/src/lib/customer-payment-poll";
 import { readCustomerPaymentSession } from "@/src/lib/customer-payment-session";
+import { dedupeCustomerNotifications } from "@/src/lib/customer-notification-dedupe";
 
 type ApiEnvelope<T> = { success: true; data: T; meta?: { nextCursor: string | null; hasMore: boolean; limit: number; total: number } };
 
@@ -325,6 +328,44 @@ const mockBaseQuery: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQueryErro
   if (url === "/app/gold-rate/history") return ok([{ ...customerHome.goldRate, effectiveDate: "2026-09-16" }, { ...customerHome.goldRate, ratePerGramPaise: 721000, ratePerGramDisplay: "₹7,210 / g", effectiveDate: "2026-09-15", movement: -0.18 }, { ...customerHome.goldRate, ratePerGramPaise: 722500, ratePerGramDisplay: "₹7,225 / g", effectiveDate: "2026-09-14", movement: 0.31 }]);
   if (url === "/app/branches") return ok([customerProfile.branch, { id: "br_thrissur", code: "TSR", name: "Thrissur", address: "Round South, Thrissur", mobile: "+91 487 2211900" }]);
   if (url.includes("/redemption-request")) return ok({ id: "red_001", schemeId: url.split("/")[3], status: "REQUESTED", preferredMode: body?.preferredMode, preferredDate: body?.preferredDate, version: Number(body?.expectedVersion ?? 1) + 1 });
+  const settlementPreviewMatch = url.match(/^\/app\/schemes\/([^/]+)\/settlement-preview$/);
+  if (settlementPreviewMatch && method === "GET") {
+    const scheme = customerSchemes.find((s) => s.id === settlementPreviewMatch[1]);
+    const paid =
+      (scheme?.totalPaid && "amountPaise" in scheme.totalPaid
+        ? scheme.totalPaid.amountPaise
+        : undefined) ?? 5_500_000;
+    return ok({
+      type: "MATURITY_REDEMPTION",
+      eligible: scheme?.status === "MATURED",
+      blockers:
+        scheme?.status === "MATURED"
+          ? []
+          : [{ code: "SCHEME_NOT_MATURED", message: "Available after contractual maturity." }],
+      computation: {
+        lines: [
+          {
+            key: "TOTAL_PAID",
+            label: "Total paid",
+            amount: { amountPaise: paid, amountDisplay: money(paid / 100) },
+            sign: "+",
+          },
+          {
+            key: "PENALTY",
+            label: "Penalty",
+            amount: { amountPaise: 0, amountDisplay: "₹0" },
+            sign: "-",
+          },
+        ],
+        finalValue: { amountPaise: paid, amountDisplay: money(paid / 100) },
+      },
+      allowedModes: [
+        { mode: "CASH", label: "Cash payout", available: true },
+        { mode: "PURCHASE_ADJUSTMENT", label: "Adjust against purchase", available: true },
+      ],
+      approvalRequired: true,
+    });
+  }
   return ok({});
 };
 
@@ -557,6 +598,7 @@ export const customerApi = createApi({
         url: `/app/schemes/${schemeId}/payable-range`,
         params: targetCycle ? { targetCycle } : undefined,
       }),
+      keepUnusedDataFor: 0,
     }),
     enrolCustomerScheme: builder.mutation<Record<string, unknown>, { planId: string; installmentAmountPaise?: number; payNow: boolean; redirectUrl?: string }>({ query: (body) => ({ url: "/app/schemes/enrol", method: "POST", body }), invalidatesTags: ["CustomerScheme", "CustomerHome"] }),
     initiatePublicPaymentLink: builder.mutation<
@@ -595,7 +637,12 @@ export const customerApi = createApi({
             : undefined);
         const shared = { amountPaise, ...(redirect ? { redirectUrl: redirect } : {}) };
         const cycle = targetCycle ?? scheme.payableRange?.targetCycle;
-        const pos = positionVersion ?? scheme.payableRange?.positionVersion ?? scheme.positionVersion ?? 0;
+        const pos =
+          positionVersion ??
+          scheme.payableRange?.expectedPositionVersion ??
+          scheme.payableRange?.positionVersion ??
+          scheme.positionVersion ??
+          0;
         return scheme.displayMode === "FIXED"
           ? { url: `/app/schemes/${scheme.id}/pay`, method: "POST", body: shared }
           : {
@@ -619,7 +666,21 @@ export const customerApi = createApi({
       transformResponse: (raw: unknown) => adaptCustomerPayment(raw),
       providesTags: (_r, _e, id) => [{ type: "CustomerPayment", id }],
     }),
-    getCustomerNotifications: builder.query<{ items: CustomerNotification[]; unreadCount: number }, void>({ query: () => "/app/notifications", providesTags: ["CustomerNotification"] }),
+    getCustomerNotifications: builder.query<{ items: CustomerNotification[]; unreadCount: number }, void>({
+      query: () => "/app/notifications",
+      transformResponse: (raw: unknown) => {
+        const payload = (raw as { items?: CustomerNotification[]; unreadCount?: number }) ?? {};
+        const rawItems = payload.items ?? [];
+        const items = dedupeCustomerNotifications(rawItems);
+        const unreadFromItems = items.filter((n) => !n.read).length;
+        const unreadCount =
+          rawItems.length === items.length
+            ? (payload.unreadCount ?? unreadFromItems)
+            : unreadFromItems;
+        return { items, unreadCount };
+      },
+      providesTags: ["CustomerNotification"],
+    }),
     markCustomerNotificationRead: builder.mutation<{ read: boolean }, string>({ query: (id) => ({ url: `/app/notifications/${id}/read`, method: "POST" }), invalidatesTags: ["CustomerNotification"] }),
     markAllCustomerNotificationsRead: builder.mutation<{ unreadCount: number }, void>({ query: () => ({ url: "/app/notifications/read-all", method: "POST" }), invalidatesTags: ["CustomerNotification"] }),
     getCustomerGrievances: builder.query<CustomerGrievance[], void>({ query: () => "/app/grievances", providesTags: ["CustomerGrievance"] }),
@@ -647,6 +708,17 @@ export const customerApi = createApi({
     getCustomerGoldRate: builder.query<CustomerHome["goldRate"], void>({ query: () => "/app/gold-rate/current" }),
     getCustomerGoldHistory: builder.query<Array<CustomerHome["goldRate"]>, void>({ query: () => "/app/gold-rate/history" }),
     getCustomerBranches: builder.query<Array<CustomerProfile["branch"]>, void>({ query: () => "/app/branches" }),
+    getCustomerSettlementPreview: builder.query<
+      SettlementPreview,
+      { schemeId: string; mode?: string }
+    >({
+      query: ({ schemeId, mode }) => ({
+        url: `/app/schemes/${schemeId}/settlement-preview`,
+        params: { mode: mode ?? "CASH" },
+      }),
+      transformResponse: (raw) =>
+        adaptSettlementPreview(raw, "MATURITY_REDEMPTION"),
+    }),
     requestCustomerRedemption: builder.mutation<Record<string, unknown>, { schemeId: string; preferredMode: string; preferredDate?: string; remarks?: string; expectedVersion: number }>({ query: ({ schemeId, ...body }) => ({ url: `/app/schemes/${schemeId}/redemption-request`, method: "POST", body }), invalidatesTags: ["CustomerScheme"] }),
     registerCustomerFcmToken: builder.mutation<
       { registered: boolean; deviceId: string },
@@ -671,6 +743,7 @@ export const {
   useReplyCustomerGrievanceMutation, useGetCustomerDevicesQuery, useRevokeCustomerDeviceMutation,
   useCustomerLogoutMutation,
   useGetCustomerGoldRateQuery, useGetCustomerGoldHistoryQuery, useGetCustomerBranchesQuery,
+  useGetCustomerSettlementPreviewQuery,
   useRequestCustomerRedemptionMutation,
   useRegisterCustomerFcmTokenMutation,
 } = customerApi;

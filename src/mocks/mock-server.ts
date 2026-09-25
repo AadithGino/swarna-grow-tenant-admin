@@ -86,7 +86,6 @@ const PAYMENT_MODE_BREAKDOWN: { mode: Payment["mode"]; label: string }[] = [
   { mode: "CARD", label: "Card / POS" },
   { mode: "UPI", label: "UPI" },
   { mode: "BANK_TRANSFER", label: "Bank transfer" },
-  { mode: "CHEQUE", label: "Cheque" },
   { mode: "ONLINE_GATEWAY", label: "Online payment" },
 ];
 
@@ -912,14 +911,31 @@ export async function mockRequest<T>({
       return customer as T;
     }
     case "enrollments": {
+      const group = String(params.group ?? "");
       const status = String(params.status ?? "ALL");
-      const rows = mockDb.enrollments.filter(
-        (item) =>
-          (!q ||
-            includes(item.customer, q) ||
-            includes(item.enrollmentNo, q)) &&
-          (status === "ALL" || item.status === status),
-      );
+      const openStatuses = new Set([
+        "ACTIVE",
+        "LOCKED",
+        "DEFAULTED",
+        "PENDING_ACTIVATION",
+        "PENDING_PAYMENT",
+      ]);
+      const activeLocked = new Set(["ACTIVE", "LOCKED"]);
+      const pastStatuses = new Set(["REDEEMED", "CLOSED_PREMATURE"]);
+      const rows = mockDb.enrollments.filter((item) => {
+        if (
+          q &&
+          !includes(item.customer, q) &&
+          !includes(item.enrollmentNo, q)
+        ) {
+          return false;
+        }
+        if (group === "OPEN") return openStatuses.has(item.status);
+        if (group === "ACTIVE_AND_LOCKED") return activeLocked.has(item.status);
+        if (group === "PAST") return pastStatuses.has(item.status);
+        if (status === "ALL" || !params.status) return true;
+        return item.status === status;
+      });
       const count = (value: string) =>
         mockDb.enrollments.filter((item) => item.status === value).length;
       const { items, page } = paginateSlice(rows, params);
@@ -1026,6 +1042,8 @@ export async function mockRequest<T>({
         body.installmentAmountPaise != null
           ? Number(body.installmentAmountPaise) / 100
           : Number(body.amount ?? plan.amount);
+      const activatedAtEnrol =
+        body.firstInstallmentMode === "COLLECT_NOW" && Boolean(body.payment);
       const row = {
         id: `sch_${Date.now()}`,
         enrollmentNo: `ENR-${24120 + mockDb.enrollments.length}`,
@@ -1033,16 +1051,13 @@ export async function mockRequest<T>({
         customer: customer.name,
         plan: plan.name,
         branch: customer.branch,
-        progress: body.firstInstallmentMode === "COLLECT_NOW" ? 1 : 0,
+        progress: activatedAtEnrol ? 1 : 0,
         tenure: plan.tenure,
-        paid: body.firstInstallmentMode === "COLLECT_NOW" ? installment : 0,
+        paid: activatedAtEnrol ? installment : 0,
         installment,
         nextDue: "14 Oct 2026",
         maturity: "14 Sep 2027",
-        status:
-          body.firstInstallmentMode === "COLLECT_NOW"
-            ? "ACTIVE"
-            : "PENDING_ACTIVATION",
+        status: activatedAtEnrol ? "ACTIVE" : "PENDING_ACTIVATION",
         valueBasis: plan.valueBasis,
       } as const;
       mockDb.enrollments.unshift(row as any);
@@ -3241,9 +3256,11 @@ export async function mockRequest<T>({
         __contract: true,
         payload: {
           schemeId: String(params.schemeId),
-          projectedSettlementPaise: 3600000,
-          projectedWeightMg: 4965,
           maturityDate: "2027-09-05",
+          projectedPrincipalPaise: 3000000,
+          projectedBenefitPaise: 600000,
+          projectedAmountPaise: 3600000,
+          projectedWeightMg: 4965,
         },
       } as T;
     case "getSchemePaymentIntents": {
@@ -3803,11 +3820,6 @@ function buildSettlementPreview(
         {
           mode: "PURCHASE_ADJUSTMENT",
           label: "Adjust against purchase",
-          available: true,
-        },
-        {
-          mode: "TRANSFER_TO_SCHEME",
-          label: "Start a new scheme",
           available: true,
         },
       ],

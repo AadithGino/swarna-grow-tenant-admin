@@ -16,6 +16,7 @@ import { Surface } from "@/src/components/common/page-parts";
 import { StatusBadge } from "@/src/components/common/status-badge";
 import { SettlementLinesPanel } from "@/src/features/enrollments/settlement-lines-panel";
 import { money } from "@/src/lib/format";
+import type { MaturityProjection } from "@/src/lib/v1-maturity-projection";
 import type { Enrollment, SettlementPreview } from "@/src/types/domain";
 import { cn } from "@/lib/utils";
 
@@ -74,6 +75,7 @@ function workflowStepIndex(enrollment: Enrollment) {
 export function EnrollmentMaturityTab({
   enrollment,
   maturityPreview,
+  maturityProjection,
   onMaturityPreview,
   onPrematurePreview,
   onRedeem,
@@ -81,6 +83,7 @@ export function EnrollmentMaturityTab({
 }: {
   enrollment: Enrollment;
   maturityPreview?: SettlementPreview;
+  maturityProjection?: MaturityProjection | null;
   onMaturityPreview: () => void;
   onPrematurePreview: () => void;
   onRedeem: () => void;
@@ -109,7 +112,15 @@ export function EnrollmentMaturityTab({
     (row.progress / Math.max(row.tenure, 1)) * 100,
   );
   const cyclesRemaining = Math.max(row.tenure - row.progress, 0);
-  const projected = row.installment * row.tenure;
+  const projectedFromApi =
+    maturityProjection && maturityProjection.projectedAmountPaise > 0
+      ? maturityProjection.projectedAmountPaise / 100
+      : null;
+  const projected = projectedFromApi ?? row.installment * row.tenure;
+  const projectedLabel =
+    projectedFromApi != null
+      ? "Projected at maturity"
+      : "Projected contribution";
   const showTermProgress = !redemptionComplete;
 
   return (
@@ -203,7 +214,7 @@ export function EnrollmentMaturityTab({
             {[
               {
                 icon: Scale,
-                label: "Projected contribution",
+                label: projectedLabel,
                 value: money(projected),
                 tone: "text-[#241316]",
               },

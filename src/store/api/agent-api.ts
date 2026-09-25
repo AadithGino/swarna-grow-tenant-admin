@@ -125,6 +125,11 @@ function mapCustomerScheme(raw: Record<string, unknown>): AgentSchemeSummary {
     maturityDate: raw.maturityDate as string | undefined,
     totalPaidPaise,
     goldBalanceMg: (raw.goldBalanceMg as number | undefined) ?? paid?.goldWeightMg,
+    targetCycle: raw.targetCycle != null ? String(raw.targetCycle) : undefined,
+    cycleCapPaise: raw.cycleCapPaise != null ? Number(raw.cycleCapPaise) : undefined,
+    paidThisCyclePaise: raw.paidThisCyclePaise != null ? Number(raw.paidThisCyclePaise) : undefined,
+    remainingThisCyclePaise:
+      raw.remainingThisCyclePaise != null ? Number(raw.remainingThisCyclePaise) : undefined,
   };
 }
 
@@ -172,6 +177,12 @@ function normalizePayableRange(raw: Record<string, unknown>): AgentPayableRange 
     positionVersion: raw.positionVersion != null ? Number(raw.positionVersion) : undefined,
     payable: Boolean(raw.payable ?? max > 0),
     targetCycle: raw.targetCycle != null ? String(raw.targetCycle) : undefined,
+    capPaise: raw.capPaise != null ? Number(raw.capPaise) : undefined,
+    paidPaise: raw.paidPaise != null ? Number(raw.paidPaise) : undefined,
+    remainingPaise:
+      raw.remainingPaise != null
+        ? Number(raw.remainingPaise)
+        : max,
   };
 }
 
@@ -405,7 +416,23 @@ const mockBaseQuery: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQueryErro
     const scheme = (agentSchemes.find((item) => item.id === rangeMatch[1]) ?? agentCustomers.flatMap((item) => item.schemes ?? []).find((item) => item.id === rangeMatch[1]) ?? agentSchemes[0]) as AgentScheme;
     if (scheme.paymentPattern === "FIXED") return ok({ model: "FIXED", installmentNumber: 3, minPayablePaise: scheme.installmentAmountPaise ?? scheme.nextAmountPaise ?? 250000, maxPayablePaise: scheme.installmentAmountPaise ?? scheme.nextAmountPaise ?? 250000, suggestedPaise: scheme.installmentAmountPaise ?? scheme.nextAmountPaise ?? 250000, expectedVersion: scheme.version, payable: true } satisfies AgentPayableRange);
     const free = scheme.phase === "FREE";
-    return ok({ model: "FLEXIBLE", phase: free ? "FREE" : "CAPPED", contributionIsOptional: true, targetCycle: String(params.targetCycle ?? "2026-09"), minPayablePaise: free ? 50000 : 10000, maxPayablePaise: free ? 1000000 : 150000, suggestedPaise: free ? 100000 : 150000, paymentIncrementPaise: 100, unusedAllowanceCarriesForward: false, positionVersion: scheme.positionVersion, payable: true, nextCycleAction: "PAY_CURRENT_CYCLE" } satisfies AgentPayableRange);
+    return ok({
+      model: "FLEXIBLE",
+      phase: free ? "FREE" : "CAPPED",
+      contributionIsOptional: true,
+      targetCycle: String(params.targetCycle ?? "2026-09"),
+      minPayablePaise: free ? 50000 : 10000,
+      maxPayablePaise: free ? 1000000 : 150000,
+      suggestedPaise: free ? 100000 : 150000,
+      paymentIncrementPaise: 100,
+      unusedAllowanceCarriesForward: false,
+      positionVersion: scheme.positionVersion,
+      payable: true,
+      nextCycleAction: "PAY_CURRENT_CYCLE",
+      capPaise: free ? undefined : 200000,
+      paidPaise: free ? undefined : 110000,
+      remainingPaise: free ? undefined : 90000,
+    } satisfies AgentPayableRange);
   }
   const passbookMatch = url.match(/^\/staff\/schemes\/([^/]+)\/passbook$/);
   if (passbookMatch) {

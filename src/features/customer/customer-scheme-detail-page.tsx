@@ -26,9 +26,12 @@ import { downloadCustomerPaymentReceipt } from "@/src/lib/customer-receipt";
 import { PageSkeleton, QueryError } from "@/src/components/common/query-state";
 import {
   useGetCustomerSchemeQuery,
+  useGetCustomerSettlementPreviewQuery,
   useInitiatePublicPaymentLinkMutation,
   useRequestCustomerRedemptionMutation,
 } from "@/src/store/api/customer-api";
+import { CustomerRedemptionPreview } from "@/src/features/customer/customer-redemption-preview";
+import { apiErrorMessage } from "@/src/lib/api-error";
 import { openCustomerPaymentTarget } from "@/src/lib/customer-payment-redirect";
 import { CustomerMakePaymentSheet } from "@/src/features/customer/customer-make-payment-sheet";
 import type { CustomerSchemeDetail } from "@/src/types/customer";
@@ -52,10 +55,16 @@ export function CustomerSchemeDetailPage({ id }: { id: string }) {
   }, [scheme?.redemption?.preferredModes]);
 
   useEffect(() => {
-    if (redemptionModeOptions.length && !redemptionMode) {
+    if (!redeemOpen) return;
+    if (redemptionModeOptions.length) {
       setRedemptionMode(redemptionModeOptions[0].mode);
     }
-  }, [redemptionModeOptions, redemptionMode]);
+  }, [redeemOpen, redemptionModeOptions]);
+
+  const previewQuery = useGetCustomerSettlementPreviewQuery(
+    { schemeId: id, mode: redemptionMode || "CASH" },
+    { skip: !redeemOpen || !redemptionMode },
+  );
 
   if (isLoading || !scheme) return <PageSkeleton cards={3} />;
   if (isError) return <QueryError onRetry={refetch} />;
@@ -105,8 +114,9 @@ export function CustomerSchemeDetailPage({ id }: { id: string }) {
       }).unwrap();
       toast.success("Redemption request sent to your jewellery");
       setRedeemOpen(false);
-    } catch {
-      toast.error("Could not submit the request");
+      await refetch();
+    } catch (err) {
+      toast.error(apiErrorMessage(err, "Could not submit the request"));
     }
   };
 
@@ -170,11 +180,11 @@ export function CustomerSchemeDetailPage({ id }: { id: string }) {
       {displayMode === "FIXED" ? <FixedSchemeSummaryDock scheme={scheme} /> : null}
       <CustomerMakePaymentSheet scheme={scheme} open={payOpen} onOpenChange={setPayOpen} />
       <Dialog open={redeemOpen} onOpenChange={setRedeemOpen}>
-        <DialogContent>
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Request redemption</DialogTitle>
             <DialogDescription>
-              This sends a servicing request. No financial ledger entry is created until the jewellery completes settlement.
+              Review the estimated settlement below. No ledger entry is created until your jeweller completes handover.
             </DialogDescription>
           </DialogHeader>
           {redemptionModeOptions.length > 1 ? (
@@ -185,18 +195,48 @@ export function CustomerSchemeDetailPage({ id }: { id: string }) {
                   <SelectValue placeholder="Choose mode" />
                 </SelectTrigger>
                 <SelectContent>
-                  {redemptionModeOptions.map((opt) => (
-                    <SelectItem key={opt.mode} value={opt.mode}>
-                      {opt.label}
-                    </SelectItem>
-                  ))}
+                  {redemptionModeOptions
+                    .filter((opt) => {
+                      const allowed = previewQuery.data?.allowedModes;
+                      if (!allowed?.length) return true;
+                      const row = allowed.find((m) => m.mode === opt.mode);
+                      return row ? row.available !== false : true;
+                    })
+                    .map((opt) => (
+                      <SelectItem key={opt.mode} value={opt.mode}>
+                        {opt.label}
+                      </SelectItem>
+                    ))}
                 </SelectContent>
               </Select>
+              {previewQuery.data?.modePreviews?.[redemptionMode]?.note ? (
+                <p className="mt-2 text-xs text-muted-foreground">
+                  {previewQuery.data.modePreviews[redemptionMode].note}
+                  {previewQuery.data.modePreviews[redemptionMode].weightDisplay
+                    ? ` · ${previewQuery.data.modePreviews[redemptionMode].weightDisplay}`
+                    : ""}
+                </p>
+              ) : null}
             </div>
           ) : redemptionModeOptions.length === 1 ? (
             <p className="text-sm text-muted-foreground">Settlement: {redemptionModeOptions[0].label}</p>
           ) : null}
-          <Button disabled={redemptionState.isLoading || !redemptionMode} onClick={redeem} className="mt-4 bg-[#730321]">
+          <CustomerRedemptionPreview
+            preview={previewQuery.data}
+            isLoading={previewQuery.isLoading}
+            isError={previewQuery.isError}
+            error={previewQuery.error}
+          />
+          <Button
+            disabled={
+              redemptionState.isLoading ||
+              !redemptionMode ||
+              previewQuery.isLoading ||
+              !previewQuery.data?.eligible
+            }
+            onClick={redeem}
+            className="mt-4 bg-[#730321]"
+          >
             Submit request
           </Button>
         </DialogContent>

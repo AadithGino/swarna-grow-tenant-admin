@@ -41,6 +41,11 @@ export function AgentSchemeCard({ scheme, href }: { scheme: AgentSchemeSummary; 
   const collectedValue = gold
     ? formatAgentWeight(scheme.goldBalanceMg ?? 0)
     : formatAgentMoney(scheme.totalPaidPaise ?? 0);
+  const cappedCycle =
+    scheme.phase === "CAPPED" &&
+    scheme.cycleCapPaise != null &&
+    scheme.paidThisCyclePaise != null &&
+    scheme.remainingThisCyclePaise != null;
   const dueLabel = scheme.payableLabel ?? (flexible ? "Contribution" : "Collect amount");
   const dueValue =
     scheme.nextAmountPaise != null
@@ -84,7 +89,12 @@ export function AgentSchemeCard({ scheme, href }: { scheme: AgentSchemeSummary; 
               <p className="mt-1 text-sm font-black text-[#730321]">{dueValue}</p>
             </div>
           </div>
-          {scheme.progressLabel ? (
+          {cappedCycle ? (
+            <p className="mt-2 text-[.68rem] font-semibold leading-5 text-[#8a8083]">
+              {formatAgentMoney(scheme.paidThisCyclePaise!)} of {formatAgentMoney(scheme.cycleCapPaise!)} this cycle ·{" "}
+              {formatAgentMoney(scheme.remainingThisCyclePaise!)} left
+            </p>
+          ) : scheme.progressLabel ? (
             <p className="mt-2 text-[.68rem] font-semibold text-[#8a8083]">{scheme.progressLabel}</p>
           ) : null}
           <div className="mt-3 flex items-center justify-between rounded-xl bg-[#fbf7f3] px-3 py-2 text-xs">

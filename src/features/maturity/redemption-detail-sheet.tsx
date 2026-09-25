@@ -30,6 +30,7 @@ import {
   SheetDescription,
   SheetTitle,
 } from "@/components/ui/sheet";
+import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { PageSkeleton, QueryError } from "@/src/components/common/query-state";
 import { FormFieldError } from "@/src/components/common/form-field-error";
@@ -44,8 +45,12 @@ import {
   validateRedemptionCompleteRemarks,
   validateRedemptionRejectReason,
 } from "@/src/lib/redemption-form-validation";
+import {
+  purchaseAdjustmentBillReady,
+  validatePurchaseAdjustmentBillNumber,
+} from "@/src/lib/settlement-form-validation";
 import { downloadText } from "@/src/lib/download";
-import { money } from "@/src/lib/format";
+import { moneyExact } from "@/src/lib/format";
 import { cn } from "@/lib/utils";
 import type { RedemptionDetailView } from "@/src/store/api/contract-adapters";
 import {
@@ -205,6 +210,10 @@ function RedemptionDetailBody({
   setCompleteRemarks,
   completeRemarksTouched,
   setCompleteRemarksTouched,
+  completeBillNumber,
+  setCompleteBillNumber,
+  completeBillNumberTouched,
+  setCompleteBillNumberTouched,
   showRejectForm,
   setShowRejectForm,
   busy,
@@ -221,6 +230,10 @@ function RedemptionDetailBody({
   setCompleteRemarks: (v: string) => void;
   completeRemarksTouched: boolean;
   setCompleteRemarksTouched: (v: boolean) => void;
+  completeBillNumber: string;
+  setCompleteBillNumber: (v: string) => void;
+  completeBillNumberTouched: boolean;
+  setCompleteBillNumberTouched: (v: boolean) => void;
   showRejectForm: boolean;
   setShowRejectForm: (v: boolean) => void;
   busy: boolean;
@@ -237,8 +250,6 @@ function RedemptionDetailBody({
       ? liveRedemptionCompleteRemarksError(completeRemarks)
       : undefined;
   const canConfirmReject = redemptionRejectReasonReady(rejectReason);
-  const canCompleteHandover =
-    validateRedemptionCompleteRemarks(completeRemarks) === undefined;
   const [fetchReceipt, receiptState] = useLazyGetRedemptionReceiptQuery();
   const settlementPreview = {
     ...d.settlementPreview,
@@ -249,6 +260,16 @@ function RedemptionDetailBody({
     d.status === "REQUESTED" || d.status === "PENDING_APPROVAL";
   const approved = d.status === "APPROVED";
   const terminal = d.status === "COMPLETED" || d.status === "REJECTED";
+  const needsBillAtComplete =
+    approved && d.mode === "PURCHASE_ADJUSTMENT" && !d.billNumber;
+  const completeBillError =
+    needsBillAtComplete && completeBillNumberTouched
+      ? validatePurchaseAdjustmentBillNumber(completeBillNumber)
+      : undefined;
+  const canCompleteHandover =
+    validateRedemptionCompleteRemarks(completeRemarks) === undefined &&
+    (!needsBillAtComplete ||
+      purchaseAdjustmentBillReady(d.mode, completeBillNumber));
 
   return (
     <>
@@ -269,7 +290,7 @@ function RedemptionDetailBody({
               Settlement amount
             </p>
             <p className="text-[2rem] font-extrabold leading-none tabular-nums tracking-tight text-[#730321]">
-              {money(d.settlementPreview.finalValue)}
+              {moneyExact(d.settlementPreview.finalValue)}
             </p>
             {d.settlementPreview.finalWeightDisplay ? (
               <p className="mt-1 text-sm font-medium text-[#776a6d]">
@@ -342,7 +363,7 @@ function RedemptionDetailBody({
                 {d.fulfilment.handoverValue != null ? (
                   <p className="text-muted-foreground">
                     Reference value at handover:{" "}
-                    <strong>{money(d.fulfilment.handoverValue)}</strong>
+                    <strong>{moneyExact(d.fulfilment.handoverValue)}</strong>
                     {d.fulfilment.handoverRatePerGram != null &&
                     d.fulfilment.handoverRateDate ? (
                       <>
@@ -360,7 +381,7 @@ function RedemptionDetailBody({
             ) : (
               <p className="text-sm">
                 Cash paid out:{" "}
-                <strong>{money(d.fulfilment.cashOut)}</strong>
+                <strong>{moneyExact(d.fulfilment.cashOut)}</strong>
                 {d.mode === "CASH" ? (
                   <span className="mt-1 block text-xs text-muted-foreground">
                     Gold-weight schemes closed against this cash settlement.
@@ -371,7 +392,7 @@ function RedemptionDetailBody({
           </DetailBlock>
         ) : null}
 
-        {pending && showRejectForm ? (
+        {(pending || approved) && showRejectForm ? (
           <DetailBlock title="Reject request">
             <FieldLabel>Reason (required)</FieldLabel>
             <Textarea
@@ -410,6 +431,34 @@ function RedemptionDetailBody({
                 Confirm reject
               </Button>
             </div>
+          </DetailBlock>
+        ) : null}
+
+        {d.billNumber ? (
+          <DetailBlock title="Purchase bill">
+            <p className="font-mono text-sm font-semibold text-[#241316]">
+              {d.billNumber}
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Linked invoice for purchase adjustment settlement.
+            </p>
+          </DetailBlock>
+        ) : null}
+
+        {approved && needsBillAtComplete ? (
+          <DetailBlock title="Purchase bill">
+            <FieldLabel>Bill / invoice number</FieldLabel>
+            <Input
+              value={completeBillNumber}
+              onChange={(e) => setCompleteBillNumber(e.target.value)}
+              onBlur={() => setCompleteBillNumberTouched(true)}
+              placeholder="Required before handover can be completed"
+              className={cn(
+                completeBillError && "border-red-600",
+              )}
+              aria-invalid={Boolean(completeBillError)}
+            />
+            <FormFieldError message={completeBillError} />
           </DetailBlock>
         ) : null}
 
@@ -501,14 +550,23 @@ function RedemptionDetailBody({
               ) : null}
             </div>
           ) : null}
-          {approved ? (
-            <Button
-              className="h-11 w-full text-base font-semibold"
-              disabled={busy || !canCompleteHandover}
-              onClick={onCompleteClick}
-            >
-              Complete handover
-            </Button>
+          {approved && !showRejectForm ? (
+            <div className="space-y-3">
+              <Button
+                className="h-11 w-full text-base font-semibold"
+                disabled={busy || !canCompleteHandover}
+                onClick={onCompleteClick}
+              >
+                Complete handover
+              </Button>
+              <button
+                type="button"
+                className="w-full text-center text-sm font-medium text-red-700 underline-offset-2 hover:underline"
+                onClick={() => setShowRejectForm(true)}
+              >
+                Reject this request instead
+              </button>
+            </div>
           ) : null}
         </div>
       ) : null}
@@ -805,6 +863,9 @@ export function RedemptionDetailSheet({
   const [rejectReasonTouched, setRejectReasonTouched] = useState(false);
   const [completeRemarks, setCompleteRemarks] = useState("");
   const [completeRemarksTouched, setCompleteRemarksTouched] = useState(false);
+  const [completeBillNumber, setCompleteBillNumber] = useState("");
+  const [completeBillNumberTouched, setCompleteBillNumberTouched] =
+    useState(false);
   const [confirmCompleteOpen, setConfirmCompleteOpen] = useState(false);
   const [showRejectForm, setShowRejectForm] = useState(false);
 
@@ -826,6 +887,8 @@ export function RedemptionDetailSheet({
     setRejectReasonTouched(false);
     setCompleteRemarks("");
     setCompleteRemarksTouched(false);
+    setCompleteBillNumber("");
+    setCompleteBillNumberTouched(false);
     setConfirmCompleteOpen(false);
     setShowRejectForm(false);
   }
@@ -865,6 +928,10 @@ export function RedemptionDetailSheet({
               setCompleteRemarks={setCompleteRemarks}
               completeRemarksTouched={completeRemarksTouched}
               setCompleteRemarksTouched={setCompleteRemarksTouched}
+              completeBillNumber={completeBillNumber}
+              setCompleteBillNumber={setCompleteBillNumber}
+              completeBillNumberTouched={completeBillNumberTouched}
+              setCompleteBillNumberTouched={setCompleteBillNumberTouched}
               showRejectForm={showRejectForm}
               setShowRejectForm={setShowRejectForm}
               busy={busy}
@@ -898,10 +965,20 @@ export function RedemptionDetailSheet({
               }}
               onCompleteClick={() => {
                 setCompleteRemarksTouched(true);
+                if (
+                  d.mode === "PURCHASE_ADJUSTMENT" &&
+                  !d.billNumber
+                ) {
+                  setCompleteBillNumberTouched(true);
+                }
+                const billErr =
+                  d.mode === "PURCHASE_ADJUSTMENT" && !d.billNumber
+                    ? validatePurchaseAdjustmentBillNumber(completeBillNumber)
+                    : undefined;
                 const remarksErr =
                   validateRedemptionCompleteRemarks(completeRemarks);
-                if (remarksErr) {
-                  toast.error(remarksErr);
+                if (billErr || remarksErr) {
+                  toast.error(billErr ?? remarksErr);
                   return;
                 }
                 setConfirmCompleteOpen(true);
@@ -930,7 +1007,7 @@ export function RedemptionDetailSheet({
                       Payout
                     </p>
                     <p className="text-lg font-bold text-[#730321]">
-                      {money(d.settlementPreview.finalValue)} · {d.modeLabel}
+                      {moneyExact(d.settlementPreview.finalValue)} · {d.modeLabel}
                     </p>
                     <p className="mt-1 text-sm">{d.customer.name}</p>
                   </div>
@@ -962,6 +1039,10 @@ export function RedemptionDetailSheet({
                   await complete({
                     id: d.id,
                     remarks: completeRemarks.trim() || undefined,
+                    billNumber:
+                      d.mode === "PURCHASE_ADJUSTMENT" && !d.billNumber
+                        ? completeBillNumber.trim()
+                        : undefined,
                   }).unwrap();
                   setConfirmCompleteOpen(false);
                   await afterAction("Redemption completed");

@@ -1,5 +1,6 @@
 import type { PlanBuilderFormState } from "@/src/features/schemes/plan-builder-form";
 import type { StepId } from "@/src/features/schemes/plan-builder-wizard-types";
+import { flexiblePhaseTargetMonths } from "@/src/lib/flexible-plan-phase-target";
 
 export const PLAN_CODE_PATTERN = /^[A-Z0-9_-]{2,20}$/;
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -49,6 +50,10 @@ export function validatePlanDuration(
   }
   if (form.installmentCount < 1 || form.installmentCount > 120) {
     errors.installmentCount = "Installment count must be between 1 and 120.";
+  }
+  if (form.installmentCount > form.durationMonths) {
+    errors.installmentCount =
+      "Installment count cannot exceed duration (maturity months).";
   }
   return errors;
 }
@@ -107,12 +112,10 @@ export function validatePlanFlexible(
   if (form.flexiblePhaseCycles < 1 || form.cappedPhaseCycles < 1) {
     errors.flexiblePhaseCycles = "Free and capped phases must each be at least 1 month.";
   }
-  if (
-    form.flexiblePhaseCycles + form.cappedPhaseCycles !==
-    form.durationMonths
-  ) {
-    errors.durationMonths =
-      "Free + capped months must equal total duration.";
+  const paymentMonths = flexiblePhaseTargetMonths(form);
+  if (form.flexiblePhaseCycles + form.cappedPhaseCycles !== paymentMonths) {
+    errors.flexiblePhaseCycles =
+      "Free + capped months must equal installment count (payment months).";
   }
   if (form.flexMinPayment <= 0) {
     errors.flexMinPayment = "Minimum free-window payment must be greater than zero.";

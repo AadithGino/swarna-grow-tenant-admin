@@ -24,7 +24,6 @@ function modeLabel(mode?: string) {
     CASH: "Cash payout",
     GOLD_HANDOVER: "Gold handover",
     PURCHASE_ADJUSTMENT: "Purchase adjustment",
-    TRANSFER_TO_SCHEME: "New scheme",
   };
   return mode ? (map[mode] ?? mode.replaceAll("_", " ")) : null;
 }

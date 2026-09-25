@@ -26,15 +26,27 @@ import {
 } from "@/src/lib/list-date-range";
 import {
   defaultAmountForPlan,
+  isFlexibleEnrolPlan,
   resolvedFirstInstallmentMode,
 } from "@/src/lib/enrol-plan-rules";
-import { money } from "@/src/lib/format";
+import { idempotencyKey, money } from "@/src/lib/format";
 import {
   useCreateEnrollmentMutation,
+  useCreatePaymentLinkMutation,
   useGetCustomersQuery,
   useGetPlansQuery,
   useValidateEnrolmentMutation,
 } from "@/src/store/api/admin-api";
+import { useAppSelector } from "@/src/store/hooks";
+import { EnrolFirstPaymentAtEnrolment } from "@/src/components/common/enrol-first-payment-at-enrolment";
+import {
+  DEFAULT_ENROL_FIRST_PAYMENT,
+  buildEnrolFirstPaymentRequest,
+  enrolFirstPaymentSubmitReady,
+  enrolFlexiblePaymentLinkPositionVersion,
+  validateEnrolFirstPaymentFields,
+} from "@/src/lib/enrol-first-payment";
+import { toastApiError } from "@/src/lib/api-error";
 import { FormFieldError } from "@/src/components/common/form-field-error";
 import {
   enrolSubmitReady,
@@ -53,6 +65,8 @@ export function EnrollmentsCreateDialog({
   trigger: React.ReactNode;
 }) {
   const router = useRouter();
+  const caps = useAppSelector((s) => s.session.session?.capabilities);
+  const onlinePayments = caps?.onlinePayments !== false;
   const [open, setOpen] = useState(false);
   const [customerSearch, setCustomerSearch] = useState("");
   const debouncedCustomerSearch = useDebouncedValue(customerSearch, 350);
@@ -65,6 +79,7 @@ export function EnrollmentsCreateDialog({
   );
   const plans = useGetPlansQuery(undefined, { skip: !open });
   const [createEnrollment] = useCreateEnrollmentMutation();
+  const [createPaymentLink] = useCreatePaymentLinkMutation();
   const [validateEnrolment, validateState] = useValidateEnrolmentMutation();
 
   const activePlans = useMemo(
@@ -84,6 +99,7 @@ export function EnrollmentsCreateDialog({
     planId: "",
     amount: 0,
     firstInstallmentMode: "COLLECT_NOW" as "COLLECT_NOW" | "START_NEXT_CYCLE",
+    ...DEFAULT_ENROL_FIRST_PAYMENT,
   });
 
   const selectedPlan = activePlans.find(
@@ -102,6 +118,7 @@ export function EnrollmentsCreateDialog({
         planId: "",
         amount: 0,
         firstInstallmentMode: "COLLECT_NOW",
+        ...DEFAULT_ENROL_FIRST_PAYMENT,
       });
       setFieldErrors({});
       setCustomerTouched(false);
@@ -132,6 +149,7 @@ export function EnrollmentsCreateDialog({
   }, [runValidate]);
 
   const enrolBlockers = validateState.data?.blockers ?? [];
+  const collectNow = effectiveFirstMode === "COLLECT_NOW";
 
   const displayCustomerError = () =>
     fieldErrors.customerId ??
@@ -179,6 +197,11 @@ export function EnrollmentsCreateDialog({
           amount: debouncedAmount,
           apiBlockers: enrolBlockers,
           validateLoading: validateState.isLoading,
+          firstPaymentReady: enrolFirstPaymentSubmitReady(collectNow, {
+            firstInstallmentAction: form.firstInstallmentAction,
+            paymentMode: form.paymentMode,
+            paymentReference: form.paymentReference,
+          }),
         })
       }
       onSubmit={async () => {
@@ -201,13 +224,59 @@ export function EnrollmentsCreateDialog({
           toast.error(enrolBlockers[0]?.message ?? "Enrolment is blocked.");
           return false;
         }
+        const firstPaymentErrors = validateEnrolFirstPaymentFields(collectNow, {
+          firstInstallmentAction: form.firstInstallmentAction,
+          paymentMode: form.paymentMode,
+          paymentReference: form.paymentReference,
+        });
+        if (Object.keys(firstPaymentErrors).length) {
+          setFieldErrors((prev) => ({ ...prev, ...firstPaymentErrors }));
+          toast.error("Complete first payment details.");
+          return false;
+        }
+        const flexiblePlan = isFlexibleEnrolPlan(selectedPlan);
+        const firstPayment = buildEnrolFirstPaymentRequest(
+          collectNow,
+          debouncedAmount,
+          {
+            firstInstallmentAction: form.firstInstallmentAction,
+            paymentMode: form.paymentMode,
+            paymentReference: form.paymentReference,
+          },
+          { isFlexiblePlan: flexiblePlan },
+        );
         const row = await createEnrollment({
           customerId: form.customerId,
           planId: form.planId,
           amount: debouncedAmount,
           firstInstallmentMode: effectiveFirstMode,
+          ...firstPayment,
         }).unwrap();
-        toast.success(`${row.enrollmentNo} created`);
+        if (
+          collectNow &&
+          form.firstInstallmentAction === "CREATE_PAYMENT_LINK" &&
+          onlinePayments
+        ) {
+          try {
+            const link = await createPaymentLink({
+              schemeId: row.id,
+              amount: debouncedAmount,
+              expectedPositionVersion:
+                enrolFlexiblePaymentLinkPositionVersion(flexiblePlan),
+              idempotencyKey: idempotencyKey(),
+            }).unwrap();
+            toast.success(
+              `${row.enrollmentNo} created · link sent (expires ${link.expiresAt})`,
+            );
+          } catch (err) {
+            toastApiError(
+              err,
+              `${row.enrollmentNo} created, but payment link failed`,
+            );
+          }
+        } else {
+          toast.success(`${row.enrollmentNo} created`);
+        }
         setOpen(false);
         router.push(`/enrollments/${row.id}`);
       }}
@@ -328,6 +397,18 @@ export function EnrollmentsCreateDialog({
             setForm({ ...form, firstInstallmentMode })
           }
         />
+        {collectNow ? (
+          <EnrolFirstPaymentAtEnrolment
+            onlinePayments={onlinePayments}
+            value={{
+              firstInstallmentAction: form.firstInstallmentAction,
+              paymentMode: form.paymentMode,
+              paymentReference: form.paymentReference,
+            }}
+            onChange={(firstPayment) => setForm({ ...form, ...firstPayment })}
+            fieldErrors={fieldErrors}
+          />
+        ) : null}
       </EnrolFormShell>
     </ActionDialog>
   );

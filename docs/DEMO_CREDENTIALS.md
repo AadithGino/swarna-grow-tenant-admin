@@ -13,7 +13,7 @@ npm run seed:demo   # KAIRALI tenant, staff, customers, schemes
 # .env.local
 NEXT_PUBLIC_API_BASE_URL=http://localhost:4000/api/v1
 NEXT_PUBLIC_USE_MOCKS=false
-NEXT_PUBLIC_AGENT_TENANT_CODE=KAIRALI
+# Agent login uses /agent/kairali/login (no env tenant code required)
 ```
 
 Re-running `npm run seed:demo` **replaces** all KAIRALI demo data. Existing refresh tokens stop working — sign in again in every open portal tab.
@@ -57,8 +57,8 @@ From `SEED_PLATFORM_EMAIL` / `SEED_PLATFORM_PASSWORD` in backend `.env` (default
 
 | Field | Value |
 |--------|--------|
-| **URL** | `/agent/login` |
-| **Tenant code** | `KAIRALI` (optional if `NEXT_PUBLIC_AGENT_TENANT_CODE=KAIRALI`) |
+| **URL** | `/agent/kairali/login` |
+| **Tenant code** | In the URL slug (`kairali` → `KAIRALI`) |
 | **Mobile** | `9847012352` |
 | **Password** | `2026` |
 | **User** | Vijay Field — collection agent, Kochi (`KOC`) |
@@ -98,7 +98,7 @@ Customers do **not** use the staff password `2026`. Registration is OTP-only unl
 |--------|-----------|------------|--------|
 | Platform | `/platform/login` | `ops@platform.com` | `1234` |
 | Tenant | `/login` | Tenant `KAIRALI` + mobile | `2026` |
-| Agent | `/agent/login` | `9847012352` | `2026` |
+| Agent | `/agent/kairali/login` | `9847012352` | `2026` |
 | Customer | `/customer/kairali/login` | Mobile (see table) | OTP `123456` |
 
 ---

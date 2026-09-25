@@ -1,5 +1,7 @@
 # Gold Scheme Platform — API Contract (v1)
 
+> **Deprecated for implementation.** Align the Tenant Admin portal with `swarnagrow-backend` `7582ac6+` (`docs/API_CONTRACT_ADMIN.md`). See `docs/BACKEND_V1_ALIGNMENT.md` in the Tenant Admin repo for CHEQUE removal, redemption mode changes, maturity projection fields, and purchase-adjustment `billNumber`.
+
 Multi-tenant gold savings scheme platform. Node.js + Express + MongoDB/Mongoose.
 
 ## Document set

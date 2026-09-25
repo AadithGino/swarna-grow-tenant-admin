@@ -57,7 +57,7 @@ export const STEP_COPY: Record<StepId, StepCopy> = {
     title: "Duration",
     description: "How long the scheme runs",
     intro:
-      "Total months should match how many collection periods you expect (installments for fixed plans, cycles for flexible).",
+      "Duration is calendar months to maturity. Installment count is payment periods (fixed dues or flexible free+capped months). They can differ (e.g. 12 / 11).",
     icon: Calendar,
   },
   amount: {

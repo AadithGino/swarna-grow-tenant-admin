@@ -154,12 +154,14 @@ export type PayableRange = {
   minPayable: MoneyRef;
   maxPayable: MoneyRef;
   cycleCap?: MoneyRef;
+  paidThisCycle?: MoneyRef;
   remainingThisCycle?: MoneyRef;
   suggested: MoneyRef;
   multipleOfPaise: number;
   quickAmounts: MoneyRef[];
   helperText: string;
   positionVersion: number;
+  expectedPositionVersion?: number;
   unusedAllowanceCarriesForward: false;
   paidMoneyNeverExpires: true;
   allowFutureCycleSelection?: boolean;
@@ -183,7 +185,9 @@ export type CustomerSchemeDetail = SchemeCard & {
     /** Full free-window months elapsed; current month is not counted until it ends. */
     freeWindowMonthsCompleted?: number;
     cycleCap?: MoneyRef;
+    paidThisCycle?: MoneyRef;
     remainingThisCycle?: MoneyRef;
+    currentCycle?: string;
     lockedAverage?: MoneyRef;
     goldAccumulated?: WeightRef;
     goldAccrued?: WeightRef;

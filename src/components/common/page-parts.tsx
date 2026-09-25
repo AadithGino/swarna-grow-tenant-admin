@@ -92,12 +92,14 @@ export function StatCard({
   value,
   detail,
   tone = "wine",
+  valueClassName,
 }: {
   icon: LucideIcon;
   label: string;
   value: React.ReactNode;
   detail?: React.ReactNode;
   tone?: "wine" | "gold" | "red" | "green" | "cream";
+  valueClassName?: string;
 }) {
   const toneClasses = {
     wine: "bg-[#f7ecee] text-[#7b0a2b]",
@@ -117,7 +119,12 @@ export function StatCard({
         <Icon className="size-5" />
       </div>
       <div className="text-sm text-[#776a6d]">{label}</div>
-      <div className="mt-1 truncate text-[1.7rem] font-extrabold tracking-tight text-[#28161a]">
+      <div
+        className={cn(
+          "mt-1 font-extrabold tracking-tight text-[#28161a]",
+          valueClassName ?? "truncate text-[1.7rem]",
+        )}
+      >
         {value}
       </div>
       {detail && <div className="mt-1.5 text-sm text-[#807478]">{detail}</div>}

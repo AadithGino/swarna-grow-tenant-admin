@@ -9,6 +9,7 @@ import {
   type AuthRealm,
 } from "@/src/lib/auth-token-storage";
 import {
+  handleAgentUnauthorized,
   handleCustomerUnauthorized,
   handlePlatformUnauthorized,
   handleTenantUnauthorized,
@@ -35,8 +36,15 @@ function isTenantAppPath(pathname: string) {
   );
 }
 
+function isAgentLoginPath(pathname: string) {
+  return (
+    pathname === "/agent/login" ||
+    /^\/agent\/[^/]+\/login\/?$/.test(pathname)
+  );
+}
+
 function isAgentAppPath(pathname: string) {
-  return pathname.startsWith("/agent") && pathname !== "/agent/login";
+  return pathname.startsWith("/agent") && !isAgentLoginPath(pathname);
 }
 
 function isCustomerAppPath(pathname: string) {
@@ -71,7 +79,7 @@ function handleCrossTabLogout(realm: AuthRealm, dispatch: ReturnType<typeof useA
     return;
   }
   if (realm === "agent" && isAgentAppPath(pathname)) {
-    window.location.assign("/agent/login");
+    handleAgentUnauthorized(dispatch);
   }
 }
 

@@ -394,8 +394,8 @@ export function adaptEnrollmentList(
       plan: plan.name ?? item.planName ?? "—",
       branch: branchName(item),
       progress:
-        item.progress?.installmentsPaid ??
         item.progress?.paidCycles ??
+        item.progress?.installmentsPaid ??
         paidInstallments,
       tenure:
         item.progress?.installmentsTotal ??
@@ -444,7 +444,9 @@ export function adaptEnrollmentList(
       version: item.version ?? item.audit?.version ?? 1,
       canRecordPayment:
         item.actions?.canRecordPayment ??
-        (item.uiStatus ?? item.status) === "ACTIVE",
+        ["ACTIVE", "LOCKED", "DEFAULTED"].includes(
+          String(item.uiStatus ?? item.status ?? "").toUpperCase(),
+        ),
       canRedeem:
         item.actions?.canRedeem ??
         (item.uiStatus ?? item.status) === "MATURED",
@@ -582,10 +584,17 @@ export function adaptEnrollment(raw: any): Enrollment {
     explainerText:
       flexible.capSnapshot?.explainerText ?? flexible.projectedLock?.note,
     currentCycleCap: rupees(
-      position.currentCycleCap ?? flexible.capSnapshot?.cycleCap,
+      position.currentCycleCapPaise ??
+        position.currentCycleCap ??
+        flexible.capSnapshot?.cycleCapPaise ??
+        flexible.capSnapshot?.cycleCap,
     ),
-    confirmedThisCycle: rupees(position.confirmedThisCycle),
-    remainingThisCycle: rupees(position.remainingThisCycle),
+    confirmedThisCycle: rupees(
+      position.confirmedThisCyclePaise ?? position.confirmedThisCycle,
+    ),
+    remainingThisCycle: rupees(
+      position.remainingThisCyclePaise ?? position.remainingThisCycle,
+    ),
     lockDate: flexible.freeWindow?.lockDate,
     daysToLock: flexible.freeWindow?.daysToLock,
     projectedMonthly: rupees(flexible.projectedLock?.ifWindowClosedToday),
@@ -684,7 +693,10 @@ export function adaptPayableRange(raw: any): PayableQuote {
     schemeId: item.schemeId ?? "",
     paymentPattern,
     displayMode,
-    eligible: item.payable !== false && item.eligible !== false,
+    eligible:
+      item.payable !== false &&
+      item.eligible !== false &&
+      (max ?? 0) > 0,
     helperText: item.helperText ?? item.warnings?.[0]?.message ?? "",
     suggested:
       suggested != null
@@ -1053,9 +1065,7 @@ function paymentSummaryFromItems(items: Payment[]) {
   const online = sum(
     (p) =>
       p.status === "SUCCESS" &&
-      (p.mode === "ONLINE_GATEWAY" ||
-        p.mode === "BANK_TRANSFER" ||
-        p.mode === "CHEQUE"),
+      (p.mode === "ONLINE_GATEWAY" || p.mode === "BANK_TRANSFER"),
   );
   return {
     collected,
@@ -1112,9 +1122,7 @@ export function adaptPayments(raw: any) {
   const card = byMode.CARD ?? derived.card;
   const upi = byMode.UPI ?? derived.upi;
   const onlineFromModes =
-    (byMode.ONLINE_GATEWAY ?? 0) +
-    (byMode.BANK_TRANSFER ?? 0) +
-    (byMode.CHEQUE ?? 0);
+    (byMode.ONLINE_GATEWAY ?? 0) + (byMode.BANK_TRANSFER ?? 0);
   const online = onlineFromModes || derived.online;
   const digital =
     Object.entries(byMode)
@@ -1836,7 +1844,6 @@ const PAYMENT_MODE_LABELS: Record<string, string> = {
   CARD: "Card",
   UPI: "UPI",
   BANK_TRANSFER: "Bank transfer",
-  CHEQUE: "Cheque",
   ONLINE_GATEWAY: "Online",
   LEGACY_ONLINE: "Online (legacy)",
 };
@@ -2604,6 +2611,10 @@ function mapDueWorkboardRow(
     amount,
     overdueDays: daysPastDue(dueDateRaw),
     status,
+    installmentNumber: context.installmentNumber,
+    targetCycle: context.targetCycle,
+    paymentPattern: context.paymentPattern,
+    flexiblePhase: context.flexiblePhase,
   };
 }
 
@@ -2653,7 +2664,13 @@ function flattenDueInstallments(schemes: any[]): any[] {
             paidPaise: dp.paidPaise ?? 0,
             status: dp.status,
           },
-          context,
+          {
+            ...context,
+            installmentNumber: dp.installmentNumber,
+            targetCycle: dp.targetCycle,
+            paymentPattern: dp.paymentPattern ?? scheme.paymentPattern,
+            flexiblePhase: dp.flexiblePhase ?? scheme.flexiblePhase,
+          },
         ),
       );
       continue;
@@ -3028,7 +3045,6 @@ const REDEMPTION_MODE_LABELS: Record<string, string> = {
   CASH: "Cash payout",
   GOLD_HANDOVER: "Take as gold",
   PURCHASE_ADJUSTMENT: "Adjust against purchase",
-  TRANSFER_TO_SCHEME: "Start a new scheme",
 };
 
 export type RedemptionDetailView = {
@@ -3039,6 +3055,7 @@ export type RedemptionDetailView = {
   closureTypeLabel: string;
   mode: string;
   modeLabel: string;
+  billNumber?: string;
   version: number;
   requestedAt: string;
   approvedAt?: string;
@@ -3166,6 +3183,10 @@ export function adaptRedemptionDetail(raw: unknown): RedemptionDetailView {
       REDEMPTION_CLOSURE_LABELS[closureType] ?? closureType.replace(/_/g, " "),
     mode,
     modeLabel: REDEMPTION_MODE_LABELS[mode] ?? mode,
+    billNumber:
+      typeof item.modeDetails?.billNumber === "string"
+        ? item.modeDetails.billNumber
+        : undefined,
     version: Number(item.version ?? 0),
     requestedAt: dateTime(item.requestedAt ?? item.createdAt),
     approvedAt: item.approvedAt ? dateTime(item.approvedAt) : undefined,

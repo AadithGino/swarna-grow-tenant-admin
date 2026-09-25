@@ -49,6 +49,7 @@ import { paymentHasGoldAccrual } from "@/src/lib/gold-payment-display";
 import {
   useCreatePaymentLinkMutation,
   useGetEnrollmentQuery,
+  useGetMaturityProjectionQuery,
   useGetPaymentsQuery,
   useGetSchemeLedgerQuery,
   useGetSettlementPreviewQuery,
@@ -70,6 +71,9 @@ export function EnrollmentDetailPage({ id }: { id: string }) {
     { skip: !id },
   );
   const ledgerQuery = useGetSchemeLedgerQuery(id, { skip: !id });
+  const maturityProjectionQuery = useGetMaturityProjectionQuery(id, {
+    skip: !id,
+  });
   const enrollment = query.data;
   const redemptionInProgress =
     enrollment?.status === "REDEMPTION_PENDING" ||
@@ -77,7 +81,11 @@ export function EnrollmentDetailPage({ id }: { id: string }) {
   const maturedForPreview =
     enrollment?.status === "MATURED" || redemptionInProgress;
   const maturityPreview = useGetSettlementPreviewQuery(
-    { schemeId: id, type: "MATURITY_REDEMPTION" },
+    {
+      schemeId: id,
+      type: "MATURITY_REDEMPTION",
+      mode: "CASH",
+    },
     { skip: !enrollment || (!maturedForPreview && !enrollment.canRedeem) },
   );
   if (query.isLoading) return <PageSkeleton cards={5} />;
@@ -536,6 +544,7 @@ export function EnrollmentDetailPage({ id }: { id: string }) {
           <EnrollmentMaturityTab
             enrollment={row}
             maturityPreview={maturityPreview.data}
+            maturityProjection={maturityProjectionQuery.data}
             onMaturityPreview={() => {
               setPreviewType("MATURITY_REDEMPTION");
               setPreviewOpen(true);

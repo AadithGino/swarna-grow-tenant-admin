@@ -1,5 +1,7 @@
 /** Form state aligned with POST /admin/scheme-plans (05-scheme-plans.md). */
 
+import type { V1BenefitTreatment, V1RedemptionMode } from "@/src/lib/v1-payment-modes";
+
 export type BenefitType =
   | "ONE_FREE_INSTALLMENT"
   | "FIXED_BONUS_AMOUNT"
@@ -9,13 +11,9 @@ export type BonusBasis = "FLAT" | "PERCENT_OF_PAID";
 
 export type PenaltyMode = "NONE" | "FLAT" | "PERCENT_OF_PAID";
 
-export type BenefitTreatment = "FORFEIT" | "PRORATE" | "FULL";
+export type BenefitTreatment = V1BenefitTreatment;
 
-export type RedemptionMode =
-  | "CASH"
-  | "GOLD_HANDOVER"
-  | "PURCHASE_ADJUSTMENT"
-  | "TRANSFER_TO_SCHEME";
+export type RedemptionMode = V1RedemptionMode;
 
 export type PlanBuilderFormState = {
   name: string;
@@ -153,12 +151,7 @@ export const defaultPlanBuilderForm = (): PlanBuilderFormState => ({
   penaltyPercent: 2,
   penaltyFlat: 500,
   benefitTreatment: "FORFEIT",
-  allowedRedemptionModes: [
-    "CASH",
-    "GOLD_HANDOVER",
-    "PURCHASE_ADJUSTMENT",
-    "TRANSFER_TO_SCHEME",
-  ],
+  allowedRedemptionModes: ["CASH", "GOLD_HANDOVER", "PURCHASE_ADJUSTMENT"],
   redeemAtAnyBranch: false,
   allBranches: true,
   branchIds: [],
@@ -687,9 +680,14 @@ export function planDetailToForm(detail: Record<string, unknown>): PlanBuilderFo
       fromPaise(penalty.value as number) ||
       base.penaltyFlat,
     benefitTreatment:
-      (penalty.benefitTreatment as BenefitTreatment) ?? base.benefitTreatment,
+      penalty.benefitTreatment === "PRORATE"
+        ? "FORFEIT"
+        : ((penalty.benefitTreatment as BenefitTreatment) ?? base.benefitTreatment),
     allowedRedemptionModes: Array.isArray(redemption.allowedModes)
-      ? (redemption.allowedModes as RedemptionMode[])
+      ? (redemption.allowedModes as string[])
+          .filter((m): m is RedemptionMode =>
+            (["CASH", "GOLD_HANDOVER", "PURCHASE_ADJUSTMENT"] as string[]).includes(m),
+          )
       : base.allowedRedemptionModes,
     redeemAtAnyBranch: Boolean(redemption.redeemAtAnyBranch),
     allBranches: Boolean(avail.allBranches ?? true),
@@ -813,7 +811,6 @@ export function redemptionModesLabel(modes: RedemptionMode[]): string {
     CASH: "Cash settlement",
     GOLD_HANDOVER: "Gold handover",
     PURCHASE_ADJUSTMENT: "Purchase adjustment",
-    TRANSFER_TO_SCHEME: "Transfer to another scheme",
   };
   return modes.map((m) => labels[m] ?? m).join(" · ");
 }

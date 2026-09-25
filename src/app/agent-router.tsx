@@ -2,6 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { PageSkeleton } from "@/src/components/common/query-state";
+import { parseAgentSlug } from "@/src/lib/agent-tenant";
 
 const options = { loading: () => <PageSkeleton /> };
 const Login = dynamic(() => import("@/src/features/agent/agent-login-page").then((module) => module.AgentLoginPage), options);
@@ -17,8 +18,8 @@ const Report = dynamic(() => import("@/src/features/agent/agent-report-page").th
 const Account = dynamic(() => import("@/src/features/agent/agent-account-page").then((module) => module.AgentAccountPage), options);
 
 export function AgentRouter({ slug }: { slug: string[] }) {
-  const [, section, id, detail] = slug;
-  if (section === "login") return <Login />;
+  const { tenantSlug, section, id, detail } = parseAgentSlug(slug);
+  if (section === "login") return <Login tenantSlug={tenantSlug} />;
   if (!section) return <Dashboard />;
   if (section === "collect") return id ? <Collect schemeId={id} /> : <Search />;
   if (section === "customers" && id) return <Customer id={id} />;

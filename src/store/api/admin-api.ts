@@ -27,6 +27,10 @@ import { normalizeFetchBaseQueryError } from "@/src/lib/api-error";
 import { newIdempotencyKey } from "@/src/lib/idempotency";
 import { ensureMutationJsonBody } from "@/src/lib/rtk-mutation-body";
 import { businessTodayYmd } from "@/src/lib/list-date-range";
+import {
+  adaptMaturityProjection,
+  type MaturityProjection,
+} from "@/src/lib/v1-maturity-projection";
 import { mockRequest } from "@/src/mocks/mock-server";
 import type {
   CashHandover,
@@ -1138,14 +1142,14 @@ export const adminApi = createApi({
         { type: "Enrollment", id: schemeId },
       ],
     }),
-    getMaturityProjection: builder.query<Record<string, unknown>, string>({
+    getMaturityProjection: builder.query<MaturityProjection | null, string>({
       query: (schemeId) => ({
         url: `/admin/schemes/${schemeId}/maturity-projection`,
         params: { schemeId },
         mockKey: "getMaturityProjection",
       }),
       transformResponse: (raw) =>
-        contractPayload(raw) as Record<string, unknown>,
+        adaptMaturityProjection(contractPayload(raw)),
     }),
     getSchemePaymentIntents: builder.query<
       ReturnType<typeof adaptListBundle>,
@@ -1199,11 +1203,16 @@ export const adminApi = createApi({
     }),
     getSettlementPreview: builder.query<
       SettlementPreview,
-      { schemeId: string; type: SettlementPreviewType }
+      {
+        schemeId: string;
+        type: SettlementPreviewType;
+        /** Required for `GOLD_WEIGHT` on the backend; defaults to CASH for preview loads. */
+        mode?: string;
+      }
     >({
-      query: ({ schemeId, type }) => ({
+      query: ({ schemeId, type, mode }) => ({
         url: `/admin/schemes/${schemeId}/settlement-preview`,
-        params: { id: schemeId, type },
+        params: { id: schemeId, type, mode: mode ?? "CASH" },
         mockKey: "settlementPreview",
       }),
       transformResponse: (raw, _meta, arg) =>
@@ -1218,6 +1227,7 @@ export const adminApi = createApi({
         expectedVersion: number;
         expectedFinalValue: number;
         remarks?: string;
+        billNumber?: string;
       }
     >({
       query: ({
@@ -1226,6 +1236,7 @@ export const adminApi = createApi({
         expectedVersion,
         expectedFinalValue,
         remarks,
+        billNumber,
       }) => ({
         url: `/admin/schemes/${schemeId}/redeem`,
         method: "POST",
@@ -1236,6 +1247,7 @@ export const adminApi = createApi({
           modeDetails: {
             expectedFinalValuePaise: Math.round(expectedFinalValue * 100),
             remarks,
+            ...(billNumber ? { billNumber } : {}),
           },
         },
         mockKey: "redeemEnrollment",
@@ -1259,6 +1271,7 @@ export const adminApi = createApi({
         acknowledgePenalty: boolean;
         acknowledgeBenefitForfeit: boolean;
         expectedFinalValue: number;
+        billNumber?: string;
       }
     >({
       query: ({
@@ -1270,6 +1283,7 @@ export const adminApi = createApi({
         acknowledgePenalty,
         acknowledgeBenefitForfeit,
         expectedFinalValue,
+        billNumber,
       }) => ({
         url: `/admin/schemes/${schemeId}/close-premature`,
         method: "POST",
@@ -1283,6 +1297,7 @@ export const adminApi = createApi({
             acknowledgePenalty,
             acknowledgeBenefitForfeit,
             expectedFinalValuePaise: Math.round(expectedFinalValue * 100),
+            ...(billNumber ? { billNumber } : {}),
           },
         },
         mockKey: "closePrematureEnrollment",
@@ -1344,6 +1359,12 @@ export const adminApi = createApi({
         firstInstallmentAction?:
           | "RECORD_MANUAL_PAYMENT"
           | "CREATE_PAYMENT_LINK";
+        payment?: {
+          amountPaise: number;
+          mode: Payment["mode"];
+          reference?: string;
+          expectedPositionVersion?: number;
+        };
       }
     >({
       query: (body) => ({
@@ -1355,6 +1376,7 @@ export const adminApi = createApi({
           installmentAmountPaise: Math.round(body.amount * 100),
           firstInstallmentMode: body.firstInstallmentMode,
           firstInstallmentAction: body.firstInstallmentAction,
+          ...(body.payment ? { payment: body.payment } : {}),
         },
         mockKey: "createEnrollment",
       }),
@@ -1494,7 +1516,14 @@ export const adminApi = createApi({
       invalidatesTags: ["Payment", "Enrollment", "Cash", "Dashboard", "Report"],
     }),
     pollPaymentStatus: builder.mutation<
-      { paymentId: string; queued: boolean },
+      {
+        paymentId: string;
+        paymentStatus: string;
+        providerState: string | null;
+        outcome: string;
+        requiresReview: boolean;
+        reviewReason: string | null;
+      },
       string
     >({
       query: (paymentId) => ({
@@ -1504,8 +1533,61 @@ export const adminApi = createApi({
         mockKey: "pollPaymentStatus",
       }),
       transformResponse: (raw) =>
-        contractPayload(raw) as { paymentId: string; queued: boolean },
+        contractPayload(raw) as {
+          paymentId: string;
+          paymentStatus: string;
+          providerState: string | null;
+          outcome: string;
+          requiresReview: boolean;
+          reviewReason: string | null;
+        },
       invalidatesTags: ["Payment"],
+    }),
+    initiatePaymentRefund: builder.mutation<
+      { refundId: string; status: string; reused: boolean },
+      {
+        paymentId: string;
+        amountPaise: number;
+        reason: string;
+      }
+    >({
+      query: ({ paymentId, ...body }) => ({
+        url: `/admin/payments/${paymentId}/refunds`,
+        method: "POST",
+        params: { paymentId },
+        body,
+        mockKey: "initiatePaymentRefund",
+      }),
+      transformResponse: (raw) =>
+        contractPayload(raw) as {
+          refundId: string;
+          status: string;
+          reused: boolean;
+        },
+      invalidatesTags: ["Payment", "Enrollment", "Report"],
+    }),
+    listPaymentRefunds: builder.query<
+      Array<{
+        id: string;
+        amountPaise: number;
+        status: string;
+        reason?: string;
+      }>,
+      string
+    >({
+      query: (paymentId) => ({
+        url: `/admin/payments/${paymentId}/refunds`,
+        params: { paymentId },
+        mockKey: "listPaymentRefunds",
+      }),
+      transformResponse: (raw) =>
+        contractPayload(raw) as Array<{
+          id: string;
+          amountPaise: number;
+          status: string;
+          reason?: string;
+        }>,
+      providesTags: ["Payment"],
     }),
     reconcilePayment: builder.mutation<unknown, string>({
       query: (paymentId) => ({
@@ -2407,23 +2489,26 @@ export const adminApi = createApi({
         contactNumber?: string;
       }
     >({
-      query: (body) => ({
-        url: "/admin/branches",
-        method: "POST",
-        body: {
-          name: body.name,
-          code: body.code,
-          mobile: body.contactNumber,
-          address: [
-            body.address?.line1,
-            body.address?.city,
-            body.address?.pincode,
-          ]
-            .filter(Boolean)
-            .join(", "),
-        },
-        mockKey: "createBranch",
-      }),
+      query: (body) => {
+        const address = {
+          ...(body.address?.line1 ? { line1: body.address.line1 } : {}),
+          ...(body.address?.city ? { city: body.address.city } : {}),
+          ...(body.address?.pincode ? { pincode: body.address.pincode } : {}),
+        };
+        return {
+          url: "/admin/branches",
+          method: "POST",
+          body: {
+            name: body.name,
+            code: body.code,
+            ...(body.contactNumber
+              ? { mobile: body.contactNumber, contactNumber: body.contactNumber }
+              : {}),
+            ...(Object.keys(address).length ? { address } : {}),
+          },
+          mockKey: "createBranch",
+        };
+      },
       transformResponse: (raw) => contractPayload(raw) as any,
       invalidatesTags: ["Access"],
     }),
@@ -3192,13 +3277,16 @@ export const adminApi = createApi({
     }),
     completeRedemption: builder.mutation<
       unknown,
-      { id: string; remarks?: string }
+      { id: string; remarks?: string; billNumber?: string }
     >({
-      query: ({ id, ...body }) => ({
+      query: ({ id, remarks, billNumber }) => ({
         url: `/admin/redemptions/${id}/complete`,
         method: "POST",
         params: { id },
-        body,
+        body: {
+          ...(remarks ? { remarks } : {}),
+          ...(billNumber ? { modeDetails: { billNumber } } : {}),
+        },
         mockKey: "completeRedemption",
       }),
       invalidatesTags: ["Enrollment", "Dashboard", "Report"],

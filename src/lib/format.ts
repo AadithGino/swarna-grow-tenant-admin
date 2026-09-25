@@ -5,6 +5,15 @@ export const money = (value: number) =>
     maximumFractionDigits: 0,
   }).format(value);
 
+/** Settlement figures keep paise. Gold weight × rate is often not a whole rupee. */
+export const moneyExact = (value: number) =>
+  new Intl.NumberFormat("en-IN", {
+    style: "currency",
+    currency: "INR",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(value);
+
 /** Compact rupee labels for chart axes (values already in rupees). */
 export const compactMoney = (value: number) => {
   const abs = Math.abs(value);

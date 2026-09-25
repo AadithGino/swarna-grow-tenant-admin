@@ -23,6 +23,7 @@ import {
   Surface,
 } from "@/src/components/common/page-parts";
 import { parseApiError } from "@/src/lib/api-error";
+import { flexiblePhaseTargetMonths } from "@/src/lib/flexible-plan-phase-target";
 import {
   validatePlanBuilderFull,
   validatePlanBuilderStep,
@@ -78,7 +79,6 @@ const REDEMPTION_MODE_OPTIONS: { id: RedemptionMode; label: string }[] = [
   { id: "CASH", label: "Cash settlement" },
   { id: "GOLD_HANDOVER", label: "Gold handover" },
   { id: "PURCHASE_ADJUSTMENT", label: "Purchase adjustment" },
-  { id: "TRANSFER_TO_SCHEME", label: "Transfer to another scheme" },
 ];
 
 function buildSteps(paymentPattern: string): { id: StepId; label: string }[] {
@@ -290,7 +290,9 @@ export function PlanBuilderWizard({
     form.capMinCycle,
     Math.min(form.capMaxCycle, roundedCap),
   );
-  const splitMatchesDuration = totalFlexibleMonths === form.durationMonths;
+  const flexiblePaymentMonths = flexiblePhaseTargetMonths(form);
+  const splitMatchesPaymentMonths =
+    totalFlexibleMonths === flexiblePaymentMonths;
   const freeBoundsValid =
     form.flexMinPayment > 0 && form.flexMaxPayment >= form.flexMinPayment;
   const capBandValid = form.capMinCycle > 0 && form.capMaxCycle >= form.capMinCycle;
@@ -477,12 +479,12 @@ export function PlanBuilderWizard({
             {current.id === "duration" && (
               <FormSection
                 title="Scheme length"
-                hint="Usually duration and installment count match (e.g. 11 months, 11 installments)."
+                hint="Duration is calendar tenure to maturity. Installment count is how many payment periods you schedule (e.g. 12 months duration, 11 installments for a free final month)."
               >
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div>
                     <FieldLabel>Duration (months)</FieldLabel>
-                    <FieldHint>Total scheme tenure from enrolment to maturity.</FieldHint>
+                    <FieldHint>Maturity calendar — scheme becomes MATURED after this many months.</FieldHint>
                     <Input
                       type="number"
                       min={1}
@@ -509,12 +511,13 @@ export function PlanBuilderWizard({
                 </div>
                 {form.paymentPattern === "FLEXIBLE_AVERAGE" &&
                 form.flexiblePhaseCycles + form.cappedPhaseCycles !==
-                  form.durationMonths ? (
+                  flexiblePaymentMonths ? (
                   <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950">
                     Tip: free + capped months (
                     {form.flexiblePhaseCycles + form.cappedPhaseCycles}) should
-                    equal duration ({form.durationMonths}) — adjust on Flexible
-                    rules.
+                    equal installment count ({flexiblePaymentMonths}) — adjust on
+                    Flexible rules. Duration ({form.durationMonths}) is maturity
+                    only when it differs.
                   </p>
                 ) : null}
               </FormSection>
@@ -994,8 +997,15 @@ export function PlanBuilderWizard({
                         Configuration health
                       </p>
                       <ul className="mt-2 space-y-1.5 text-sm">
-                        <li className={splitMatchesDuration ? "text-emerald-700" : "text-amber-700"}>
-                          {splitMatchesDuration ? "OK" : "Check"}: free + capped months
+                        <li
+                          className={
+                            splitMatchesPaymentMonths
+                              ? "text-emerald-700"
+                              : "text-amber-700"
+                          }
+                        >
+                          {splitMatchesPaymentMonths ? "OK" : "Check"}: free +
+                          capped = installment count ({flexiblePaymentMonths})
                         </li>
                         <li className={freeBoundsValid ? "text-emerald-700" : "text-amber-700"}>
                           {freeBoundsValid ? "OK" : "Check"}: free payment min/max
@@ -1310,7 +1320,6 @@ export function PlanBuilderWizard({
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="FORFEIT">Forfeit benefit</SelectItem>
-                    <SelectItem value="PRORATE">Prorate benefit</SelectItem>
                     <SelectItem value="FULL">Full benefit</SelectItem>
                   </SelectContent>
                 </Select>

@@ -28,6 +28,7 @@ import { useCustomerTenant } from "@/src/components/customer/customer-tenant-con
 import { customerPath } from "@/src/lib/customer-tenant";
 import { useGetPublicCustomerUploadDownloadQuery } from "@/src/store/api/customer-api";
 import { apiOrigin } from "@/src/config/env";
+import { cappedCycleAmounts, formatInrPaise } from "@/src/features/customer/customer-scheme-progress";
 
 function uploadIdFromPath(value?: string | null): string | null {
   if (!value) return null;
@@ -194,10 +195,8 @@ export function CustomerHomeSchemeCard({
   const isFixed = normalized === "FIXED";
   const isCapped = normalized === "FLEXIBLE_LOCK_WINDOW";
   const badge = homeSchemeBadge(scheme.displayMode);
-  const detail = "progressCard" in scheme ? (scheme as CustomerSchemeDetail) : null;
-  const cap = detail?.progressCard.cycleCap ?? scheme.cycleCap;
-  const remaining = detail?.progressCard.remainingThisCycle ?? scheme.remainingThisCycle;
-  const paid = scheme.totalPaid ?? { amountPaise: 0, amountDisplay: "₹0" };
+  const { cap, remaining, paidThisCyclePaise } = cappedCycleAmounts(scheme);
+  const totalSaved = scheme.totalPaid?.amountDisplay ?? "—";
   const progressPercent = Math.min(100, Math.max(0, scheme.progressPercent ?? 0));
   const payLabel = isFixed
     ? "Pay now"
@@ -264,18 +263,34 @@ export function CustomerHomeSchemeCard({
       </div>
 
       {isCapped && cap ? (
-        <div className="mt-3 grid grid-cols-3 gap-2 rounded-xl bg-[#fcfaf6] px-3 py-3 text-center">
-          <div>
-            <p className="text-[0.65rem] font-semibold text-[#77727c]">Cap</p>
-            <p className="mt-0.5 text-xs font-black">{cap.amountDisplay}</p>
+        <div className="mt-3 space-y-2">
+          <div className="flex items-center justify-between gap-3 rounded-xl bg-[#f6edf0] px-3 py-2.5">
+            <p className="text-[0.65rem] font-semibold leading-snug text-[#77727c]">Total saved in this scheme</p>
+            <p className="text-sm font-black text-[#171722]">{totalSaved}</p>
           </div>
-          <div className="border-x border-[#ebe4dc]">
-            <p className="text-[0.65rem] font-semibold text-[#77727c]">Paid</p>
-            <p className="mt-0.5 text-xs font-black">{paid.amountDisplay}</p>
-          </div>
-          <div>
-            <p className="text-[0.65rem] font-semibold text-[#77727c]">Remaining</p>
-            <p className="mt-0.5 text-xs font-black">{remaining?.amountDisplay ?? "—"}</p>
+          <div className="rounded-xl bg-[#fcfaf6] px-3 py-3">
+            <p className="text-center text-[0.62rem] font-bold uppercase tracking-[0.06em] text-[#77727c]">
+              This month · optional limit
+            </p>
+            <div className="mt-2 grid grid-cols-3 gap-2 text-center">
+              <div>
+                <p className="text-[0.65rem] font-semibold leading-snug text-[#77727c]">Monthly limit</p>
+                <p className="mt-0.5 text-xs font-black">{cap.amountDisplay}</p>
+              </div>
+              <div className="border-x border-[#ebe4dc]">
+                <p className="text-[0.65rem] font-semibold leading-snug text-[#77727c]">Paid this month</p>
+                <p className="mt-0.5 text-xs font-black">{formatInrPaise(paidThisCyclePaise)}</p>
+              </div>
+              <div>
+                <p className="text-[0.65rem] font-semibold leading-snug text-[#77727c]">Can still add</p>
+                <p className="mt-0.5 text-xs font-black text-[var(--customer-primary,#730321)]">
+                  {remaining?.amountDisplay ?? "—"}
+                </p>
+              </div>
+            </div>
+            <p className="mt-2 text-center text-[0.62rem] leading-4 text-[#8a8490]">
+              Not your whole-scheme balance — only how much you can optionally add this month.
+            </p>
           </div>
         </div>
       ) : null}
@@ -290,7 +305,11 @@ export function CustomerHomeSchemeCard({
           </div>
           <div className="shrink-0">{payCta}</div>
         </div>
-        <p className="mt-1.5 text-xs font-semibold text-[#706b77]">{scheme.progressLabel}</p>
+        <p className="mt-1.5 text-xs font-semibold text-[#706b77]">
+          {isCapped && cap
+            ? `${formatInrPaise(paidThisCyclePaise)} of ${cap.amountDisplay} used this month`
+            : scheme.progressLabel}
+        </p>
       </div>
     </article>
   );
@@ -330,9 +349,7 @@ export function CustomerSchemesActiveCard({ scheme }: { scheme: SchemeCard }) {
   const isFixed = normalized === "FIXED";
   const isLocked = normalized === "FLEXIBLE_LOCK_WINDOW";
   const badges = schemeListBadges(scheme.displayMode);
-  const detail = "progressCard" in scheme ? (scheme as CustomerSchemeDetail) : null;
-  const cap = detail?.progressCard.cycleCap ?? scheme.cycleCap;
-  const remaining = detail?.progressCard.remainingThisCycle ?? scheme.remainingThisCycle;
+  const { cap, remaining, paidThisCyclePaise } = cappedCycleAmounts(scheme);
   const paidTotal = scheme.totalPaid?.amountDisplay ?? "₹0";
   const progressPercent = Math.min(100, Math.max(0, scheme.progressPercent ?? 0));
   const barColor = isLocked ? "var(--customer-accent, #c9a227)" : "var(--customer-primary, #730321)";
@@ -343,15 +360,6 @@ export function CustomerSchemesActiveCard({ scheme }: { scheme: SchemeCard }) {
       ? `${scheme.nextActionAmount.amountDisplay} · ${dueDateFromScheme(scheme)}`
       : dueDateFromScheme(scheme)
     : formatCustomerDate(scheme.maturityDate);
-
-  const capPaise = cap?.amountPaise ?? 0;
-  const remainingPaise = remaining?.amountPaise ?? 0;
-  const paidInCycle =
-    cap && remaining
-      ? new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(
-          Math.max(0, capPaise - remainingPaise) / 100,
-        )
-      : "—";
 
   return (
     <Link href={href} className={schemeListCardClass}>
@@ -380,22 +388,29 @@ export function CustomerSchemesActiveCard({ scheme }: { scheme: SchemeCard }) {
 
       <p className="mt-3.5 text-[1.375rem] font-black tracking-tight text-[#171722]">
         {paidTotal}
-        <span className="ml-1.5 text-[0.9375rem] font-semibold text-[#77727c]">paid</span>
+        <span className="ml-1.5 text-[0.9375rem] font-semibold text-[#77727c]">saved in scheme</span>
       </p>
 
       {isLocked && cap ? (
-        <div className="mt-3.5 grid grid-cols-3 gap-1 rounded-xl bg-[#fcfaf6] px-2 py-3 text-center">
-          <div>
-            <p className="text-[0.65rem] font-semibold text-[#77727c]">Cap</p>
-            <p className="mt-0.5 text-xs font-black text-[#171722]">{cap.amountDisplay}</p>
-          </div>
-          <div className="border-x border-[#ebe4dc]">
-            <p className="text-[0.65rem] font-semibold text-[#77727c]">Paid</p>
-            <p className="mt-0.5 text-xs font-black text-[#171722]">{paidInCycle}</p>
-          </div>
-          <div>
-            <p className="text-[0.65rem] font-semibold text-[#77727c]">Left</p>
-            <p className="mt-0.5 text-xs font-black text-[#171722]">{remaining?.amountDisplay ?? "—"}</p>
+        <div className="mt-3.5 rounded-xl bg-[#fcfaf6] px-2 py-3">
+          <p className="text-center text-[0.62rem] font-bold uppercase tracking-[0.06em] text-[#77727c]">
+            This month · optional limit
+          </p>
+          <div className="mt-2 grid grid-cols-3 gap-1 text-center">
+            <div>
+              <p className="text-[0.65rem] font-semibold leading-snug text-[#77727c]">Monthly limit</p>
+              <p className="mt-0.5 text-xs font-black text-[#171722]">{cap.amountDisplay}</p>
+            </div>
+            <div className="border-x border-[#ebe4dc]">
+              <p className="text-[0.65rem] font-semibold leading-snug text-[#77727c]">Paid this month</p>
+              <p className="mt-0.5 text-xs font-black text-[#171722]">{formatInrPaise(paidThisCyclePaise)}</p>
+            </div>
+            <div>
+              <p className="text-[0.65rem] font-semibold leading-snug text-[#77727c]">Can still add</p>
+              <p className="mt-0.5 text-xs font-black text-[var(--customer-primary,#730321)]">
+                {remaining?.amountDisplay ?? "—"}
+              </p>
+            </div>
           </div>
         </div>
       ) : (

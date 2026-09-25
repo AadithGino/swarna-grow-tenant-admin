@@ -248,7 +248,6 @@ export interface Payment {
     | "CARD"
     | "UPI"
     | "BANK_TRANSFER"
-    | "CHEQUE"
     | "ONLINE_GATEWAY";
   staff: string;
   branch: string;

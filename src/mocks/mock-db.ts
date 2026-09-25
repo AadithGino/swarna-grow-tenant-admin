@@ -573,7 +573,6 @@ const modes: Payment["mode"][] = [
   "UPI",
   "BANK_TRANSFER",
   "CARD",
-  "CHEQUE",
 ];
 export const payments: Payment[] = Array.from({ length: 18 }, (_, index) => {
   const customer = customers[index % customers.length];

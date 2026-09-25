@@ -641,18 +641,28 @@ export function GrievanceDetailSheet({
               }
               const body = reply.trim();
               try {
+                const current = detailQuery.data!;
                 await postMessage({
-                  id: detailQuery.data!.id,
+                  id: current.id,
                   messageType: "PUBLIC_REPLY",
                   body,
-                  expectedVersion: detailQuery.data!.version,
+                  expectedVersion: current.version,
                 }).unwrap();
+                let version = current.version + 1;
+                if (current.status === "OPEN") {
+                  await updateStatus({
+                    id: current.id,
+                    status: "IN_PROGRESS",
+                    expectedVersion: version,
+                  }).unwrap();
+                  version += 1;
+                }
                 await updateStatus({
-                  id: detailQuery.data!.id,
+                  id: current.id,
                   status: "RESOLVED",
                   resolutionCode,
                   resolutionSummary: body,
-                  expectedVersion: detailQuery.data!.version + 1,
+                  expectedVersion: version,
                 }).unwrap();
                 toast.success("Reply sent and request resolved");
                 resetComposeState();

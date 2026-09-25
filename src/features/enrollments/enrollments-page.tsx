@@ -43,10 +43,17 @@ import {
   useActingBranchKey,
 } from "@/src/hooks/use-acting-branch-id";
 
+const ENROLLMENT_GROUP_FILTERS = new Set([
+  "OPEN",
+  "ACTIVE_AND_LOCKED",
+  "PAST",
+]);
+
 const ENROLLMENT_STATUS_FILTERS: FilterOption[] = [
-  { value: "OPEN", label: "Open" },
-  { value: "ACTIVE", label: "Active (status)" },
-  { value: "LOCKED", label: "Capped / locked" },
+  { value: "OPEN", label: "Open (in progress)" },
+  { value: "ACTIVE_AND_LOCKED", label: "Active & capped" },
+  { value: "ACTIVE", label: "Active only" },
+  { value: "LOCKED", label: "Locked / capped only" },
   { value: "DEFAULTED", label: "Defaulted" },
   { value: "MATURED", label: "Matured" },
   { value: "REDEEMED", label: "Redeemed" },
@@ -58,7 +65,7 @@ export function EnrollmentsPage() {
   const router = useRouter();
   const branchKey = useActingBranchKey();
   const branchId = useActingBranchId();
-  const [status, setStatus] = useState("ACTIVE");
+  const [status, setStatus] = useState("OPEN");
   const [q, setQ] = useState("");
   const debouncedQ = useDebouncedValue(q, 350);
   const pager = useCursorPagination(
@@ -68,8 +75,8 @@ export function EnrollmentsPage() {
   const query = useGetEnrollmentsQuery(
     {
       q: listSearchQueryForApi(debouncedQ),
-      status: status === "PAST" || status === "OPEN" ? undefined : status,
-      group: status === "PAST" ? "PAST" : status === "OPEN" ? "OPEN" : undefined,
+      status: ENROLLMENT_GROUP_FILTERS.has(status) ? undefined : status,
+      group: ENROLLMENT_GROUP_FILTERS.has(status) ? status : undefined,
       branchId,
       ...pager.queryParams,
     },
