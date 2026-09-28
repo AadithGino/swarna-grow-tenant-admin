@@ -11,12 +11,18 @@ export type PayableQuoteBounds = {
   max: number;
   multipleOf?: number;
   eligible?: boolean;
+  allowedAmountsPaise?: number[];
 };
 
 export function payableAmountRangeMessage(quote: PayableQuoteBounds): string {
   let msg = `Enter an amount between ${money(quote.min)} and ${money(quote.max)}`;
   if (quote.multipleOf) {
     msg += ` (multiples of ${money(quote.multipleOf)})`;
+  }
+  if (quote.allowedAmountsPaise?.length) {
+    msg = `Choose one of the allowed amounts: ${quote.allowedAmountsPaise
+      .map((paise) => money(paise / 100))
+      .join(", ")}`;
   }
   return `${msg}.`;
 }
@@ -37,6 +43,10 @@ export function validatePayableAmount(
     return "Enter a payment amount greater than zero.";
   }
   if (!amountWithinPayableQuote(amount, quote)) {
+    return payableAmountRangeMessage(quote);
+  }
+  const amountPaise = Math.round(amount * 100);
+  if (quote.allowedAmountsPaise?.length && !quote.allowedAmountsPaise.includes(amountPaise)) {
     return payableAmountRangeMessage(quote);
   }
   return undefined;

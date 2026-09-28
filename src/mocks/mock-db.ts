@@ -873,7 +873,7 @@ export const grievances: Grievance[] = [
     customer: "Muhammed G",
     subject: "KYC document verification",
     category: "KYC",
-    priority: "MEDIUM",
+    priority: "NORMAL",
     status: "IN_PROGRESS",
     assignee: "Arun Raj",
     createdAt: "Yesterday",

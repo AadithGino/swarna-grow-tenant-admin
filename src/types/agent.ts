@@ -44,7 +44,7 @@ export type AgentCollectionSummary = {
   byMode: Array<{ mode: string; label: string; amountPaise: number; count: number }>;
 };
 
-export type AgentManualPaymentMode = "CASH" | "UPI" | "CARD" | "BANK_TRANSFER" | "CHEQUE";
+export type AgentManualPaymentMode = "CASH" | "UPI" | "CARD" | "BANK_TRANSFER";
 
 export type AgentSchemeSummary = {
   id: string;
@@ -102,6 +102,21 @@ export type AgentPayableRange = {
   positionVersion?: number;
   payable: boolean;
   nextCycleAction?: string;
+  allowedAmountsPaise?: number[] | null;
+  maxPaymentPerTransactionPaise?: number | null;
+  reservedPaise?: number;
+  remainingPayablePaise?: number;
+  currentInstallmentNumber?: number;
+  consecutivePayableInstallments?: number;
+  partialPaymentAllowed?: boolean;
+  advancePaymentAllowed?: boolean;
+  maxAdvanceInstallments?: number | null;
+  capPaise?: number;
+  paidPaise?: number;
+  remainingPaise?: number;
+  allowFinalRemainderBelowMinimum?: boolean;
+  allowFutureCycleSelection?: boolean;
+  targetCycleOptions?: Array<{ cycle: string; label?: string; remainingPaise?: number; isCurrentCycle?: boolean }>;
 };
 
 export type AgentGoldRate = {
@@ -123,6 +138,12 @@ export type AgentPayment = {
   id: string;
   receiptNumber: string;
   amountPaise: number;
+  grossAmountPaise?: number;
+  refundedAmountPaise?: number;
+  netAmountPaise?: number;
+  grossWeightMg?: number;
+  refundedWeightMg?: number;
+  netWeightMg?: number;
   weightMg?: number | null;
   ratePerGramPaise?: number | null;
   goldAccrual?: AgentPaymentGoldAccrual | null;
@@ -145,6 +166,27 @@ export type AgentPayment = {
     valueBasis?: string;
     status?: string;
   };
+};
+
+export type AgentPaymentLink = {
+  id: string;
+  token: string;
+  url: string;
+  status: string;
+  expiresAt: string;
+  paymentIntentId?: string;
+  positionVersion?: number;
+};
+
+export type AgentNotification = {
+  id: string;
+  type: string;
+  title?: string;
+  body?: string;
+  status?: string;
+  createdAt: string;
+  customerId?: string;
+  schemeId?: string;
 };
 
 export type AgentHandoverStatus = "PENDING" | "ACCEPTED" | "REJECTED" | "DISCREPANCY" | "CANCELLED";
@@ -186,6 +228,10 @@ export type AgentPassbook = {
     receiptNumber?: string;
     mode?: string;
     installmentNumber?: number;
+    status?: string;
+    grossAmountPaise?: number;
+    refundedAmountPaise?: number;
+    netAmountPaise?: number;
   }>;
 };
 

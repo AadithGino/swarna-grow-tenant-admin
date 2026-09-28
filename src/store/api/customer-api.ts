@@ -17,8 +17,10 @@ import type {
   CustomerHome,
   CustomerNotification,
   CustomerPastScheme,
+  CustomerPassbook,
   CustomerProfile,
   CustomerSchemeDetail,
+  CustomerSettlementPreview,
   PayableRange,
   PaymentListItem,
   SchemeCard,
@@ -47,6 +49,10 @@ import {
   adaptCustomerPaymentList,
   adaptCustomerSchemeDetail,
 } from "@/src/lib/customer-payment-adapter";
+import {
+  adaptCustomerGrievance,
+  adaptCustomerGrievanceList,
+} from "@/src/lib/customer-grievance-adapter";
 import {
   adaptCustomerPaymentPoll,
   type CustomerPaymentPollResult,
@@ -352,7 +358,7 @@ function unwrapCustomerEnvelope(result: {
       success: boolean;
       error?: { code: string; message: string };
     };
-    if (envelope.success) return { data: envelope.data, meta: result.meta };
+    if (envelope.success) return { data: envelope.data, meta: envelope.meta };
     return {
       error: {
         status: "CUSTOM_ERROR" as const,
@@ -549,6 +555,10 @@ export const customerApi = createApi({
       transformResponse: (raw: unknown) => adaptCustomerSchemeDetail(raw),
       providesTags: (_r, _e, id) => [{ type: "CustomerScheme", id }],
     }),
+    getCustomerPassbook: builder.query<CustomerPassbook, string>({
+      query: (id) => `/app/schemes/${id}/passbook`,
+      providesTags: (_r, _e, id) => [{ type: "CustomerScheme", id: `passbook-${id}` }],
+    }),
     getCustomerPayableRange: builder.query<
       PayableRange,
       { schemeId: string; targetCycle?: string }
@@ -556,6 +566,15 @@ export const customerApi = createApi({
       query: ({ schemeId, targetCycle }) => ({
         url: `/app/schemes/${schemeId}/payable-range`,
         params: targetCycle ? { targetCycle } : undefined,
+      }),
+    }),
+    getCustomerSettlementPreview: builder.query<
+      CustomerSettlementPreview,
+      { schemeId: string; mode: string; type?: "MATURITY_REDEMPTION" | "PREMATURE_CLOSURE" }
+    >({
+      query: ({ schemeId, mode, type = "MATURITY_REDEMPTION" }) => ({
+        url: `/app/schemes/${schemeId}/settlement-preview`,
+        params: { mode, type },
       }),
     }),
     enrolCustomerScheme: builder.mutation<Record<string, unknown>, { planId: string; installmentAmountPaise?: number; payNow: boolean; redirectUrl?: string }>({ query: (body) => ({ url: "/app/schemes/enrol", method: "POST", body }), invalidatesTags: ["CustomerScheme", "CustomerHome"] }),
@@ -610,8 +629,22 @@ export const customerApi = createApi({
       },
     }),
     getCustomerPayments: builder.query<PaymentListItem[], void>({
-      query: () => ({ url: "/app/payments", params: { limit: 100 } }),
-      transformResponse: (raw: unknown) => adaptCustomerPaymentList(raw),
+      queryFn: async (_arg, _api, _extra, baseQuery) => {
+        const rows: PaymentListItem[] = [];
+        const seenCursors = new Set<string>();
+        let cursor: string | undefined;
+        for (let page = 0; page < 100; page += 1) {
+          const result = await baseQuery({ url: "/app/payments", params: { limit: 100, ...(cursor ? { cursor } : {}) } });
+          if (result.error) return { error: result.error };
+          rows.push(...adaptCustomerPaymentList(result.data));
+          const meta = result.meta as ApiEnvelope<unknown>["meta"] | undefined;
+          const next = meta?.hasMore && meta.nextCursor ? meta.nextCursor : undefined;
+          if (!next || seenCursors.has(next)) break;
+          seenCursors.add(next);
+          cursor = next;
+        }
+        return { data: rows };
+      },
       providesTags: ["CustomerPayment"],
     }),
     getCustomerPayment: builder.query<PaymentListItem, string>({
@@ -622,10 +655,37 @@ export const customerApi = createApi({
     getCustomerNotifications: builder.query<{ items: CustomerNotification[]; unreadCount: number }, void>({ query: () => "/app/notifications", providesTags: ["CustomerNotification"] }),
     markCustomerNotificationRead: builder.mutation<{ read: boolean }, string>({ query: (id) => ({ url: `/app/notifications/${id}/read`, method: "POST" }), invalidatesTags: ["CustomerNotification"] }),
     markAllCustomerNotificationsRead: builder.mutation<{ unreadCount: number }, void>({ query: () => ({ url: "/app/notifications/read-all", method: "POST" }), invalidatesTags: ["CustomerNotification"] }),
-    getCustomerGrievances: builder.query<CustomerGrievance[], void>({ query: () => "/app/grievances", providesTags: ["CustomerGrievance"] }),
-    getCustomerGrievance: builder.query<CustomerGrievance, string>({ query: (id) => `/app/grievances/${id}`, providesTags: (_r, _e, id) => [{ type: "CustomerGrievance", id }] }),
-    createCustomerGrievance: builder.mutation<CustomerGrievance, { category: string; subject: string; description: string }>({ query: (body) => ({ url: "/app/grievances", method: "POST", body }), invalidatesTags: ["CustomerGrievance"] }),
-    replyCustomerGrievance: builder.mutation<Record<string, unknown>, { id: string; body: string; expectedVersion: number }>({ query: ({ id, ...body }) => ({ url: `/app/grievances/${id}/messages`, method: "POST", body }), invalidatesTags: (_r, _e, arg) => [{ type: "CustomerGrievance", id: arg.id }] }),
+    getCustomerGrievances: builder.query<CustomerGrievance[], void>({
+      query: () => "/app/grievances",
+      transformResponse: (raw: unknown) => adaptCustomerGrievanceList(raw),
+      providesTags: ["CustomerGrievance"],
+    }),
+    getCustomerGrievance: builder.query<CustomerGrievance, string>({
+      query: (id) => `/app/grievances/${id}`,
+      transformResponse: (raw: unknown) => adaptCustomerGrievance(raw),
+      providesTags: (_r, _e, id) => [{ type: "CustomerGrievance", id }],
+    }),
+    createCustomerGrievance: builder.mutation<
+      CustomerGrievance,
+      { category: string; subject: string; description: string }
+    >({
+      query: (body) => ({ url: "/app/grievances", method: "POST", body }),
+      transformResponse: (raw: unknown) => adaptCustomerGrievance(raw),
+      invalidatesTags: ["CustomerGrievance"],
+    }),
+    replyCustomerGrievance: builder.mutation<
+      Record<string, unknown>,
+      { id: string; body: string; expectedVersion: number }
+    >({
+      query: ({ id, ...body }) => ({
+        url: `/app/grievances/${id}/messages`,
+        method: "POST",
+        body,
+      }),
+      invalidatesTags: (_r, _e, arg) => [
+        { type: "CustomerGrievance", id: arg.id },
+      ],
+    }),
     getCustomerDevices: builder.query<Array<{ deviceId: string; platform: string; deviceModel: string; lastUsedAt: string; current: boolean }>, void>({ query: () => "/app/auth/devices", providesTags: ["CustomerDevice"] }),
     revokeCustomerDevice: builder.mutation<void, string>({ query: (id) => ({ url: `/app/auth/devices/${id}`, method: "DELETE" }), invalidatesTags: ["CustomerDevice"] }),
     customerLogout: builder.mutation<
@@ -647,7 +707,7 @@ export const customerApi = createApi({
     getCustomerGoldRate: builder.query<CustomerHome["goldRate"], void>({ query: () => "/app/gold-rate/current" }),
     getCustomerGoldHistory: builder.query<Array<CustomerHome["goldRate"]>, void>({ query: () => "/app/gold-rate/history" }),
     getCustomerBranches: builder.query<Array<CustomerProfile["branch"]>, void>({ query: () => "/app/branches" }),
-    requestCustomerRedemption: builder.mutation<Record<string, unknown>, { schemeId: string; preferredMode: string; preferredDate?: string; remarks?: string; expectedVersion: number }>({ query: ({ schemeId, ...body }) => ({ url: `/app/schemes/${schemeId}/redemption-request`, method: "POST", body }), invalidatesTags: ["CustomerScheme"] }),
+    requestCustomerRedemption: builder.mutation<Record<string, unknown>, { schemeId: string; preferredMode: string; preferredDate?: string; remarks?: string; expectedVersion: number; modeDetails?: { billNumber?: string } }>({ query: ({ schemeId, ...body }) => ({ url: `/app/schemes/${schemeId}/redemption-request`, method: "POST", body }), invalidatesTags: ["CustomerScheme"] }),
     registerCustomerFcmToken: builder.mutation<
       { registered: boolean; deviceId: string },
       { fcmToken: string; deviceId: string; platform: "android" | "ios" }
@@ -662,7 +722,7 @@ export const {
   useGetCustomerHomeQuery, useGetCustomerProfileQuery, useUpdateCustomerProfileMutation,
   useCompleteCustomerProfileMutation, usePresignCustomerUploadMutation, useCompleteCustomerUploadMutation, useGetCustomerUploadDownloadQuery, useGetPublicCustomerUploadDownloadQuery, useSubmitCustomerKycMutation,
   useUpdateCustomerNomineeMutation, useRemoveCustomerNomineeMutation,
-  useGetCustomerPlansQuery, useGetCustomerPlanQuery, useGetCustomerSchemesQuery, useGetCustomerPastSchemesQuery, useGetCustomerSchemeQuery, useGetCustomerPayableRangeQuery, useLazyGetCustomerPayableRangeQuery,
+  useGetCustomerPlansQuery, useGetCustomerPlanQuery, useGetCustomerSchemesQuery, useGetCustomerPastSchemesQuery, useGetCustomerSchemeQuery, useGetCustomerPassbookQuery, useGetCustomerPayableRangeQuery, useLazyGetCustomerPayableRangeQuery, useGetCustomerSettlementPreviewQuery,
   useEnrolCustomerSchemeMutation, useInitiateCustomerPaymentMutation, useInitiatePublicPaymentLinkMutation,
   useLazyPollCustomerPaymentIntentQuery, useLazyPollPublicPaymentLinkQuery,
   useGetCustomerPaymentsQuery, useGetCustomerPaymentQuery,

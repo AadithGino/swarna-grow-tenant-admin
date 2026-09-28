@@ -31,6 +31,7 @@ import type {
   CustomerDisplayMode,
   CustomerMaturityBenefit,
   CustomerPlanRulesSection,
+  CustomerPassbookRow,
   CustomerSchemeDetail,
   PaymentListItem,
 } from "@/src/types/customer";
@@ -901,6 +902,41 @@ function PassbookList({
   );
 }
 
+function AuthoritativePassbookList({ rows }: { rows: CustomerPassbookRow[] }) {
+  if (!rows.length) return <p className="py-8 text-center text-sm text-[#77727c]">No passbook entries yet.</p>;
+  return (
+    <ul className="divide-y divide-[#ece6e0]">
+      {rows.map((row) => {
+        const paid = row.netAmount ?? row.amountPaid ?? row.payment?.amountPaid;
+        const refunded = row.refundedAmount?.amountPaise ?? 0;
+        return (
+          <li key={`${row.installmentNumber ?? row.entryNumber}-${row.payment?.id ?? row.dueDate ?? "row"}`} className="py-4">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-sm font-bold text-[#171722]">
+                  {row.installmentNumber ? `Instalment #${row.installmentNumber}` : `Entry #${row.entryNumber}`}
+                </p>
+                <p className="mt-1 text-xs text-[#77727c]">
+                  {row.paidAt ? formatCustomerDate(row.paidAt) : row.dueDate ? `Due ${formatCustomerDate(row.dueDate)}` : row.mode?.replaceAll("_", " ") ?? "Ledger entry"}
+                </p>
+              </div>
+              <div className="text-right">
+                <p className="text-sm font-black text-[#171722]">{paid?.amountDisplay ?? row.amountDue?.amountDisplay ?? "—"}</p>
+                <p className={cn("mt-1 text-[0.65rem] font-bold", row.status === "PAID" || row.status === "SUCCESS" || row.status === "PARTIALLY_REFUNDED" ? "text-emerald-700" : "text-[#77727c]")}>{row.status.replaceAll("_", " ")}</p>
+              </div>
+            </div>
+            {refunded > 0 ? (
+              <p className="mt-2 rounded-lg bg-amber-50 px-2.5 py-1.5 text-xs text-amber-800">
+                Refunded {row.refundedAmount?.amountDisplay}; retained {paid?.amountDisplay ?? "—"}
+              </p>
+            ) : null}
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
 function RulesBlock({ section }: { section: CustomerPlanRulesSection }) {
   return (
     <div className="customer-surface p-5">
@@ -918,14 +954,12 @@ function RulesBlock({ section }: { section: CustomerPlanRulesSection }) {
 }
 
 function BenefitTab({
-  scheme,
   maturityBenefit,
   schemeIsGold,
   redemptionEligible,
   redemptionBlocker,
   onRedeem,
 }: {
-  scheme: CustomerSchemeDetail;
   maturityBenefit: CustomerMaturityBenefit;
   schemeIsGold: boolean;
   redemptionEligible: boolean;
@@ -977,7 +1011,6 @@ function BenefitTab({
 
 export function SchemeDetailTabs({
   scheme,
-  mode,
   maturityBenefit,
   schemeIsGold,
   planRuleSections,
@@ -988,9 +1021,9 @@ export function SchemeDetailTabs({
   onDownloadReceipt,
   passbookExtra,
   passbookLayout = "default",
+  passbookRows,
 }: {
   scheme: CustomerSchemeDetail;
-  mode: CustomerDisplayMode;
   maturityBenefit: CustomerMaturityBenefit;
   schemeIsGold: boolean;
   planRuleSections: CustomerPlanRulesSection[];
@@ -1001,6 +1034,7 @@ export function SchemeDetailTabs({
   onDownloadReceipt: (payment: PaymentListItem) => void;
   passbookExtra?: React.ReactNode;
   passbookLayout?: "default" | "fixed";
+  passbookRows?: CustomerPassbookRow[];
 }) {
   const { tenantSlug } = useCustomerTenant();
 
@@ -1029,7 +1063,11 @@ export function SchemeDetailTabs({
 
       <TabsContent value="passbook" className="mt-3 space-y-3 focus-visible:outline-none">
         {passbookExtra ? <div className="space-y-3">{passbookExtra}</div> : null}
-        {passbookLayout === "fixed" ? (
+        {passbookRows ? (
+          <section className="customer-surface overflow-hidden px-4 sm:px-5">
+            <AuthoritativePassbookList rows={passbookRows} />
+          </section>
+        ) : passbookLayout === "fixed" ? (
           <>
             <Link
               href={customerPath(tenantSlug, "payments")}
@@ -1051,7 +1089,6 @@ export function SchemeDetailTabs({
 
       <TabsContent value="benefit" className="mt-4">
         <BenefitTab
-          scheme={scheme}
           maturityBenefit={maturityBenefit}
           schemeIsGold={schemeIsGold}
           redemptionEligible={redemptionEligible}

@@ -99,10 +99,7 @@ export function CustomerMakePaymentSheet({
   const valid = !!range && paymentAmountReady(numericAmount, quoteBounds);
 
   useEffect(() => {
-    if (!open) {
-      setAmountTouched(false);
-      return;
-    }
+    if (!open) return;
     let cancelled = false;
     (async () => {
       try {
@@ -153,13 +150,15 @@ export function CustomerMakePaymentSheet({
   const cycleLabel = formatCycleLabel(range?.targetCycle ?? targetCycle, cycleOptions);
 
   const amountChips = useMemo(() => {
-    const chips = range?.quickAmounts?.length
-      ? range.quickAmounts.map((q) => q.amountPaise)
+    const chips = range?.allowedAmountsPaise?.length
+      ? range.allowedAmountsPaise
+      : range?.quickAmounts?.length
+        ? range.quickAmounts.map((q) => q.amountPaise)
       : range
         ? [range.suggested?.amountPaise ?? range.maxPayable.amountPaise]
         : [];
     const unique = [...new Set(chips.filter((p) => p > 0))];
-    if (amountPaise > 0 && !unique.includes(amountPaise)) {
+    if (amountPaise > 0 && !unique.includes(amountPaise) && !range?.allowedAmountsPaise?.length) {
       unique.unshift(amountPaise);
     }
     return unique;
@@ -213,7 +212,13 @@ export function CustomerMakePaymentSheet({
   const maxDisplay = range ? range.maxPayable.amountDisplay : "—";
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
+    <Sheet
+      open={open}
+      onOpenChange={(nextOpen) => {
+        if (!nextOpen) setAmountTouched(false);
+        onOpenChange(nextOpen);
+      }}
+    >
       <SheetContent
         side="bottom"
         showCloseButton={false}

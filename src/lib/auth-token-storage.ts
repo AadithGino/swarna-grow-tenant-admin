@@ -85,6 +85,7 @@ export function clearTenantTokens() {
   if (typeof window === "undefined") return;
   localStorage.removeItem(TOKEN_KEYS.tenant.access);
   localStorage.removeItem(TOKEN_KEYS.tenant.refresh);
+  localStorage.removeItem(TOKEN_KEYS.tenant.session);
 }
 
 /** Write platform token keys only — safe inside Redux reducers (no store listeners). */
@@ -171,6 +172,7 @@ export function clearAgentTokens() {
   if (typeof window === "undefined") return;
   localStorage.removeItem(TOKEN_KEYS.agent.access);
   localStorage.removeItem(TOKEN_KEYS.agent.refresh);
+  localStorage.removeItem(TOKEN_KEYS.agent.session);
 }
 
 export function hasPlatformSession(): boolean {

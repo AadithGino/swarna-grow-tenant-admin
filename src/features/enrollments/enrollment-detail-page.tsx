@@ -78,9 +78,15 @@ export function EnrollmentDetailPage({ id }: { id: string }) {
     {
       schemeId: id,
       type: "MATURITY_REDEMPTION",
-      mode: enrollment?.allowedRedemptionModes?.[0],
+      mode:
+        enrollment?.allowedRedemptionModes?.[0] ??
+        (enrollment?.valueBasis === "GOLD_WEIGHT" ? "GOLD_HANDOVER" : "CASH"),
     },
-    { skip: !enrollment || (!maturedForPreview && !enrollment.canRedeem) },
+    {
+      skip:
+        !enrollment ||
+        (!maturedForPreview && !enrollment.canRedeem),
+    },
   );
   if (query.isLoading) return <PageSkeleton cards={5} />;
   if (query.isError || !query.data)
@@ -169,7 +175,10 @@ export function EnrollmentDetailPage({ id }: { id: string }) {
       <SettlementPreviewDialog
         schemeId={row.id}
         type={previewType}
-        mode={row.allowedRedemptionModes?.[0]}
+        mode={
+          row.allowedRedemptionModes?.[0] ??
+          (row.valueBasis === "GOLD_WEIGHT" ? "GOLD_HANDOVER" : "CASH")
+        }
         open={previewOpen}
         onOpenChange={setPreviewOpen}
         onInitiateRedemption={

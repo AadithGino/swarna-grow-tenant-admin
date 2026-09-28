@@ -1,16 +1,24 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft, ArrowRight, Building2, Check, Eye, EyeOff, LockKeyhole, Smartphone } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAgentLoginMutation } from "@/src/store/api/agent-api";
-import { useAppDispatch } from "@/src/store/hooks";
-import { persistAgentTokens } from "@/src/lib/auth-token-storage";
-import { setAgentSession } from "@/src/store/slices/agent-session-slice";
+import { useAppDispatch, useAppSelector } from "@/src/store/hooks";
+import {
+  persistAgentTokens,
+  realmHasStoredSession,
+} from "@/src/lib/auth-token-storage";
+import { safeAuthReturnPath } from "@/src/lib/auth-return-path";
+import { useClientMounted } from "@/src/hooks/use-client-mounted";
+import {
+  hydrateAgentSession,
+  setAgentSession,
+} from "@/src/store/slices/agent-session-slice";
 import { env } from "@/src/config/env";
 import type { AgentTenantChoice } from "@/src/types/agent";
 import {
@@ -42,13 +50,29 @@ function isRequestAborted(error: unknown): boolean {
 
 export function AgentLoginPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const dispatch = useAppDispatch();
+  const mounted = useClientMounted();
+  const { session, hydrated } = useAppSelector((s) => s.agentSession);
   const [login, state] = useAgentLoginMutation();
   const [mobile, setMobile] = useState("9847012352");
   const [password, setPassword] = useState("2026");
   const [showPassword, setShowPassword] = useState(false);
   const [tenants, setTenants] = useState<AgentTenantChoice[]>([]);
   const [selectedTenant, setSelectedTenant] = useState<AgentTenantChoice | null>(null);
+
+  const postLoginPath = safeAuthReturnPath(searchParams.get("next"), "/agent");
+
+  useEffect(() => {
+    if (!hydrated) dispatch(hydrateAgentSession());
+  }, [dispatch, hydrated]);
+
+  useEffect(() => {
+    if (!mounted || !hydrated) return;
+    if (session && realmHasStoredSession("agent")) {
+      router.replace(postLoginPath);
+    }
+  }, [mounted, hydrated, session, router, postLoginPath]);
 
   const submit = async (tenant?: AgentTenantChoice) => {
     if (mobile.replace(/\D/g, "").length < 10 || !passwordPinReady(password)) {
@@ -71,7 +95,7 @@ export function AgentLoginPage() {
       dispatch(setAgentSession({ ...result, selectedTenant: choice }));
       persistAgentTokens(result.accessToken, result.refreshToken);
       toast.success(`Welcome to ${choice.displayName}`);
-      router.replace("/agent");
+      router.replace(postLoginPath);
     } catch (error) {
       if (isRequestAborted(error)) return;
       const choices = tenantChoicesFromError(error);

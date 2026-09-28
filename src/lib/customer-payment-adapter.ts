@@ -24,12 +24,13 @@ function readMoney(raw: unknown, paiseFallback?: number): MoneyRef {
 
 function readChannel(raw: Record<string, unknown>): PaymentListItem["channel"] {
   const channel = String(raw.channel ?? "").toUpperCase();
-  if (channel === "CASH" || channel === "UPI" || channel === "BANK_TRANSFER" || channel === "PHONEPE") {
+  if (channel === "CASH" || channel === "UPI" || channel === "CARD" || channel === "BANK_TRANSFER" || channel === "PHONEPE") {
     return channel;
   }
   const mode = String(raw.mode ?? raw.source ?? "").toUpperCase();
   if (mode.includes("CASH")) return "CASH";
   if (mode.includes("UPI")) return "UPI";
+  if (mode.includes("CARD") || mode.includes("POS")) return "CARD";
   if (mode.includes("BANK")) return "BANK_TRANSFER";
   return "PHONEPE";
 }
@@ -37,6 +38,7 @@ function readChannel(raw: Record<string, unknown>): PaymentListItem["channel"] {
 function statusLabel(status: string): string {
   const map: Record<string, string> = {
     SUCCESS: "Successful",
+    PARTIALLY_REFUNDED: "Partially refunded",
     PENDING: "Processing",
     FAILED: "Failed",
     REVERSED: "Reversed",
@@ -49,6 +51,7 @@ function channelLabel(channel: PaymentListItem["channel"]): string {
   if (channel === "CASH") return "Cash at branch";
   if (channel === "PHONEPE") return "PhonePe";
   if (channel === "UPI") return "UPI";
+  if (channel === "CARD") return "Card / POS";
   return "Bank transfer";
 }
 
@@ -65,7 +68,13 @@ export function adaptCustomerPayment(raw: unknown): PaymentListItem {
   const planSnapshot = scheme?.planSnapshot as Record<string, unknown> | undefined;
   const id = String(row.id ?? row._id ?? "");
   const status = String(row.status ?? "SUCCESS").toUpperCase() as PaymentListItem["status"];
-  const amount = readMoney(row.amount, Number(row.amountPaise ?? 0));
+  const grossAmount = readMoney(row.grossAmount, Number(row.grossAmountPaise ?? row.amountPaise ?? 0));
+  const refundedAmount = readMoney(row.refundedAmount, Number(row.refundedAmountPaise ?? 0));
+  const netAmount = readMoney(
+    row.netAmount ?? row.amount,
+    Number(row.netAmountPaise ?? (grossAmount.amountPaise - refundedAmount.amountPaise)),
+  );
+  const amount = netAmount;
   const channel = readChannel(row);
   const schemeId = String(row.schemeId ?? scheme?.id ?? scheme?._id ?? "");
   const schemeName = String(
@@ -87,6 +96,12 @@ export function adaptCustomerPayment(raw: unknown): PaymentListItem {
   return {
     id,
     amount,
+    grossAmount,
+    refundedAmount,
+    netAmount,
+    grossAmountPaise: grossAmount.amountPaise,
+    refundedAmountPaise: refundedAmount.amountPaise,
+    netAmountPaise: netAmount.amountPaise,
     status,
     statusLabel: String(row.statusLabel ?? statusLabel(status)),
     paidAt: row.paidAt ? String(row.paidAt) : undefined,
@@ -139,7 +154,7 @@ export type CustomerPaymentsSummary = {
 };
 
 export function summarizeCustomerPayments(items: PaymentListItem[]): CustomerPaymentsSummary {
-  const success = items.filter((p) => p.status === "SUCCESS");
+  const success = items.filter((p) => p.status === "SUCCESS" || p.status === "PARTIALLY_REFUNDED");
   return {
     totalPaidPaise: success.reduce((sum, p) => sum + p.amount.amountPaise, 0),
     successCount: success.length,

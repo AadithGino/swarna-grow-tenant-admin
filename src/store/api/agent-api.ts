@@ -25,13 +25,16 @@ import {
   shouldForceAuthLogout,
 } from "@/src/lib/auth-base-query-refresh";
 import {
+  handleAgentUnauthorized,
+  isUnauthorizedFetchError,
+} from "@/src/lib/auth-logout";
+import {
   normalizeFetchBaseQueryError,
   readContractResponseBody,
 } from "@/src/lib/contract-response";
 import {
   AGENT_ACCESS_KEY,
   AGENT_REFRESH_KEY,
-  clearAgentSession,
   patchAgentTokens,
 } from "@/src/store/slices/agent-session-slice";
 import type {
@@ -45,6 +48,8 @@ import type {
   AgentPassbook,
   AgentPayableRange,
   AgentPayment,
+  AgentPaymentLink,
+  AgentNotification,
   AgentReport,
   AgentScheme,
   AgentSchemeSummary,
@@ -172,6 +177,23 @@ function normalizePayableRange(raw: Record<string, unknown>): AgentPayableRange 
     positionVersion: raw.positionVersion != null ? Number(raw.positionVersion) : undefined,
     payable: Boolean(raw.payable ?? max > 0),
     targetCycle: raw.targetCycle != null ? String(raw.targetCycle) : undefined,
+    allowedAmountsPaise: Array.isArray(raw.allowedAmountsPaise)
+      ? raw.allowedAmountsPaise.map(Number).filter((value) => Number.isSafeInteger(value) && value > 0)
+      : null,
+    paymentIncrementPaise: raw.paymentIncrementPaise != null ? Number(raw.paymentIncrementPaise) : undefined,
+    maxPaymentPerTransactionPaise: raw.maxPaymentPerTransactionPaise != null ? Number(raw.maxPaymentPerTransactionPaise) : null,
+    reservedPaise: Number(raw.reservedPaise ?? 0),
+    remainingPayablePaise: raw.remainingPayablePaise != null ? Number(raw.remainingPayablePaise) : undefined,
+    targetCycleOptions: Array.isArray(raw.targetCycleOptions)
+      ? (raw.targetCycleOptions as Record<string, unknown>[]).map((option) => ({
+          cycle: String(option.cycle ?? ""),
+          label: option.label != null ? String(option.label) : undefined,
+          remainingPaise: option.remainingPaise != null
+            ? Number(option.remainingPaise)
+            : ((option.remaining as { amountPaise?: number } | undefined)?.amountPaise),
+          isCurrentCycle: Boolean(option.isCurrentCycle),
+        })).filter((option) => option.cycle)
+      : undefined,
   };
 }
 
@@ -187,8 +209,11 @@ function passbookRowToLedgerEntry(row: Record<string, unknown>, index: number) {
         ? String(row.receiptNumber)
         : undefined;
   const paymentId = String(row.paymentId ?? payment?.id ?? payment?._id ?? "");
-  const amountPaise = Number(row.amountPaise ?? amountPaid?.amountPaise ?? 0);
-  const hasPayment = amountPaise > 0 && Boolean(payment || amountPaid?.amountPaise || receiptNumber || paymentId);
+  const grossAmountPaise = Number(row.grossAmountPaise ?? payment?.grossAmountPaise ?? row.amountPaise ?? amountPaid?.amountPaise ?? 0);
+  const refundedAmountPaise = Number(row.refundedAmountPaise ?? payment?.refundedAmountPaise ?? 0);
+  const netAmountPaise = Number(row.netAmountPaise ?? payment?.netAmountPaise ?? amountPaid?.amountPaise ?? Math.max(0, grossAmountPaise - refundedAmountPaise));
+  const amountPaise = netAmountPaise;
+  const hasPayment = Boolean(payment || amountPaid?.amountPaise != null || receiptNumber || paymentId);
   const effectiveAtRaw = paidAt ?? (hasPayment ? row.createdAt : undefined);
   const effectiveAt =
     effectiveAtRaw != null && String(effectiveAtRaw)
@@ -212,6 +237,10 @@ function passbookRowToLedgerEntry(row: Record<string, unknown>, index: number) {
     receiptNumber,
     mode: payment?.mode != null ? String(payment.mode) : row.mode != null ? String(row.mode) : undefined,
     installmentNumber: row.installmentNumber != null ? Number(row.installmentNumber) : undefined,
+    status: row.status != null ? String(row.status) : payment?.status != null ? String(payment.status) : undefined,
+    grossAmountPaise,
+    refundedAmountPaise,
+    netAmountPaise,
     hasPayment,
   };
 }
@@ -226,7 +255,10 @@ function normalizePassbook(raw: Record<string, unknown>): AgentPassbook {
   const ledger = mapped
     .filter((entry) => entry.hasPayment)
     .sort((a, b) => (b.effectiveAt || "").localeCompare(a.effectiveAt || ""))
-    .map(({ hasPayment: _drop, ...entry }) => entry);
+    .map(({ hasPayment, ...entry }) => {
+      void hasPayment;
+      return entry;
+    });
   return {
     scheme: {
       id: idOf(schemeRaw),
@@ -278,9 +310,17 @@ function normalizePayment(raw: Record<string, unknown>): AgentPayment {
   const scheme = (raw.scheme ?? { enrollmentNumber: "" }) as Record<string, unknown>;
   const goldRaw = raw.goldAccrual as Record<string, unknown> | null | undefined;
   const amountWrap = raw.amount as { amountPaise?: number } | undefined;
+  const grossWrap = raw.grossAmount as { amountPaise?: number } | undefined;
+  const refundedWrap = raw.refundedAmount as { amountPaise?: number } | undefined;
+  const netWrap = raw.netAmount as { amountPaise?: number } | undefined;
+  const grossAmountPaise = Number(raw.grossAmountPaise ?? grossWrap?.amountPaise ?? raw.amountPaise ?? amountWrap?.amountPaise ?? 0);
+  const refundedAmountPaise = Number(raw.refundedAmountPaise ?? refundedWrap?.amountPaise ?? 0);
+  const netAmountPaise = Number(raw.netAmountPaise ?? netWrap?.amountPaise ?? amountWrap?.amountPaise ?? Math.max(0, grossAmountPaise - refundedAmountPaise));
   const weightMg =
-    raw.weightMg != null
-      ? Number(raw.weightMg)
+    raw.netWeightMg != null
+      ? Number(raw.netWeightMg)
+      : raw.weightMg != null
+      ? Math.max(0, Number(raw.weightMg) - Number(raw.refundedWeightMg ?? 0))
       : goldRaw?.weightMg != null
         ? Number(goldRaw.weightMg)
         : undefined;
@@ -294,7 +334,13 @@ function normalizePayment(raw: Record<string, unknown>): AgentPayment {
     ...(raw as unknown as AgentPayment),
     id: idOf(raw),
     receiptNumber: String(raw.receiptNumber ?? ""),
-    amountPaise: Number(raw.amountPaise ?? amountWrap?.amountPaise ?? 0),
+    amountPaise: netAmountPaise,
+    grossAmountPaise,
+    refundedAmountPaise,
+    netAmountPaise,
+    grossWeightMg: raw.grossWeightMg != null ? Number(raw.grossWeightMg) : undefined,
+    refundedWeightMg: raw.refundedWeightMg != null ? Number(raw.refundedWeightMg) : undefined,
+    netWeightMg: raw.netWeightMg != null ? Number(raw.netWeightMg) : undefined,
     mode: String(raw.mode ?? "CASH"),
     status: String(raw.status ?? "SUCCESS"),
     source: String(raw.source ?? "STAFF_APP"),
@@ -467,6 +513,11 @@ const mockBaseQuery: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQueryErro
     return ok(handover ?? agentHandovers[0]);
   }
   if (url === "/staff/report") return ok(agentReport);
+  if (url === "/staff/notifications") return ok([]);
+  if (url === "/staff/payment-links" && method === "POST") {
+    return ok({ id: "plink_demo", token: "demo-token", url: "/pay/demo-token", status: "ACTIVE", expiresAt: new Date(Date.now() + 30 * 60_000).toISOString() });
+  }
+  if (/^\/staff\/payments\/[^/]+\/share-whatsapp$/.test(url) && method === "POST") return ok({ queued: true });
   return ok({});
 };
 
@@ -554,16 +605,16 @@ const dynamicBaseQuery: BaseQueryFn<
       }
       result = await retryAuthorizedRequest(liveBaseQuery, request, api, extra);
     } else if (shouldForceAuthLogout("agent", true)) {
-      api.dispatch(clearAgentSession());
+      handleAgentUnauthorized(api.dispatch);
     }
   } else if (
     !env.useMocks &&
-    result.error?.status === 401 &&
+    isUnauthorizedFetchError(result.error) &&
     typeof window !== "undefined" &&
     !guard.skipRefresh &&
     shouldForceAuthLogout("agent", false)
   ) {
-    api.dispatch(clearAgentSession());
+    handleAgentUnauthorized(api.dispatch);
   }
   return unwrap(result);
 };
@@ -677,6 +728,33 @@ export const agentApi = createApi({
         }
       },
     }),
+    createAgentPaymentLink: builder.mutation<AgentPaymentLink, {
+      schemeId: string;
+      amountPaise: number;
+      targetCycle?: string;
+      expectedPositionVersion?: number;
+      positionVersion?: number;
+      expiresInMinutes?: number;
+    }>({
+      query: (body) => ({ url: "/staff/payment-links", method: "POST", body }),
+      invalidatesTags: (_r, _e, arg) => [{ type: "AgentScheme", id: arg.schemeId }],
+    }),
+    shareAgentPaymentWhatsApp: builder.mutation<{ queued?: boolean; id?: string }, string>({
+      query: (paymentId) => ({ url: `/staff/payments/${paymentId}/share-whatsapp`, method: "POST" }),
+    }),
+    getAgentNotifications: builder.query<AgentNotification[], void>({
+      query: () => "/staff/notifications",
+      transformResponse: (rows: unknown) => asList(rows, (raw) => ({
+        id: idOf(raw),
+        type: String(raw.type ?? "NOTIFICATION"),
+        title: raw.title != null ? String(raw.title) : undefined,
+        body: raw.body != null ? String(raw.body) : raw.message != null ? String(raw.message) : undefined,
+        status: raw.status != null ? String(raw.status) : undefined,
+        createdAt: String(raw.createdAt ?? new Date().toISOString()),
+        customerId: raw.customerId != null ? String(raw.customerId) : undefined,
+        schemeId: raw.schemeId != null ? String(raw.schemeId) : undefined,
+      })),
+    }),
     getAgentPayments: builder.query<AgentPayment[], { from?: string; to?: string; cursor?: string; limit?: number }>({
       query: (params) => ({ url: "/staff/payments", params: { sort: "paidAt:desc", ...params } }),
       transformResponse: (rows: unknown) => asList(rows, normalizePayment),
@@ -732,15 +810,28 @@ export const agentApi = createApi({
     getAgentReport: builder.query<AgentReport, { from: string; to: string }>({
       queryFn: async (arg, api, extra, baseQuery) => {
         if (env.useMocks) return baseQuery({ url: "/staff/report", params: arg }) as Promise<{ data: AgentReport }>;
-        const result = await baseQuery({ url: "/staff/payments", params: { ...arg, includeSummary: true, limit: 100 } });
-        if (result.error) return { error: result.error };
-        const raw = result.data as Record<string, unknown> | AgentPayment[];
-        if (!Array.isArray(raw) && raw.days) return { data: raw as unknown as AgentReport };
-        const rows = (Array.isArray(raw) ? raw : []) as AgentPayment[];
+        const summaryResult = await baseQuery({ url: "/staff/collections/summary", params: arg });
+        if (summaryResult.error) return { error: summaryResult.error };
+        const summary = summaryResult.data as AgentCollectionSummary;
+        const rows: AgentPayment[] = [];
+        const seenCursors = new Set<string>();
+        let cursor: string | undefined;
+        for (let page = 0; page < 100; page += 1) {
+          const result = await baseQuery({ url: "/staff/payments", params: { ...arg, limit: 100, ...(cursor ? { cursor } : {}) } });
+          if (result.error) return { error: result.error };
+          const pageRows = Array.isArray(result.data) ? result.data as Record<string, unknown>[] : [];
+          rows.push(...pageRows.map(normalizePayment));
+          const pageMeta = result.meta as Envelope<unknown>["meta"] | undefined;
+          const next = pageMeta?.hasMore && pageMeta.nextCursor ? pageMeta.nextCursor : undefined;
+          if (!next || seenCursors.has(next)) break;
+          seenCursors.add(next);
+          cursor = next;
+        }
         const byDay = new Map<string, { amountPaise: number; count: number; goldWeightMg: number }>();
         rows.forEach((row) => { const date = row.paidAt.slice(0, 10); const item = byDay.get(date) ?? { amountPaise: 0, count: 0, goldWeightMg: 0 }; item.amountPaise += row.amountPaise; item.count += 1; item.goldWeightMg += row.weightMg ?? 0; byDay.set(date, item); });
-        const amountPaise = rows.reduce((sum, row) => sum + row.amountPaise, 0);
-        return { data: { amountPaise, count: rows.length, goldWeightMg: rows.reduce((sum, row) => sum + (row.weightMg ?? 0), 0), averageCollectionPaise: rows.length ? Math.round(amountPaise / rows.length) : 0, days: [...byDay.entries()].map(([date, item]) => ({ date, ...item })).sort((a, b) => a.date.localeCompare(b.date)) } };
+        const amountPaise = Number(summary.amountPaise ?? 0);
+        const count = Number(summary.count ?? 0);
+        return { data: { amountPaise, count, goldWeightMg: rows.reduce((sum, row) => sum + (row.weightMg ?? 0), 0), averageCollectionPaise: count ? Math.round(amountPaise / count) : 0, days: [...byDay.entries()].map(([date, item]) => ({ date, ...item })).sort((a, b) => a.date.localeCompare(b.date)) } };
       },
       providesTags: ["AgentPayments"],
     }),
@@ -764,6 +855,9 @@ export const {
   useGetAgentPayableRangeQuery,
   useGetAgentPassbookQuery,
   useRecordAgentPaymentMutation,
+  useCreateAgentPaymentLinkMutation,
+  useShareAgentPaymentWhatsAppMutation,
+  useGetAgentNotificationsQuery,
   useGetAgentPaymentsQuery,
   useGetAgentPaymentQuery,
   useGetAgentPaymentsPageQuery,

@@ -322,7 +322,7 @@ export interface Grievance {
   customer: string;
   subject: string;
   category: string;
-  priority: "LOW" | "MEDIUM" | "HIGH" | "URGENT";
+  priority: "LOW" | "NORMAL" | "HIGH" | "URGENT";
   status: "OPEN" | "IN_PROGRESS" | "WAITING_CUSTOMER" | "RESOLVED";
   assignee: string;
   createdAt: string;

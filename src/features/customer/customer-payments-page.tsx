@@ -67,7 +67,7 @@ function displaySchemeNumber(schemeNumber: string) {
 function paidThisYear(items: PaymentListItem[]) {
   const year = new Date().getFullYear();
   const rows = items.filter((p) => {
-    if (p.status !== "SUCCESS") return false;
+    if (p.status !== "SUCCESS" && p.status !== "PARTIALLY_REFUNDED") return false;
     const when = new Date(p.paidAt ?? p.createdAt);
     return when.getFullYear() === year;
   });
@@ -107,13 +107,15 @@ function ChannelMark({ channel }: { channel: PaymentListItem["channel"] }) {
 function channelDisplayName(payment: PaymentListItem) {
   if (payment.channel === "PHONEPE") return "PhonePe";
   if (payment.channel === "UPI") return "UPI";
+  if (payment.channel === "CARD") return "Card / POS";
   if (payment.channel === "CASH") return payment.recordedByLabel ? `Cash · ${payment.recordedByLabel}` : "Cash";
   if (payment.channel === "BANK_TRANSFER") return "Bank transfer";
-  return payment.channelLabel ?? payment.channel.replaceAll("_", " ");
+  return payment.channelLabel ?? "Payment";
 }
 
 function StatusPill({ payment }: { payment: PaymentListItem }) {
   const isPaid = payment.status === "SUCCESS";
+  const isPartiallyRefunded = payment.status === "PARTIALLY_REFUNDED";
   const isPending = payment.status === "PENDING";
   const isFailed = payment.status === "FAILED" || payment.status === "REVERSED";
   const label = isPaid
@@ -122,15 +124,18 @@ function StatusPill({ payment }: { payment: PaymentListItem }) {
       ? "Pending"
       : isFailed
         ? "Failed"
-        : (payment.statusLabel ?? payment.status);
+        : isPartiallyRefunded
+          ? "Partially refunded"
+          : (payment.statusLabel ?? payment.status);
   return (
     <span
       className={cn(
         "rounded-full px-2.5 py-0.5 text-[10px] font-extrabold uppercase tracking-wide",
         isPaid && "bg-[#eafbf3] text-[#0b9860]",
         isPending && "bg-amber-50 text-amber-800",
+        isPartiallyRefunded && "bg-amber-50 text-amber-800",
         isFailed && "bg-[#fdecec] text-[#c62828]",
-        !isPaid && !isPending && !isFailed && "bg-red-50 text-red-700",
+        !isPaid && !isPending && !isFailed && !isPartiallyRefunded && "bg-red-50 text-red-700",
       )}
     >
       {label}
@@ -199,7 +204,7 @@ export function CustomerPaymentsPage() {
   const [mainTab, setMainTab] = useState<MainTab>("payments");
   const [filter, setFilter] = useState<PayFilter>("ALL");
 
-  const items = data ?? [];
+  const items = useMemo(() => data ?? [], [data]);
   const yearSummary = useMemo(() => paidThisYear(items), [items]);
 
   const filtered = useMemo(() => {
@@ -208,9 +213,9 @@ export function CustomerPaymentsPage() {
         new Date(b.paidAt ?? b.createdAt).getTime() - new Date(a.paidAt ?? a.createdAt).getTime(),
     );
     if (mainTab === "passbook") {
-      rows = rows.filter((p) => p.status === "SUCCESS");
+      rows = rows.filter((p) => p.status === "SUCCESS" || p.status === "PARTIALLY_REFUNDED");
     } else if (filter === "PAID") {
-      rows = rows.filter((p) => p.status === "SUCCESS");
+      rows = rows.filter((p) => p.status === "SUCCESS" || p.status === "PARTIALLY_REFUNDED");
     } else if (filter === "PENDING") {
       rows = rows.filter((p) => p.status === "PENDING");
     }
@@ -241,7 +246,7 @@ export function CustomerPaymentsPage() {
         {(
           [
             { key: "payments", label: "Payments" },
-            { key: "passbook", label: "Passbook" },
+            { key: "passbook", label: "Contributions" },
           ] as const
         ).map((tab) => (
           <button
@@ -313,7 +318,7 @@ export function CustomerPaymentsPage() {
             <p className="font-black text-[#171722]">No entries yet</p>
             <p className="mt-2 text-sm text-[#777280]">
               {mainTab === "passbook"
-                ? "Verified contributions appear in your passbook after payment succeeds."
+                ? "Retained contributions appear here after payment confirmation. Open a scheme for its full passbook."
                 : "Contributions appear here once recorded."}
             </p>
           </div>
@@ -394,6 +399,8 @@ export function CustomerPaymentDetailPage({ id }: { id: string }) {
   const when = payment.paidAt ?? payment.createdAt;
   const whenLabel = formatPaymentDateTime(when);
   const isPaid = payment.status === "SUCCESS";
+  const isPartiallyRefunded = payment.status === "PARTIALLY_REFUNDED";
+  const isRetained = isPaid || isPartiallyRefunded;
   const hasGold = paymentHasGoldAccrual(payment) && payment.goldAccrual;
 
   const onDownload = async () => {
@@ -405,7 +412,11 @@ export function CustomerPaymentDetailPage({ id }: { id: string }) {
     }
   };
 
-  const statusWord = isPaid ? "PAID" : (payment.statusLabel ?? payment.status).toUpperCase();
+  const statusWord = isPaid
+    ? "PAID"
+    : isPartiallyRefunded
+      ? "PARTIALLY REFUNDED"
+      : (payment.statusLabel ?? payment.status).toUpperCase();
   const gold = payment.goldAccrual;
   const showGold =
     hasGold || payment.valueBasis === "GOLD_WEIGHT" || /gold/i.test(payment.schemeName);
@@ -435,13 +446,13 @@ export function CustomerPaymentDetailPage({ id }: { id: string }) {
       <div
         className={cn(
           "mt-4 flex items-center gap-4 rounded-2xl px-4 py-4",
-          isPaid ? "bg-[#ecf8f1]" : payment.status === "PENDING" ? "bg-amber-50" : "bg-[#fdecec]",
+          isPaid ? "bg-[#ecf8f1]" : isPartiallyRefunded || payment.status === "PENDING" ? "bg-amber-50" : "bg-[#fdecec]",
         )}
       >
         <span
           className={cn(
             "grid size-14 shrink-0 place-items-center rounded-full",
-            isPaid ? "bg-[#0b9860] text-white" : payment.status === "PENDING" ? "bg-amber-500 text-white" : "bg-[#c62828] text-white",
+            isPaid ? "bg-[#0b9860] text-white" : isPartiallyRefunded || payment.status === "PENDING" ? "bg-amber-500 text-white" : "bg-[#c62828] text-white",
           )}
         >
           <Check className="size-8" strokeWidth={3} />
@@ -450,7 +461,7 @@ export function CustomerPaymentDetailPage({ id }: { id: string }) {
           <p
             className={cn(
               "text-[11px] font-extrabold tracking-[0.14em]",
-              isPaid ? "text-[#0b9860]" : payment.status === "PENDING" ? "text-amber-800" : "text-[#c62828]",
+              isPaid ? "text-[#0b9860]" : isPartiallyRefunded || payment.status === "PENDING" ? "text-amber-800" : "text-[#c62828]",
             )}
           >
             {statusWord}
@@ -476,6 +487,13 @@ export function CustomerPaymentDetailPage({ id }: { id: string }) {
           }
         />
         <DetailRow label="Transaction ID" value={transactionLabel} />
+        {isPartiallyRefunded ? (
+          <>
+            <DetailRow label="Original payment" value={payment.grossAmount?.amountDisplay ?? payment.amount.amountDisplay} />
+            <DetailRow label="Refunded" value={payment.refundedAmount?.amountDisplay ?? "—"} />
+            <DetailRow label="Retained in scheme" value={payment.netAmount?.amountDisplay ?? payment.amount.amountDisplay} />
+          </>
+        ) : null}
       </section>
 
       {showGold ? (
@@ -497,7 +515,7 @@ export function CustomerPaymentDetailPage({ id }: { id: string }) {
         </section>
       ) : null}
 
-      {isPaid ? (
+      {isRetained ? (
         <div className="mt-3 flex items-center gap-2 rounded-xl bg-[#fff1e8] px-3.5 py-2.5 text-xs font-semibold text-[var(--customer-primary,#730321)]">
           <Lock className="size-3.5 shrink-0" strokeWidth={2.25} />
           <p>This passbook entry cannot be edited.</p>
@@ -506,7 +524,7 @@ export function CustomerPaymentDetailPage({ id }: { id: string }) {
 
       <button
         type="button"
-        disabled={downloading}
+        disabled={downloading || !canDownload}
         onClick={onDownload}
         className={cn(
           "mt-3 flex h-[3.25rem] w-full items-center justify-center gap-2 rounded-2xl border bg-white text-base font-bold text-[var(--customer-primary,#730321)] transition active:scale-[0.99]",
@@ -524,7 +542,7 @@ export function CustomerPaymentDetailPage({ id }: { id: string }) {
         )}
       </button>
 
-      {isPaid ? (
+      {isRetained ? (
         <section className={cn("mt-4 p-4", paymentDetailCardClass)}>
           <TimelineStep label="Payment received" time={whenLabel} done />
           <TimelineStep label="Verified" time={formatPaymentDateTimeOffset(when, 1)} done last />

@@ -15,6 +15,7 @@ const HandoverDetail = dynamic(() => import("@/src/features/agent/agent-history-
 const CollectionDetail = dynamic(() => import("@/src/features/agent/agent-history-pages").then((module) => module.AgentPaymentDetailPage), options);
 const Report = dynamic(() => import("@/src/features/agent/agent-report-page").then((module) => module.AgentReportPage), options);
 const Account = dynamic(() => import("@/src/features/agent/agent-account-page").then((module) => module.AgentAccountPage), options);
+const Notifications = dynamic(() => import("@/src/features/agent/agent-notifications-page").then((module) => module.AgentNotificationsPage), options);
 
 export function AgentRouter({ slug }: { slug: string[] }) {
   const [, section, id, detail] = slug;
@@ -28,5 +29,6 @@ export function AgentRouter({ slug }: { slug: string[] }) {
   if (section === "handover") return <Handover />;
   if (section === "report") return <Report />;
   if (section === "account") return <Account />;
+  if (section === "notifications") return <Notifications />;
   return <Dashboard />;
 }

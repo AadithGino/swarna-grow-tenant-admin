@@ -84,19 +84,24 @@ export function HandoverDetailDialog({
                   <section>
                     <DetailRecordTabsHeader label="Activity" />
                     <ol className="space-y-0 rounded-xl border border-[#eaded9] bg-[#faf7f5] p-4">
-                      {d.timeline.map((ev, i) => (
+                      {(d.timeline ?? []).length === 0 ? (
+                        <li className="px-1 py-2 text-sm text-muted-foreground">
+                          No activity recorded yet.
+                        </li>
+                      ) : (
+                        (d.timeline ?? []).map((ev, i) => (
                         <li
                           key={i}
                           className={cn(
                             "relative flex gap-3 pb-4 last:pb-0",
-                            i < d.timeline.length - 1 &&
+                            i < (d.timeline?.length ?? 0) - 1 &&
                               "border-b border-[#eaded9]/80 mb-4 last:mb-0 last:border-0",
                           )}
                         >
                           <span
                             className={cn(
                               "mt-1 flex size-8 shrink-0 items-center justify-center rounded-full text-xs font-bold",
-                              i === d.timeline.length - 1
+                              i === (d.timeline?.length ?? 0) - 1
                                 ? "bg-[#730321] text-white"
                                 : "bg-white text-[#730321] ring-1 ring-[#eaded9]",
                             )}
@@ -120,7 +125,8 @@ export function HandoverDetailDialog({
                             )}
                           </div>
                         </li>
-                      ))}
+                        ))
+                      )}
                     </ol>
                   </section>
                   {d.coversFrom && (
@@ -138,7 +144,12 @@ export function HandoverDetailDialog({
                   <section>
                     <DetailRecordTabsHeader label="Cash receipts" />
                     <ul className="max-h-56 overflow-y-auto rounded-xl border border-[#eaded9] bg-white">
-                      {d.paymentLines.map((p, i) => (
+                      {(d.paymentLines ?? []).length === 0 ? (
+                        <li className="px-4 py-3 text-sm text-muted-foreground">
+                          No linked cash receipts on this handover.
+                        </li>
+                      ) : (
+                        (d.paymentLines ?? []).map((p, i) => (
                         <li
                           key={p.id}
                           className={cn(
@@ -163,13 +174,14 @@ export function HandoverDetailDialog({
                             </p>
                           </div>
                         </li>
-                      ))}
+                        ))
+                      )}
                     </ul>
                     <p className="mt-2 text-xs text-muted-foreground">
-                      {d.paymentLines.length} receipt
-                      {d.paymentLines.length === 1 ? "" : "s"} ·{" "}
+                      {(d.paymentLines ?? []).length} receipt
+                      {(d.paymentLines ?? []).length === 1 ? "" : "s"} ·{" "}
                       {money(
-                        d.paymentLines.reduce((s, p) => s + p.amount, 0),
+                        (d.paymentLines ?? []).reduce((s, p) => s + p.amount, 0),
                       )}{" "}
                       total
                     </p>

@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Eye, EyeOff, LockKeyhole, ShieldCheck } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { BrandMark } from "@/src/components/brand/brand-mark";
@@ -19,7 +19,13 @@ import {
   validatePlatformLoginForm,
   sanitizePasswordPinInput,
 } from "@/src/lib/platform-login-form-validation";
-import { persistPlatformTokens, TOKEN_KEYS } from "@/src/lib/auth-token-storage";
+import {
+  hasPlatformSession,
+  persistPlatformTokens,
+  TOKEN_KEYS,
+} from "@/src/lib/auth-token-storage";
+import { safeAuthReturnPath } from "@/src/lib/auth-return-path";
+import { useClientMounted } from "@/src/hooks/use-client-mounted";
 import { usePlatformLoginMutation } from "@/src/store/api/platform-api";
 
 function mergeFieldMessage(
@@ -31,6 +37,8 @@ function mergeFieldMessage(
 
 export function PlatformLoginPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const mounted = useClientMounted();
   const [login, { isLoading }] = usePlatformLoginMutation();
   const [email, setEmail] = useState(
     env.useMocks ? "ops@platform.com" : "",
@@ -44,6 +52,18 @@ export function PlatformLoginPage() {
   const [touched, setTouched] = useState<{ email?: boolean; password?: boolean }>(
     {},
   );
+
+  const postLoginPath = safeAuthReturnPath(
+    searchParams.get("next"),
+    "/platform",
+  );
+
+  useEffect(() => {
+    if (!mounted) return;
+    if (hasPlatformSession()) {
+      router.replace(postLoginPath);
+    }
+  }, [mounted, router, postLoginPath]);
 
   const liveEmailError = useMemo(
     () => livePlatformLoginEmailError(email),
@@ -81,7 +101,7 @@ export function PlatformLoginPage() {
       }).unwrap();
       persistPlatformTokens(result.accessToken, result.refreshToken);
       localStorage.setItem(TOKEN_KEYS.platform.user, JSON.stringify(result.user));
-      router.push("/platform");
+      router.push(postLoginPath);
     } catch (e) {
       setSubmitError(e);
       handleFormApiError(e, {

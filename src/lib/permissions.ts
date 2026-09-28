@@ -4,7 +4,10 @@ export function hasPermission(
   user: PortalUser | undefined,
   permission: string,
 ): boolean {
-  if (!user?.permissions?.length) return true;
+  // No signed-in user → deny (do not fail open for anonymous shells).
+  if (!user) return false;
+  // Empty permission list = unrestricted staff role (e.g. owner).
+  if (!user.permissions?.length) return true;
   if (user.permissions.includes("*")) return true;
   return user.permissions.includes(permission);
 }

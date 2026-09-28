@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Eye, EyeOff, LockKeyhole, Phone } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -27,7 +27,10 @@ import { FieldLabel } from "@/src/components/common/page-parts";
 import { env } from "@/src/config/env";
 import { MOCK_OWNER_SESSION } from "@/src/config/mock-session";
 import { portalSessionFromLogin } from "@/src/lib/auth-session";
+import { safeAuthReturnPath } from "@/src/lib/auth-return-path";
 import { getOrCreateDeviceId } from "@/src/lib/device-id";
+import { realmHasStoredSession } from "@/src/lib/auth-token-storage";
+import { useClientMounted } from "@/src/hooks/use-client-mounted";
 import {
   adminApi,
   useForgotPasswordMutation,
@@ -38,7 +41,7 @@ import {
 } from "@/src/store/api/admin-api";
 import { apiErrorMessage, parseApiError } from "@/src/lib/api-error";
 import { cn } from "@/lib/utils";
-import { useAppDispatch } from "@/src/store/hooks";
+import { useAppDispatch, useAppSelector } from "@/src/store/hooks";
 import { setSession } from "@/src/store/slices/session-slice";
 import {
   passwordPinReady,
@@ -81,7 +84,11 @@ function FieldError({ message }: { message?: string }) {
 
 export function LoginPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const dispatch = useAppDispatch();
+  const mounted = useClientMounted();
+  const hydrated = useAppSelector((s) => s.session.hydrated);
+  const session = useAppSelector((s) => s.session.session);
   const [login, loginState] = useLoginMutation();
   const [forgotPassword, forgotState] = useForgotPasswordMutation();
   const [verifyResetOtp, verifyOtpState] = useVerifyPasswordResetOtpMutation();
@@ -113,12 +120,33 @@ export function LoginPage() {
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
 
+  const postLoginPath = safeAuthReturnPath(searchParams.get("next"), "/");
+
+  useEffect(() => {
+    if (!mounted || !hydrated) return;
+    if (session && realmHasStoredSession("tenant")) {
+      router.replace(postLoginPath);
+    }
+  }, [mounted, hydrated, session, router, postLoginPath]);
+
+  if (
+    !mounted ||
+    !hydrated ||
+    (session && realmHasStoredSession("tenant"))
+  ) {
+    return (
+      <div className="grid min-h-screen place-items-center bg-[#fbf7f3]">
+        <div className="size-10 animate-spin rounded-full border-4 border-[#ecd8dd] border-t-[#730321]" />
+      </div>
+    );
+  }
+
   async function completeLogin(
     sessionInput: Parameters<typeof portalSessionFromLogin>[0],
     { redirect = true }: { redirect?: boolean } = {},
   ) {
-    const session = portalSessionFromLogin(sessionInput);
-    dispatch(setSession(session));
+    const nextSession = portalSessionFromLogin(sessionInput);
+    dispatch(setSession(nextSession));
 
     if (!env.useMocks) {
       try {
@@ -131,20 +159,20 @@ export function LoginPage() {
           profile?.displayName ??
           profile?.businessName ??
           profile?.name ??
-          session.tenant.displayName;
+          nextSession.tenant.displayName;
         const code =
           profile?.tenantCode ??
           profile?.code ??
-          session.tenant.tenantCode;
+          nextSession.tenant.tenantCode;
         if (
-          displayName !== session.tenant.displayName ||
-          code !== session.tenant.tenantCode
+          displayName !== nextSession.tenant.displayName ||
+          code !== nextSession.tenant.tenantCode
         ) {
           dispatch(
             setSession({
-              ...session,
+              ...nextSession,
               tenant: {
-                ...session.tenant,
+                ...nextSession.tenant,
                 displayName,
                 tenantCode: code,
               },
@@ -156,7 +184,7 @@ export function LoginPage() {
       }
     }
 
-    if (redirect) router.push("/");
+    if (redirect) router.push(postLoginPath);
   }
 
   return (
@@ -205,7 +233,7 @@ export function LoginPage() {
                 if (env.useMocks) {
                   await new Promise((resolve) => setTimeout(resolve, 650));
                   dispatch(setSession(MOCK_OWNER_SESSION));
-                  router.push("/");
+                  router.push(postLoginPath);
                   return;
                 }
 
@@ -654,7 +682,7 @@ export function LoginPage() {
                   await setPassword({ password: newPassword }).unwrap();
                   toast.success("Password set");
                   setMustSetPasswordOpen(false);
-                  router.push("/");
+                  router.push(postLoginPath);
                 } catch (err) {
                   toast.error(apiErrorMessage(err, "Could not set password"));
                 }

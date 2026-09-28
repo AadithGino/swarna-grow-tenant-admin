@@ -1,15 +1,19 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft, ArrowRight, CheckCircle2, LoaderCircle, LockKeyhole, Smartphone } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useLoginCustomerPasswordMutation, useRequestCustomerOtpMutation, useVerifyCustomerOtpMutation } from "@/src/store/api/customer-api";
-import { persistCustomerTokens } from "@/src/lib/auth-token-storage";
+import {
+  persistCustomerTokens,
+  realmHasStoredSession,
+} from "@/src/lib/auth-token-storage";
+import { safeAuthReturnPath } from "@/src/lib/auth-return-path";
 import { customerSignedIn } from "@/src/store/slices/customer-session-slice";
-import { useAppDispatch } from "@/src/store/hooks";
+import { useAppDispatch, useAppSelector } from "@/src/store/hooks";
 import { toast } from "sonner";
 import { useCustomerTenant } from "@/src/components/customer/customer-tenant-context";
 import { customerPath } from "@/src/lib/customer-tenant";
@@ -21,8 +25,10 @@ type AuthMode = "login" | "signup";
 
 export function CustomerLoginPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const dispatch = useAppDispatch();
   const { tenantCode, tenantSlug, tenant, loading, notFound } = useCustomerTenant();
+  const authenticated = useAppSelector((s) => s.customerSession.authenticated);
   const [mounted, setMounted] = useState(false);
   const [mode, setMode] = useState<AuthMode>("login");
   const [step, setStep] = useState<Step>("mobile");
@@ -39,9 +45,21 @@ export function CustomerLoginPage() {
   const kycPortalEnabled = portalCaps.kycMandatory;
   const passwordOnlyLogin = portalCaps.customerLoginMode === "PASSWORD_ONLY";
 
+  const homePath = safeAuthReturnPath(
+    searchParams.get("next"),
+    customerPath(tenantSlug),
+  );
+
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  useEffect(() => {
+    if (!mounted) return;
+    if (authenticated || realmHasStoredSession("customer")) {
+      router.replace(homePath);
+    }
+  }, [mounted, authenticated, router, homePath]);
 
   useEffect(() => {
     if (!seconds) return;

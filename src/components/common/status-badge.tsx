@@ -57,9 +57,11 @@ function formatStatusLabel(status: string) {
 
 export function StatusBadge({
   status,
+  label,
   className,
 }: {
   status?: string | null;
+  label?: string;
   className?: string;
 }) {
   const key = status?.trim() ? status : "UNKNOWN";
@@ -72,7 +74,7 @@ export function StatusBadge({
         className,
       )}
     >
-      {formatStatusLabel(key)}
+      {label ?? formatStatusLabel(key)}
     </Badge>
   );
 }

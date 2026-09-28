@@ -98,43 +98,51 @@ export function EnrollmentsPage() {
         redeemedOrClosedEnrollments?: number;
       }
     | undefined;
-  const metric = (key: string) =>
-    analyticsSummary.find((m) => m.key === key)?.value;
+  const asCount = (value: unknown, fallback = 0): number =>
+    typeof value === "number" && Number.isFinite(value) ? value : fallback;
+  const metric = (key: string): number | undefined => {
+    const value = analyticsSummary.find((m) => m.key === key)?.value;
+    return typeof value === "number" && Number.isFinite(value)
+      ? value
+      : undefined;
+  };
 
-  const lockedCount =
-    typeof analyticsTotals?.lockedEnrollments === "number"
-      ? analyticsTotals.lockedEnrollments
-      : summary.locked ?? 0;
-  const defaultedCount =
-    typeof analyticsTotals?.defaultedEnrollments === "number"
-      ? analyticsTotals.defaultedEnrollments
-      : typeof metric("DEFAULTED") === "number"
-        ? metric("DEFAULTED")
-        : summary.defaulted ?? 0;
-  const activeAndLockedCount =
-    typeof analyticsTotals?.activeAndLockedEnrollments === "number"
-      ? analyticsTotals.activeAndLockedEnrollments
-      : typeof analyticsTotals?.activeEnrollments === "number"
-        ? analyticsTotals.activeEnrollments
-        : typeof metric("ACTIVE_ENROLLMENTS") === "number"
-          ? metric("ACTIVE_ENROLLMENTS")
-          : (summary as { activeAndLocked?: number }).activeAndLocked ??
-            summary.active;
-  const openEnrollmentCount =
-    typeof analyticsTotals?.openEnrollments === "number"
-      ? analyticsTotals.openEnrollments
-      : (summary as { open?: number }).open ??
-        activeAndLockedCount + defaultedCount;
-  const maturedCount =
-    typeof analyticsTotals?.maturedEnrollments === "number"
-      ? analyticsTotals.maturedEnrollments
-      : typeof metric("MATURED") === "number"
-        ? metric("MATURED")
-        : summary.matured;
-  const redeemedCount =
-    typeof analyticsTotals?.redeemedOrClosedEnrollments === "number"
-      ? analyticsTotals.redeemedOrClosedEnrollments
-      : summary.redeemed ?? 0;
+  const lockedCount = asCount(
+    analyticsTotals?.lockedEnrollments,
+    asCount(summary.locked),
+  );
+  const defaultedCount = asCount(
+    analyticsTotals?.defaultedEnrollments,
+    asCount(metric("DEFAULTED"), asCount(summary.defaulted)),
+  );
+  const activeAndLockedCount = asCount(
+    analyticsTotals?.activeAndLockedEnrollments,
+    asCount(
+      analyticsTotals?.activeEnrollments,
+      asCount(
+        metric("ACTIVE_ENROLLMENTS"),
+        asCount(
+          (summary as { activeAndLocked?: number }).activeAndLocked,
+          asCount(summary.active),
+        ),
+      ),
+    ),
+  );
+  const openEnrollmentCount = asCount(
+    analyticsTotals?.openEnrollments,
+    asCount(
+      (summary as { open?: number }).open,
+      activeAndLockedCount + defaultedCount,
+    ),
+  );
+  const maturedCount = asCount(
+    analyticsTotals?.maturedEnrollments,
+    asCount(metric("MATURED"), asCount(summary.matured)),
+  );
+  const redeemedCount = asCount(
+    analyticsTotals?.redeemedOrClosedEnrollments,
+    asCount(summary.redeemed),
+  );
 
   return (
     <>

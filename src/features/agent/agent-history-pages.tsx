@@ -87,6 +87,11 @@ function AgentPaymentHistoryRow({ payment }: { payment: AgentPayment }) {
             </div>
             <div className="text-right">
               <p className="text-base font-black">{formatAgentMoney(payment.amountPaise)}</p>
+              {(payment.refundedAmountPaise ?? 0) > 0 ? (
+                <p className="mt-0.5 text-[0.68rem] font-semibold text-amber-700">
+                  {formatAgentMoney(payment.refundedAmountPaise ?? 0)} refunded
+                </p>
+              ) : null}
               {payment.weightMg ? (
                 <p className="mt-0.5 text-xs font-black text-[#91630c]">{formatAgentWeight(payment.weightMg)}</p>
               ) : null}
@@ -382,6 +387,13 @@ export function AgentPaymentDetailPage({ id }: { id: string }) {
             {item.targetCycle ? <DetailRow label="Cycle" value={item.targetCycle} /> : null}
             {item.branch?.name ? <DetailRow label="Branch" value={item.branch.name} /> : null}
             {collectorName ? <DetailRow label="Recorded by" value={collectorName} /> : null}
+            {(item.refundedAmountPaise ?? 0) > 0 ? (
+              <>
+                <DetailRow label="Original collection" value={formatAgentMoney(item.grossAmountPaise ?? item.amountPaise)} />
+                <DetailRow label="Refunded" value={formatAgentMoney(item.refundedAmountPaise ?? 0)} />
+                <DetailRow label="Net retained" value={formatAgentMoney(item.netAmountPaise ?? item.amountPaise)} />
+              </>
+            ) : null}
           </div>
           {gold && (gold.weightMg > 0 || gold.ratePerGramPaise > 0) ? (
             <div className="rounded-2xl border border-[#eddfc0] bg-[#fff9e9] p-4">

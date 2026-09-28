@@ -77,6 +77,9 @@ export type TenantBranding = {
   supportNumber: string;
   city: string;
   kycMandatory?: boolean;
+  redemptionKycRequired?: boolean;
+  selfKycEnabled?: boolean;
+  kycAllowedTypes?: string[];
   customerSelfRegistration?: boolean;
   customerSelfEnrol?: boolean;
   multiScheme?: boolean;
@@ -167,6 +170,10 @@ export type PayableRange = {
   advancePaymentAllowed?: boolean;
   maxAdvanceInstallments?: number | null;
   partialPaymentAllowed?: boolean;
+  allowedAmountsPaise?: number[] | null;
+  reservedPaise?: number;
+  expectedPositionVersion?: number;
+  reservationExpiresAt?: string | null;
 };
 
 export type CustomerSchemeDetail = SchemeCard & {
@@ -249,7 +256,13 @@ export type SchemePlan = {
 export type PaymentListItem = {
   id: string;
   amount: MoneyRef;
-  status: "PENDING" | "SUCCESS" | "FAILED" | "REVERSED" | "UNALLOCATED_PENDING_REVIEW";
+  grossAmount?: MoneyRef;
+  refundedAmount?: MoneyRef;
+  netAmount?: MoneyRef;
+  grossAmountPaise?: number;
+  refundedAmountPaise?: number;
+  netAmountPaise?: number;
+  status: "PENDING" | "SUCCESS" | "PARTIALLY_REFUNDED" | "FAILED" | "REVERSED" | "UNALLOCATED_PENDING_REVIEW";
   statusLabel?: string;
   paidAt?: string;
   createdAt: string;
@@ -258,7 +271,7 @@ export type PaymentListItem = {
   schemeName: string;
   receiptNumber?: string;
   receiptDownloadPath?: string;
-  channel: "PHONEPE" | "CASH" | "UPI" | "BANK_TRANSFER";
+  channel: "PHONEPE" | "CASH" | "UPI" | "CARD" | "BANK_TRANSFER";
   channelLabel?: string;
   recordedByLabel?: string;
   paymentPattern: "FIXED" | "FLEXIBLE";
@@ -266,6 +279,51 @@ export type PaymentListItem = {
   valueBasis?: "CASH" | "GOLD_WEIGHT";
   goldAccrual?: PaymentGoldAccrual | null;
   transactionId?: string;
+};
+
+export type CustomerPassbookRow = {
+  entryNumber: number;
+  installmentNumber?: number;
+  dueDate?: string;
+  status: string;
+  paidAt?: string;
+  amountDue?: MoneyRef;
+  amountPaid?: MoneyRef;
+  grossAmount?: MoneyRef;
+  refundedAmount?: MoneyRef;
+  netAmount?: MoneyRef;
+  mode?: string;
+  receiptNumber?: string;
+  payment?: { id: string; receiptNumber?: string; paidAt?: string; amountPaid?: MoneyRef } | null;
+  goldAccrual?: PaymentGoldAccrual | null;
+};
+
+export type CustomerPassbook = {
+  scheme: { id: string; schemeNumber: string; displayMode: CustomerDisplayMode };
+  rows: CustomerPassbookRow[];
+  totals: Record<string, MoneyRef | number>;
+};
+
+export type CustomerSettlementPreview = {
+  eligible: boolean;
+  blockers: Array<{ code: string; message: string }>;
+  computation: {
+    lines: Array<{ key: string; label: string; amount: MoneyRef; sign: "+" | "-"; forfeited?: boolean }>;
+    finalValue: MoneyRef;
+    goldWeight?: WeightRef | null;
+  };
+  allowedModes: Array<{ mode: string; label: string; available: boolean; note?: string }>;
+  modePreviews?: Record<string, Record<string, unknown>>;
+  warningText?: string;
+  valuationNote?: string;
+  valuationRatePerGramPaise?: number;
+  valuationRateEffectiveDate?: string;
+  principalPaise: number;
+  benefitPaise: number;
+  penaltyPaise: number;
+  settlementPaise: number;
+  weightMg?: number;
+  mode?: string | null;
 };
 
 export type CustomerPlanRulesSection = {

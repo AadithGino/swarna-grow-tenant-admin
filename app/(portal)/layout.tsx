@@ -20,11 +20,22 @@ function isCustomerPortalPath(pathname: string): boolean {
 }
 
 function isCustomerAuthSurface(pathname: string): boolean {
-  return (
+  if (
     pathname === "/customer/login" ||
     pathname === "/customer/onboarding" ||
     /^\/customer\/[^/]+\/(login|onboarding)\/?$/.test(pathname)
-  );
+  ) {
+    return true;
+  }
+  // Public payment links (tokenised) must not require customer login.
+  if (
+    pathname === "/pay" ||
+    pathname.startsWith("/pay/") ||
+    /^\/customer\/[^/]+\/pay(\/|$)/.test(pathname)
+  ) {
+    return true;
+  }
+  return false;
 }
 
 /** Keeps sidebar + topbar mounted across in-app navigations (see [[...slug]] page). */
@@ -37,6 +48,8 @@ export default function PortalLayout({
   if (pathname === "/login") return children;
   if (pathname === "/platform/login") return children;
   if (pathname === "/agent/login") return children;
+  // Public payment deep links (no tenant/admin session required).
+  if (pathname === "/pay" || pathname.startsWith("/pay/")) return children;
   if (pathname === "/agent" || pathname.startsWith("/agent/")) {
     return <AgentShell>{children}</AgentShell>;
   }

@@ -363,7 +363,7 @@ function GrievanceDetailBody({
                       <SelectValue placeholder="Priority" />
                     </SelectTrigger>
                     <SelectContent>
-                      {["LOW", "MEDIUM", "HIGH", "URGENT"].map((p) => (
+                      {["LOW", "NORMAL", "HIGH", "URGENT"].map((p) => (
                         <SelectItem key={p} value={p}>
                           {p.replace(/_/g, " ")}
                         </SelectItem>

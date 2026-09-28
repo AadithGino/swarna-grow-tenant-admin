@@ -1,16 +1,19 @@
 import type { FetchBaseQueryError } from "@reduxjs/toolkit/query";
 import type { AppDispatch } from "@/src/store";
 import { adminApi } from "@/src/store/api/admin-api";
+import { agentApi } from "@/src/store/api/agent-api";
 import { customerApi } from "@/src/store/api/customer-api";
 import { platformApi } from "@/src/store/api/platform-api";
 import { CUSTOMER_ROUTE_SECTIONS } from "@/src/lib/customer-tenant";
 import { clearPlatformTokens } from "@/src/lib/auth-token-storage";
 import { customerSignedOut } from "@/src/store/slices/customer-session-slice";
+import { clearAgentSession } from "@/src/store/slices/agent-session-slice";
 import { clearSession } from "@/src/store/slices/session-slice";
 
 let tenantLogoutStarted = false;
 let platformLogoutStarted = false;
 let customerLogoutStarted = false;
+let agentLogoutStarted = false;
 
 export function clearPlatformAuthStorage() {
   clearPlatformTokens();
@@ -90,4 +93,17 @@ export function handlePlatformUnauthorized(dispatch: AppDispatch) {
   clearPlatformAuthStorage();
   dispatch(platformApi.util.resetApiState());
   window.location.assign(loginPathWithReturn("/platform/login"));
+}
+
+/** Clear agent session, cache, and redirect to agent login. */
+export function handleAgentUnauthorized(dispatch: AppDispatch) {
+  if (typeof window === "undefined") return;
+  const path = window.location.pathname;
+  if (path === "/agent/login" || path.startsWith("/agent/login/")) return;
+  if (agentLogoutStarted) return;
+  agentLogoutStarted = true;
+
+  dispatch(clearAgentSession());
+  dispatch(agentApi.util.resetApiState());
+  window.location.assign(loginPathWithReturn("/agent/login"));
 }

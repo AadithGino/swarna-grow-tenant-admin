@@ -12,6 +12,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { uploadFileViaPresign } from "@/src/lib/upload-via-presign";
 import {
   useCompleteCustomerUploadMutation,
@@ -28,6 +29,7 @@ type Props = {
   }) => Promise<void>;
   submitting?: boolean;
   disabled?: boolean;
+  allowedTypes?: string[];
 };
 
 function IdCardGraphic() {
@@ -89,16 +91,20 @@ function DocumentUploadCard({
   );
 }
 
-export function CustomerKycVerificationForm({ onSubmit, submitting, disabled }: Props) {
+export function CustomerKycVerificationForm({ onSubmit, submitting, disabled, allowedTypes = ["AADHAAR", "PAN"] }: Props) {
   const [presignUpload] = usePresignCustomerUploadMutation();
   const [completeUpload] = useCompleteCustomerUploadMutation();
   const [panUploadId, setPanUploadId] = useState<string | null>(null);
   const [aadhaarFrontUploadId, setAadhaarFrontUploadId] = useState<string | null>(null);
   const [aadhaarBackUploadId, setAadhaarBackUploadId] = useState<string | null>(null);
   const [uploadBusy, setUploadBusy] = useState(false);
+  const supportedTypes = allowedTypes.filter((type) => type === "AADHAAR" || type === "PAN");
+  const [selectedType, setSelectedType] = useState(supportedTypes[0] ?? "AADHAAR");
 
   const busy = submitting || uploadBusy || disabled;
-  const ready = Boolean(panUploadId && aadhaarFrontUploadId);
+  const ready = selectedType === "PAN"
+    ? Boolean(panUploadId)
+    : Boolean(aadhaarFrontUploadId && aadhaarBackUploadId);
 
   const handleUpload = async (file: File, target: "pan" | "aadhaarFront" | "aadhaarBack") => {
     setUploadBusy(true);
@@ -123,28 +129,51 @@ export function CustomerKycVerificationForm({ onSubmit, submitting, disabled }: 
   const submit = async () => {
     if (!ready) return;
     await onSubmit({
-      type: "AADHAAR",
-      frontUploadId: aadhaarFrontUploadId ?? undefined,
-      backUploadId: aadhaarBackUploadId ?? aadhaarFrontUploadId ?? undefined,
+      type: selectedType,
+      frontUploadId: selectedType === "PAN" ? panUploadId ?? undefined : aadhaarFrontUploadId ?? undefined,
+      backUploadId: selectedType === "AADHAAR" ? aadhaarBackUploadId ?? undefined : undefined,
     });
   };
 
   return (
     <div className="space-y-4">
-      <DocumentUploadCard
-        title="PAN card"
-        hint="Upload a clear photo of your PAN card (front side)."
-        uploadId={panUploadId}
-        busy={busy}
-        onUpload={(file) => void handleUpload(file, "pan")}
-      />
-      <DocumentUploadCard
-        title="Aadhaar card"
-        hint="Upload a clear photo of your Aadhaar card (front side)."
-        uploadId={aadhaarFrontUploadId}
-        busy={busy}
-        onUpload={(file) => void handleUpload(file, "aadhaarFront")}
-      />
+      {supportedTypes.length > 1 ? (
+        <div>
+          <label className="text-xs font-bold text-[#706b77]">Identity document</label>
+          <Select value={selectedType} onValueChange={(value) => setSelectedType(value as "AADHAAR" | "PAN")} disabled={busy}>
+            <SelectTrigger className="mt-2 h-11 rounded-xl bg-white"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {supportedTypes.map((type) => <SelectItem key={type} value={type}>{type === "AADHAAR" ? "Aadhaar" : "PAN"}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+      ) : null}
+      {selectedType === "PAN" ? (
+        <DocumentUploadCard
+          title="PAN card"
+          hint="Upload a clear image or PDF of your PAN card."
+          uploadId={panUploadId}
+          busy={busy}
+          onUpload={(file) => void handleUpload(file, "pan")}
+        />
+      ) : (
+        <>
+          <DocumentUploadCard
+            title="Aadhaar front"
+            hint="Upload a clear image of the front side."
+            uploadId={aadhaarFrontUploadId}
+            busy={busy}
+            onUpload={(file) => void handleUpload(file, "aadhaarFront")}
+          />
+          <DocumentUploadCard
+            title="Aadhaar back"
+            hint="Upload a clear image of the back side."
+            uploadId={aadhaarBackUploadId}
+            busy={busy}
+            onUpload={(file) => void handleUpload(file, "aadhaarBack")}
+          />
+        </>
+      )}
 
       <p className="flex items-start gap-2 px-0.5 pt-1 text-[11px] leading-relaxed text-[#706b77]">
         <Lock className="mt-0.5 size-3.5 shrink-0 text-[#8a8490]" strokeWidth={2} />

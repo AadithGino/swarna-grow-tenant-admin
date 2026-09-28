@@ -69,7 +69,7 @@ export function CustomerProfilePage() {
     .join("")
     .slice(0, 2)
     .toUpperCase();
-  const showKycMenu = kycEnabled || Boolean(data.kyc);
+  const showKycMenu = kycEnabled || Boolean(data.tenant.selfKycEnabled || data.tenant.redemptionKycRequired || data.kyc);
   const kyc = data.kyc;
   const customerId = formatProfileCustomerId(data.passbookNumber, data.customerNumber);
   const branchDisplay = (() => {

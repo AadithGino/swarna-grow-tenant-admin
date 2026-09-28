@@ -22,14 +22,15 @@ export function CustomerProfileKycPage() {
   const kycEnabled = useCustomerKycEnabled();
   const { data, isLoading, isError, refetch } = useGetCustomerProfileQuery();
   const [submitKyc, kycState] = useSubmitCustomerKycMutation();
+  const portalEnabled = kycEnabled || Boolean(data?.tenant.selfKycEnabled || data?.tenant.redemptionKycRequired || data?.kyc);
 
   useEffect(() => {
-    if (!kycEnabled) {
+    if (data && !portalEnabled) {
       router.replace(customerPath(tenantSlug, "profile"));
     }
-  }, [kycEnabled, router, tenantSlug]);
+  }, [data, portalEnabled, router, tenantSlug]);
 
-  if (!kycEnabled) return null;
+  if (data && !portalEnabled) return null;
 
   if (isLoading || !data) return <PageSkeleton cards={2} />;
   if (isError) return <QueryError onRetry={refetch} />;
@@ -63,6 +64,7 @@ export function CustomerProfileKycPage() {
       {canSubmit ? (
         <div className="mt-4">
           <CustomerKycVerificationForm
+            allowedTypes={data.tenant.kycAllowedTypes}
             submitting={kycState.isLoading}
             disabled={!canSubmit}
             onSubmit={async (payload) => {

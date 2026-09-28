@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 import {
@@ -114,6 +113,7 @@ export function CustomerPaymentStatusPage() {
   const [receiptPaymentId, setReceiptPaymentId] = useState<string | null>(null);
   const [receiptNumber, setReceiptNumber] = useState<string | null>(null);
   const [paidAt, setPaidAt] = useState<string | null>(null);
+  const [retryKey, setRetryKey] = useState(0);
   const [sessionSnapshot] = useState(() => readCustomerPaymentSession());
 
   const { data: paymentRecord } = useGetCustomerPaymentQuery(receiptPaymentId ?? "", {
@@ -188,8 +188,10 @@ export function CustomerPaymentStatusPage() {
         }, delayMs);
         return false;
       } catch {
-        finish("FAILED", "We could not confirm the payment status. Check your passbook or try again.");
-        clearCustomerPaymentSession();
+        finish(
+          "UNKNOWN",
+          "Confirmation is delayed. Your payment session is safe; retry when your connection is stable.",
+        );
         return true;
       }
     };
@@ -200,7 +202,7 @@ export function CustomerPaymentStatusPage() {
       cancelled = true;
       if (timer) window.clearTimeout(timer);
     };
-  }, [dispatch, pollIntent, pollLink]);
+  }, [dispatch, pollIntent, pollLink, retryKey]);
 
   const amountPaise =
     sessionSnapshot?.amountPaise ??
@@ -256,11 +258,19 @@ export function CustomerPaymentStatusPage() {
         </h1>
         <p className="mt-2 text-sm leading-relaxed text-[#777280]">{detail}</p>
         <Button
-          onClick={() => router.replace(customerPath(tenantSlug, "schemes"))}
+          onClick={() => {
+            if (stage === "UNKNOWN" && readCustomerPaymentSession()) {
+              setStage("PROCESSING");
+              setDetail("PhonePe is confirming your payment…");
+              setRetryKey((value) => value + 1);
+              return;
+            }
+            router.replace(customerPath(tenantSlug, "schemes"));
+          }}
           className="mt-6 w-full rounded-xl font-bold text-white"
           style={{ background: "var(--customer-primary, #730321)" }}
         >
-          Back to schemes
+          {stage === "UNKNOWN" && readCustomerPaymentSession() ? "Retry confirmation" : "Back to schemes"}
         </Button>
       </div>
     );

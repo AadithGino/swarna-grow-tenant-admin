@@ -2,7 +2,9 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { memo, useCallback, useState } from "react";
+import { memo, useCallback, useEffect, useState } from "react";
+import { useClientMounted } from "@/src/hooks/use-client-mounted";
+import { realmHasStoredSession } from "@/src/lib/auth-token-storage";
 import {
   Activity,
   Bell,
@@ -484,6 +486,31 @@ function AdminShellGrid({ children }: { children: React.ReactNode }) {
 }
 
 export function AdminShell({ children }: { children: React.ReactNode }) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const mounted = useClientMounted();
+  const hydrated = useAppSelector((state) => state.session.hydrated);
+  const session = useAppSelector((state) => state.session.session);
+  const [sessionReady, setSessionReady] = useState(false);
+
+  useEffect(() => {
+    if (!mounted || !hydrated) return;
+    const hasTokens = realmHasStoredSession("tenant");
+    if (!hasTokens || !session) {
+      router.replace(`/login?next=${encodeURIComponent(pathname || "/")}`);
+      return;
+    }
+    setSessionReady(true);
+  }, [mounted, hydrated, session, pathname, router]);
+
+  if (!mounted || !hydrated || !sessionReady) {
+    return (
+      <div className="grid min-h-screen place-items-center bg-[#fbf8f5]">
+        <div className="size-10 animate-spin rounded-full border-4 border-[#ecd8dd] border-t-[#730321]" />
+      </div>
+    );
+  }
+
   return (
     <>
       <AdminShellGrid>{children}</AdminShellGrid>

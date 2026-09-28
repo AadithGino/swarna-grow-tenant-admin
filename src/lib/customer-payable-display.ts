@@ -19,7 +19,13 @@ export function payableQuoteBounds(range?: PayableRange | null): PayableQuoteBou
   const stepPaise = range.multipleOfPaise ?? 1;
   const multipleOf = stepPaise > 1 ? stepPaise / 100 : undefined;
   const eligible = range.payable !== false && max > 0;
-  return { min, max, multipleOf, eligible };
+  return {
+    min,
+    max,
+    multipleOf,
+    eligible,
+    allowedAmountsPaise: range.allowedAmountsPaise ?? undefined,
+  };
 }
 
 export function customerPayablePhaseLabel(

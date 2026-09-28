@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { LoaderCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   Select,
@@ -26,12 +28,13 @@ import { downloadCustomerPaymentReceipt } from "@/src/lib/customer-receipt";
 import { PageSkeleton, QueryError } from "@/src/components/common/query-state";
 import {
   useGetCustomerSchemeQuery,
+  useGetCustomerPassbookQuery,
+  useGetCustomerSettlementPreviewQuery,
   useInitiatePublicPaymentLinkMutation,
   useRequestCustomerRedemptionMutation,
 } from "@/src/store/api/customer-api";
 import { openCustomerPaymentTarget } from "@/src/lib/customer-payment-redirect";
 import { CustomerMakePaymentSheet } from "@/src/features/customer/customer-make-payment-sheet";
-import type { CustomerSchemeDetail } from "@/src/types/customer";
 import { useCustomerTenant } from "@/src/components/customer/customer-tenant-context";
 import { customerPath } from "@/src/lib/customer-tenant";
 import { useCustomerPortalCapabilities } from "@/src/lib/customer-portal-capabilities";
@@ -40,9 +43,13 @@ import { isGoldWeightScheme } from "@/src/lib/customer-gold-ui";
 export function CustomerSchemeDetailPage({ id }: { id: string }) {
   const { customerAppPaymentsEnabled } = useCustomerPortalCapabilities();
   const { data: scheme, isLoading, isError, refetch } = useGetCustomerSchemeQuery(id);
+  const passbook = useGetCustomerPassbookQuery(id);
   const [payOpen, setPayOpen] = useState(false);
   const [redeemOpen, setRedeemOpen] = useState(false);
   const [redemptionMode, setRedemptionMode] = useState("");
+  const [billNumber, setBillNumber] = useState("");
+  const [preferredDate, setPreferredDate] = useState("");
+  const [redemptionRemarks, setRedemptionRemarks] = useState("");
   const [requestRedemption, redemptionState] = useRequestCustomerRedemptionMutation();
   const redemptionModeOptions = useMemo(() => {
     const preferred = scheme?.redemption?.preferredModes ?? [];
@@ -50,12 +57,11 @@ export function CustomerSchemeDetailPage({ id }: { id: string }) {
       typeof entry === "string" ? { mode: entry, label: entry.replaceAll("_", " ").toLowerCase() } : entry,
     );
   }, [scheme?.redemption?.preferredModes]);
-
-  useEffect(() => {
-    if (redemptionModeOptions.length && !redemptionMode) {
-      setRedemptionMode(redemptionModeOptions[0].mode);
-    }
-  }, [redemptionModeOptions, redemptionMode]);
+  const effectiveRedemptionMode = redemptionMode || redemptionModeOptions[0]?.mode || "";
+  const preview = useGetCustomerSettlementPreviewQuery(
+    { schemeId: id, mode: effectiveRedemptionMode },
+    { skip: !redeemOpen || !effectiveRedemptionMode },
+  );
 
   if (isLoading || !scheme) return <PageSkeleton cards={3} />;
   if (isError) return <QueryError onRetry={refetch} />;
@@ -97,10 +103,19 @@ export function CustomerSchemeDetailPage({ id }: { id: string }) {
 
   const redeem = async () => {
     try {
-      if (!redemptionMode) return toast.error("Choose how you would like to redeem");
+      if (!effectiveRedemptionMode) return toast.error("Choose how you would like to redeem");
+      if (!preview.data?.eligible) return toast.error(preview.data?.blockers?.[0]?.message ?? "Settlement is not currently eligible");
+      if (effectiveRedemptionMode === "PURCHASE_ADJUSTMENT" && !billNumber.trim()) {
+        return toast.error("Bill number is required for purchase adjustment");
+      }
       await requestRedemption({
         schemeId: scheme.id,
-        preferredMode: redemptionMode,
+        preferredMode: effectiveRedemptionMode,
+        ...(preferredDate ? { preferredDate } : {}),
+        ...(redemptionRemarks.trim() ? { remarks: redemptionRemarks.trim() } : {}),
+        ...(effectiveRedemptionMode === "PURCHASE_ADJUSTMENT"
+          ? { modeDetails: { billNumber: billNumber.trim() } }
+          : {}),
         expectedVersion: scheme.version,
       }).unwrap();
       toast.success("Redemption request sent to your jewellery");
@@ -138,7 +153,6 @@ export function CustomerSchemeDetailPage({ id }: { id: string }) {
       />
       <SchemeDetailTabs
         scheme={scheme}
-        mode={scheme.displayMode}
         maturityBenefit={maturityBenefit}
         schemeIsGold={schemeIsGold}
         planRuleSections={planRuleSections}
@@ -148,6 +162,7 @@ export function CustomerSchemeDetailPage({ id }: { id: string }) {
         onRedeem={() => setRedeemOpen(true)}
         onDownloadReceipt={downloadReceipt}
         passbookLayout={displayMode === "FIXED" ? "fixed" : "default"}
+        passbookRows={passbook.data?.rows}
         passbookExtra={
           displayMode === "FIXED" ? (
             <>
@@ -180,7 +195,7 @@ export function CustomerSchemeDetailPage({ id }: { id: string }) {
           {redemptionModeOptions.length > 1 ? (
             <div className="mt-2">
               <label className="text-xs font-bold text-muted-foreground">Preferred settlement</label>
-              <Select value={redemptionMode} onValueChange={setRedemptionMode}>
+              <Select value={effectiveRedemptionMode} onValueChange={setRedemptionMode}>
                 <SelectTrigger className="mt-2 h-11 rounded-xl">
                   <SelectValue placeholder="Choose mode" />
                 </SelectTrigger>
@@ -196,7 +211,56 @@ export function CustomerSchemeDetailPage({ id }: { id: string }) {
           ) : redemptionModeOptions.length === 1 ? (
             <p className="text-sm text-muted-foreground">Settlement: {redemptionModeOptions[0].label}</p>
           ) : null}
-          <Button disabled={redemptionState.isLoading || !redemptionMode} onClick={redeem} className="mt-4 bg-[#730321]">
+          {preview.isFetching ? (
+            <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
+              <LoaderCircle className="size-4 animate-spin" /> Calculating settlement…
+            </div>
+          ) : preview.data ? (
+            <div className="mt-4 rounded-xl border bg-muted/30 p-3 text-sm">
+              <div className="space-y-2">
+                {preview.data.computation.lines.map((line) => (
+                  <div key={line.key} className="flex justify-between gap-3">
+                    <span className="text-muted-foreground">{line.label}</span>
+                    <span className="font-bold">{line.sign}{line.amount.amountDisplay}</span>
+                  </div>
+                ))}
+                <div className="flex justify-between gap-3 border-t pt-2 text-base font-black">
+                  <span>Settlement</span>
+                  <span>{preview.data.computation.finalValue.amountDisplay}</span>
+                </div>
+                {preview.data.computation.goldWeight ? (
+                  <div className="flex justify-between gap-3">
+                    <span className="text-muted-foreground">Gold handover</span>
+                    <span className="font-bold">{preview.data.computation.goldWeight.weightDisplay}</span>
+                  </div>
+                ) : null}
+              </div>
+              {preview.data.valuationNote ? <p className="mt-3 text-xs text-muted-foreground">{preview.data.valuationNote}</p> : null}
+              {preview.data.warningText ? <p className="mt-3 text-xs font-semibold text-amber-800">{preview.data.warningText}</p> : null}
+              {!preview.data.eligible ? (
+                <div className="mt-3 space-y-1 text-xs font-semibold text-red-700">
+                  {preview.data.blockers.map((blocker) => <p key={blocker.code}>{blocker.message}</p>)}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+          {effectiveRedemptionMode === "PURCHASE_ADJUSTMENT" ? (
+            <div className="mt-4">
+              <label className="text-xs font-bold text-muted-foreground" htmlFor="redemption-bill-number">Bill number</label>
+              <Input id="redemption-bill-number" value={billNumber} onChange={(event) => setBillNumber(event.target.value)} maxLength={64} className="mt-2" />
+            </div>
+          ) : null}
+          <div className="mt-4 grid gap-3">
+            <div>
+              <label className="text-xs font-bold text-muted-foreground" htmlFor="redemption-date">Preferred date (optional)</label>
+              <Input id="redemption-date" type="date" value={preferredDate} onChange={(event) => setPreferredDate(event.target.value)} className="mt-2" />
+            </div>
+            <div>
+              <label className="text-xs font-bold text-muted-foreground" htmlFor="redemption-remarks">Remarks (optional)</label>
+              <Textarea id="redemption-remarks" value={redemptionRemarks} onChange={(event) => setRedemptionRemarks(event.target.value)} maxLength={500} className="mt-2" />
+            </div>
+          </div>
+          <Button disabled={redemptionState.isLoading || preview.isFetching || !effectiveRedemptionMode || !preview.data?.eligible || (effectiveRedemptionMode === "PURCHASE_ADJUSTMENT" && !billNumber.trim())} onClick={redeem} className="mt-4 bg-[#730321]">
             Submit request
           </Button>
         </DialogContent>

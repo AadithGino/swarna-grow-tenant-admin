@@ -62,6 +62,7 @@ import {
   adaptCashOverview,
   adaptCashStaffBalances,
   adaptCashHandovers,
+  adaptCashHandoverDetail,
   adaptCashReport,
   adaptAdminReport,
   adaptPayableRange,
@@ -1994,6 +1995,7 @@ export const adminApi = createApi({
         params: { id },
         mockKey: "handover",
       }),
+      transformResponse: adaptCashHandoverDetail,
       providesTags: (_r, _e, id) => [{ type: "Cash", id: `handover-${id}` }],
     }),
     getMaturities: builder.query<

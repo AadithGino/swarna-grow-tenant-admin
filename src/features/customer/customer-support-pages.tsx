@@ -36,7 +36,11 @@ import { toast } from "sonner";
 type TicketTab = "open" | "closed";
 
 function isOpenTicket(item: CustomerGrievance) {
-  return item.status === "OPEN" || item.status === "IN_PROGRESS" || item.status === "AWAITING_CUSTOMER";
+  return (
+    item.status === "OPEN" ||
+    item.status === "IN_PROGRESS" ||
+    item.status === "AWAITING_CUSTOMER"
+  );
 }
 
 function ticketHash(number: string) {
@@ -54,7 +58,7 @@ function formatUpdatedAt(iso: string) {
 }
 
 function statusBadgeClass(item: CustomerGrievance) {
-  const label = item.statusLabel.toUpperCase();
+  const label = String(item.statusLabel ?? item.status ?? "").toUpperCase();
   if (item.status === "RESOLVED" || item.status === "CLOSED") {
     return "bg-emerald-50 text-emerald-700";
   }
@@ -71,7 +75,8 @@ function statusBadgeLabel(item: CustomerGrievance) {
   if (item.status === "IN_PROGRESS") return "IN PROGRESS";
   if (item.status === "AWAITING_CUSTOMER") return "AWAITING YOUR REPLY";
   if (item.status === "RESOLVED") return "RESOLVED";
-  return item.statusLabel.toUpperCase();
+  if (item.status === "CLOSED") return "CLOSED";
+  return String(item.statusLabel ?? item.status ?? "OPEN").toUpperCase();
 }
 
 function formatMessageTime(iso: string) {
@@ -229,12 +234,24 @@ export function CustomerSupportPage() {
       <div className="mt-4 space-y-3">
         {tab === "open" ? (
           openTickets.length ? (
-            openTickets.map((item) => <TicketCard key={item.id} item={item} tenantSlug={tenantSlug} />)
+            openTickets.map((item, index) => (
+              <TicketCard
+                key={item.id || item.ticketNumber || `open-${index}`}
+                item={item}
+                tenantSlug={tenantSlug}
+              />
+            ))
           ) : (
             <div className="customer-surface p-8 text-center text-sm text-[#777280]">No open tickets.</div>
           )
         ) : closedTickets.length ? (
-          closedTickets.map((item) => <TicketCard key={item.id} item={item} tenantSlug={tenantSlug} />)
+          closedTickets.map((item, index) => (
+            <TicketCard
+              key={item.id || item.ticketNumber || `closed-${index}`}
+              item={item}
+              tenantSlug={tenantSlug}
+            />
+          ))
         ) : (
           <div className="customer-surface p-8 text-center text-sm text-[#777280]">No closed tickets.</div>
         )}
@@ -244,8 +261,12 @@ export function CustomerSupportPage() {
         <div className="mt-6">
           <h2 className="mb-3 text-sm font-black text-[#171722]">Closed tickets</h2>
           <div className="space-y-3">
-            {closedTickets.slice(0, 3).map((item) => (
-              <TicketCard key={item.id} item={item} tenantSlug={tenantSlug} />
+            {closedTickets.slice(0, 3).map((item, index) => (
+              <TicketCard
+                key={item.id || item.ticketNumber || `preview-${index}`}
+                item={item}
+                tenantSlug={tenantSlug}
+              />
             ))}
           </div>
         </div>
@@ -311,7 +332,7 @@ export function CustomerGrievanceDetailPage({ id }: { id: string }) {
   if (isLoading || !data) return <PageSkeleton cards={2} />;
   if (isError) return <QueryError onRetry={refetch} />;
 
-  const canReply = data.allowedActions.includes("REPLY");
+  const canReply = (data.allowedActions ?? []).includes("REPLY");
   const isActive = isOpenTicket(data);
   const jeweller = tenant?.displayName ?? tenant?.appDisplayName ?? "Swarna Mahal Support";
 
@@ -340,7 +361,7 @@ export function CustomerGrievanceDetailPage({ id }: { id: string }) {
           <h1 className="truncate text-base font-black text-[#171722]">{data.subject}</h1>
           <p className="text-[11px] font-semibold text-[#8a8490]">{ticketHash(data.ticketNumber)}</p>
           <span className={cn("mt-1 inline-block rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide", statusBadgeClass(data))}>
-            {data.status === "IN_PROGRESS" ? "In progress" : data.statusLabel}
+            {statusBadgeLabel(data)}
           </span>
         </div>
       </header>
@@ -367,10 +388,13 @@ export function CustomerGrievanceDetailPage({ id }: { id: string }) {
       ) : null}
 
       <section className="flex-1 space-y-4 px-0.5">
-        {data.messages.map((item) => {
+        {(data.messages ?? []).map((item, index) => {
           const isCustomer = item.authorType === "CUSTOMER";
           return (
-            <div key={item.id} className={cn("flex gap-2", isCustomer ? "justify-end" : "justify-start")}>
+            <div
+              key={item.id || `msg-${index}`}
+              className={cn("flex gap-2", isCustomer ? "justify-end" : "justify-start")}
+            >
               {!isCustomer ? <SupportLotusMark /> : null}
               <div
                 className={cn(

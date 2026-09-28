@@ -1,5 +1,6 @@
 import type {
   Customer,
+  CashHandoverDetail,
   DashboardGoldRate,
   Enrollment,
   GlobalSearchItem,
@@ -16,7 +17,6 @@ import type {
 } from "@/src/types/domain";
 import { initials, money } from "@/src/lib/format";
 import {
-  DEFAULT_LIST_LIMIT,
   mergePageMeta,
   type ListPageMeta,
 } from "@/src/lib/cursor-pagination";
@@ -417,7 +417,11 @@ export function adaptEnrollmentList(
       ),
       maturity: date(item.maturityDate ?? item.dates?.maturityDate),
       status: item.uiStatus ?? item.status,
-      valueBasis: plan.valueBasis ?? item.valueBasis ?? "CASH",
+      valueBasis:
+        plan.valueBasis ??
+        item.planSnapshot?.valueBasis ??
+        item.valueBasis ??
+        "CASH",
       accumulatedGold: mgToGrams(
         item.goldAccrued ??
           item.totals?.goldAccrued ??
@@ -451,7 +455,9 @@ export function adaptEnrollmentList(
       pendingRedemption: item.pendingRedemption ?? null,
       completedRedemption: item.completedRedemption ?? null,
       allowedRedemptionModes:
-        plan.redemptionRules?.allowedModes ?? item.allowedRedemptionModes,
+        plan.redemptionRules?.allowedModes ??
+        item.planSnapshot?.redemptionRules?.allowedModes ??
+        item.allowedRedemptionModes,
     };
   }) as Enrollment[];
 }
@@ -594,7 +600,11 @@ export function adaptEnrollment(raw: any): Enrollment {
     phase: flexible.phase,
     allowedRedemptionModes:
       item.planSnapshot?.redemptionRules?.allowedModes ??
-      row.allowedRedemptionModes,
+      item.plan?.redemptionRules?.allowedModes ??
+      row.allowedRedemptionModes ??
+      (row.valueBasis === "GOLD_WEIGHT"
+        ? ["GOLD_HANDOVER", "CASH", "PURCHASE_ADJUSTMENT"]
+        : ["CASH", "PURCHASE_ADJUSTMENT", "GOLD_HANDOVER"]),
     monthlyBreakdown: (flexible.freeWindow?.monthlyBreakdown ?? []).map(
       (m: any) => ({
         month: m.month,
@@ -1684,8 +1694,9 @@ export function adaptGrievanceRow(
         : String(g.customer ?? ""),
     subject: g.subject ?? "",
     category: g.categoryLabel ?? g.category ?? "",
-    priority: (g.priority ??
-      "MEDIUM") as import("@/src/types/domain").Grievance["priority"],
+    priority: (g.priority === "MEDIUM"
+      ? "NORMAL"
+      : (g.priority ?? "NORMAL")) as import("@/src/types/domain").Grievance["priority"],
     status: ((g.status === "WAITING_FOR_CUSTOMER"
       ? "WAITING_CUSTOMER"
       : g.status) ??
@@ -3488,7 +3499,16 @@ function adaptCashStaffBalanceRow(item: any): CashStaffBalanceRow {
 }
 
 function adaptCashHandoverRow(item: any) {
-  if (item?.handoverNo && item?.id && !item?.handoverNumber) return item;
+  if (
+    item?.handoverNo &&
+    item?.id &&
+    !item?.handoverNumber &&
+    !item?.amountPaise &&
+    typeof item?.staff === "string" &&
+    typeof item?.branch === "string"
+  ) {
+    return item;
+  }
   const id = entityId(item);
   const amount =
     rupees(item.amount) ||
@@ -3500,19 +3520,116 @@ function adaptCashHandoverRow(item: any) {
       ? item.acceptedAmountPaise / 100
       : 0) ||
     amount;
+  const staff =
+    item.staff?.name ??
+    item.staffName ??
+    (typeof item.staff === "string" && !looksLikeOpaqueId(item.staff)
+      ? item.staff
+      : "—");
   return {
     id,
     handoverNo: item.handoverNumber ?? item.handoverNo ?? id,
-    staff:
-      item.staff?.name ??
-      (typeof item.staff === "string" ? item.staff : "—"),
+    staff,
     branch: branchName(item),
     amount,
     declared,
     payments: item.receiptCount ?? item.payments ?? 0,
-    submittedAt: dateTime(item.submittedAt) || String(item.submittedAt ?? "—"),
+    submittedAt:
+      dateTime(item.submittedAt ?? item.createdAt) ||
+      String(item.submittedAt ?? item.createdAt ?? "—"),
     status: item.status,
-    initiatedBy: item.initiatedBy,
+    initiatedBy: item.initiatedBy ?? item.initiator,
+    acceptedBy:
+      item.acceptedBy?.name ??
+      item.settledBy?.name ??
+      (typeof item.acceptedBy === "string" ? item.acceptedBy : undefined),
+    remarks: item.remarks ?? item.reason,
+  };
+}
+
+export function adaptCashHandoverDetail(raw: any): CashHandoverDetail {
+  const data = contractPayload<any>(raw) ?? raw;
+  // Already-adapted mock / UI detail shape (string staff/branch labels).
+  if (
+    data?.handoverNo &&
+    Array.isArray(data?.timeline) &&
+    Array.isArray(data?.paymentLines) &&
+    typeof data?.systemAmount === "number" &&
+    typeof data?.staff === "string" &&
+    typeof data?.branch === "string"
+  ) {
+    return data as CashHandoverDetail;
+  }
+
+  const base = adaptCashHandoverRow(data);
+  const systemAmount =
+    rupees(data?.systemAmount) ||
+    rupees(data?.amount) ||
+    (typeof data?.amountPaise === "number" ? data.amountPaise / 100 : 0) ||
+    base.amount;
+  const declared =
+    rupees(data?.acceptedAmount) ||
+    (typeof data?.acceptedAmountPaise === "number"
+      ? data.acceptedAmountPaise / 100
+      : 0) ||
+    base.declared ||
+    systemAmount;
+
+  const timelineRaw = Array.isArray(data?.timeline) ? data.timeline : [];
+  const timeline = timelineRaw.map((ev: any) => ({
+    at: dateTime(ev?.at) || String(ev?.at ?? "—"),
+    event: String(ev?.event ?? "EVENT"),
+    by: ev?.by?.name ?? (typeof ev?.by === "string" ? ev.by : "—"),
+    note: ev?.note ? String(ev.note) : undefined,
+  }));
+
+  const paymentLinesRaw = Array.isArray(data?.paymentLines)
+    ? data.paymentLines
+    : Array.isArray(data?.payments) && typeof data.payments[0] === "object"
+      ? data.payments
+      : [];
+  const paymentLines = paymentLinesRaw.map((p: any, index: number) => ({
+    id: entityId(p) || `pay_line_${index}`,
+    receiptNo: String(p?.receiptNo ?? p?.receiptNumber ?? "—"),
+    customer:
+      p?.customer?.name ??
+      (typeof p?.customer === "string" ? p.customer : "—"),
+    amount:
+      rupees(p?.amount) ||
+      (typeof p?.amountPaise === "number" ? p.amountPaise / 100 : 0),
+    paidAt: dateTime(p?.paidAt ?? p?.collectedAt) || String(p?.paidAt ?? "—"),
+  }));
+
+  const denominations = Array.isArray(data?.denominations)
+    ? data.denominations.map((den: any) => ({
+        denomination: Number(den?.denomination ?? den?.value ?? 0),
+        count: Number(den?.count ?? 0),
+      }))
+    : [];
+
+  return {
+    ...base,
+    declared,
+    systemAmount,
+    declaredReceiptCount:
+      Number(
+        data?.declaredReceiptCount ?? data?.receiptCount ?? paymentLines.length,
+      ) || base.payments,
+    coversFrom: data?.coversFrom
+      ? dateTime(data.coversFrom) || String(data.coversFrom)
+      : undefined,
+    coversUntil: data?.coversUntil
+      ? dateTime(data.coversUntil) || String(data.coversUntil)
+      : undefined,
+    paymentLines,
+    denominations: denominations.length ? denominations : undefined,
+    timeline,
+    acceptedBy:
+      data?.settledBy?.name ??
+      data?.acceptedBy?.name ??
+      (typeof data?.acceptedBy === "string" ? data.acceptedBy : undefined) ??
+      base.acceptedBy,
+    remarks: data?.remarks ?? data?.reason ?? base.remarks,
   };
 }
 
