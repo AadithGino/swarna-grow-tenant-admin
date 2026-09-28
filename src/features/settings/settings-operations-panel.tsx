@@ -28,6 +28,8 @@ export type OperationsFormState = {
   customerLoginMode: "OTP_ONLY" | "PASSWORD_ONLY";
   customerAppWriteEnabled: boolean;
   customerAppPaymentsEnabled: boolean;
+  agentCanRegisterCustomers: boolean;
+  agentCanEnrolSchemes: boolean;
   redemptionApprovalRequired: boolean;
   receiptPrefix: string;
   receiptNumberFormat: string;
@@ -49,6 +51,8 @@ type PolicyKey = keyof Pick<
   | "customerSelfRegistrationEnabled"
   | "customerAppWriteEnabled"
   | "customerAppPaymentsEnabled"
+  | "agentCanRegisterCustomers"
+  | "agentCanEnrolSchemes"
   | "redemptionApprovalRequired"
 >;
 
@@ -128,6 +132,21 @@ const POLICY_SECTIONS: PolicySection[] = [
         key: "customerAppMaintenance",
         title: "Customer app maintenance",
         detail: "Temporarily returns a maintenance response for customer-app requests",
+      },
+    ],
+  },
+  {
+    label: "Collection agents",
+    policies: [
+      {
+        key: "agentCanRegisterCustomers",
+        title: "Agents can register customers",
+        detail: "Off = agents only search existing customers and collect",
+      },
+      {
+        key: "agentCanEnrolSchemes",
+        title: "Agents can enrol customers into schemes",
+        detail: "Enrols at the agent's branch; KYC rules still apply",
       },
     ],
   },

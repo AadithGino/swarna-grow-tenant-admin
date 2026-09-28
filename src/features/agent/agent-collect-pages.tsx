@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, ArrowRight, Banknote, CheckCircle2, Gem, Info, Link2, ReceiptText, Search, Share2, ShieldCheck, Smartphone } from "lucide-react";
+import { ArrowLeft, ArrowRight, Banknote, CheckCircle2, Gem, Info, Link2, PlusCircle, ReceiptText, Search, Share2, ShieldCheck, Smartphone, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,6 +14,7 @@ import { useDebouncedValue } from "@/src/hooks/use-debounced-value";
 import { useCreateAgentPaymentLinkMutation, useGetAgentCustomerQuery, useGetAgentGoldRateQuery, useGetAgentPassbookQuery, useGetAgentPayableRangeQuery, useGetAgentSchemeQuery, useRecordAgentPaymentMutation, useSearchAgentCustomersQuery, useShareAgentPaymentWhatsAppMutation } from "@/src/store/api/agent-api";
 import { AgentCard, AgentEmpty, AgentLoadingCards, AgentPageHeader, AgentSchemeCard, AgentStatus, formatAgentDate, formatAgentMoney, formatAgentTime, formatAgentWeight } from "@/src/components/agent/agent-ui";
 import type { AgentManualPaymentMode, AgentPayment } from "@/src/types/agent";
+import { useAgentCapabilities } from "./use-agent-capabilities";
 
 const AGENT_PAYMENT_MODES: Array<{ value: AgentManualPaymentMode; label: string; hint: string }> = [
   { value: "CASH", label: "Cash", hint: "Counts toward your cash-in-hand balance" },
@@ -37,8 +38,9 @@ export function AgentCustomerSearchPage() {
   const debounced = useDebouncedValue(query, 300);
   const searchQ = debounced.trim();
   const customers = useSearchAgentCustomersQuery({ q: searchQ, limit: 20 });
+  const { registerCustomers } = useAgentCapabilities();
   return <div className="space-y-6">
-<AgentPageHeader eyebrow="Collect cash" title="Find a customer" description="Search only customers assigned to your branch." />
+<AgentPageHeader eyebrow="Collect cash" title="Find a customer" description="Search only customers assigned to your branch." action={registerCustomers ? <Button asChild className="h-11 rounded-xl font-black"><Link href="/agent/customers/new"><UserPlus className="mr-2 size-4" />New customer</Link></Button> : undefined} />
 <AgentCard className="p-3 sm:p-4">
 <div className="relative">
 <Search className="absolute left-4 top-1/2 size-5 -translate-y-1/2 text-[#9a8f91]" />
@@ -78,6 +80,7 @@ export function AgentCustomerSearchPage() {
 
 export function AgentCustomerDetailPage({ id }: { id: string }) {
   const customer = useGetAgentCustomerQuery(id);
+  const { enrolSchemes } = useAgentCapabilities();
   if (customer.isLoading) return <AgentLoadingCards />;
   if (!customer.data) return <AgentEmpty title="Customer unavailable" description="This customer is outside your branch or could not be loaded." />;
   const item = customer.data;
@@ -111,8 +114,8 @@ export function AgentCustomerDetailPage({ id }: { id: string }) {
 </div>
 </AgentCard>
 <div>
-<AgentPageHeader eyebrow="Choose scheme" title="What are you collecting for?" description="The payable amount is checked again before the receipt is created." />
-<div className="mt-4 grid gap-3 lg:grid-cols-2">{item.schemes?.map((scheme) => <AgentSchemeCard key={scheme.id} scheme={scheme} href={`/agent/collect/${scheme.id}`} />)}</div>
+<AgentPageHeader eyebrow="Choose scheme" title="What are you collecting for?" description="The payable amount is checked again before the receipt is created." action={enrolSchemes ? <Button asChild variant="outline" className="h-11 rounded-xl font-black"><Link href={`/agent/customers/${item.id}/enrol`}><PlusCircle className="mr-2 size-4" />Enrol in scheme</Link></Button> : undefined} />
+{item.schemes?.length ? <div className="mt-4 grid gap-3 lg:grid-cols-2">{item.schemes.map((scheme) => <AgentSchemeCard key={scheme.id} scheme={scheme} href={`/agent/collect/${scheme.id}`} />)}</div> : <div className="mt-4"><AgentEmpty title="No active schemes" description={enrolSchemes ? "Enrol this customer in a scheme to start collecting." : "Ask the branch to enrol this customer in a scheme."} /></div>}
 </div>
 </div>;
 }

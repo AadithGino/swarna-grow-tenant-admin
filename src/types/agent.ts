@@ -15,7 +15,46 @@ export type AgentUser = {
   tenantName?: string;
   tenantCode?: string;
   permissions: string[];
+  agentCapabilities?: AgentCapabilities;
   mustSetPassword?: boolean;
+};
+
+export type AgentCapabilities = {
+  registerCustomers: boolean;
+  enrolSchemes: boolean;
+};
+
+export type AgentPlan = {
+  id: string;
+  name: string;
+  code: string;
+  valueBasis: "CASH" | "GOLD_WEIGHT";
+  paymentPattern: "FIXED" | "FLEXIBLE";
+  durationMonths: number;
+  amountMode?: "JEWELLER_FIXED" | "JEWELLER_SLABS" | "CUSTOMER_CHOSEN";
+  fixedAmountPaise?: number;
+  slabsPaise: number[];
+  minInstallmentPaise?: number;
+  maxInstallmentPaise?: number;
+  multipleOfPaise?: number;
+  firstInstallmentModeDefault: "COLLECT_NOW" | "START_NEXT_CYCLE";
+  firstInstallmentModeEditable: boolean;
+  benefitLabel?: string;
+};
+
+export type AgentCreateCustomerInput = {
+  name: string;
+  mobile: string;
+  email?: string;
+  address: string;
+  passbookNumber?: string;
+};
+
+export type AgentEnrolInput = {
+  customerId: string;
+  planId: string;
+  installmentAmountPaise?: number;
+  firstInstallmentMode: "COLLECT_NOW" | "START_NEXT_CYCLE";
 };
 
 export type AgentLoginResponse = {

@@ -16,8 +16,33 @@ export const agentUser = {
   tenantName: "Kairali Jewellers",
   tenantCode: "KAIRALI",
   permissions: ["CUSTOMER_READ", "SCHEME_READ", "PAYMENT_READ", "PAYMENT_RECORD", "CASH_READ", "CASH_HANDOVER", "GOLD_RATE_READ"],
+  agentCapabilities: { registerCustomers: true, enrolSchemes: true },
   mustSetPassword: false,
 };
+
+export const agentPlans = [
+  {
+    _id: "spl_gold11",
+    name: "Swarna Gold 11",
+    code: "SG11",
+    valueBasis: "GOLD_WEIGHT",
+    paymentPattern: "FIXED",
+    durationMonths: 11,
+    amountRules: { amountMode: "JEWELLER_SLABS", slabsPaise: [100000, 250000, 500000] },
+    scheduleRules: { firstInstallmentModeDefault: "COLLECT_NOW", firstInstallmentModeEditable: true },
+    benefit: { displayLabel: "One installment free on maturity" },
+  },
+  {
+    _id: "spl_cash12",
+    name: "Cash Saver 12",
+    code: "CS12",
+    valueBasis: "CASH",
+    paymentPattern: "FIXED",
+    durationMonths: 12,
+    amountRules: { amountMode: "CUSTOMER_CHOSEN", minInstallmentPaise: 50000, maxInstallmentPaise: 2000000, multipleOfPaise: 10000 },
+    scheduleRules: { firstInstallmentModeDefault: "COLLECT_NOW", firstInstallmentModeEditable: false },
+  },
+];
 
 export const agentGoldRate: AgentGoldRate = { id: "rate_today", ratePerGramPaise: 724000, effectiveDate: "2026-09-17", purity: "22K" };
 

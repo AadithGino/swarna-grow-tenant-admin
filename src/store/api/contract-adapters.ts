@@ -16,10 +16,7 @@ import type {
   SettlementPreviewType,
 } from "@/src/types/domain";
 import { initials, money } from "@/src/lib/format";
-import {
-  mergePageMeta,
-  type ListPageMeta,
-} from "@/src/lib/cursor-pagination";
+import { mergePageMeta, type ListPageMeta } from "@/src/lib/cursor-pagination";
 import {
   cappedCyclePayableBounds,
   CAPPED_CYCLE_INCREMENT,
@@ -157,16 +154,25 @@ function kycDocumentLabel(side: string, type?: string) {
 }
 
 function buildAdminKycDocuments(kyc: Record<string, unknown>) {
-  const fromApi = (kyc.documents as Array<Record<string, unknown>> | undefined) ?? [];
+  const fromApi =
+    (kyc.documents as Array<Record<string, unknown>> | undefined) ?? [];
   if (fromApi.length) {
     return fromApi.map((doc) => ({
       side: (doc.side as string) ?? "SINGLE",
-      label: String(doc.label ?? kycDocumentLabel(String(doc.side ?? "SINGLE"), kyc.type as string)),
+      label: String(
+        doc.label ??
+          kycDocumentLabel(String(doc.side ?? "SINGLE"), kyc.type as string),
+      ),
       uploadId: (doc.uploadId as string) ?? undefined,
       previewUrl: (doc.previewUrl ?? doc.viewUrl) as string | undefined,
     }));
   }
-  const docs: Array<{ side: string; label: string; uploadId?: string; previewUrl?: string }> = [];
+  const docs: Array<{
+    side: string;
+    label: string;
+    uploadId?: string;
+    previewUrl?: string;
+  }> = [];
   if (kyc.frontUploadId) {
     docs.push({
       side: "FRONT",
@@ -196,7 +202,7 @@ export function adaptCustomerList(raw: any): {
     };
   }
   const list = contractPayload<any[]>(raw) ?? [];
-  const rows = Array.isArray(list) ? list : (list as any)?.items ?? [];
+  const rows = Array.isArray(list) ? list : ((list as any)?.items ?? []);
   const items = rows.map((item: any) => {
     const kycStatus = String(
       item.kyc?.status ?? item.kycStatus ?? "NOT_SUBMITTED",
@@ -212,9 +218,7 @@ export function adaptCustomerList(raw: any): {
       branch: branchName(item),
       branchId: branchIdOf(item),
       activeSchemes:
-        item.schemeSummary?.active ??
-        item.summary?.activeSchemes ??
-        0,
+        item.schemeSummary?.active ?? item.summary?.activeSchemes ?? 0,
       nextDue: date(item.nextDue?.date),
       nextDueAmount: fromPaise(
         item.nextDue?.amountPaise ?? item.nextDue?.amount,
@@ -258,7 +262,8 @@ export function adaptCustomer(raw: any): Customer {
           submittedAt: date(item.kyc.submittedAt),
           verifiedAt: date(item.kyc.verifiedAt),
           verifiedBy: item.kyc.verifiedBy?.name,
-          rejectionRemarks: item.kyc.rejectionRemarks ?? item.kyc.rejectionReason,
+          rejectionRemarks:
+            item.kyc.rejectionRemarks ?? item.kyc.rejectionReason,
           documents: buildAdminKycDocuments(item.kyc),
         }
       : undefined);
@@ -292,12 +297,8 @@ export function adaptCustomer(raw: any): Customer {
     ),
     paymentCount: Number(item.summary?.paymentCount ?? 0),
     nextDue: date(item.nextDue?.date),
-    nextDueAmount: fromPaise(
-      item.nextDue?.amountPaise ?? item.nextDue?.amount,
-    ),
-    overdueAmount: fromPaise(
-      item.overdue?.amountPaise ?? item.overdue?.amount,
-    ),
+    nextDueAmount: fromPaise(item.nextDue?.amountPaise ?? item.nextDue?.amount),
+    overdueAmount: fromPaise(item.overdue?.amountPaise ?? item.overdue?.amount),
     lastPayment: "—",
     lastPaymentAmount: 0,
     kyc:
@@ -340,7 +341,9 @@ export function adaptEnrollmentList(
   if (!list.length) return [];
   return list.map((item) => {
     const plan = item.plan ?? item.planSnapshot ?? {};
-    const installments = Array.isArray(item.installments) ? item.installments : [];
+    const installments = Array.isArray(item.installments)
+      ? item.installments
+      : [];
     const paidInstallments = installments.filter((row: any) =>
       ["PAID", "WAIVED"].includes(String(row.status ?? "")),
     ).length;
@@ -362,7 +365,9 @@ export function adaptEnrollmentList(
       (typeof item.totals?.amountPaidPaise === "number"
         ? item.totals.amountPaidPaise
         : null) ??
-      (typeof item.amountPaidPaise === "number" ? item.amountPaidPaise : null) ??
+      (typeof item.amountPaidPaise === "number"
+        ? item.amountPaidPaise
+        : null) ??
       installments.reduce(
         (sum: number, row: any) => sum + Number(row.paidPaise ?? 0),
         0,
@@ -450,8 +455,7 @@ export function adaptEnrollmentList(
         item.actions?.canRecordPayment ??
         (item.uiStatus ?? item.status) === "ACTIVE",
       canRedeem:
-        item.actions?.canRedeem ??
-        (item.uiStatus ?? item.status) === "MATURED",
+        item.actions?.canRedeem ?? (item.uiStatus ?? item.status) === "MATURED",
       pendingRedemption: item.pendingRedemption ?? null,
       completedRedemption: item.completedRedemption ?? null,
       allowedRedemptionModes:
@@ -497,7 +501,9 @@ export function adaptEnrollment(raw: any): Enrollment {
         ),
         status: entry.status,
         receipt: entry.payment?.receiptNumber,
-        goldAccrual: readGoldAccrual(entry.payment ?? entry.goldAccrual ?? entry),
+        goldAccrual: readGoldAccrual(
+          entry.payment ?? entry.goldAccrual ?? entry,
+        ),
         paymentId:
           entry.payment?.id ??
           entry.payment?._id ??
@@ -787,25 +793,33 @@ export function adaptEnrolValidation(raw: any): {
       installmentCount: preview.installmentCount,
       phaseSummary: preview.phaseSummary,
       illustrativeCapPerCycle: moneyToRupees(preview.illustrativeCapPerCycle),
-      totalCommitment: moneyToRupees(preview.totalPayable ?? preview.totalCommitment),
+      totalCommitment: moneyToRupees(
+        preview.totalPayable ?? preview.totalCommitment,
+      ),
       totalPayableNote: preview.totalPayableNote,
       isFlexible: preview.paymentPattern === "FLEXIBLE",
       firstDueDate: preview.firstDueDate,
       maturityDate: preview.maturityDate,
       benefitLabel:
-        preview.benefit?.displayLabel ?? preview.benefitLabel ?? preview.benefit?.type,
-      projectedValue: moneyToRupees(preview.estimatedMaturityValue ?? preview.projectedValue),
-      schedulePreview: (preview.schedulePreview ?? []).map((row: any, index: number) => ({
-        sequence: row.installmentNumber ?? row.sequence ?? index + 1,
-        dueDate: row.dueDate,
-        amountDisplay:
-          row.amount?.amountDisplay ??
-          row.amountDisplay ??
-          (row.amount?.amountPaise != null
-            ? money(row.amount.amountPaise / 100)
-            : "—"),
-        note: row.note,
-      })),
+        preview.benefit?.displayLabel ??
+        preview.benefitLabel ??
+        preview.benefit?.type,
+      projectedValue: moneyToRupees(
+        preview.estimatedMaturityValue ?? preview.projectedValue,
+      ),
+      schedulePreview: (preview.schedulePreview ?? []).map(
+        (row: any, index: number) => ({
+          sequence: row.installmentNumber ?? row.sequence ?? index + 1,
+          dueDate: row.dueDate,
+          amountDisplay:
+            row.amount?.amountDisplay ??
+            row.amountDisplay ??
+            (row.amount?.amountPaise != null
+              ? money(row.amount.amountPaise / 100)
+              : "—"),
+          note: row.note,
+        }),
+      ),
     };
   };
   if (item.preview != null || Array.isArray(item.blockers)) {
@@ -825,7 +839,8 @@ export function adaptEnrolValidation(raw: any): {
         ? [
             {
               code: "INVALID",
-              message: "Enrolment is not valid for the selected plan and amount.",
+              message:
+                "Enrolment is not valid for the selected plan and amount.",
             },
           ]
         : [],
@@ -981,7 +996,9 @@ export function adaptPaymentList(raw: any, customerName = ""): Payment[] {
             ? [payload]
             : [];
   return list.map((item: any) => {
-    const grossAmount = rupees(item.grossAmount ?? { amountPaise: item.amountPaise ?? 0 });
+    const grossAmount = rupees(
+      item.grossAmount ?? { amountPaise: item.amountPaise ?? 0 },
+    );
     const refundedAmount = rupees(
       item.refundedAmount ?? { amountPaise: item.refundedAmountPaise ?? 0 },
     );
@@ -1037,7 +1054,9 @@ export function adaptPaymentList(raw: any, customerName = ""): Payment[] {
         item.enrollmentNo ??
         item.schemeNumber ??
         "—",
-      schemeId: String(item.schemeId ?? item.scheme?._id ?? item.scheme?.id ?? ""),
+      schemeId: String(
+        item.schemeId ?? item.scheme?._id ?? item.scheme?.id ?? "",
+      ),
       amount: netAmount,
       grossAmount,
       refundedAmount,
@@ -1080,13 +1099,18 @@ function byModeFromSuccessfulItems(items: Payment[]) {
 
 function paymentSummaryFromItems(items: Payment[]) {
   const sum = (predicate: (p: Payment) => boolean) =>
-    items.filter(predicate).reduce((total, row) => total + Number(row.amount ?? 0), 0);
+    items
+      .filter(predicate)
+      .reduce((total, row) => total + Number(row.amount ?? 0), 0);
   const isCollected = (p: Payment) =>
     p.status === "SUCCESS" || p.status === "PARTIALLY_REFUNDED";
   const sumNet = (predicate: (p: Payment) => boolean) =>
     items
       .filter(predicate)
-      .reduce((total, row) => total + Number(row.netAmount ?? row.amount ?? 0), 0);
+      .reduce(
+        (total, row) => total + Number(row.netAmount ?? row.amount ?? 0),
+        0,
+      );
   const collected = sumNet(isCollected);
   const cash = sumNet((p) => isCollected(p) && p.mode === "CASH");
   const card = sumNet((p) => isCollected(p) && p.mode === "CARD");
@@ -1094,8 +1118,7 @@ function paymentSummaryFromItems(items: Payment[]) {
   const online = sum(
     (p) =>
       isCollected(p) &&
-      (p.mode === "ONLINE_GATEWAY" ||
-        p.mode === "BANK_TRANSFER"),
+      (p.mode === "ONLINE_GATEWAY" || p.mode === "BANK_TRANSFER"),
   );
   return {
     collected,
@@ -1132,7 +1155,9 @@ export function adaptPayments(raw: any) {
       reversed: raw.summary?.reversed ?? derived.reversed,
       refunded:
         raw.summary?.refunded ??
-        rupees(raw.summary?.totalRefundedAmount ?? raw.summary?.refundedAmount) ??
+        rupees(
+          raw.summary?.totalRefundedAmount ?? raw.summary?.refundedAmount,
+        ) ??
         derived.refunded,
       failed: raw.summary?.failed ?? derived.failed,
       lateSuccess: raw.summary?.lateSuccess ?? derived.lateSuccess,
@@ -1142,7 +1167,12 @@ export function adaptPayments(raw: any) {
   const items = adaptPaymentList(raw);
   const meta = contractMeta(raw)?.summary ?? {};
   const derived = paymentSummaryFromItems(items);
-  let byModeRows: Array<{ mode: string; label: string; count: number; amount: number }> = (meta.byMode ?? []).map((x: any) => ({
+  let byModeRows: Array<{
+    mode: string;
+    label: string;
+    count: number;
+    amount: number;
+  }> = (meta.byMode ?? []).map((x: any) => ({
     mode: x.mode,
     label: x.label ?? x.mode,
     count: x.count ?? 0,
@@ -1160,8 +1190,7 @@ export function adaptPayments(raw: any) {
   const card = byMode.CARD ?? derived.card;
   const upi = byMode.UPI ?? derived.upi;
   const onlineFromModes =
-    (byMode.ONLINE_GATEWAY ?? 0) +
-    (byMode.BANK_TRANSFER ?? 0);
+    (byMode.ONLINE_GATEWAY ?? 0) + (byMode.BANK_TRANSFER ?? 0);
   const online = onlineFromModes || derived.online;
   const digital =
     Object.entries(byMode)
@@ -1189,7 +1218,8 @@ export function adaptPayments(raw: any) {
       digital,
       pending:
         rupees(
-          (meta.byStatus ?? []).find((x: any) => x.status === "PENDING")?.amount,
+          (meta.byStatus ?? []).find((x: any) => x.status === "PENDING")
+            ?.amount,
         ) || derived.pending,
       failed: meta.failedCount ?? derived.failed,
       reversed: rupees(meta.reversedAmount) || derived.reversed,
@@ -1299,17 +1329,18 @@ export function adaptPlans(raw: any) {
 export function adaptPlanMutationResponse(raw: unknown): SchemePlan {
   const data = (contractPayload(raw) ?? raw) as Record<string, unknown>;
   const rules = (data.amountRules ?? {}) as Record<string, unknown>;
-  const minPaise = Number(rules.minInstallmentPaise ?? rules.fixedAmountPaise ?? 0);
+  const minPaise = Number(
+    rules.minInstallmentPaise ?? rules.fixedAmountPaise ?? 0,
+  );
   return {
     id: entityId(data),
     code: String(data.code ?? ""),
     name: String(data.displayName ?? data.name ?? ""),
     valueBasis: (data.valueBasis as SchemePlan["valueBasis"]) ?? "CASH",
     paymentPattern:
-      data.paymentPattern === "FLEXIBLE"
-        ? "FLEXIBLE_AVERAGE"
-        : "FIXED_DATE",
-    amountMode: (rules.amountMode as SchemePlan["amountMode"]) ?? "CUSTOMER_CHOSEN",
+      data.paymentPattern === "FLEXIBLE" ? "FLEXIBLE_AVERAGE" : "FIXED_DATE",
+    amountMode:
+      (rules.amountMode as SchemePlan["amountMode"]) ?? "CUSTOMER_CHOSEN",
     tenure: Number(data.durationMonths ?? 0),
     amount: minPaise / 100,
     activeEnrollments: 0,
@@ -1336,8 +1367,7 @@ function normalizePlanChartBlock(block: Record<string, unknown>) {
         data: (s.data ?? []).map((p: any) => ({
           ...p,
           yDisplay:
-            p.yDisplay ??
-            (axisType === "count" ? String(p.y ?? 0) : undefined),
+            p.yDisplay ?? (axisType === "count" ? String(p.y ?? 0) : undefined),
         })),
       }))
     : [];
@@ -1447,9 +1477,7 @@ export function adaptStaffList(raw: any): {
     ),
     sessions: Number(item.activeSessions ?? item.sessions ?? 0),
     lastSeen:
-      dateTime(item.lastLoginAt ?? item.lastSeenAt) ||
-      item.lastSeen ||
-      "—",
+      dateTime(item.lastLoginAt ?? item.lastSeenAt) || item.lastSeen || "—",
     status: item.status ?? "ACTIVE",
   }));
   const meta = contractMeta(raw);
@@ -1482,10 +1510,8 @@ export function adaptSettingsBranding(raw: unknown): Record<string, unknown> {
   if (data.appDisplayName != null || data.primaryColor != null) {
     return {
       ...data,
-      secondaryColor:
-        data.secondaryColor ?? branding.accentColor ?? "#C9A227",
-      appDisplayName:
-        data.appDisplayName ?? branding.displayName ?? "",
+      secondaryColor: data.secondaryColor ?? branding.accentColor ?? "#C9A227",
+      appDisplayName: data.appDisplayName ?? branding.displayName ?? "",
     };
   }
   return {
@@ -1509,8 +1535,7 @@ export function adaptSettingsOperations(raw: unknown): Record<string, unknown> {
     multiSchemePerCustomer:
       ops.multiSchemePerCustomer ??
       !Boolean(settings.oneActiveSchemePerCustomer),
-    kycMandatory:
-      ops.kycMandatory ?? Boolean(settings.requireKycForEnrolment),
+    kycMandatory: ops.kycMandatory ?? Boolean(settings.requireKycForEnrolment),
     kycAllowedTypes: ops.kycAllowedTypes ?? ["AADHAAR", "PAN"],
     customerSelfEnrolEnabled: ops.customerSelfEnrolEnabled ?? true,
     customerSelfRegistrationEnabled:
@@ -1520,6 +1545,8 @@ export function adaptSettingsOperations(raw: unknown): Record<string, unknown> {
     customerAppPaymentsEnabled:
       (ops.customerAppWriteEnabled ?? true) &&
       (ops.customerAppPaymentsEnabled ?? true),
+    agentCanRegisterCustomers: ops.agentCanRegisterCustomers === true,
+    agentCanEnrolSchemes: ops.agentCanEnrolSchemes === true,
     receiptPrefix: ops.receiptPrefix ?? "",
     receiptNumberFormat: ops.receiptNumberFormat ?? "",
     passbookNumberFormat: ops.passbookNumberFormat ?? "",
@@ -1533,7 +1560,9 @@ export function adaptSettingsOperations(raw: unknown): Record<string, unknown> {
   };
 }
 
-export function adaptSubscriptionInvoice(row: unknown): Record<string, unknown> {
+export function adaptSubscriptionInvoice(
+  row: unknown,
+): Record<string, unknown> {
   const inv = (row ?? {}) as Record<string, unknown>;
   const amountRaw = inv.amount as Record<string, unknown> | undefined;
   return {
@@ -1556,12 +1585,18 @@ export function adaptSubscriptionInvoice(row: unknown): Record<string, unknown> 
   };
 }
 
-export function adaptSubscriptionInvoices(raw: unknown): Record<string, unknown>[] {
+export function adaptSubscriptionInvoices(
+  raw: unknown,
+): Record<string, unknown>[] {
   const payload = contractPayload(raw);
   if (Array.isArray(payload)) {
     return payload.map((row) => adaptSubscriptionInvoice(row));
   }
-  if (payload && typeof payload === "object" && Array.isArray((payload as { items?: unknown[] }).items)) {
+  if (
+    payload &&
+    typeof payload === "object" &&
+    Array.isArray((payload as { items?: unknown[] }).items)
+  ) {
     return (payload as { items: unknown[] }).items.map((row) =>
       adaptSubscriptionInvoice(row),
     );
@@ -1586,11 +1621,36 @@ export function adaptSubscription(raw: unknown): Record<string, unknown> {
     daysRemaining: sub.daysRemaining ?? 0,
     renewsAutomatically: sub.renewsAutomatically ?? false,
     usage: {
-      activeCustomers: { used: 0, limit: limits.activeCustomers ?? 0, percent: 0, status: "OK" },
-      branches: { used: 0, limit: limits.branches ?? 0, percent: 0, status: "OK" },
-      staffSeats: { used: 0, limit: limits.staff ?? 0, percent: 0, status: "OK" },
-      schemePlans: { used: 0, limit: limits.schemePlans ?? 0, percent: 0, status: "OK" },
-      whatsappMessages: { used: 0, limit: limits.whatsappMessages ?? 0, percent: 0, status: "OK" },
+      activeCustomers: {
+        used: 0,
+        limit: limits.activeCustomers ?? 0,
+        percent: 0,
+        status: "OK",
+      },
+      branches: {
+        used: 0,
+        limit: limits.branches ?? 0,
+        percent: 0,
+        status: "OK",
+      },
+      staffSeats: {
+        used: 0,
+        limit: limits.staff ?? 0,
+        percent: 0,
+        status: "OK",
+      },
+      schemePlans: {
+        used: 0,
+        limit: limits.schemePlans ?? 0,
+        percent: 0,
+        status: "OK",
+      },
+      whatsappMessages: {
+        used: 0,
+        limit: limits.whatsappMessages ?? 0,
+        percent: 0,
+        status: "OK",
+      },
     },
     features: data.features ?? {},
   };
@@ -1600,7 +1660,11 @@ export function adaptBranchDetail(raw: unknown): Record<string, unknown> {
   const data = (contractPayload(raw) ?? raw) as Record<string, unknown>;
   const addressRaw = data.address;
   let address: Record<string, string | null> | null = null;
-  if (addressRaw && typeof addressRaw === "object" && !Array.isArray(addressRaw)) {
+  if (
+    addressRaw &&
+    typeof addressRaw === "object" &&
+    !Array.isArray(addressRaw)
+  ) {
     const a = addressRaw as Record<string, unknown>;
     address = {
       line1: a.line1 != null ? String(a.line1) : null,
@@ -1610,16 +1674,13 @@ export function adaptBranchDetail(raw: unknown): Record<string, unknown> {
   } else if (typeof addressRaw === "string" && addressRaw.trim()) {
     address = { line1: addressRaw.trim(), city: null, pincode: null };
   }
-  const contact =
-    data.contactNumber ?? data.mobile ?? null;
+  const contact = data.contactNumber ?? data.mobile ?? null;
   return {
     ...data,
     id: entityId(data),
     address,
     contactNumber: contact != null ? String(contact) : null,
-    status:
-      data.status ??
-      (data.active === false ? "INACTIVE" : "ACTIVE"),
+    status: data.status ?? (data.active === false ? "INACTIVE" : "ACTIVE"),
   };
 }
 
@@ -1655,15 +1716,16 @@ export function adaptBranchList(raw: any): {
         ? item.address
         : (item.address?.city ?? item.city);
     return {
-    id: entityId(item),
-    name: item.name,
-    code: item.code,
-    city: cityFromAddress && String(cityFromAddress).trim()
-      ? String(cityFromAddress)
-      : "—",
-    staff: item.stats?.staffCount ?? item.staff ?? 0,
-    customers: item.stats?.activeCustomers ?? item.customers ?? 0,
-    status: item.active === false ? "INACTIVE" : (item.status ?? "ACTIVE"),
+      id: entityId(item),
+      name: item.name,
+      code: item.code,
+      city:
+        cityFromAddress && String(cityFromAddress).trim()
+          ? String(cityFromAddress)
+          : "—",
+      staff: item.stats?.staffCount ?? item.staff ?? 0,
+      customers: item.stats?.activeCustomers ?? item.customers ?? 0,
+      status: item.active === false ? "INACTIVE" : (item.status ?? "ACTIVE"),
     };
   });
   const meta = contractMeta(raw);
@@ -1696,7 +1758,8 @@ export function adaptGrievanceRow(
     category: g.categoryLabel ?? g.category ?? "",
     priority: (g.priority === "MEDIUM"
       ? "NORMAL"
-      : (g.priority ?? "NORMAL")) as import("@/src/types/domain").Grievance["priority"],
+      : (g.priority ??
+        "NORMAL")) as import("@/src/types/domain").Grievance["priority"],
     status: ((g.status === "WAITING_FOR_CUSTOMER"
       ? "WAITING_CUSTOMER"
       : g.status) ??
@@ -1996,9 +2059,7 @@ export function adaptDashboardChart(
       chartKey === "collection-by-mode"
         ? (PAYMENT_MODE_LABELS[rawKey] ?? rawKey)
         : rawKey;
-    const y = Number(
-      row.y ?? row.value ?? row.amountPaise ?? row.count ?? 0,
-    );
+    const y = Number(row.y ?? row.value ?? row.amountPaise ?? row.count ?? 0);
     const yDisplay =
       yAxisType === "count"
         ? String(y)
@@ -2224,11 +2285,14 @@ export function adaptDashboard(
     );
   }
 
-  const chartRows = (block?: import("@/src/types/admin-report").ChartSeriesBlock) => {
+  const chartRows = (
+    block?: import("@/src/types/admin-report").ChartSeriesBlock,
+  ) => {
     const series = block?.series ?? [];
     if (!series.length) return [];
     const points = new Map<string, any>();
-    const divisor = block?.yAxis?.type === "currency" || !block?.yAxis?.type ? 100 : 1;
+    const divisor =
+      block?.yAxis?.type === "currency" || !block?.yAxis?.type ? 100 : 1;
     series.forEach((s) =>
       s.data?.forEach((p) =>
         points.set(p.x, {
@@ -2246,15 +2310,13 @@ export function adaptDashboard(
   const modePoints = modeBlock?.series?.[0]?.data ?? [];
   const modeDivisor =
     modeBlock?.yAxis?.type === "currency" || !modeBlock?.yAxis?.type ? 100 : 1;
-  const total =
-    modePoints.reduce((sum, p) => sum + Number(p.y), 0) || 1;
+  const total = modePoints.reduce((sum, p) => sum + Number(p.y), 0) || 1;
 
-  const defaultCharts =
-    extras?.defaultCharts?.length
-      ? extras.defaultCharts
-      : summary.defaultCharts?.length
-        ? summary.defaultCharts
-        : [...DEFAULT_DASHBOARD_CHARTS];
+  const defaultCharts = extras?.defaultCharts?.length
+    ? extras.defaultCharts
+    : summary.defaultCharts?.length
+      ? summary.defaultCharts
+      : [...DEFAULT_DASHBOARD_CHARTS];
 
   return {
     widgets,
@@ -2310,12 +2372,17 @@ export function adaptDashboard(
       ? {
           count: Number(summary.redemptions.count ?? 0),
           totalSettled: fromPaise(summary.redemptions.settlementPaise ?? 0),
-          cashHandedOut: fromPaise(summary.redemptions.cashSettlementPaise ?? 0),
+          cashHandedOut: fromPaise(
+            summary.redemptions.cashSettlementPaise ?? 0,
+          ),
           benefitPaid: fromPaise(summary.redemptions.benefitPaise ?? 0),
           penaltyCollected: fromPaise(summary.redemptions.penaltyPaise ?? 0),
           goldHandedGrams:
-            Number(summary.redemptions.goldWeightMg ?? summary.redemptions.weightMg ?? 0) /
-            1000,
+            Number(
+              summary.redemptions.goldWeightMg ??
+                summary.redemptions.weightMg ??
+                0,
+            ) / 1000,
           goldHandoverValue: fromPaise(
             summary.redemptions.goldHandoverValuePaise ?? 0,
           ),
@@ -2365,8 +2432,7 @@ export const adaptGoldHistory = (
     const ratePerGram = rupees(x);
     const previous = list[index + 1];
     const previousRate = previous ? rupees(previous) : null;
-    const movement =
-      previousRate == null ? null : ratePerGram - previousRate;
+    const movement = previousRate == null ? null : ratePerGram - previousRate;
     return {
       id: entityId(x),
       effectiveAt: dateTime(
@@ -2444,7 +2510,9 @@ function mapAdaptListItem(item: any): any {
     item?.installments
   ) {
     const plan = item.plan ?? item.planSnapshot ?? {};
-    const installments = Array.isArray(item.installments) ? item.installments : [];
+    const installments = Array.isArray(item.installments)
+      ? item.installments
+      : [];
     const paidFromInstallments = installments.reduce(
       (sum: number, row: any) => sum + Number(row.paidPaise ?? 0),
       0,
@@ -2519,13 +2587,13 @@ export function adaptListBundle(raw: any): {
     return {
       items,
       summary: raw.summary,
-      page: raw.page ?? mergePageMeta(raw, { total: raw.total ?? items.length }),
+      page:
+        raw.page ?? mergePageMeta(raw, { total: raw.total ?? items.length }),
       total: raw.total ?? items.length,
     };
   }
 
-  const apiSummary =
-    meta?.summary ?? raw?.summary ?? payload?.summary;
+  const apiSummary = meta?.summary ?? raw?.summary ?? payload?.summary;
   const summary = normalizeMaturitySummaryFromApi(
     apiSummary as Record<string, unknown> | undefined,
     items,
@@ -2636,8 +2704,7 @@ function mapDueWorkboardRow(
   else if (
     dueDateRaw &&
     dueDateRaw < today &&
-    (!inst.graceEndsAt ||
-      String(inst.graceEndsAt).slice(0, 10) >= today) &&
+    (!inst.graceEndsAt || String(inst.graceEndsAt).slice(0, 10) >= today) &&
     status !== "OVERDUE"
   ) {
     status = "GRACE";
@@ -2657,8 +2724,7 @@ function mapDueWorkboardRow(
     amount,
     overdueDays: daysPastDue(dueDateRaw),
     status,
-    paymentPattern:
-      inst.paymentPattern === "FLEXIBLE" ? "FLEXIBLE" : "FIXED",
+    paymentPattern: inst.paymentPattern === "FLEXIBLE" ? "FLEXIBLE" : "FIXED",
     flexiblePhase:
       inst.flexiblePhase === "CAPPED"
         ? "CAPPED"
@@ -2678,21 +2744,14 @@ function flattenDueInstallments(schemes: any[]): any[] {
       scheme.enrollmentNumber ??
       scheme.enrollmentNo ??
       schemeId;
-    const customer =
-      scheme.customer?.name ?? scheme.customerName ?? "—";
+    const customer = scheme.customer?.name ?? scheme.customerName ?? "—";
     const customerId = String(
       scheme.customerId ?? scheme.customer?._id ?? scheme.customer?.id ?? "",
     );
     const phone =
-      scheme.customer?.mobile ??
-      scheme.customer?.phone ??
-      scheme.phone ??
-      "—";
+      scheme.customer?.mobile ?? scheme.customer?.phone ?? scheme.phone ?? "—";
     const plan =
-      scheme.planSnapshot?.name ??
-      scheme.plan?.name ??
-      scheme.planName ??
-      "—";
+      scheme.planSnapshot?.name ?? scheme.plan?.name ?? scheme.planName ?? "—";
     const branch = branchName(scheme);
     const context = {
       schemeId,
@@ -2757,7 +2816,9 @@ function deriveDuesSummary(items: any[]): Record<string, any> {
       .filter((row) => statuses.includes(String(row.status ?? "")))
       .reduce((total, row) => total + Number(row.amount ?? 0), 0);
   const customers = new Set(
-    items.map((row) => String(row.customerId || row.customer || "")).filter(Boolean),
+    items
+      .map((row) => String(row.customerId || row.customer || ""))
+      .filter(Boolean),
   );
   return {
     due: sumStatus("DUE", "PARTIALLY_PAID"),
@@ -2795,15 +2856,13 @@ export function adaptDueList(raw: any): {
       grace: raw.summary?.grace ?? deriveDuesSummary(items).grace,
       overdue: raw.summary?.overdue ?? deriveDuesSummary(items).overdue,
       defaulted: raw.summary?.defaulted ?? deriveDuesSummary(items).defaulted,
-      customers:
-        raw.summary?.customers ?? deriveDuesSummary(items).customers,
+      customers: raw.summary?.customers ?? deriveDuesSummary(items).customers,
     };
     return {
       items,
       summary,
       page:
-        raw.page ??
-        mergePageMeta(raw, { total: raw.total ?? items.length }),
+        raw.page ?? mergePageMeta(raw, { total: raw.total ?? items.length }),
       total: raw.total ?? items.length,
     };
   }
@@ -2901,8 +2960,7 @@ export function adaptMessages(raw: any): {
         queued: raw.summary?.queued ?? derived.queued,
       },
       page:
-        raw.page ??
-        mergePageMeta(raw, { total: raw.total ?? items.length }),
+        raw.page ?? mergePageMeta(raw, { total: raw.total ?? items.length }),
       total: raw.total ?? items.length,
     };
   }
@@ -2944,7 +3002,9 @@ export function adaptMessages(raw: any): {
       ...(raw?.summary ?? meta?.summary ?? {}),
       sent: raw?.summary?.sent ?? meta?.summary?.sent ?? derived.sent,
       delivered:
-        raw?.summary?.delivered ?? meta?.summary?.delivered ?? derived.delivered,
+        raw?.summary?.delivered ??
+        meta?.summary?.delivered ??
+        derived.delivered,
       read: raw?.summary?.read ?? meta?.summary?.read ?? derived.read,
       failed: raw?.summary?.failed ?? meta?.summary?.failed ?? derived.failed,
       queued: raw?.summary?.queued ?? meta?.summary?.queued ?? derived.queued,
@@ -2966,9 +3026,7 @@ function messageSummaryFromItems(items: any[]) {
   const deliveredExplicit = count("DELIVERED");
   const delivered = deliveredExplicit + sentExplicit;
   return {
-    sent:
-      sentExplicit + deliveredExplicit + read + failed ||
-      items.length,
+    sent: sentExplicit + deliveredExplicit + read + failed || items.length,
     delivered,
     read,
     failed,
@@ -3190,11 +3248,14 @@ export function adaptRedemptionDetail(raw: unknown): RedemptionDetailView {
   const reasonRaw = item.modeDetails?.reason;
   const requestReason =
     typeof reasonRaw === "string"
-      ? reasonRaw.replace(/_/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase())
+      ? reasonRaw
+          .replace(/_/g, " ")
+          .replace(/\b\w/g, (c: string) => c.toUpperCase())
       : undefined;
 
   const status = String(item.status ?? "REQUESTED");
-  const pendingApproval = status === "REQUESTED" || status === "PENDING_APPROVAL";
+  const pendingApproval =
+    status === "REQUESTED" || status === "PENDING_APPROVAL";
   const mode = String(item.mode ?? "CASH");
   const isCompleted = status === "COMPLETED";
   const handoverRate = Number(item.handoverRatePerGramPaise ?? 0);
@@ -3245,8 +3306,7 @@ export function adaptRedemptionDetail(raw: unknown): RedemptionDetailView {
     },
     scheme: {
       id: entityId(scheme) || String(item.schemeId ?? ""),
-      enrollmentNumber:
-        scheme.enrollmentNumber ?? scheme.schemeNumber ?? "—",
+      enrollmentNumber: scheme.enrollmentNumber ?? scheme.schemeNumber ?? "—",
       planName: scheme.name ?? scheme.planSnapshot?.name,
       maturityDate: scheme.maturityDate,
       status: scheme.status,
@@ -3407,13 +3467,15 @@ function deriveMaturitySummary(items: any[]): Record<string, number> {
     const maturityIso =
       typeof maturityRaw === "string" && maturityRaw.includes("T")
         ? maturityRaw.slice(0, 10)
-        : typeof maturityRaw === "string" && /^\d{4}-\d{2}-\d{2}/.test(maturityRaw)
+        : typeof maturityRaw === "string" &&
+            /^\d{4}-\d{2}-\d{2}/.test(maturityRaw)
           ? maturityRaw.slice(0, 10)
           : null;
     if (status === "MATURED" || row.pendingRedemption) notRedeemed += 1;
     if (status === "DEFAULTED") incomplete += 1;
     if (maturityIso === today) maturedToday += 1;
-    if (maturityIso && maturityIso >= today && maturityIso <= in30) upcoming += 1;
+    if (maturityIso && maturityIso >= today && maturityIso <= in30)
+      upcoming += 1;
     liability += Number(row.paid ?? 0);
     gold += Number(row.accumulatedGold ?? 0);
   }
@@ -3421,7 +3483,8 @@ function deriveMaturitySummary(items: any[]): Record<string, number> {
     upcoming: upcoming || items.length,
     maturedToday,
     incomplete,
-    notRedeemed: notRedeemed || items.filter((r) => r.status === "MATURED").length,
+    notRedeemed:
+      notRedeemed || items.filter((r) => r.status === "MATURED").length,
     liability,
     gold,
   };
@@ -3592,8 +3655,7 @@ export function adaptCashHandoverDetail(raw: any): CashHandoverDetail {
     id: entityId(p) || `pay_line_${index}`,
     receiptNo: String(p?.receiptNo ?? p?.receiptNumber ?? "—"),
     customer:
-      p?.customer?.name ??
-      (typeof p?.customer === "string" ? p.customer : "—"),
+      p?.customer?.name ?? (typeof p?.customer === "string" ? p.customer : "—"),
     amount:
       rupees(p?.amount) ||
       (typeof p?.amountPaise === "number" ? p.amountPaise / 100 : 0),
@@ -3834,44 +3896,50 @@ export function adaptCustomerAnalytics(raw: any): {
   const total = Number(data.total ?? 0);
   const active = Number(data.active ?? 0);
   const blocked = Number(data.blocked ?? 0);
-  const inactive = Number(data.inactive ?? Math.max(0, total - active - blocked));
+  const inactive = Number(
+    data.inactive ?? Math.max(0, total - active - blocked),
+  );
   const kycVerified = Number(data.kycVerified ?? 0);
   const kycPending = Number(data.kycPending ?? 0);
   const withActiveScheme = Number(data.withActiveScheme ?? 0);
 
-  const summary: import("@/src/types/admin-report").ReportSummaryItem[] = Array.isArray(
-    data.summary,
-  ) && data.summary.length
-    ? data.summary
-    : [
-        { key: "TOTAL", label: "Total customers", value: total, valueType: "count" },
-        { key: "ACTIVE", label: "Active", value: active, valueType: "count" },
-        {
-          key: "BLOCKED",
-          label: "Blocked",
-          value: blocked,
-          valueType: "count",
-          severity: blocked > 0 ? "WARNING" : undefined,
-        },
-        {
-          key: "KYC_VERIFIED",
-          label: "KYC verified",
-          value: kycVerified,
-          valueType: "count",
-        },
-        {
-          key: "KYC_PENDING",
-          label: "KYC pending",
-          value: kycPending,
-          valueType: "count",
-        },
-        {
-          key: "WITH_ACTIVE_SCHEME",
-          label: "With active scheme",
-          value: withActiveScheme,
-          valueType: "count",
-        },
-      ];
+  const summary: import("@/src/types/admin-report").ReportSummaryItem[] =
+    Array.isArray(data.summary) && data.summary.length
+      ? data.summary
+      : [
+          {
+            key: "TOTAL",
+            label: "Total customers",
+            value: total,
+            valueType: "count",
+          },
+          { key: "ACTIVE", label: "Active", value: active, valueType: "count" },
+          {
+            key: "BLOCKED",
+            label: "Blocked",
+            value: blocked,
+            valueType: "count",
+            severity: blocked > 0 ? "WARNING" : undefined,
+          },
+          {
+            key: "KYC_VERIFIED",
+            label: "KYC verified",
+            value: kycVerified,
+            valueType: "count",
+          },
+          {
+            key: "KYC_PENDING",
+            label: "KYC pending",
+            value: kycPending,
+            valueType: "count",
+          },
+          {
+            key: "WITH_ACTIVE_SCHEME",
+            label: "With active scheme",
+            value: withActiveScheme,
+            valueType: "count",
+          },
+        ];
 
   const charts: Record<
     string,
@@ -3973,9 +4041,7 @@ export function adaptAuditEvents(raw: any): {
       actor:
         typeof item.actor === "string" && !looksLikeOpaqueId(item.actor)
           ? item.actor
-          : (item.actor as { name?: string })?.name ??
-            staffName(item) ??
-            "—",
+          : ((item.actor as { name?: string })?.name ?? staffName(item) ?? "—"),
       action: String(item.action ?? "—"),
       entityType: item.entityType ? String(item.entityType) : undefined,
       entity: auditEntityLabel(item),
@@ -3985,7 +4051,8 @@ export function adaptAuditEvents(raw: any): {
     }));
     return {
       items,
-      page: raw.page ?? mergePageMeta(raw, { total: raw.total ?? items.length }),
+      page:
+        raw.page ?? mergePageMeta(raw, { total: raw.total ?? items.length }),
       total: raw.total ?? items.length,
     };
   }
@@ -4020,7 +4087,9 @@ export function adaptAuditEvents(raw: any): {
         ? `${action.replaceAll("_", " ")} · ${item.metadata.note}`
         : action.replaceAll("_", " "));
     return {
-      id: entityId(item) || `${action}_${item.occurredAt ?? item.createdAt ?? ""}`,
+      id:
+        entityId(item) ||
+        `${action}_${item.occurredAt ?? item.createdAt ?? ""}`,
       at: dateTime(item.occurredAt ?? item.createdAt ?? item.at),
       actor: actorName,
       action,

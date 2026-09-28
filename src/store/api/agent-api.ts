@@ -11,6 +11,7 @@ import {
   agentGoldRate,
   agentHandovers,
   agentPayments,
+  agentPlans,
   agentReport,
   agentSchemes,
   agentTenantChoices,
@@ -37,10 +38,16 @@ import {
   AGENT_REFRESH_KEY,
   patchAgentTokens,
 } from "@/src/store/slices/agent-session-slice";
+import { adaptEnrolValidation } from "@/src/store/api/contract-adapters";
+import type { EnrolValidationPreview } from "@/src/components/common/enrol-validation-panel";
 import type {
+  AgentCapabilities,
   AgentCashSummary,
   AgentCollectionSummary,
+  AgentCreateCustomerInput,
   AgentCustomer,
+  AgentEnrolInput,
+  AgentPlan,
   AgentGoldRate,
   AgentHandover,
   AgentManualPaymentMode,
@@ -82,19 +89,56 @@ function peelAgentPayload(raw: unknown): Record<string, unknown> {
 }
 
 function mapAgentUser(raw: Record<string, unknown> | null | undefined): AgentUser {
-  const row = raw && typeof raw === "object" ? raw : {};
+  const row = raw && typeof raw === "object" ? raw : ({} as Record<string, unknown>);
   return {
     id: idOf(row),
-    name: String(raw.name ?? ""),
-    mobile: raw.mobile != null ? String(raw.mobile) : undefined,
-    role: (raw.role ?? "COLLECTION_AGENT") as AgentUser["role"],
-    tenantId: String(raw.tenantId ?? ""),
-    branchId: String(raw.branchId ?? ""),
-    branchName: raw.branchName != null ? String(raw.branchName) : undefined,
-    tenantName: raw.tenantName != null ? String(raw.tenantName) : undefined,
-    tenantCode: raw.tenantCode != null ? String(raw.tenantCode) : undefined,
-    permissions: Array.isArray(raw.permissions) ? (raw.permissions as string[]) : [],
-    mustSetPassword: Boolean(raw.mustSetPassword),
+    name: String(row.name ?? ""),
+    mobile: row.mobile != null ? String(row.mobile) : undefined,
+    role: (row.role ?? "COLLECTION_AGENT") as AgentUser["role"],
+    tenantId: String(row.tenantId ?? ""),
+    branchId: String(row.branchId ?? ""),
+    branchName: row.branchName != null ? String(row.branchName) : undefined,
+    tenantName: row.tenantName != null ? String(row.tenantName) : undefined,
+    tenantCode: row.tenantCode != null ? String(row.tenantCode) : undefined,
+    permissions: Array.isArray(row.permissions) ? (row.permissions as string[]) : [],
+    agentCapabilities: mapAgentCapabilities(row.agentCapabilities),
+    mustSetPassword: Boolean(row.mustSetPassword),
+  };
+}
+
+function mapAgentCapabilities(raw: unknown): AgentCapabilities | undefined {
+  if (!raw || typeof raw !== "object") return undefined;
+  const row = raw as Record<string, unknown>;
+  return {
+    registerCustomers: row.registerCustomers === true,
+    enrolSchemes: row.enrolSchemes === true,
+  };
+}
+
+function optionalPaise(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
+function mapAgentPlan(raw: Record<string, unknown>): AgentPlan {
+  const amount = (raw.amountRules ?? {}) as Record<string, unknown>;
+  const schedule = (raw.scheduleRules ?? {}) as Record<string, unknown>;
+  const benefit = (raw.benefit ?? {}) as Record<string, unknown>;
+  return {
+    id: idOf(raw),
+    name: String(raw.displayName ?? raw.name ?? "Plan"),
+    code: String(raw.code ?? ""),
+    valueBasis: raw.valueBasis === "GOLD_WEIGHT" ? "GOLD_WEIGHT" : "CASH",
+    paymentPattern: raw.paymentPattern === "FLEXIBLE" ? "FLEXIBLE" : "FIXED",
+    durationMonths: Number(raw.durationMonths ?? 0),
+    amountMode: amount.amountMode as AgentPlan["amountMode"],
+    fixedAmountPaise: optionalPaise(amount.fixedAmountPaise),
+    slabsPaise: Array.isArray(amount.slabsPaise) ? (amount.slabsPaise as number[]).filter((value) => typeof value === "number") : [],
+    minInstallmentPaise: optionalPaise(amount.minInstallmentPaise),
+    maxInstallmentPaise: optionalPaise(amount.maxInstallmentPaise),
+    multipleOfPaise: optionalPaise(amount.multipleOfPaise),
+    firstInstallmentModeDefault: schedule.firstInstallmentModeDefault === "START_NEXT_CYCLE" ? "START_NEXT_CYCLE" : "COLLECT_NOW",
+    firstInstallmentModeEditable: schedule.firstInstallmentModeEditable === true,
+    benefitLabel: benefit.displayLabel != null ? String(benefit.displayLabel) : undefined,
   };
 }
 
@@ -432,6 +476,17 @@ const mockBaseQuery: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQueryErro
   if (url === "/staff/cash/summary") return ok(agentCashSummary);
   if (url === "/staff/collections/summary") return ok(agentCollectionSummary);
   if (url === "/staff/gold-rate/current") return ok(agentGoldRate);
+  if (url === "/staff/customers" && method === "POST") {
+    const id = `cus_mock_${Date.now()}`;
+    return ok({ _id: id, customerNumber: "CUS-NEW", name: String(body.name ?? ""), mobile: String(body.mobile ?? ""), status: "ACTIVE", passbookNumber: String(body.passbookNumber ?? ""), version: 1 });
+  }
+  if (url === "/staff/scheme-plans") return ok(agentPlans);
+  if (url === "/staff/schemes/enrol/validate" && method === "POST") {
+    return ok({ canEnrol: true, valid: true, blockers: [], warnings: [], installmentAmountPaise: body.installmentAmountPaise ?? 250000, preview: { installmentAmount: { amountPaise: Number(body.installmentAmountPaise ?? 250000) }, installmentCount: 11, firstDueDate: "2026-10-05", maturityDate: "2027-09-05" } });
+  }
+  if (url === "/staff/schemes/enrol" && method === "POST") {
+    return ok({ _id: agentSchemes[0].id, customerId: body.customerId, status: body.firstInstallmentMode === "COLLECT_NOW" ? "PENDING_PAYMENT" : "ACTIVE" });
+  }
   if (url === "/staff/customers") {
     const q = String(params.q ?? "").trim().toLowerCase();
     const rows = !q ? agentCustomers : agentCustomers.filter((item) => [item.name, item.mobile, item.customerNumber, item.passbookNumber].some((value) => value.toLowerCase().includes(q)));
@@ -646,6 +701,8 @@ export const agentApi = createApi({
     getAgentMe: builder.query<AgentUserResult, void>({
       query: () => "/auth/me",
       transformResponse: (raw: Record<string, unknown>) => mapAgentUser(raw),
+      providesTags: ["AgentProfile"],
+      keepUnusedDataFor: 300,
     }),
     getAgentProfile: builder.query<AgentUserResult, void>({
       query: () => "/staff/profile",
@@ -670,6 +727,27 @@ export const agentApi = createApi({
       query: (id) => `/staff/customers/${id}`,
       transformResponse: (raw: Record<string, unknown>) => normalizeCustomer(raw),
       providesTags: (_r, _e, id) => [{ type: "AgentCustomer", id }],
+    }),
+    checkAgentCustomerMobile: builder.query<{ exists: boolean }, string>({
+      query: (mobile) => ({ url: "/staff/customers/check-mobile", params: { mobile } }),
+      transformResponse: (raw: Record<string, unknown>) => ({ exists: raw?.exists === true }),
+    }),
+    createAgentCustomer: builder.mutation<AgentCustomer, AgentCreateCustomerInput>({
+      query: (body) => ({ url: "/staff/customers", method: "POST", body }),
+      transformResponse: (raw: Record<string, unknown>) => normalizeCustomer(raw),
+    }),
+    getAgentPlans: builder.query<AgentPlan[], void>({
+      query: () => ({ url: "/staff/scheme-plans", params: { limit: 100 } }),
+      transformResponse: (rows: unknown) => asList(rows, mapAgentPlan),
+    }),
+    validateAgentEnrolment: builder.mutation<EnrolValidationPreview, AgentEnrolInput>({
+      query: (body) => ({ url: "/staff/schemes/enrol/validate", method: "POST", body }),
+      transformResponse: (raw: unknown) => adaptEnrolValidation(raw),
+    }),
+    enrolAgentCustomer: builder.mutation<{ id: string; status: string }, AgentEnrolInput>({
+      query: (body) => ({ url: "/staff/schemes/enrol", method: "POST", body }),
+      transformResponse: (raw: Record<string, unknown>) => ({ id: idOf(raw ?? {}), status: String(raw?.status ?? "") }),
+      invalidatesTags: (_r, _e, arg) => [{ type: "AgentCustomer", id: arg.customerId }],
     }),
     getAgentScheme: builder.query<AgentScheme, string>({ query: (id) => `/staff/schemes/${id}`, transformResponse: (raw: Record<string, unknown>) => normalizeScheme(raw), providesTags: (_r, _e, id) => [{ type: "AgentScheme", id }] }),
     getAgentPayableRange: builder.query<AgentPayableRange, { schemeId: string; targetCycle?: string }>({
@@ -851,6 +929,11 @@ export const {
   useGetAgentGoldRateQuery,
   useSearchAgentCustomersQuery,
   useGetAgentCustomerQuery,
+  useLazyCheckAgentCustomerMobileQuery,
+  useCreateAgentCustomerMutation,
+  useGetAgentPlansQuery,
+  useValidateAgentEnrolmentMutation,
+  useEnrolAgentCustomerMutation,
   useGetAgentSchemeQuery,
   useGetAgentPayableRangeQuery,
   useGetAgentPassbookQuery,

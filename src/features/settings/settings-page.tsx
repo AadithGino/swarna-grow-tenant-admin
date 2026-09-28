@@ -224,6 +224,8 @@ export function SettingsPage({
     customerLoginMode: "OTP_ONLY" as "OTP_ONLY" | "PASSWORD_ONLY",
     customerAppWriteEnabled: true,
     customerAppPaymentsEnabled: true,
+    agentCanRegisterCustomers: false,
+    agentCanEnrolSchemes: false,
     redemptionApprovalRequired: true,
     receiptPrefix: "",
     receiptNumberFormat: "",
@@ -353,6 +355,8 @@ export function SettingsPage({
       customerAppPaymentsEnabled: Boolean(
         o.customerAppPaymentsEnabled ?? true,
       ),
+      agentCanRegisterCustomers: o.agentCanRegisterCustomers === true,
+      agentCanEnrolSchemes: o.agentCanEnrolSchemes === true,
       redemptionApprovalRequired: Boolean(o.redemptionApprovalRequired),
       receiptPrefix: String(o.receiptPrefix ?? ""),
       receiptNumberFormat: String(o.receiptNumberFormat ?? ""),
