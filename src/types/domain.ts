@@ -515,6 +515,9 @@ export interface SettlementPreview {
   approvalReason?: string;
   warningText?: string;
   valuationNote?: string;
+  /** Cash-value gold handover: settlement minus valued handover weight (paise as rupees). */
+  roundingDelta?: number;
+  handoverValue?: number;
 }
 
 export interface RedemptionRecord {

@@ -3091,6 +3091,12 @@ export function adaptSettlementPreview(
       approvalReason: payload.approvalReason,
       warningText: payload.warningText,
       valuationNote: payload.valuationNote,
+      handoverValue: payload.handoverValuePaise != null
+        ? fromPaise(Number(payload.handoverValuePaise))
+        : undefined,
+      roundingDelta: payload.roundingDeltaPaise != null
+        ? fromPaise(Number(payload.roundingDeltaPaise))
+        : undefined,
     };
   }
 

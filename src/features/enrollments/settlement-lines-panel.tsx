@@ -366,6 +366,16 @@ export function SettlementLinesPanel({
                     {preview.finalWeightDisplay}
                   </p>
                 ) : null}
+                {preview.handoverValue != null && preview.handoverValue > 0 ? (
+                  <p className="mt-1 text-xs text-[#776a6d]">
+                    Gold valued at handover: {money(preview.handoverValue)}
+                  </p>
+                ) : null}
+                {preview.roundingDelta != null && preview.roundingDelta !== 0 ? (
+                  <p className="mt-1 text-xs text-amber-900/90">
+                    Rounding vs settlement: {money(preview.roundingDelta)} (disclosure only)
+                  </p>
+                ) : null}
               </div>
             </div>
           </Surface>
