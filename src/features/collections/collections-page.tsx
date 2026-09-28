@@ -299,7 +299,10 @@ export function CollectionsPage() {
                 </Button>
               </>
             ) : null}
-            {status === "SUCCESS" && tab !== "reversed" ? (
+            {status === "SUCCESS" &&
+            tab !== "reversed" &&
+            r.mode !== "ONLINE_GATEWAY" &&
+            r.mode !== "LEGACY_ONLINE" ? (
               <Button
                 size="sm"
                 variant="ghost"
