@@ -37,7 +37,6 @@ import { EnrollmentMaturityTab } from "@/src/features/enrollments/enrollment-mat
 import { EnrollmentSchedule } from "@/src/features/enrollments/scheme-schedule";
 import {
   PrematureClosureDialog,
-  RedeemEnrollmentDialog,
   SettlementPreviewDialog,
 } from "@/src/features/enrollments/settlement-dialogs";
 import { PaymentDialog } from "@/src/features/payments/payment-dialog";
@@ -60,7 +59,6 @@ export function EnrollmentDetailPage({ id }: { id: string }) {
   const [previewType, setPreviewType] = useState<
     "MATURITY_REDEMPTION" | "PREMATURE_CLOSURE"
   >("MATURITY_REDEMPTION");
-  const [redeemOpen, setRedeemOpen] = useState(false);
   const [closeOpen, setCloseOpen] = useState(false);
   const [createPaymentLink, createLinkState] = useCreatePaymentLinkMutation();
   const [fetchPassbook, passbookState] = useLazyGetSchemePassbookQuery();
@@ -181,19 +179,7 @@ export function EnrollmentDetailPage({ id }: { id: string }) {
         }
         open={previewOpen}
         onOpenChange={setPreviewOpen}
-        onInitiateRedemption={
-          previewType === "MATURITY_REDEMPTION"
-            ? () => {
-                setRedeemOpen(true);
-                setPreviewOpen(false);
-              }
-            : undefined
-        }
-      />
-      <RedeemEnrollmentDialog
-        schemeId={row.id}
-        open={redeemOpen}
-        onOpenChange={setRedeemOpen}
+        redemptionWizard={previewType === "MATURITY_REDEMPTION"}
       />
       <PrematureClosureDialog
         schemeId={row.id}
@@ -555,7 +541,10 @@ export function EnrollmentDetailPage({ id }: { id: string }) {
               setPreviewType("PREMATURE_CLOSURE");
               setPreviewOpen(true);
             }}
-            onRedeem={() => setRedeemOpen(true)}
+            onRedeem={() => {
+              setPreviewType("MATURITY_REDEMPTION");
+              setPreviewOpen(true);
+            }}
             onCloseEarly={() => setCloseOpen(true)}
           />
         </PageTabsPanel>

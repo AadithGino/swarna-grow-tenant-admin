@@ -65,6 +65,7 @@ import { ReversePaymentDialog } from "@/src/features/collections/reverse-payment
 import { PaymentRefundDialog } from "@/src/features/collections/payment-refund-dialog";
 import type { Payment } from "@/src/types/domain";
 import { GatewaySettlementPanel } from "@/src/features/collections/gateway-settlement-panel";
+import { PostSettlementRefundsPanel } from "@/src/features/collections/post-settlement-refunds-panel";
 
 type LedgerTab = "all" | "pending" | "late" | "reversed";
 type CollectionSection = "payments" | "refunds" | "settlement" | "post-settlement-refunds";
@@ -493,32 +494,7 @@ export function CollectionsPage() {
           </PageTab>
         </PageFilterTabs>
       </Surface>
-      {section === "post-settlement-refunds" ? (
-        <Surface
-          title="Post-settlement gateway refunds"
-          description="Provider refunds after scheme settlement need an operator disposition (not another cash movement)."
-        >
-          {pendingCases.isLoading ? (
-            <PageSkeleton />
-          ) : (pendingCases.data?.data?.length ?? 0) === 0 ? (
-            <EmptyState title="No pending cases" description="All post-settlement refunds are resolved." />
-          ) : (
-            <ul className="divide-y text-sm">
-              {(pendingCases.data?.data ?? []).map((row) => (
-                <li key={String(row._id ?? row.id)} className="flex flex-wrap justify-between gap-2 py-3">
-                  <span>
-                    {money(Number(row.refundAmountPaise ?? 0) / 100)}
-                    <span className="text-muted-foreground"> · {String(row.status ?? "PENDING")}</span>
-                  </span>
-                  <span className="text-muted-foreground">
-                    Completed {row.refundCompletedAt ? new Date(String(row.refundCompletedAt)).toLocaleDateString() : "—"}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </Surface>
-      ) : null}
+      {section === "post-settlement-refunds" ? <PostSettlementRefundsPanel /> : null}
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
         <StatCard
           icon={IndianRupee}

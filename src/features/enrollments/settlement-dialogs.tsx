@@ -1,7 +1,8 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useState } from "react";
-import { ArrowRight, Loader2 } from "lucide-react";
+import { ArrowLeft, ArrowRight, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -41,7 +42,7 @@ import {
   useGetSettlementPreviewQuery,
   useRedeemEnrollmentMutation,
 } from "@/src/store/api/admin-api";
-import type { SettlementPreviewType } from "@/src/types/domain";
+import type { SettlementPreview, SettlementPreviewType } from "@/src/types/domain";
 import { apiErrorCode, apiErrorMessage } from "@/src/lib/api-error";
 import { cn } from "@/lib/utils";
 
@@ -87,6 +88,76 @@ function pickDefaultMode(
   return choices[0] ?? REDEMPTION_MODE_OPTIONS[0]!.value;
 }
 
+function hasGoldRateBlocker(preview?: SettlementPreview) {
+  return (
+    preview?.blockers?.some(
+      (blocker) =>
+        blocker.code === "GOLD_RATE_NOT_SET" ||
+        /gold rate/i.test(blocker.message ?? ""),
+    ) ?? false
+  );
+}
+
+function RedemptionMethodSelect({
+  modeChoices,
+  selectedMode,
+  onModeChange,
+  loading,
+  isGoldWeight,
+  preview,
+}: {
+  modeChoices: string[];
+  selectedMode: string;
+  onModeChange: (mode: string) => void;
+  loading?: boolean;
+  isGoldWeight?: boolean;
+  preview?: SettlementPreview;
+}) {
+  const options =
+    modeChoices.length > 0
+      ? modeChoices
+      : REDEMPTION_MODE_OPTIONS.map((row) => row.value);
+
+  return (
+    <div className="space-y-2 rounded-2xl border border-[#eaded9] bg-[#faf7f5] p-4 shadow-sm">
+      <FieldLabel>Settlement type (redemption method)</FieldLabel>
+      <Select
+        value={selectedMode || undefined}
+        onValueChange={onModeChange}
+        disabled={loading || options.length === 0}
+      >
+        <SelectTrigger className="w-full bg-white">
+          <SelectValue placeholder="Select how value is handed over" />
+        </SelectTrigger>
+        <SelectContent>
+          {options.map((value) => {
+            const fromPreview = preview?.allowedModes?.find((m) => m.mode === value);
+            return (
+              <SelectItem key={value} value={value}>
+                {fromPreview?.label ?? redemptionModeLabel(value)}
+              </SelectItem>
+            );
+          })}
+        </SelectContent>
+      </Select>
+      {preview?.modePreviews?.[selectedMode]?.note ? (
+        <p className="text-xs leading-5 text-[#776a6d]">
+          {preview.modePreviews[selectedMode].note}
+          {preview.modePreviews[selectedMode].weightDisplay
+            ? ` · ${preview.modePreviews[selectedMode].weightDisplay}`
+            : ""}
+        </p>
+      ) : (
+        <p className="text-xs leading-5 text-[#776a6d]">
+          {isGoldWeight
+            ? "Gold accumulation plans settle by cash payout, gold handover, or purchase adjustment per plan rules."
+            : "Choose how the customer receives value at maturity."}
+        </p>
+      )}
+    </div>
+  );
+}
+
 export function SettlementPreviewDialog({
   schemeId,
   type,
@@ -94,8 +165,9 @@ export function SettlementPreviewDialog({
   onOpenChange,
   title,
   description,
-  onInitiateRedemption,
   mode,
+  redemptionWizard = type === "MATURITY_REDEMPTION",
+  initialWizardStep = "preview",
 }: {
   schemeId: string;
   type: SettlementPreviewType;
@@ -103,21 +175,23 @@ export function SettlementPreviewDialog({
   onOpenChange: (open: boolean) => void;
   title?: string;
   description?: string;
-  onInitiateRedemption?: () => void;
   mode?: string;
+  redemptionWizard?: boolean;
+  initialWizardStep?: "preview" | "submit";
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       {open ? (
         <SettlementPreviewDialogBody
-          key={`${schemeId}:${type}`}
+          key={`${schemeId}:${type}:${initialWizardStep}`}
           schemeId={schemeId}
           type={type}
           onOpenChange={onOpenChange}
           title={title}
           description={description}
-          onInitiateRedemption={onInitiateRedemption}
           mode={mode}
+          redemptionWizard={redemptionWizard}
+          initialWizardStep={initialWizardStep}
         />
       ) : null}
     </Dialog>
@@ -130,20 +204,30 @@ function SettlementPreviewDialogBody({
   onOpenChange,
   title,
   description,
-  onInitiateRedemption,
   mode,
+  redemptionWizard,
+  initialWizardStep,
 }: {
   schemeId: string;
   type: SettlementPreviewType;
   onOpenChange: (open: boolean) => void;
   title?: string;
   description?: string;
-  onInitiateRedemption?: () => void;
   mode?: string;
+  redemptionWizard: boolean;
+  initialWizardStep: "preview" | "submit";
 }) {
   const enrollmentQuery = useGetEnrollmentQuery(schemeId);
+  const [redeem, redeemState] = useRedeemEnrollmentMutation();
   const isMaturity = type === "MATURITY_REDEMPTION";
+  const [wizardStep, setWizardStep] = useState<"preview" | "submit">(
+    initialWizardStep,
+  );
   const [modeOverride, setModeOverride] = useState<string | null>(null);
+  const [billNumber, setBillNumber] = useState("");
+  const [remarks, setRemarks] = useState("");
+  const [remarksTouched, setRemarksTouched] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const modeChoices = useMemo(
     () => resolveModeChoices(enrollmentQuery.data),
@@ -169,263 +253,88 @@ function SettlementPreviewDialogBody({
   );
 
   const preview = previewQuery.data;
-  const canContinue =
-    isMaturity && preview?.eligible && Boolean(onInitiateRedemption);
-
-  return (
-    <DialogContent className={cn(dialogScrollShellClass, "sm:max-w-3xl")}>
-      <DialogBody className="space-y-5 pb-2">
-        <DialogHeader className="space-y-2 text-left">
-          <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#9a6f2a]">
-            Settlement preview
-          </p>
-          <DialogTitle className="text-2xl font-extrabold tracking-tight text-[#241316]">
-            {title ??
-              (isMaturity ? "Maturity settlement" : "Premature closure")}
-          </DialogTitle>
-          <DialogDescription className="max-w-2xl text-sm leading-6 text-[#776a6d]">
-            {description ??
-              "Computed from confirmed payments only — no ledger writes until you submit redemption or closure."}
-          </DialogDescription>
-        </DialogHeader>
-
-        {isMaturity ? (
-          <div className="space-y-2 rounded-2xl border border-[#eaded9] bg-[#faf7f5] p-4">
-            <FieldLabel>Redemption method</FieldLabel>
-            <Select
-              value={selectedMode || undefined}
-              onValueChange={setModeOverride}
-              disabled={modeChoices.length === 0 && enrollmentQuery.isLoading}
-            >
-              <SelectTrigger className="w-full bg-white">
-                <SelectValue placeholder="Select how value is handed over" />
-              </SelectTrigger>
-              <SelectContent>
-                {(modeChoices.length
-                  ? modeChoices
-                  : REDEMPTION_MODE_OPTIONS.map((row) => row.value)
-                ).map((value) => (
-                  <SelectItem key={value} value={value}>
-                    {redemptionModeLabel(value)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <p className="text-xs leading-5 text-[#776a6d]">
-              {isGoldWeight
-                ? "Gold-weight schemes require a redemption method before settlement amounts can be calculated."
-                : "Choose how the customer will receive value at maturity."}
-            </p>
-          </div>
-        ) : null}
-
-        {enrollmentQuery.isLoading ||
-        (previewQuery.isFetching && !previewQuery.isError && !preview) ? (
-          <PageSkeleton cards={4} />
-        ) : previewQuery.isFetching && preview ? (
-          <div className="relative opacity-60 pointer-events-none">
-            <SettlementLinesPanel preview={preview} />
-          </div>
-        ) : previewQuery.isError ? (
-          <p className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-900">
-            {apiErrorMessage(
-              previewQuery.error,
-              "Could not load settlement preview. Refresh the page and try again.",
-            )}
-          </p>
-        ) : preview ? (
-          <SettlementLinesPanel preview={preview} />
-        ) : isMaturity && !selectedMode ? (
-          <p className="rounded-2xl border border-[#eaded9] bg-[#faf7f5] p-4 text-sm text-[#5c4a4e]">
-            Select a redemption method to load the settlement preview.
-          </p>
-        ) : (
-          <p className="text-sm text-muted-foreground">
-            Settlement preview is unavailable.
-          </p>
-        )}
-      </DialogBody>
-      <DialogFooter className="gap-3 border-t border-[#efe6ea] bg-[#faf7f5]/80 px-6 py-4 sm:justify-between">
-        <Button variant="outline" onClick={() => onOpenChange(false)}>
-          Close
-        </Button>
-        {canContinue ? (
-          <Button
-            className="gap-2"
-            onClick={() => {
-              onInitiateRedemption?.();
-            }}
-          >
-            Continue to redeem
-            <ArrowRight className="size-4" />
-          </Button>
-        ) : preview && !preview.eligible ? (
-          <p className="text-sm text-[#776a6d]">
-            Resolve blockers above to proceed.
-          </p>
-        ) : null}
-      </DialogFooter>
-    </DialogContent>
-  );
-}
-
-export function RedeemEnrollmentDialog({
-  schemeId,
-  open,
-  onOpenChange,
-}: {
-  schemeId: string;
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-}) {
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      {open ? (
-        <RedeemEnrollmentDialogBody
-          key={schemeId}
-          schemeId={schemeId}
-          onOpenChange={onOpenChange}
-        />
-      ) : null}
-    </Dialog>
-  );
-}
-
-function RedeemEnrollmentDialogBody({
-  schemeId,
-  onOpenChange,
-}: {
-  schemeId: string;
-  onOpenChange: (open: boolean) => void;
-}) {
-  const enrollmentQuery = useGetEnrollmentQuery(schemeId);
-  const [redeem, redeemState] = useRedeemEnrollmentMutation();
-  const [modeOverride, setModeOverride] = useState<string | null>(null);
-  const [billNumber, setBillNumber] = useState("");
-  const [remarks, setRemarks] = useState("");
-  const [remarksTouched, setRemarksTouched] = useState(false);
-  const [submitError, setSubmitError] = useState<string | null>(null);
-
-  const modeChoices = useMemo(
-    () => resolveModeChoices(enrollmentQuery.data),
-    [enrollmentQuery.data],
-  );
-  const mode =
-    modeOverride && modeChoices.includes(modeOverride)
-      ? modeOverride
-      : pickDefaultMode(modeChoices);
-
-  const previewQuery = useGetSettlementPreviewQuery(
-    { schemeId, type: "MATURITY_REDEMPTION", mode },
-    {
-      skip:
-        !mode || enrollmentQuery.isLoading || !enrollmentQuery.data,
-    },
-  );
-  const preview = previewQuery.data;
   const expectedVersion = enrollmentQuery.data?.version ?? 1;
+  const showWizard = isMaturity && redemptionWizard;
+  const onSubmitStep = showWizard && wizardStep === "submit";
 
-  const remarksDisplayError =
-    submitError && submitError.includes("Remarks")
-      ? undefined
-      : liveSettlementRemarksError(remarks, { required: false });
+  const remarksDisplayError = liveSettlementRemarksError(remarks, {
+    required: false,
+  });
 
-  const modeSelect = (
-    <div>
-      <FieldLabel>Redemption mode</FieldLabel>
-      <Select
-        value={mode || undefined}
-        onValueChange={setModeOverride}
-        disabled={!modeChoices.length}
-      >
-        <SelectTrigger className="w-full">
-          <SelectValue placeholder="Select redemption method" />
-        </SelectTrigger>
-        <SelectContent>
-          {(preview?.allowedModes?.filter((m) => m.available).length
-            ? preview.allowedModes.filter((m) => m.available)
-            : modeChoices.map((value) => ({
-                mode: value,
-                label: redemptionModeLabel(value),
-                available: true,
-              }))
-          ).map((m) => (
-            <SelectItem key={m.mode} value={m.mode}>
-              {m.label}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-      {preview?.modePreviews?.[mode]?.note ? (
-        <p className="mt-2 text-xs text-muted-foreground">
-          {preview.modePreviews[mode].note}
-          {preview.modePreviews[mode].weightDisplay
-            ? ` · ${preview.modePreviews[mode].weightDisplay}`
-            : ""}
-        </p>
-      ) : null}
-    </div>
-  );
+  const modeSelect = isMaturity ? (
+    <RedemptionMethodSelect
+      modeChoices={modeChoices}
+      selectedMode={selectedMode}
+      onModeChange={setModeOverride}
+      loading={enrollmentQuery.isLoading}
+      isGoldWeight={isGoldWeight}
+      preview={preview}
+    />
+  ) : null;
+
+  const previewPanel =
+    enrollmentQuery.isLoading ||
+    (previewQuery.isFetching && !previewQuery.isError && !preview) ? (
+      <PageSkeleton cards={4} />
+    ) : previewQuery.isError ? (
+      <p className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-900">
+        {apiErrorMessage(
+          previewQuery.error,
+          "Could not load settlement preview. Refresh the page and try again.",
+        )}
+      </p>
+    ) : preview ? (
+      <SettlementLinesPanel preview={preview} compact={onSubmitStep} />
+    ) : isMaturity && !selectedMode ? (
+      <p className="rounded-2xl border border-[#eaded9] bg-[#faf7f5] p-4 text-sm text-[#5c4a4e]">
+        Select a settlement type to load the computation.
+      </p>
+    ) : (
+      <p className="text-sm text-muted-foreground">
+        Settlement preview is unavailable.
+      </p>
+    );
 
   return (
     <DialogContent className={cn(dialogScrollShellClass, "sm:max-w-3xl")}>
       <DialogBody className="space-y-5 pb-2">
         <DialogHeader className="space-y-2 text-left">
           <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#9a6f2a]">
-            Redemption
+            {onSubmitStep ? "Redemption" : "Settlement preview"}
           </p>
           <DialogTitle className="text-2xl font-extrabold tracking-tight text-[#241316]">
-            Initiate redemption
+            {onSubmitStep
+              ? "Confirm & submit redemption"
+              : title ??
+                (isMaturity ? "Maturity settlement" : "Premature closure")}
           </DialogTitle>
           <DialogDescription className="max-w-2xl text-sm leading-6 text-[#776a6d]">
-            Choose how value is handed over before submitting the redemption
-            request.
+            {onSubmitStep
+              ? "Step 2 of 2 — verify settlement type and submit when blockers are cleared."
+              : description ??
+                "Step 1 of 2 — pick settlement type and review the computation before submitting."}
           </DialogDescription>
         </DialogHeader>
-        {enrollmentQuery.isLoading ||
-        (previewQuery.isLoading && !previewQuery.isError) ? (
-          <div className="space-y-4">
-            {modeSelect}
-            <PageSkeleton />
-          </div>
-        ) : previewQuery.isError ? (
-          <div className="space-y-4">
-            {modeSelect}
-            <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900">
-              {apiErrorMessage(
-                previewQuery.error,
-                "Could not load settlement preview for this mode.",
-              )}
-            </p>
-          </div>
-        ) : !preview ? (
-          <div className="space-y-4">
-            {modeSelect}
-            <p className="text-sm text-muted-foreground">
-              Select a redemption mode to continue.
-            </p>
-          </div>
-        ) : !preview.eligible ? (
-          <div className="space-y-4">
-            {modeSelect}
-            <SettlementLinesPanel preview={preview} />
-          </div>
-        ) : (
-          <div className="space-y-4">
+
+        {modeSelect}
+
+        {onSubmitStep && preview && !preview.eligible ? (
+          <p className="text-sm text-[#776a6d]">
+            Submission stays disabled until blockers above are resolved (for example
+            today&apos;s 22K gold rate).
+          </p>
+        ) : null}
+
+        {previewPanel}
+
+        {onSubmitStep && preview?.eligible ? (
+          <div className="space-y-4 border-t border-[#efe6ea] pt-4">
             {submitError ? (
               <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900">
                 {submitError}
               </p>
             ) : null}
-            {previewQuery.isFetching ? (
-              <div className="relative opacity-60 pointer-events-none">
-                <SettlementLinesPanel preview={preview} compact />
-              </div>
-            ) : (
-              <SettlementLinesPanel preview={preview} compact />
-            )}
-            {modeSelect}
-            {mode === "PURCHASE_ADJUSTMENT" ? (
+            {selectedMode === "PURCHASE_ADJUSTMENT" ? (
               <div>
                 <FieldLabel>Purchase bill number</FieldLabel>
                 <Input
@@ -447,78 +356,130 @@ function RedeemEnrollmentDialogBody({
                 className={cn(
                   remarksTouched && remarksDisplayError && "border-red-600",
                 )}
-                aria-invalid={Boolean(remarksTouched && remarksDisplayError)}
               />
               <FormFieldError
                 message={remarksTouched ? remarksDisplayError : undefined}
               />
             </div>
           </div>
-        )}
+        ) : null}
       </DialogBody>
-      <DialogFooter className="gap-3 border-t border-[#efe6ea] bg-[#faf7f5]/80 px-6 py-4">
-        <Button variant="outline" onClick={() => onOpenChange(false)}>
-          Cancel
-        </Button>
-        <Button
-          className="gap-2"
-          disabled={
-            !preview?.eligible ||
-            redeemState.isLoading ||
-            previewQuery.isFetching ||
-            !mode ||
-            (mode === "PURCHASE_ADJUSTMENT" && !billNumber.trim()) ||
-            !redeemRemarksReady(remarks)
-          }
-          onClick={async () => {
-            if (!preview) return;
-            setRemarksTouched(true);
-            const remarksErr = validateSettlementRemarks(remarks, {
-              required: false,
-            });
-            if (remarksErr) {
-              setSubmitError(remarksErr);
-              toast.error("Fix the highlighted fields.");
-              return;
-            }
-            setSubmitError(null);
-            try {
-              await redeem({
-                schemeId,
-                mode,
-                expectedVersion,
-                expectedFinalValue: preview.finalValue,
-                remarks: remarks.trim() || undefined,
-                billNumber:
-                  mode === "PURCHASE_ADJUSTMENT"
-                    ? billNumber.trim()
-                    : undefined,
-              }).unwrap();
-              toast.success(
-                preview.approvalRequired
-                  ? "Redemption submitted for approval"
-                  : "Redemption approved — complete handover from Maturity & redemption",
-              );
-              onOpenChange(false);
-              await enrollmentQuery.refetch();
-            } catch (err) {
-              const message = apiErrorMessage(
-                err,
-                "Could not submit redemption.",
-              );
-              setSubmitError(message);
-              toast.error(message);
-              if (apiErrorCode(err) === "REDEMPTION_ALREADY_OPEN") {
-                await enrollmentQuery.refetch();
+      <DialogFooter className="flex-wrap gap-3 border-t border-[#efe6ea] bg-[#faf7f5]/80 px-6 py-4 sm:justify-between">
+        {onSubmitStep ? (
+          <Button
+            variant="outline"
+            className="gap-2"
+            onClick={() => setWizardStep("preview")}
+          >
+            <ArrowLeft className="size-4" />
+            Back to preview
+          </Button>
+        ) : (
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Close
+          </Button>
+        )}
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          {onSubmitStep && preview && hasGoldRateBlocker(preview) ? (
+            <Button variant="secondary" asChild>
+              <Link href="/gold-rates">Set today&apos;s gold rate</Link>
+            </Button>
+          ) : null}
+          {showWizard && !onSubmitStep && preview && selectedMode ? (
+            <Button
+              className="gap-2"
+              onClick={() => setWizardStep("submit")}
+            >
+              Continue to redeem
+              <ArrowRight className="size-4" />
+            </Button>
+          ) : null}
+          {onSubmitStep && preview ? (
+            <Button
+              className="gap-2"
+              disabled={
+                !preview.eligible ||
+                redeemState.isLoading ||
+                previewQuery.isFetching ||
+                !selectedMode ||
+                (selectedMode === "PURCHASE_ADJUSTMENT" && !billNumber.trim()) ||
+                !redeemRemarksReady(remarks)
               }
-            }
-          }}
-        >
-          {redeemState.isLoading && <Loader2 className="animate-spin" />}
-          Submit redemption
-        </Button>
+              onClick={async () => {
+                setRemarksTouched(true);
+                const remarksErr = validateSettlementRemarks(remarks, {
+                  required: false,
+                });
+                if (remarksErr) {
+                  setSubmitError(remarksErr);
+                  toast.error("Fix the highlighted fields.");
+                  return;
+                }
+                setSubmitError(null);
+                try {
+                  await redeem({
+                    schemeId,
+                    mode: selectedMode,
+                    expectedVersion,
+                    expectedFinalValue: preview.finalValue,
+                    remarks: remarks.trim() || undefined,
+                    billNumber:
+                      selectedMode === "PURCHASE_ADJUSTMENT"
+                        ? billNumber.trim()
+                        : undefined,
+                  }).unwrap();
+                  toast.success(
+                    preview.approvalRequired
+                      ? "Redemption submitted for approval"
+                      : "Redemption approved — complete handover from Maturity & redemption",
+                  );
+                  onOpenChange(false);
+                  await enrollmentQuery.refetch();
+                } catch (err) {
+                  const message = apiErrorMessage(
+                    err,
+                    "Could not submit redemption.",
+                  );
+                  setSubmitError(message);
+                  toast.error(message);
+                  if (apiErrorCode(err) === "REDEMPTION_ALREADY_OPEN") {
+                    await enrollmentQuery.refetch();
+                  }
+                }
+              }}
+            >
+              {redeemState.isLoading && <Loader2 className="animate-spin" />}
+              Submit redemption
+            </Button>
+          ) : null}
+        </div>
       </DialogFooter>
     </DialogContent>
+  );
+}
+
+/** @deprecated Use SettlementPreviewDialog with redemptionWizard (default for maturity). */
+export function RedeemEnrollmentDialog({
+  schemeId,
+  open,
+  onOpenChange,
+  initialMode,
+}: {
+  schemeId: string;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  initialMode?: string;
+}) {
+  return (
+    <SettlementPreviewDialog
+      schemeId={schemeId}
+      type="MATURITY_REDEMPTION"
+      open={open}
+      onOpenChange={onOpenChange}
+      mode={initialMode}
+      redemptionWizard
+      initialWizardStep="submit"
+    />
   );
 }
 

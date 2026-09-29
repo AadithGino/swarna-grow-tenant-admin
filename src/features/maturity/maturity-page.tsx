@@ -40,10 +40,7 @@ import {
   useGetMaturitiesCalendarQuery,
   useGetMaturitiesQuery,
 } from "@/src/store/api/admin-api";
-import {
-  RedeemEnrollmentDialog,
-  SettlementPreviewDialog,
-} from "@/src/features/enrollments/settlement-dialogs";
+import { SettlementPreviewDialog } from "@/src/features/enrollments/settlement-dialogs";
 import { RedemptionsQueue } from "@/src/features/maturity/redemptions-queue";
 import { FlexibleLocksPanel } from "@/src/features/maturity/flexible-locks-panel";
 
@@ -127,18 +124,12 @@ export function MaturityPage() {
     null,
   );
   const [settlementPreviewOpen, setSettlementPreviewOpen] = useState(false);
-  const [redeemOpen, setRedeemOpen] = useState(false);
 
   function openSettlement(schemeId: string) {
     setSettlementSchemeId(schemeId);
     setSettlementPreviewOpen(true);
   }
 
-  function closeSettlementFlow() {
-    setSettlementPreviewOpen(false);
-    setRedeemOpen(false);
-    setSettlementSchemeId(null);
-  }
   const monthMeta = monthBounds(calendarMonth);
   const queryFrom = view === "month" ? monthMeta.from : from;
   const queryTo = view === "month" ? monthMeta.to : to;
@@ -246,25 +237,14 @@ export function MaturityPage() {
             open={settlementPreviewOpen}
             onOpenChange={(open) => {
               setSettlementPreviewOpen(open);
-              if (!open && !redeemOpen) setSettlementSchemeId(null);
-            }}
-            onInitiateRedemption={() => {
-              setRedeemOpen(true);
-              setSettlementPreviewOpen(false);
-            }}
-          />
-          <RedeemEnrollmentDialog
-            schemeId={settlementSchemeId}
-            open={redeemOpen}
-            onOpenChange={(open) => {
-              setRedeemOpen(open);
               if (!open) {
-                closeSettlementFlow();
+                setSettlementSchemeId(null);
                 void listQuery.refetch();
                 void statsQuery.refetch();
                 void calendarQuery.refetch();
               }
             }}
+            redemptionWizard
           />
         </>
       ) : null}

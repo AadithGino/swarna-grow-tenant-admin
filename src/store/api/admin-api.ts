@@ -1574,6 +1574,18 @@ export const adminApi = createApi({
       },
       providesTags: ["Payment"],
     }),
+    getPostSettlementRefundCase: builder.query<
+      Record<string, unknown>,
+      string
+    >({
+      query: (caseId) => ({
+        url: `/admin/post-settlement-refund-cases/${caseId}`,
+      }),
+      transformResponse: (raw) => contractPayload(raw) as Record<string, unknown>,
+      providesTags: (_result, _err, caseId) => [
+        { type: "Payment", id: `post-settlement-${caseId}` },
+      ],
+    }),
     resolvePostSettlementRefundCase: builder.mutation<
       Record<string, unknown>,
       { caseId: string; disposition: string; reason: string; expectedVersion: number }
@@ -4025,6 +4037,7 @@ export const {
   useMarkMessagingInboundReadMutation,
   useInitiatePaymentRefundMutation,
   useGetPostSettlementRefundCasesQuery,
+  useGetPostSettlementRefundCaseQuery,
   useResolvePostSettlementRefundCaseMutation,
   useListPaymentRefundsQuery,
   useReconcilePaymentRefundMutation,
