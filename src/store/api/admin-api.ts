@@ -1552,6 +1552,39 @@ export const adminApi = createApi({
       transformResponse: (raw) => contractPayload(raw) as Record<string, any>,
       invalidatesTags: ["Payment", "Enrollment", "Dashboard", "Report"],
     }),
+    getPostSettlementRefundCases: builder.query<
+      { data: Record<string, unknown>[]; meta: { total: number; pendingCount: number } },
+      { status?: string } | void
+    >({
+      query: (params) => ({
+        url: "/admin/post-settlement-refund-cases",
+        params: params ?? {},
+      }),
+      transformResponse: (raw) => {
+        const value = contractPayload<any>(raw);
+        const data = Array.isArray(value) ? value : value?.data ?? [];
+        const meta = (raw as { meta?: { total?: number; pendingCount?: number } })?.meta ?? {};
+        return {
+          data,
+          meta: {
+            total: meta.total ?? data.length,
+            pendingCount: meta.pendingCount ?? 0,
+          },
+        };
+      },
+      providesTags: ["Payment"],
+    }),
+    resolvePostSettlementRefundCase: builder.mutation<
+      Record<string, unknown>,
+      { caseId: string; disposition: string; reason: string; expectedVersion: number }
+    >({
+      query: ({ caseId, ...body }) => ({
+        url: `/admin/post-settlement-refund-cases/${caseId}/resolve`,
+        method: "POST",
+        body,
+      }),
+      invalidatesTags: ["Payment"],
+    }),
     listPaymentRefunds: builder.query<Record<string, any>[], string>({
       query: (paymentId) => ({
         url: `/admin/payments/${paymentId}/refunds`,
@@ -3991,6 +4024,8 @@ export const {
   useGetMessagingInboundDetailQuery,
   useMarkMessagingInboundReadMutation,
   useInitiatePaymentRefundMutation,
+  useGetPostSettlementRefundCasesQuery,
+  useResolvePostSettlementRefundCaseMutation,
   useListPaymentRefundsQuery,
   useReconcilePaymentRefundMutation,
   useReleasePaymentRefundReservationMutation,

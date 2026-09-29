@@ -49,8 +49,10 @@ import {
 } from "@/src/hooks/use-acting-branch-id";
 import { useCursorPagination } from "@/src/hooks/use-cursor-pagination";
 import { useDebouncedValue } from "@/src/hooks/use-debounced-value";
+import Link from "next/link";
 import {
   useGetDashboardQuery,
+  useGetPostSettlementRefundCasesQuery,
   useGetPaymentsQuery,
   useLazyGetPaymentReceiptQuery,
   usePollPaymentStatusMutation,
@@ -65,14 +67,16 @@ import type { Payment } from "@/src/types/domain";
 import { GatewaySettlementPanel } from "@/src/features/collections/gateway-settlement-panel";
 
 type LedgerTab = "all" | "pending" | "late" | "reversed";
-type CollectionSection = "payments" | "refunds" | "settlement";
+type CollectionSection = "payments" | "refunds" | "settlement" | "post-settlement-refunds";
 
 export function CollectionsPage() {
   const searchParams = useSearchParams();
   const receiptFromUrl = searchParams.get("q") ?? "";
   const requestedSection = searchParams.get("view");
   const [section, setSection] = useState<CollectionSection>(() =>
-    requestedSection === "refunds" || requestedSection === "settlement"
+    requestedSection === "refunds" ||
+    requestedSection === "settlement" ||
+    requestedSection === "post-settlement-refunds"
       ? requestedSection
       : "payments",
   );
@@ -125,6 +129,11 @@ export function CollectionsPage() {
   ]);
 
   const query = useGetPaymentsQuery(queryArgs, { skip: skipQueries });
+  const pendingCases = useGetPostSettlementRefundCasesQuery({
+    status: "PENDING_RESOLUTION",
+  });
+  const pendingPostSettlementCount =
+    pendingCases.data?.meta?.pendingCount ?? 0;
   const modeMixQuery = useGetPaymentsQuery(
     { from, to, branchId, limit: 1 },
     { skip: skipForBadDates },
@@ -395,6 +404,23 @@ export function CollectionsPage() {
 
   return (
     <>
+      {pendingPostSettlementCount > 0 && section !== "post-settlement-refunds" ? (
+        <Surface className="mb-4 border-amber-200/80 bg-amber-50/90 px-4 py-3">
+          <div className="flex flex-wrap items-center gap-2 text-sm text-amber-950">
+            <AlertTriangle className="size-4 shrink-0" aria-hidden />
+            <span>
+              {pendingPostSettlementCount} post-settlement gateway refund
+              {pendingPostSettlementCount === 1 ? "" : "s"} pending resolution.
+            </span>
+            <Link
+              href="?view=post-settlement-refunds"
+              className="font-medium underline underline-offset-2"
+            >
+              Review cases
+            </Link>
+          </div>
+        </Surface>
+      ) : null}
       <PageHeader
         eyebrow="Money & fulfilment"
         title="Collections"
@@ -461,8 +487,38 @@ export function CollectionsPage() {
           <PageTab value="payments">Payments</PageTab>
           <PageTab value="refunds">PhonePe refunds</PageTab>
           <PageTab value="settlement">Daily settlement</PageTab>
+          <PageTab value="post-settlement-refunds">
+            Post-settlement
+            {pendingPostSettlementCount > 0 ? ` (${pendingPostSettlementCount})` : ""}
+          </PageTab>
         </PageFilterTabs>
       </Surface>
+      {section === "post-settlement-refunds" ? (
+        <Surface
+          title="Post-settlement gateway refunds"
+          description="Provider refunds after scheme settlement need an operator disposition (not another cash movement)."
+        >
+          {pendingCases.isLoading ? (
+            <PageSkeleton />
+          ) : (pendingCases.data?.data?.length ?? 0) === 0 ? (
+            <EmptyState title="No pending cases" description="All post-settlement refunds are resolved." />
+          ) : (
+            <ul className="divide-y text-sm">
+              {(pendingCases.data?.data ?? []).map((row) => (
+                <li key={String(row._id ?? row.id)} className="flex flex-wrap justify-between gap-2 py-3">
+                  <span>
+                    {money(Number(row.refundAmountPaise ?? 0) / 100)}
+                    <span className="text-muted-foreground"> · {String(row.status ?? "PENDING")}</span>
+                  </span>
+                  <span className="text-muted-foreground">
+                    Completed {row.refundCompletedAt ? new Date(String(row.refundCompletedAt)).toLocaleDateString() : "—"}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Surface>
+      ) : null}
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
         <StatCard
           icon={IndianRupee}
