@@ -44,6 +44,7 @@ import {
 } from "@/src/store/api/admin-api";
 import type { SettlementPreview, SettlementPreviewType } from "@/src/types/domain";
 import { apiErrorCode, apiErrorMessage } from "@/src/lib/api-error";
+import { isPaidAmountGoldCashPreview } from "@/src/lib/cash-settlement-basis";
 import { cn } from "@/lib/utils";
 
 const CLOSURE_REASONS = [
@@ -284,7 +285,11 @@ function SettlementPreviewDialogBody({
         )}
       </p>
     ) : preview ? (
-      <SettlementLinesPanel preview={preview} compact={onSubmitStep} />
+      <SettlementLinesPanel
+        preview={preview}
+        compact={onSubmitStep}
+        redemptionMode={isMaturity ? selectedMode : mode}
+      />
     ) : isMaturity && !selectedMode ? (
       <p className="rounded-2xl border border-[#eaded9] bg-[#faf7f5] p-4 text-sm text-[#5c4a4e]">
         Select a settlement type to load the computation.
@@ -320,8 +325,10 @@ function SettlementPreviewDialogBody({
 
         {onSubmitStep && preview && !preview.eligible ? (
           <p className="text-sm text-[#776a6d]">
-            Submission stays disabled until blockers above are resolved (for example
-            today&apos;s 22K gold rate).
+            Submission stays disabled until blockers above are resolved.
+            {!isPaidAmountGoldCashPreview(preview, selectedMode)
+              ? " For gold-value cash settlement, set today’s 22K gold rate if required."
+              : null}
           </p>
         ) : null}
 
@@ -380,7 +387,10 @@ function SettlementPreviewDialogBody({
           </Button>
         )}
         <div className="flex flex-wrap items-center justify-end gap-2">
-          {onSubmitStep && preview && hasGoldRateBlocker(preview) ? (
+          {onSubmitStep &&
+          preview &&
+          hasGoldRateBlocker(preview) &&
+          !isPaidAmountGoldCashPreview(preview, selectedMode) ? (
             <Button variant="secondary" asChild>
               <Link href="/gold-rates">Set today&apos;s gold rate</Link>
             </Button>
@@ -436,13 +446,21 @@ function SettlementPreviewDialogBody({
                   onOpenChange(false);
                   await enrollmentQuery.refetch();
                 } catch (err) {
+                  const code = apiErrorCode(err);
                   const message = apiErrorMessage(
                     err,
                     "Could not submit redemption.",
                   );
                   setSubmitError(message);
                   toast.error(message);
-                  if (apiErrorCode(err) === "REDEMPTION_ALREADY_OPEN") {
+                  if (
+                    code === "SETTLEMENT_VALUE_CHANGED" ||
+                    code === "VERSION_CONFLICT"
+                  ) {
+                    await previewQuery.refetch();
+                    await enrollmentQuery.refetch();
+                  }
+                  if (code === "REDEMPTION_ALREADY_OPEN") {
                     await enrollmentQuery.refetch();
                   }
                 }
@@ -583,7 +601,7 @@ function PrematureClosureDialogBody({
                 previewQuery.isFetching && "opacity-60 pointer-events-none",
               )}
             >
-              <SettlementLinesPanel preview={preview} compact />
+              <SettlementLinesPanel preview={preview} compact redemptionMode={mode} />
             </div>
             {preview.eligible ? (
               <>

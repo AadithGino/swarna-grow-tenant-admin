@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import {
@@ -36,14 +36,13 @@ export function RedemptionsQueue({
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [status, setStatus] = useState("OPEN");
-  const [selectedId, setSelectedId] = useState<string | null>(
-    initialReviewId ?? reviewFromUrl,
-  );
-
-  useEffect(() => {
-    const id = initialReviewId ?? reviewFromUrl;
-    if (id) setSelectedId(id);
-  }, [initialReviewId, reviewFromUrl]);
+  const urlReviewId = initialReviewId ?? reviewFromUrl;
+  const [selectedId, setSelectedId] = useState<string | null>(urlReviewId);
+  const [lastUrlReviewId, setLastUrlReviewId] = useState(urlReviewId);
+  if (urlReviewId !== lastUrlReviewId) {
+    setLastUrlReviewId(urlReviewId);
+    if (urlReviewId) setSelectedId(urlReviewId);
+  }
 
   const dateRangeError = useMemo(() => {
     if (!from.trim() && !to.trim()) return undefined;

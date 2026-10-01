@@ -24,6 +24,13 @@ type ReportPayload = Record<string, unknown> & {
   rows: Record<string, unknown>[];
 };
 
+function trendPoints(count: number, base: number) {
+  return Array.from({ length: count }, (_, index) => ({
+    x: `Wk ${index + 1}`,
+    y: base + index * 3,
+  }));
+}
+
 function branchCollectionRows() {
   return mockDb.branches.map((b, i) => ({
     key: b.id,
@@ -41,7 +48,10 @@ function branchCollectionRows() {
   }));
 }
 
-const BUILDERS: Record<AdminReportKey, () => ReportPayload> = {
+const BUILDERS: Record<
+  AdminReportKey,
+  (params?: Record<string, unknown>) => ReportPayload
+> = {
   COLLECTION: () => {
     const rows = branchCollectionRows();
     return {
@@ -981,10 +991,7 @@ export function mockAdminReport(
   params: Record<string, unknown>,
 ): ContractWrapper {
   const key = (reportKey in BUILDERS ? reportKey : "OUTSTANDING") as AdminReportKey;
-  const payload =
-    key === "CUSTOMER_PERFORMANCE"
-      ? BUILDERS.CUSTOMER_PERFORMANCE(params)
-      : BUILDERS[key]();
+  const payload = BUILDERS[key](params);
   const basePeriod = payload.period as { from?: string; to?: string } | undefined;
   const from = String(params.from ?? basePeriod?.from ?? "");
   const to = String(params.to ?? basePeriod?.to ?? "");

@@ -139,9 +139,7 @@ function GrievanceDetailBody({
   setReply,
   note,
   setNote,
-  replyTouched,
   setReplyTouched,
-  noteTouched,
   setNoteTouched,
   messageFieldErrors,
   setMessageFieldErrors,
@@ -164,9 +162,7 @@ function GrievanceDetailBody({
   setReply: (v: string) => void;
   note: string;
   setNote: (v: string) => void;
-  replyTouched: boolean;
   setReplyTouched: (v: boolean) => void;
-  noteTouched: boolean;
   setNoteTouched: (v: boolean) => void;
   messageFieldErrors: Record<string, string>;
   setMessageFieldErrors: (v: Record<string, string>) => void;
@@ -567,9 +563,7 @@ export function GrievanceDetailSheet({
             setReply={setReply}
             note={note}
             setNote={setNote}
-            replyTouched={replyTouched}
             setReplyTouched={setReplyTouched}
-            noteTouched={noteTouched}
             setNoteTouched={setNoteTouched}
             messageFieldErrors={messageFieldErrors}
             setMessageFieldErrors={setMessageFieldErrors}

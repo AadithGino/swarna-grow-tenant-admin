@@ -1,5 +1,11 @@
 import { createApi, fetchBaseQuery } from "@reduxjs/toolkit/query/react";
-import type { BaseQueryFn, FetchArgs, FetchBaseQueryError } from "@reduxjs/toolkit/query";
+import type {
+  BaseQueryFn,
+  FetchArgs,
+  FetchBaseQueryError,
+  FetchBaseQueryMeta,
+} from "@reduxjs/toolkit/query";
+import { rtkDataResult, rtkErrorResult } from "@/src/lib/rtk-query-result";
 import { env } from "@/src/config/env";
 import { newIdempotencyKey } from "@/src/lib/idempotency";
 import { ensureMutationJsonBody } from "@/src/lib/rtk-mutation-body";
@@ -334,7 +340,8 @@ function normalizeScheme(raw: Record<string, unknown>): AgentScheme {
   };
 }
 function mapPerson(raw: unknown): { id?: string; name?: string } | undefined {
-  if (!raw || typeof raw === "string") return raw ? { id: raw, name: undefined } : undefined;
+  if (typeof raw === "string") return { id: raw, name: undefined };
+  if (!raw || typeof raw !== "object") return undefined;
   const row = raw as Record<string, unknown>;
   return { id: idOf(row), name: row.name != null ? String(row.name) : undefined };
 }
@@ -598,20 +605,24 @@ function withMutationHeaders(args: string | FetchArgs) {
 
 function unwrap(result: { data?: unknown; error?: FetchBaseQueryError; meta?: unknown }) {
   if (result.error) {
-    return { error: normalizeFetchBaseQueryError(result.error) };
+    return rtkErrorResult(
+      normalizeFetchBaseQueryError(result.error),
+      result.meta,
+    );
   }
   const raw = result.data as Envelope<unknown> | AgentError | undefined;
   if (raw && typeof raw === "object" && "success" in raw) {
-    if (raw.success) return { data: raw.data, meta: raw.meta };
-    return {
-      error: normalizeFetchBaseQueryError({
+    if (raw.success) return rtkDataResult(raw.data, raw.meta ?? result.meta);
+    return rtkErrorResult(
+      normalizeFetchBaseQueryError({
         status: "CUSTOM_ERROR",
         error: raw.error.message,
         data: { success: false, error: raw.error },
       }),
-    };
+      result.meta,
+    );
   }
-  return { data: result.data, meta: result.meta };
+  return rtkDataResult(result.data, result.meta);
 }
 
 export type AgentPaymentListPage = {
@@ -636,7 +647,8 @@ const dynamicBaseQuery: BaseQueryFn<
   string | FetchArgs,
   unknown,
   FetchBaseQueryError,
-  AgentBaseQueryExtra
+  AgentBaseQueryExtra,
+  FetchBaseQueryMeta
 > = async (args, api, extra) => {
   const request = env.useMocks ? args : withMutationHeaders(args);
   let result = env.useMocks
@@ -710,8 +722,8 @@ export const agentApi = createApi({
       providesTags: ["AgentProfile"],
     }),
     changeAgentPassword: builder.mutation<{ changed: boolean }, { currentPassword: string; newPassword: string }>({ query: (body) => ({ url: "/auth/change-password", method: "POST", body }) }),
-    getAgentCashSummary: builder.query<AgentCashSummary, void>({ query: () => "/staff/cash/summary", providesTags: ["AgentCash"], refetchOnMountOrArgChange: 30 }),
-    getAgentCollectionSummary: builder.query<AgentCollectionSummary, { from: string; to: string }>({ query: (params) => ({ url: "/staff/collections/summary", params }), providesTags: ["AgentPayments"], refetchOnMountOrArgChange: 30 }),
+    getAgentCashSummary: builder.query<AgentCashSummary, void>({ query: () => "/staff/cash/summary", providesTags: ["AgentCash"] }),
+    getAgentCollectionSummary: builder.query<AgentCollectionSummary, { from: string; to: string }>({ query: (params) => ({ url: "/staff/collections/summary", params }), providesTags: ["AgentPayments"] }),
     getAgentGoldRate: builder.query<AgentGoldRate | null, void>({
       query: () => "/staff/gold-rate/current",
       transformResponse: (raw: (AgentGoldRate & { _id?: string }) | null) => {
@@ -837,7 +849,6 @@ export const agentApi = createApi({
       query: (params) => ({ url: "/staff/payments", params: { sort: "paidAt:desc", ...params } }),
       transformResponse: (rows: unknown) => asList(rows, normalizePayment),
       providesTags: ["AgentPayments"],
-      refetchOnMountOrArgChange: 30,
     }),
     getAgentPayment: builder.query<AgentPayment, string>({
       query: (id) => `/staff/payments/${id}`,
@@ -870,12 +881,11 @@ export const agentApi = createApi({
         return { ...incoming, items: [...current.items, ...appended] };
       },
       forceRefetch: ({ currentArg, previousArg }) => currentArg?.cursor !== previousArg?.cursor,
-      transformResponse: (rows: unknown, meta) => ({
+      transformResponse: (rows: unknown, meta): AgentPaymentListPage => ({
         items: asList(rows, normalizePayment),
         ...paymentListMeta(meta),
       }),
       providesTags: ["AgentPayments"],
-      refetchOnMountOrArgChange: 30,
     }),
     getAgentHandovers: builder.query<AgentHandover[], { status?: string; from?: string; to?: string }>({
       query: (params) => ({ url: "/staff/cash/handovers", params }),

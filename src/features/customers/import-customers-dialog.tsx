@@ -1,7 +1,7 @@
 "use client";
 
 import { Loader2, Upload } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -50,13 +50,14 @@ export function ImportCustomersDialog({
 
   const { validCount, invalidCount } = summarizeCustomerImport(rows);
 
-  useEffect(() => {
-    if (!open) {
+  const handleOpenChange = (next: boolean) => {
+    if (!next) {
       setRows([]);
       setFileName(null);
       setBusy(false);
     }
-  }, [open]);
+    onOpenChange(next);
+  };
 
   async function handleFile(file: File) {
     const text = await file.text();
@@ -140,7 +141,7 @@ export function ImportCustomersDialog({
   const showPreview = rows.length > 0;
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-2xl">
         <DialogBody>
           <DialogHeader>

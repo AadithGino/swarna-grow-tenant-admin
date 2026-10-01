@@ -1,9 +1,7 @@
 "use client";
 
-/* The generic table renderer signature receives a row for every column. */
-/* eslint-disable @typescript-eslint/no-unused-vars */
-
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
+import { useExternalValueSync } from "@/src/hooks/use-external-value-sync";
 import {
   ArrowDownRight,
   ArrowUpRight,
@@ -93,18 +91,17 @@ export function GoldRatesPage() {
   const branches = branchesData?.items ?? [];
   const [addRate] = useAddGoldRateMutation();
   const [rate, setRate] = useState(7225);
-  const [branch, setBranch] = useState("ALL");
+  const [branch, setBranch] = useExternalValueSync(actingBranchId ?? "ALL");
   const [rateTouched, setRateTouched] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const effectiveDate = businessTodayYmd();
   const rateError =
     rateTouched || rate > 0 ? liveGoldRatePerGramError(rate) : undefined;
 
-  useEffect(() => {
-    setBranch(actingBranchId ?? "ALL");
-  }, [actingBranchId]);
-
-  const history = query.data?.history ?? [];
+  const history = useMemo(
+    () => query.data?.history ?? [],
+    [query.data?.history],
+  );
   const page = query.data?.page ?? emptyPageMeta();
   const historyCurrent = query.data?.current;
   const liveCurrent = currentQuery.data;

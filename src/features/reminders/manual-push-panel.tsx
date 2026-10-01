@@ -33,6 +33,14 @@ import {
 
 type Audience = "ALL_DEVICES" | "BRANCH";
 
+type ManualPushHistoryRow = {
+  id: string;
+  createdAt?: string;
+  title: string;
+  status: string;
+  stats?: { delivered?: number; failed?: number; pending?: number };
+};
+
 const PUSH_IMAGE_MAX_BYTES = 2_000_000;
 
 export function ManualPushPanel() {
@@ -302,8 +310,8 @@ export function ManualPushPanel() {
       </Surface>
 
       <Surface title="Manual push history" description="Per-customer delivery appears in Message log (filter by broadcast).">
-        <PaginatedDataTable
-          rows={historyQuery.data?.items ?? []}
+        <PaginatedDataTable<ManualPushHistoryRow>
+          rows={(historyQuery.data?.items ?? []) as ManualPushHistoryRow[]}
           page={page}
           pageIndex={pager.pageIndex}
           onNext={() => pager.goNext(page.nextCursor)}
@@ -313,14 +321,14 @@ export function ManualPushPanel() {
             {
               key: "createdAt",
               header: "Queued",
-              render: (r: { createdAt?: string }) =>
+              render: (r) =>
                 r.createdAt ? new Date(r.createdAt).toLocaleString("en-IN") : "—",
             },
-            { key: "title", header: "Title", render: (r: { title: string }) => <strong>{r.title}</strong> },
+            { key: "title", header: "Title", render: (r) => <strong>{r.title}</strong> },
             {
               key: "stats",
               header: "Delivery",
-              render: (r: { stats?: { delivered?: number; failed?: number; pending?: number } }) => {
+              render: (r) => {
                 const s = r.stats ?? {};
                 return (
                   <span className="text-sm">
@@ -332,12 +340,12 @@ export function ManualPushPanel() {
             {
               key: "status",
               header: "Job",
-              render: (r: { status: string }) => <StatusBadge status={r.status} />,
+              render: (r) => <StatusBadge status={r.status} />,
             },
             {
               key: "action",
               header: "",
-              render: (r: { id: string }) => (
+              render: (r) => (
                 <Button size="sm" variant="ghost" asChild>
                   <Link
                     href={`/reminders?tab=log&broadcastId=${encodeURIComponent(r.id)}&channel=PUSH`}

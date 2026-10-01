@@ -22,7 +22,6 @@ import {
 } from "@/src/components/common/date-range-filter";
 import { PaginatedDataTable } from "@/src/components/common/paginated-data-table";
 import {
-  filterLabelFor,
   ListToolbar,
   SearchFilterBar,
   type FilterOption,
@@ -48,8 +47,6 @@ import { downloadCsv } from "@/src/lib/download";
 import { idempotencyKey, money } from "@/src/lib/format";
 import { emptyPageMeta } from "@/src/lib/cursor-pagination";
 import {
-  defaultListRangeFrom,
-  defaultListRangeTo,
   listSearchQueryForApi,
   shouldSkipListSearchQuery,
 } from "@/src/lib/list-date-range";
@@ -65,7 +62,6 @@ import {
   PageTab,
   PageTabs,
   PageTabsBar,
-  PageTabsPanel,
 } from "@/src/components/common/page-tabs";
 import {
   useBulkSendDueLinksMutation,
@@ -133,7 +129,8 @@ export function DuesPage() {
   ]);
 
   const overduesListParams = useMemo(() => {
-    const { kind: _kind, ...rest } = listQueryParams;
+    const { kind, ...rest } = listQueryParams;
+    void kind;
     return rest;
   }, [listQueryParams]);
 

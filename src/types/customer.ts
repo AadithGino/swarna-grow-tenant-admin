@@ -150,7 +150,7 @@ export type PayableRangeTargetCycleOption = {
 
 export type PayableRange = {
   model: "FIXED" | "FLEXIBLE";
-  phase?: "FIXED" | "FLEXIBLE" | "CAPPED" | null;
+  phase?: "FIXED" | "FLEXIBLE" | "FREE" | "CAPPED" | null;
   payable?: boolean;
   contributionIsOptional: boolean;
   targetCycle?: string;
@@ -316,6 +316,8 @@ export type CustomerSettlementPreview = {
   modePreviews?: Record<string, Record<string, unknown>>;
   warningText?: string;
   valuationNote?: string;
+  cashSettlementBasis?: "GOLD_VALUE" | "PAID_AMOUNT";
+  paidAmountBenefitTreatment?: "EXCLUDE" | "INCLUDE_MONETARY";
   valuationRatePerGramPaise?: number;
   valuationRateEffectiveDate?: string;
   principalPaise: number;

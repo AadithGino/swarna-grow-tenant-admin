@@ -27,7 +27,6 @@ import type { ChartSeriesBlock } from "@/src/types/admin-report";
 import {
   CHART_PALETTE,
   ChartSliceLegend,
-  pieSliceLabel,
   type ChartLegendItem,
 } from "@/src/components/common/charts";
 
@@ -268,7 +267,7 @@ export function ChartSeriesView({ chart }: { chart: ChartSeriesBlock }) {
                 stroke="#fff"
                 strokeWidth={1}
               >
-                {pieData.map((d, i) => (
+                {pieData.map((d) => (
                   <Cell
                     key={d.name}
                     fill={

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Download, FileText } from "lucide-react";
 import { toast } from "sonner";
@@ -63,6 +63,9 @@ import {
   ADMIN_REPORT_KEYS,
   ADMIN_REPORT_LABELS,
   type AdminReportKey,
+  type AdminReportRow,
+  type ChartSeriesBlock,
+  type ReportColumnDef,
 } from "@/src/types/admin-report";
 import { ReportFiltersPanel } from "@/src/features/reports/report-filters-panel";
 import { ReportSummaryStrip } from "@/src/features/reports/report-summary-strip";
@@ -162,27 +165,24 @@ export function ReportsPage() {
   const plans = plansQuery.data?.items ?? [];
   const branches = branchesQuery.data?.items ?? [];
 
-  useEffect(() => {
-    if (isCustomerPerformance) return;
-    setCustomerFocusMode("ALL");
-    setCustomerId("");
-    setCustomerSearch("");
-  }, [isCustomerPerformance]);
-
-  useEffect(() => {
-    if (!isBranchPerformance) setFocusBranchId("ALL");
-    if (!isSchemePerformance) setFocusPlanId("ALL");
-    if (!isCustomerPerformance) setCustomerFocusMode("ALL");
+  const [syncedReportKey, setSyncedReportKey] = useState(reportKey);
+  if (syncedReportKey !== reportKey) {
+    setSyncedReportKey(reportKey);
+    if (reportKey !== "CUSTOMER_PERFORMANCE") {
+      setCustomerFocusMode("ALL");
+      setCustomerId("");
+      setCustomerSearch("");
+    }
+    if (reportKey !== "BRANCH_PERFORMANCE") setFocusBranchId("ALL");
+    if (reportKey !== "SCHEME_PERFORMANCE") setFocusPlanId("ALL");
     if (!showBranchFilter) setReportBranchId("ALL");
-  }, [
-    isBranchPerformance,
-    isSchemePerformance,
-    isCustomerPerformance,
-    showBranchFilter,
-    reportKey,
-  ]);
+  }
 
-  useEffect(() => {
+  const searchSignature = searchParams.toString();
+  const [appliedSearchSignature, setAppliedSearchSignature] =
+    useState(searchSignature);
+  if (appliedSearchSignature !== searchSignature) {
+    setAppliedSearchSignature(searchSignature);
     const key = searchParams.get("reportKey");
     const branchFromUrl = searchParams.get("branchId");
     const planFromUrl = searchParams.get("planId");
@@ -201,7 +201,7 @@ export function ReportsPage() {
       setCustomerFocusMode("INDIVIDUAL");
       setCustomerId(customerFromUrl);
     }
-  }, [searchParams]);
+  }
 
   const customerSearchError = validateListSearchQuery(customerSearch);
   const customersQuery = useGetCustomersQuery(
@@ -276,7 +276,9 @@ export function ReportsPage() {
   });
   const report = skipReportQuery || !mounted ? undefined : query.data;
   const page = report?.page ?? emptyPageMeta();
-  const chartEntries = Object.entries(report?.charts ?? {});
+  const chartEntries = Object.entries(
+    report?.charts ?? {},
+  ) as [string, ChartSeriesBlock][];
   const reportTitle = report?.title ?? ADMIN_REPORT_LABELS[reportKey];
   const reportHeaderDescription = useMemo(() => {
     if (!mounted) return REPORTS_HEADER_FALLBACK;
@@ -293,13 +295,13 @@ export function ReportsPage() {
 
   const exportCsv = () => {
     if (!report) return;
-    const headers = report.columns.map((c) => c.label);
-    const keys = report.columns.map((c) => c.key);
-    const body = report.rows.map((row) =>
-      keys.map((k) => cellExportValue(row[k])),
+    const headers = report.columns.map((c: ReportColumnDef) => c.label);
+    const keys = report.columns.map((c: ReportColumnDef) => c.key);
+    const body = report.rows.map((row: AdminReportRow) =>
+      keys.map((k: string) => cellExportValue(row[k])),
     );
     if (report.totalsRow) {
-      body.push(keys.map((k) => cellExportValue(report.totalsRow?.[k])));
+      body.push(keys.map((k: string) => cellExportValue(report.totalsRow?.[k])));
     }
     downloadCsv(
       `swarnagrow-${report.reportKey.toLowerCase()}.csv`,

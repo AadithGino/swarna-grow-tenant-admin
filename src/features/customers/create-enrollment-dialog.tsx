@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
@@ -113,8 +113,8 @@ function CreateEnrollmentDialogInner({
   const debouncedAmount = useDebouncedValue(form.amount, 350);
   const [validateEnrolment, validateState] = useValidateEnrolmentMutation();
 
-  const runValidate = useCallback(() => {
-    if (!selectedPlan || !form.planId) return;
+  useEffect(() => {
+    if (!open || !selectedPlan || !form.planId) return;
     void validateEnrolment({
       customerId: customer.id,
       planId: form.planId,
@@ -122,6 +122,7 @@ function CreateEnrollmentDialogInner({
       firstInstallmentMode: effectiveFirstMode,
     });
   }, [
+    open,
     customer.id,
     debouncedAmount,
     effectiveFirstMode,
@@ -130,8 +131,8 @@ function CreateEnrollmentDialogInner({
     validateEnrolment,
   ]);
 
-  useEffect(() => {
-    if (!open) {
+  const handleOpenChange = (next: boolean) => {
+    if (!next) {
       setForm({
         planId: "",
         amount: 0,
@@ -144,10 +145,9 @@ function CreateEnrollmentDialogInner({
       setFieldErrors({});
       setPlanTouched(false);
       setAmountTouched(false);
-      return;
     }
-    runValidate();
-  }, [open, form.planId, debouncedAmount, effectiveFirstMode, runValidate]);
+    onOpenChange?.(next);
+  };
 
   const blockers = validateState.data?.blockers ?? [];
 
@@ -178,7 +178,7 @@ function CreateEnrollmentDialogInner({
     <ActionDialog
       trigger={trigger}
       open={open}
-      onOpenChange={onOpenChange}
+      onOpenChange={handleOpenChange}
       className="max-h-[min(90vh,880px)] w-[calc(100vw-1.5rem)] sm:max-w-[920px]"
       title="Create enrollment"
       description={`Enrol ${customer.name} (${customer.customerNo}) into a scheme plan.`}

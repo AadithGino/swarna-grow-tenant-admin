@@ -20,6 +20,8 @@ export type PortalTenant = {
   id: string;
   tenantCode: string;
   displayName: string;
+  /** Legacy alias used in some receipt/success UI copy. */
+  name?: string;
   status: string;
 };
 

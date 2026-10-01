@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { Activity, ArrowLeft, Building2, Check, ClipboardCopy, CreditCard, Edit3, Gauge, KeyRound, MessageCircleMore, Play, Power, Save, Send, Settings2, ShieldCheck, Trash2, Webhook } from "lucide-react";
 import { toast } from "sonner";
@@ -123,13 +123,16 @@ function EditTenantDialog({ tenant }: { tenant: PlatformTenantDetail }) {
     Partial<Record<keyof PlatformTenantProfileForm, boolean>>
   >({});
 
-  useEffect(() => {
+  const tenantProfileSeed = `${tenant.id}-${tenant.status}-${tenant.displayName}`;
+  const [appliedTenantProfileSeed, setAppliedTenantProfileSeed] = useState("");
+  if (appliedTenantProfileSeed !== tenantProfileSeed) {
     const next = platformTenantProfileFormFromDetail(tenant);
+    setAppliedTenantProfileSeed(tenantProfileSeed);
     setBaseline(next);
     setForm(next);
     setFieldErrors({});
     setTouched({});
-  }, [tenant]);
+  }
 
   const liveErrors = useMemo(
     () =>
@@ -475,13 +478,16 @@ function WhatsappCard({ tenant }: { tenant: PlatformTenantDetail }) {
   );
   const [verifyMobileError, setVerifyMobileError] = useState<string | undefined>();
 
-  useEffect(() => {
+  const whatsappSeed = `${tenant.id}|${tenant.owner.mobile}|${waLastVerified ?? ""}`;
+  const [appliedWhatsappSeed, setAppliedWhatsappSeed] = useState("");
+  if (appliedWhatsappSeed !== whatsappSeed) {
+    setAppliedWhatsappSeed(whatsappSeed);
     setForm(whatsappFormFromTenant(tenant));
     setFieldErrors({});
     setTouched({});
     setTestMobile(sanitizeIndianPhoneDigits(tenant.owner.mobile));
     setVerifyMobileError(undefined);
-  }, [tenant]);
+  }
 
   const liveErrors = useMemo(
     () => livePlatformWhatsappIntegrationFieldErrors(form, touched),
@@ -771,13 +777,16 @@ function PhonePeCard({ tenant }: { tenant: PlatformTenantDetail }) {
     Partial<Record<keyof PlatformPhonePeIntegrationForm, boolean>>
   >({});
 
-  useEffect(() => {
+  const phonePeSeed = `${tenant.id}|${pgLastVerified ?? ""}|${pgEnvironment}`;
+  const [appliedPhonePeSeed, setAppliedPhonePeSeed] = useState("");
+  if (appliedPhonePeSeed !== phonePeSeed) {
     const next = phonePeFormFromTenant(tenant);
+    setAppliedPhonePeSeed(phonePeSeed);
     setBaseline(next);
     setForm(next);
     setFieldErrors({});
     setTouched({});
-  }, [tenant]);
+  }
 
   const liveErrors = useMemo(
     () => livePlatformPhonePeIntegrationFieldErrors(form, touched),
@@ -1021,41 +1030,6 @@ function PhonePeCard({ tenant }: { tenant: PlatformTenantDetail }) {
     </Surface>
   );
 }
-function LInput({
-  text,
-  value,
-  onChange,
-  type = "text",
-  error,
-  inputMode,
-  className,
-  placeholder,
-}: {
-  text: string;
-  value: string;
-  onChange: (v: string) => void;
-  type?: string;
-  error?: string;
-  inputMode?: React.HTMLAttributes<HTMLInputElement>["inputMode"];
-  className?: string;
-  placeholder?: string;
-}) {
-  return (
-    <div>
-      <FieldLabel>{text}</FieldLabel>
-      <Input
-        type={type}
-        inputMode={inputMode}
-        placeholder={placeholder}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className={cn(error && "border-red-600", className)}
-        aria-invalid={Boolean(error)}
-      />
-      <FormFieldError message={error} />
-    </div>
-  );
-}
 
 function TenantTemplates({ tenant }: { tenant: PlatformTenantDetail }) { const defs = useGetTemplateDefinitionsQuery(); const templates = useGetTenantTemplatesQuery(tenant.id); const [selected, setSelected] = useState<TemplateDefinition | null>(null); if (defs.isLoading || templates.isLoading) return <PageSkeleton cards={3}/>; const registered = new Map((templates.data ?? []).map((row) => [row.messageType, row])); return <><Surface title="WhatsApp template registry" description="Eight required Meta templates plus the recommended payment-success text fallback"><div className="grid gap-4 p-5 md:grid-cols-2 xl:grid-cols-3">{(defs.data ?? []).map((def) => { const row = registered.get(def.messageType); return <button type="button" key={def.messageType} onClick={() => setSelected(def)} className="rounded-2xl border p-4 text-left hover:border-[#b78491] hover:shadow-sm"><div className="flex items-start justify-between gap-3"><span className="grid size-10 place-items-center rounded-xl bg-[#f7ecee] text-[#730321]"><MessageCircleMore className="size-5"/></span><StatusBadge status={row ? row.approvalStatus : "PENDING"}/></div><p className="mt-4 font-bold">{def.label}</p><p className="mt-1 font-mono text-xs text-muted-foreground">{def.messageType}</p><p className="mt-3 text-sm text-muted-foreground">{def.variables.length} variables · {def.required ? "Required" : "Optional fallback"}</p><p className={`mt-3 text-sm font-medium ${row ? "text-emerald-700" : "text-amber-700"}`}>{row ? row.templateName : "Registration missing"}</p>{row && <p className="mt-1 font-mono text-xs text-muted-foreground">ID {row.templateId} · v{row.version}{row.active ? "" : " · inactive"}</p>}</button>; })}</div></Surface>{selected && <TemplateDialog tenant={tenant} definition={selected} current={registered.get(selected.messageType)} open onOpenChange={(v) => !v && setSelected(null)}/>}</>; }
 function TemplateDialog({
@@ -1097,20 +1071,27 @@ function TemplateDialog({
   );
   const [verifyMobileError, setVerifyMobileError] = useState<string | undefined>();
 
-  useEffect(() => {
-    if (!open) return;
+  const templateDialogSeed = open
+    ? `${tenant.tenantCode}|${tenant.owner.mobile}|${definition.messageType}|${current?.id ?? ""}`
+    : "";
+  const [appliedTemplateDialogSeed, setAppliedTemplateDialogSeed] = useState("");
+  if (open && appliedTemplateDialogSeed !== templateDialogSeed) {
     const next = platformTenantTemplateFormFromRegistration(
       tenant.tenantCode,
       definition,
       current,
     );
+    setAppliedTemplateDialogSeed(templateDialogSeed);
     setBaseline(next);
     setForm(next);
     setFieldErrors({});
     setTouched({});
     setTestMobile(sanitizeIndianPhoneDigits(tenant.owner.mobile));
     setVerifyMobileError(undefined);
-  }, [open, tenant.tenantCode, tenant.owner.mobile, definition, current]);
+  }
+  if (!open && appliedTemplateDialogSeed) {
+    setAppliedTemplateDialogSeed("");
+  }
 
   const liveErrors = useMemo(
     () => livePlatformTenantTemplateFieldErrors(form, touched),

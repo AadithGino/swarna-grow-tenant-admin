@@ -446,9 +446,17 @@ export function BranchDetailPage({ branchId }: { branchId: string }) {
             >
               <OverviewFieldGrid
                 rows={[
-                  ["Branch ID", <span className="font-mono text-sm">{String(d.id)}</span>],
+                  [
+                    "Branch ID",
+                    <span key="branch-id" className="font-mono text-sm">
+                      {String(d.id)}
+                    </span>,
+                  ],
                   ["Name", branchName],
-                  ["Code", <span className="font-mono">{code}</span>],
+                  [
+                    "Code",
+                    <span key="branch-code" className="font-mono">{code}</span>,
+                  ],
                   [
                     "Status",
                     <StatusBadge

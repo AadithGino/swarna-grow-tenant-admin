@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Archive, Check, Edit3, Plus, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -45,8 +45,10 @@ export function PlatformPlansPage() {
   const query = useGetPlatformPlansQuery();
   const [editing, setEditing] = useState<PlatformPlan | null | undefined>(undefined);
 
-  const rows = query.data ?? [];
-  const plans = useMemo(() => [...rows].sort((a, b) => a.sortOrder - b.sortOrder), [rows]);
+  const plans = useMemo(
+    () => [...(query.data ?? [])].sort((a, b) => a.sortOrder - b.sortOrder),
+    [query.data],
+  );
 
   if (query.isLoading) return <PageSkeleton cards={4} />;
   if (query.isError) return <QueryError error={query.error} onRetry={query.refetch} />;
@@ -223,16 +225,23 @@ function PlanDialog({
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [touched, setTouched] = useState<Record<string, boolean>>({});
 
-  useEffect(() => {
-    if (!open) return;
+  const planDialogSeed = open ? plan?.id ?? "new" : "";
+  const [appliedPlanDialogSeed, setAppliedPlanDialogSeed] = useState<
+    string | null
+  >(null);
+  if (open && appliedPlanDialogSeed !== planDialogSeed) {
     const next = plan
       ? platformSubscriptionPlanFormFromPlan(plan)
       : emptyPlatformSubscriptionPlanForm();
+    setAppliedPlanDialogSeed(planDialogSeed);
     setBaseline(next);
     setForm(next);
     setFieldErrors({});
     setTouched({});
-  }, [open, plan]);
+  }
+  if (!open && appliedPlanDialogSeed !== null) {
+    setAppliedPlanDialogSeed(null);
+  }
 
   const liveErrors = useMemo(
     () => livePlatformSubscriptionPlanFieldErrors(form, touched),

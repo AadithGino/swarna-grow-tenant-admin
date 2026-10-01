@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useClientMounted } from "@/src/hooks/use-client-mounted";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft, ArrowRight, CheckCircle2, LoaderCircle, LockKeyhole, Smartphone } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -29,7 +30,7 @@ export function CustomerLoginPage() {
   const dispatch = useAppDispatch();
   const { tenantCode, tenantSlug, tenant, loading, notFound } = useCustomerTenant();
   const authenticated = useAppSelector((s) => s.customerSession.authenticated);
-  const [mounted, setMounted] = useState(false);
+  const mounted = useClientMounted();
   const [mode, setMode] = useState<AuthMode>("login");
   const [step, setStep] = useState<Step>("mobile");
   const [mobile, setMobile] = useState("9847012345");
@@ -49,10 +50,6 @@ export function CustomerLoginPage() {
     searchParams.get("next"),
     customerPath(tenantSlug),
   );
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
 
   useEffect(() => {
     if (!mounted) return;

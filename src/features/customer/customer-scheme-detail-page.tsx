@@ -230,11 +230,25 @@ export function CustomerSchemeDetailPage({ id }: { id: string }) {
                 </div>
                 {preview.data.computation.goldWeight ? (
                   <div className="flex justify-between gap-3">
-                    <span className="text-muted-foreground">Gold handover</span>
+                    <span className="text-muted-foreground">
+                      {effectiveRedemptionMode === "GOLD_HANDOVER"
+                        ? "Gold handover"
+                        : effectiveRedemptionMode === "CASH"
+                          ? "Accrued gold weight (closed on payout)"
+                          : "Accrued gold weight"}
+                    </span>
                     <span className="font-bold">{preview.data.computation.goldWeight.weightDisplay}</span>
                   </div>
                 ) : null}
               </div>
+              {preview.data.cashSettlementBasis === "PAID_AMOUNT" &&
+              effectiveRedemptionMode === "CASH" ? (
+                <p className="mt-3 text-xs text-muted-foreground">
+                  Cash payout uses net paid contributions from your plan (not
+                  today&apos;s gold rate). Accrued gold is closed when staff
+                  complete redemption.
+                </p>
+              ) : null}
               {preview.data.valuationNote ? <p className="mt-3 text-xs text-muted-foreground">{preview.data.valuationNote}</p> : null}
               {preview.data.warningText ? <p className="mt-3 text-xs font-semibold text-amber-800">{preview.data.warningText}</p> : null}
               {!preview.data.eligible ? (

@@ -139,9 +139,14 @@ export function CustomerSupportPage() {
   const [category, setCategory] = useState("PAYMENT");
   const [create, state] = useCreateCustomerGrievanceMutation();
 
-  const tickets = data ?? [];
-  const openTickets = useMemo(() => tickets.filter(isOpenTicket), [tickets]);
-  const closedTickets = useMemo(() => tickets.filter((t) => !isOpenTicket(t)), [tickets]);
+  const openTickets = useMemo(
+    () => (data ?? []).filter(isOpenTicket),
+    [data],
+  );
+  const closedTickets = useMemo(
+    () => (data ?? []).filter((t) => !isOpenTicket(t)),
+    [data],
+  );
   const supportPhone = tenant?.supportNumber ?? customerTenantFallbackPhone;
 
   if (isLoading) return <PageSkeleton cards={2} />;

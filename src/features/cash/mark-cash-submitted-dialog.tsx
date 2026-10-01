@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { toastApiError } from "@/src/lib/api-error";
@@ -68,6 +68,14 @@ function moneyFromPaiseField(
   return Number(field) / 100;
 }
 
+function handoverAmountDefaults(row: CashStaffRow | null | undefined) {
+  const max = staffMaxSubmit(row) ?? 0;
+  return {
+    amount: max,
+    receiptCount: Math.max(1, Math.round(max / 2500)),
+  };
+}
+
 function MarkCashSubmittedDialogInner({
   staffList,
   staff: initialStaff,
@@ -105,16 +113,17 @@ function MarkCashSubmittedDialogInner({
   const selected =
     staffList.find((s) => s.id === staffId) ?? initialStaff ?? null;
 
-  useEffect(() => {
-    if (!isOpen) {
-      setPhase("form");
-      return;
-    }
+  const handoverOpenSeed = isOpen
+    ? `${initialStaff?.id ?? ""}|${staffList.map((s) => s.id).join(",")}`
+    : "";
+  const [appliedHandoverOpenSeed, setAppliedHandoverOpenSeed] = useState("");
+  if (isOpen && appliedHandoverOpenSeed !== handoverOpenSeed) {
+    setAppliedHandoverOpenSeed(handoverOpenSeed);
     if (initialStaff) {
       setStaffId(initialStaff.id);
-      const max = staffMaxSubmit(initialStaff) ?? 0;
-      setAmount(max);
-      setReceiptCount(Math.max(1, Math.round(max / 2500)));
+      const defaults = handoverAmountDefaults(initialStaff);
+      setAmount(defaults.amount);
+      setReceiptCount(defaults.receiptCount);
     } else {
       setStaffId("");
       setAmount(0);
@@ -126,7 +135,40 @@ function MarkCashSubmittedDialogInner({
     setAmountTouched(false);
     setReceiptTouched(false);
     setFieldErrors({});
-  }, [isOpen, initialStaff, staffList]);
+  }
+  if (!isOpen && appliedHandoverOpenSeed) {
+    setAppliedHandoverOpenSeed("");
+  }
+
+  const detailSeed =
+    detailQuery.data && phase === "form" && !initialStaff
+      ? `${detailQuery.data.receiptCount ?? ""}|${detailQuery.data.availableForHandover?.amountPaise ?? ""}`
+      : "";
+  const [appliedDetailSeed, setAppliedDetailSeed] = useState("");
+  if (
+    isOpen &&
+    phase === "form" &&
+    !initialStaff &&
+    detailSeed &&
+    appliedDetailSeed !== detailSeed
+  ) {
+    setAppliedDetailSeed(detailSeed);
+    if (detailQuery.data?.receiptCount) {
+      setReceiptCount(Math.max(1, detailQuery.data.receiptCount));
+    }
+    const available = detailQuery.data?.availableForHandover;
+    if (available) {
+      const rupees = moneyFromPaiseField(available);
+      if (rupees != null && rupees > 0) setAmount(rupees);
+    }
+  }
+
+  const handleOpenChange = (next: boolean) => {
+    if (!next) {
+      setPhase("form");
+    }
+    setOpen(next);
+  };
 
   const maxSubmit =
     moneyFromPaiseField(detailQuery.data?.availableForHandover) ??
@@ -152,32 +194,6 @@ function MarkCashSubmittedDialogInner({
     remarks,
     maxSubmit,
   });
-
-  useEffect(() => {
-    if (initialStaff || !isOpen) return;
-    const member = staffList.find((s) => s.id === staffId);
-    if (member) {
-      const max = staffMaxSubmit(member) ?? 0;
-      setAmount(max);
-      setReceiptCount(Math.max(1, Math.round(max / 2500)));
-    }
-  }, [staffId, staffList, initialStaff, isOpen]);
-
-  useEffect(() => {
-    if (detailQuery.data?.receiptCount && phase === "form") {
-      setReceiptCount(Math.max(1, detailQuery.data.receiptCount));
-    }
-    const available = detailQuery.data?.availableForHandover;
-    if (available && phase === "form" && !initialStaff) {
-      const rupees = moneyFromPaiseField(available);
-      if (rupees != null && rupees > 0) setAmount(rupees);
-    }
-  }, [
-    detailQuery.data?.receiptCount,
-    detailQuery.data?.availableForHandover,
-    phase,
-    initialStaff,
-  ]);
 
   const submitHandover = async () => {
     setStaffTouched(true);
@@ -225,7 +241,7 @@ function MarkCashSubmittedDialogInner({
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={setOpen}>
+    <Dialog open={isOpen} onOpenChange={handleOpenChange}>
       {trigger ? <DialogTrigger asChild>{trigger}</DialogTrigger> : null}
       <DialogContent className={dialogScrollShellClass}>
         <DialogBody className="pb-2">
@@ -251,6 +267,12 @@ function MarkCashSubmittedDialogInner({
                         delete next.staffId;
                         return next;
                       });
+                      if (!initialStaff) {
+                        const member = staffList.find((s) => s.id === value);
+                        const defaults = handoverAmountDefaults(member);
+                        setAmount(defaults.amount);
+                        setReceiptCount(defaults.receiptCount);
+                      }
                     }}
                     disabled={Boolean(initialStaff)}
                   >

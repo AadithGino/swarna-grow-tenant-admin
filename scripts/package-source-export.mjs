@@ -10,8 +10,11 @@ const repoRoot = path.resolve(__dirname, "..");
 const ROOT_ALLOW_FILES = new Set([
   "package.json",
   "pnpm-lock.yaml",
+  "pnpm-workspace.yaml",
   "eslint.config.js",
+  "eslint.config.mjs",
   ".gitignore",
+  ".npmrc",
   ".env.example",
   "README.md",
   "tsconfig.json",
@@ -27,6 +30,9 @@ const ROOT_ALLOW_PREFIXES = [
   "components/",
   "app/",
   "public/",
+  "lib/",
+  "hooks/",
+  "vendor/",
   "swarna-grow-api-contract-v1.2/",
 ];
 

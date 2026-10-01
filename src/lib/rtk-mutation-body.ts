@@ -11,5 +11,5 @@ export function ensureMutationJsonBody<T extends string | FetchArgs>(args: T): T
   if (typeof args === "string") return args;
   const method = String(args.method ?? "GET").toUpperCase();
   if (!MUTATION_METHODS.has(method) || args.body !== undefined) return args;
-  return { ...args, body: {} };
+  return { ...(args as FetchArgs), body: {} } as T;
 }

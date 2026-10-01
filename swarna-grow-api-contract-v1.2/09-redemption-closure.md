@@ -98,7 +98,23 @@ Two settlement paths, one shared computation engine:
 }
 ```
 
-### Gold-weight scheme
+### Gold-weight scheme — cash settlement basis (plan rule)
+
+For `valueBasis: GOLD_WEIGHT` and redemption mode **CASH**, the enrolled plan snapshot may set:
+
+| Field | Values | Default |
+|---|---|---|
+| `redemptionRules.cashSettlementBasis` | `GOLD_VALUE` \| `PAID_AMOUNT` | `GOLD_VALUE` |
+| `redemptionRules.paidAmountBenefitTreatment` | `EXCLUDE` \| `INCLUDE_MONETARY` | `EXCLUDE` (only when basis is `PAID_AMOUNT`) |
+
+- **`GOLD_VALUE`** — cash payout is accrued gold (principal + eligible bonus weight) valued at the **exact-day 22K rate** on preview/completion (existing behaviour). Preview includes `valuationRate` / `valuationNote` when a rate is set.
+- **`PAID_AMOUNT`** — cash payout is **net ledger paid principal** (+ monetary benefit when `INCLUDE_MONETARY`) minus penalty. No repricing of principal gold at today's rate; preview does **not** require a gold rate solely for principal. Accrued gold weight is **released on completion** via ledger debit (full outstanding weight); cash outflow equals `settlementPaise` only.
+- Operators and customers **cannot override** the basis at redemption; it is frozen in `planSnapshot` at enrolment.
+- Settlement snapshot persisted on the redemption includes `cashSettlementBasis` and `paidAmountBenefitTreatment` for revalidation at approval/completion.
+
+`GOLD_HANDOVER`, `PURCHASE_ADJUSTMENT`, and `valueBasis: CASH` plans are unchanged.
+
+### Gold-weight scheme (GOLD_VALUE cash example)
 ```json
 {
   "computation": {

@@ -99,10 +99,13 @@ export type DisplayMode =
   "FIXED" | "FLEXIBLE_FREE_WINDOW" | "FLEXIBLE_LOCK_WINDOW";
 export type SchemeStatus =
   | "PENDING_PAYMENT"
+  | "PENDING_ACTIVATION"
   | "ENROLMENT_EXPIRED"
   | "ACTIVE"
   | "LOCKED"
   | "MATURED"
+  | "TERM_ENDED"
+  | "REDEMPTION_PENDING"
   | "DEFAULTED"
   | "REDEEMED"
   | "CLOSED_PREMATURE";
@@ -209,6 +212,9 @@ export interface Enrollment {
   positionVersion?: number;
   targetCycle?: string;
   allowedRedemptionModes?: Array<"CASH" | "GOLD_HANDOVER" | "PURCHASE_ADJUSTMENT">;
+  /** From plan snapshot at enrolment — cash payout basis for gold-weight + CASH. */
+  cashSettlementBasis?: "GOLD_VALUE" | "PAID_AMOUNT";
+  paidAmountBenefitTreatment?: "EXCLUDE" | "INCLUDE_MONETARY";
   cycleLabel?: string;
   formulaLabel?: string;
   explainerText?: string;
@@ -246,6 +252,7 @@ export interface Payment {
     | "CASH"
     | "CARD"
     | "UPI"
+    | "CHEQUE"
     | "BANK_TRANSFER"
     | "ONLINE_GATEWAY";
   staff: string;
@@ -312,6 +319,9 @@ export interface Branch {
   name: string;
   code: string;
   city: string;
+  line1?: string;
+  pincode?: string;
+  contactNumber?: string;
   staff: number;
   customers: number;
   status: "ACTIVE" | "INACTIVE";
@@ -487,6 +497,7 @@ export interface SettlementPreview {
     monthsCompleted?: number;
     lockInMonths?: number;
     lockInMet?: boolean;
+    valueBasis?: "CASH" | "GOLD_WEIGHT";
   };
   customer?: {
     name?: string;
@@ -515,6 +526,15 @@ export interface SettlementPreview {
   approvalReason?: string;
   warningText?: string;
   valuationNote?: string;
+  /** Gold-weight + CASH: frozen plan rule from enrollment snapshot (read-only in UI). */
+  cashSettlementBasis?: "GOLD_VALUE" | "PAID_AMOUNT";
+  paidAmountBenefitTreatment?: "EXCLUDE" | "INCLUDE_MONETARY";
+  principalPaid?: number;
+  includedMonetaryBenefit?: number;
+  accruedGoldWeightDisplay?: string;
+  valuationRateDisplay?: string;
+  valuationRateEffectiveDate?: string;
+  valueBasis?: "CASH" | "GOLD_WEIGHT";
   /** Cash-value gold handover: settlement minus valued handover weight (paise as rupees). */
   roundingDelta?: number;
   handoverValue?: number;

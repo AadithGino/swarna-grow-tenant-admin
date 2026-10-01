@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import { CalendarDays, Check, Info, LoaderCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -140,8 +140,11 @@ export function CustomerProfileNomineePage() {
   const [addressSame, setAddressSame] = useState(true);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
-  useEffect(() => {
-    if (!data) return;
+  const profileSeed = data
+    ? `${data.nominee?.name ?? ""}|${data.nominee?.relationship ?? ""}|${data.nominee?.notes ?? ""}|${data.nomineeEditable}`
+    : "";
+  const [appliedProfileSeed, setAppliedProfileSeed] = useState("");
+  if (data && appliedProfileSeed !== profileSeed) {
     const detail = data.nominee
       ? {
           name: data.nominee.name,
@@ -151,6 +154,7 @@ export function CustomerProfileNomineePage() {
         }
       : null;
     const notesParsed = parseNomineeNotes(data.nominee?.notes);
+    setAppliedProfileSeed(profileSeed);
     setForm(nomineeFormFieldsFromDetail(detail));
     setRelationshipKey(
       data.nominee
@@ -160,7 +164,7 @@ export function CustomerProfileNomineePage() {
     setDob(notesParsed.dob);
     setDobDisplay(isoToDobDisplay(notesParsed.dob));
     setAddressSame(notesParsed.addressSame || !data.nominee);
-  }, [data]);
+  }
 
   if (isLoading || !data || !form) return <PageSkeleton cards={2} />;
   if (isError) return <QueryError onRetry={refetch} />;

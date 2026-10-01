@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { HandCoins } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -152,30 +152,37 @@ function PaymentDialogInner({
       }
     : undefined;
 
-  useEffect(() => {
-    if (!open) {
+  const paymentOpenSeed = open
+    ? `${customerId ?? ""}|${schemeId ?? ""}|${lockScheme}|${options.map((o) => o.id).join(",")}`
+    : "";
+  const [appliedPaymentOpenSeed, setAppliedPaymentOpenSeed] = useState("");
+  if (open && appliedPaymentOpenSeed !== paymentOpenSeed) {
+    setAppliedPaymentOpenSeed(paymentOpenSeed);
+    if (lockScheme && schemeId) setSelected(schemeId);
+    else if (customerId && options.length === 1) setSelected(options[0].id);
+    else if (customerId && options.length !== 1) setSelected("");
+  }
+  if (!open && appliedPaymentOpenSeed) {
+    setAppliedPaymentOpenSeed("");
+  }
+
+  const quoteSeed = quote
+    ? `${quote.schemeId}-${quote.positionVersion}-${quote.suggested ?? ""}`
+    : "";
+  const [appliedQuoteSeed, setAppliedQuoteSeed] = useState("");
+  if (quote && !amountTouched && appliedQuoteSeed !== quoteSeed) {
+    setAppliedQuoteSeed(quoteSeed);
+    setAmount(quote.suggested ?? "");
+  }
+
+  const handleOpenChange = (next: boolean) => {
+    if (!next) {
       setFieldErrors({});
       setEnrollmentTouched(false);
       setAmountTouched(false);
-      return;
     }
-    if (lockScheme && schemeId) {
-      setSelected(schemeId);
-      return;
-    }
-    if (customerId && options.length === 1) {
-      setSelected(options[0].id);
-      return;
-    }
-    if (customerId && options.length !== 1) {
-      setSelected("");
-    }
-  }, [open, customerId, lockScheme, schemeId, options]);
-
-  useEffect(() => {
-    if (!quote) return;
-    setAmount(quote.suggested ?? "");
-  }, [quote?.schemeId, quote?.positionVersion, quote?.suggested]);
+    setOpen(next);
+  };
 
   const numericAmount = typeof amount === "number" ? amount : 0;
   const isGoldScheme = selectedRow?.valueBasis === "GOLD_WEIGHT";
@@ -254,7 +261,7 @@ function PaymentDialogInner({
     />
     <ActionDialog
       open={open}
-      onOpenChange={setOpen}
+      onOpenChange={handleOpenChange}
       className="sm:max-w-lg"
       trigger={
         trigger ?? (

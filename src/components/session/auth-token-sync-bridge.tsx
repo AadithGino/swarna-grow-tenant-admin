@@ -9,6 +9,7 @@ import {
   type AuthRealm,
 } from "@/src/lib/auth-token-storage";
 import {
+  handleAgentUnauthorized,
   handleCustomerUnauthorized,
   handlePlatformUnauthorized,
   handleTenantUnauthorized,
@@ -71,7 +72,7 @@ function handleCrossTabLogout(realm: AuthRealm, dispatch: ReturnType<typeof useA
     return;
   }
   if (realm === "agent" && isAgentAppPath(pathname)) {
-    window.location.assign("/agent/login");
+    handleAgentUnauthorized(dispatch);
   }
 }
 

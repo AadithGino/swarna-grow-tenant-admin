@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -59,14 +59,19 @@ export function AcceptHandoverDialog({
   const busy =
     acceptState.isLoading || rejectState.isLoading || resolveState.isLoading;
 
-  useEffect(() => {
-    if (!open || !handover) return;
+  const handoverSeed = handover ? `${handover.id}-${handover.amount}` : "";
+  const [appliedHandoverSeed, setAppliedHandoverSeed] = useState("");
+  if (open && handover && appliedHandoverSeed !== handoverSeed) {
+    setAppliedHandoverSeed(handoverSeed);
     setAcceptedRupee(handover.amount);
     setRemarks("");
     setAmountTouched(false);
     setRemarksTouched(false);
     setRejectMode(false);
-  }, [open, handover?.id, handover?.amount]);
+  }
+  if (!open && appliedHandoverSeed) {
+    setAppliedHandoverSeed("");
+  }
 
   if (!handover) return null;
 

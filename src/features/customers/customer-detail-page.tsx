@@ -139,8 +139,9 @@ export function CustomerDetailPage({ id }: { id: string }) {
     activeSchemes[0] ??
     schemesOverview[0];
   const paymentLinkScheme =
-    (nextDueScheme?.id &&
-      payableEnrollments.find((s) => s.id === nextDueScheme.id)) ??
+    (nextDueScheme?.id
+      ? payableEnrollments.find((s) => s.id === nextDueScheme.id)
+      : undefined) ??
     payableEnrollments.find((s) => Number(s.outstanding ?? 0) > 0) ??
     payableEnrollments[0];
 

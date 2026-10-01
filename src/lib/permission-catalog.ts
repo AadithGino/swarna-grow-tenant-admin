@@ -140,9 +140,11 @@ const KNOWN_PERMISSION_KEYS = new Set<string>(ALL_PERMISSION_KEYS);
 export function normalizeStaffPermissions(permissions: string[]): string[] {
   if (isFullAccess(permissions)) return [...ALL_PERMISSION_KEYS];
   const set = new Set(permissions.filter(Boolean));
-  return ALL_PERMISSION_KEYS.filter((k) => set.has(k)).concat(
-    [...set].filter((k) => k !== "*" && !KNOWN_PERMISSION_KEYS.has(k)),
+  const known = ALL_PERMISSION_KEYS.filter((k) => set.has(k));
+  const extra = [...set].filter(
+    (k) => k !== "*" && !KNOWN_PERMISSION_KEYS.has(k),
   );
+  return [...known, ...extra];
 }
 
 export type PermissionGroup = {

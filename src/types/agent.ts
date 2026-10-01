@@ -96,6 +96,7 @@ export type AgentSchemeSummary = {
   progressLabel?: string;
   totalPaidPaise?: number;
   goldBalanceMg?: number;
+  installmentAmountPaise?: number;
   nextAmountPaise?: number;
   payableMaxPaise?: number;
   payableLabel?: string;

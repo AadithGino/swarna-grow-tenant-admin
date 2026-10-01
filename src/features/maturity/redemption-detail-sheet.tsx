@@ -642,9 +642,10 @@ function RedemptionAuditTrail({
     entityId: redemptionId,
     limit: 25,
   });
+  const refetchAudit = auditQuery.refetch;
   useEffect(() => {
-    void auditQuery.refetch();
-  }, [refreshKey, redemptionId]);
+    void refetchAudit();
+  }, [refreshKey, redemptionId, refetchAudit]);
   const rows = auditQuery.data?.items ?? [];
 
   return (

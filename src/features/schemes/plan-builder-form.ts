@@ -16,6 +16,8 @@ export type RedemptionMode =
   | "GOLD_HANDOVER"
   | "PURCHASE_ADJUSTMENT";
 
+export type CashSettlementBasis = "GOLD_VALUE" | "PAID_AMOUNT";
+
 export type PlanBuilderFormState = {
   name: string;
   code: string;
@@ -80,6 +82,10 @@ export type PlanBuilderFormState = {
   penaltyFlat: number;
   benefitTreatment: BenefitTreatment;
   allowedRedemptionModes: RedemptionMode[];
+  /** Gold-weight + CASH: how cash payout is computed (frozen at enrolment). */
+  cashSettlementBasis: CashSettlementBasis;
+  /** When basis is PAID_AMOUNT: add eligible monetary benefit to cash (default off). */
+  includeMonetaryBenefitInPaidAmountCash: boolean;
   redeemAtAnyBranch: boolean;
   allBranches: boolean;
   branchIds: string[];
@@ -161,6 +167,8 @@ export const defaultPlanBuilderForm = (): PlanBuilderFormState => ({
     "GOLD_HANDOVER",
     "PURCHASE_ADJUSTMENT",
   ],
+  cashSettlementBasis: "GOLD_VALUE",
+  includeMonetaryBenefitInPaidAmountCash: false,
   redeemAtAnyBranch: false,
   allBranches: true,
   branchIds: [],
@@ -405,6 +413,20 @@ export function buildPlanCreatePayload(form: PlanBuilderFormState) {
       },
       allowedModes: form.allowedRedemptionModes,
       redeemAtAnyBranch: form.redeemAtAnyBranch,
+      ...(form.valueBasis === "GOLD_WEIGHT" &&
+      form.allowedRedemptionModes.includes("CASH")
+        ? {
+            cashSettlementBasis: form.cashSettlementBasis,
+            ...(form.cashSettlementBasis === "PAID_AMOUNT"
+              ? {
+                  paidAmountBenefitTreatment:
+                    form.includeMonetaryBenefitInPaidAmountCash
+                      ? "INCLUDE_MONETARY"
+                      : "EXCLUDE",
+                }
+              : {}),
+          }
+        : {}),
     },
     availability: {
       allBranches: form.allBranches,
@@ -694,6 +716,11 @@ export function planDetailToForm(detail: Record<string, unknown>): PlanBuilderFo
     allowedRedemptionModes: Array.isArray(redemption.allowedModes)
       ? (redemption.allowedModes as RedemptionMode[])
       : base.allowedRedemptionModes,
+    cashSettlementBasis:
+      (redemption.cashSettlementBasis as CashSettlementBasis) ??
+      base.cashSettlementBasis,
+    includeMonetaryBenefitInPaidAmountCash:
+      redemption.paidAmountBenefitTreatment === "INCLUDE_MONETARY",
     redeemAtAnyBranch: Boolean(redemption.redeemAtAnyBranch),
     allBranches: Boolean(avail.allBranches ?? true),
     branchIds: Array.isArray(avail.branchIds)
@@ -737,10 +764,8 @@ export function buildPlanPatchPayload(form: PlanBuilderFormState) {
       },
     };
   }
-  const { status: _s, ...rest } = buildPlanCreatePayload(form) as Record<
-    string,
-    unknown
-  >;
+  const rest = { ...buildPlanCreatePayload(form) } as Record<string, unknown>;
+  delete rest.status;
   if (form.paymentPattern === "FLEXIBLE_AVERAGE") {
     rest.paymentRules = {
       ...((rest.paymentRules as Record<string, unknown>) ?? {}),

@@ -1,5 +1,11 @@
 import { createApi, fetchBaseQuery } from "@reduxjs/toolkit/query/react";
-import type { BaseQueryFn, FetchArgs, FetchBaseQueryError } from "@reduxjs/toolkit/query";
+import type {
+  BaseQueryFn,
+  FetchArgs,
+  FetchBaseQueryError,
+  FetchBaseQueryMeta,
+} from "@reduxjs/toolkit/query";
+import { rtkDataResult, rtkErrorResult } from "@/src/lib/rtk-query-result";
 import { env } from "@/src/config/env";
 import {
   customerGrievances,
@@ -358,23 +364,27 @@ function unwrapCustomerEnvelope(result: {
       success: boolean;
       error?: { code: string; message: string };
     };
-    if (envelope.success) return { data: envelope.data, meta: envelope.meta };
-    return {
-      error: {
-        status: "CUSTOM_ERROR" as const,
-        error: envelope.error?.message ?? "Request failed",
-        data: envelope.error,
-      },
-    };
+    if (envelope.success) {
+      return rtkDataResult(envelope.data, result.meta);
+    }
+    return rtkErrorResult({
+      status: "CUSTOM_ERROR",
+      error: envelope.error?.message ?? "Request failed",
+      data: envelope.error,
+    });
   }
-  return result;
+  if (result.error) {
+    return rtkErrorResult(result.error, result.meta);
+  }
+  return rtkDataResult(result.data, result.meta);
 }
 
 const dynamicBaseQuery: BaseQueryFn<
   string | FetchArgs,
   unknown,
   FetchBaseQueryError,
-  CustomerBaseQueryExtra
+  CustomerBaseQueryExtra,
+  FetchBaseQueryMeta
 > = async (args, api, extra) => {
   const requestArgs = env.useMocks ? args : withIdempotencyHeader(args);
   const url = routeOf(requestArgs);

@@ -17,8 +17,11 @@ export function PlatformTemplateRegistryPage() {
   const defs = useGetTemplateDefinitionsQuery();
   const tenants = useGetPlatformTenantsQuery({ limit: 100 });
 
-  const definitions = defs.data ?? [];
-  const tenantRows = tenants.data?.rows ?? [];
+  const definitions = useMemo(() => defs.data ?? [], [defs.data]);
+  const tenantRows = useMemo(
+    () => tenants.data?.rows ?? [],
+    [tenants.data?.rows],
+  );
 
   const stats = useMemo(() => {
     const required = definitions.filter((d) => d.required);

@@ -1,5 +1,11 @@
 import { createApi, fetchBaseQuery } from "@reduxjs/toolkit/query/react";
-import type { BaseQueryFn, FetchArgs, FetchBaseQueryError } from "@reduxjs/toolkit/query";
+import type {
+  BaseQueryFn,
+  FetchArgs,
+  FetchBaseQueryError,
+  FetchBaseQueryMeta,
+} from "@reduxjs/toolkit/query";
+import { rtkDataResult, rtkErrorResult } from "@/src/lib/rtk-query-result";
 import { apiOrigin, env } from "@/src/config/env";
 import {
   handlePlatformUnauthorized,
@@ -168,11 +174,24 @@ const baseQuery: BaseQueryFn<
   PlatformArgs,
   unknown,
   FetchBaseQueryError,
-  PlatformBaseQueryExtra
+  PlatformBaseQueryExtra,
+  FetchBaseQueryMeta
 > = async (args, api, extra) => {
   if (env.useMocks) {
-    try { return { data: await platformMockRequest({ mockKey: args.mockKey, params: args.mockParams ?? (args.params as Record<string, unknown>), body: args.body as Record<string, unknown> }) }; }
-    catch (error) { return { error: { status: "CUSTOM_ERROR", error: error instanceof Error ? error.message : "Mock request failed" } }; }
+    try {
+      return rtkDataResult(
+        await platformMockRequest({
+          mockKey: args.mockKey,
+          params: args.mockParams ?? (args.params as Record<string, unknown>),
+          body: args.body as Record<string, unknown>,
+        }),
+      );
+    } catch (error) {
+      return rtkErrorResult({
+        status: "CUSTOM_ERROR",
+        error: error instanceof Error ? error.message : "Mock request failed",
+      });
+    }
   }
   const headers = new Headers(args.headers as HeadersInit | undefined);
   const method = String(args.method ?? "GET").toUpperCase();
@@ -211,43 +230,55 @@ const baseQuery: BaseQueryFn<
   }
 
   if (result.error) {
-    return {
-      error: normalizeFetchBaseQueryError(result.error),
-      meta: result.meta,
-    };
+    return rtkErrorResult(
+      normalizeFetchBaseQueryError(result.error),
+      result.meta,
+    );
   }
   if (result.data && typeof result.data === "object" && "success" in result.data) {
     const body = result.data as { success: boolean; data: unknown; meta?: Record<string, unknown> };
     const url = String(args.url ?? "");
     if (url === "/platform/tenants" && body.meta) {
-      return {
-        ...result,
-        data: {
+      return rtkDataResult(
+        {
           rows: body.data as PlatformTenantRow[],
           meta: body.meta,
         } satisfies PlatformTenantListResponse,
-      };
+        result.meta,
+      );
     }
     if (url === "/platform/webhook-failures" && body.meta) {
-      return { ...result, data: { rows: body.data as WebhookFailure[], meta: body.meta } satisfies WebhookFailuresResponse };
+      return rtkDataResult(
+        {
+          rows: body.data as WebhookFailure[],
+          meta: body.meta,
+        } satisfies WebhookFailuresResponse,
+        result.meta,
+      );
     }
     if (url === "/platform/error-logs" && body.meta) {
-      return { ...result, data: { rows: body.data as ErrorLog[], meta: body.meta } satisfies PlatformErrorLogsResponse };
+      return rtkDataResult(
+        {
+          rows: body.data as ErrorLog[],
+          meta: body.meta,
+        } satisfies PlatformErrorLogsResponse,
+        result.meta,
+      );
     }
     if (url === "/platform/audit-logs") {
       const rows = (Array.isArray(body.data) ? body.data : []) as AuditLog[];
       const limit = Number((args.params as { limit?: number })?.limit) || 20;
-      return {
-        ...result,
-        data: {
+      return rtkDataResult(
+        {
           items: rows,
           page: auditPageFromMeta(body.meta, limit),
         } satisfies PlatformAuditLogsResult,
-      };
+        result.meta,
+      );
     }
-    return { ...result, data: body.data };
+    return rtkDataResult(body.data, result.meta);
   }
-  return result;
+  return rtkDataResult(result.data, result.meta);
 };
 
 export const platformApi = createApi({
@@ -371,7 +402,7 @@ export const platformApi = createApi({
       providesTags: ["PlatformOps"],
     }),
     getPlatformLivenessHealth: builder.query<PlatformLivenessHealth, void>({
-      async queryFn(_arg, _api, _extra) {
+      async queryFn() {
         if (env.useMocks) {
           return { data: { status: "ok", timestamp: new Date().toISOString() } };
         }
@@ -382,14 +413,14 @@ export const platformApi = createApi({
             return { error: { status: res.status, data: json } as FetchBaseQueryError };
           }
           return { data: json.data };
-        } catch (error) {
-          return { error: { status: "FETCH_ERROR", error: String(error) } as FetchBaseQueryError };
+        } catch (err) {
+          return { error: { status: "FETCH_ERROR", error: String(err) } as FetchBaseQueryError };
         }
       },
       providesTags: ["PlatformOps"],
     }),
     getPlatformReadinessHealth: builder.query<PlatformReadinessHealth, void>({
-      async queryFn(_arg, _api, _extra) {
+      async queryFn() {
         if (env.useMocks) {
           return { data: { ok: true, database: "ready", queue: "ready", workers: "ready" } };
         }
@@ -400,7 +431,7 @@ export const platformApi = createApi({
           const queue = json.data?.queue ?? "unavailable";
           const workers = json.data?.workers ?? "unavailable";
           return { data: { ok: res.ok && Boolean(json.success), database, queue, workers } };
-        } catch (error) {
+        } catch {
           return { data: { ok: false, database: "unavailable", queue: "unavailable", workers: "unavailable" } };
         }
       },

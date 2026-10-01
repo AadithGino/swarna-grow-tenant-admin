@@ -46,6 +46,12 @@ import { downloadJson } from "@/src/lib/download";
 import { grams, idempotencyKey, money } from "@/src/lib/format";
 import { paymentHasGoldAccrual } from "@/src/lib/gold-payment-display";
 import {
+  cashSettlementBasisLabel,
+  planShowsCashSettlementBasis,
+  resolveCashSettlementBasis,
+} from "@/src/lib/cash-settlement-basis";
+import type { Payment } from "@/src/types/domain";
+import {
   useCreatePaymentLinkMutation,
   useGetEnrollmentQuery,
   useGetPaymentsQuery,
@@ -96,7 +102,7 @@ export function EnrollmentDetailPage({ id }: { id: string }) {
       />
     );
   const row = query.data;
-  const payments = paymentQuery.data?.items ?? [];
+  const payments: Payment[] = paymentQuery.data?.items ?? [];
   const ledgerRows = ledgerQuery.data ?? [];
   const ledgerSource = ledgerRows.length > 0;
   const showGoldLedger =
@@ -109,6 +115,15 @@ export function EnrollmentDetailPage({ id }: { id: string }) {
   const inProgress = Boolean(row.pendingRedemption);
   const closedOut =
     row.status === "REDEEMED" || row.status === "CLOSED_PREMATURE";
+  const enrollmentCashBasisLabel =
+    row.valueBasis === "GOLD_WEIGHT" &&
+    planShowsCashSettlementBasis(row.valueBasis, row.allowedRedemptionModes)
+      ? cashSettlementBasisLabel(
+          resolveCashSettlementBasis({
+            cashSettlementBasis: row.cashSettlementBasis,
+          }),
+        )
+      : null;
   const canCloseEarly =
     !inProgress &&
     !closedOut &&
@@ -359,7 +374,11 @@ export function EnrollmentDetailPage({ id }: { id: string }) {
               ? grams(row.accumulatedGold ?? 0)
               : patternCopy
           }
-          detail={row.valueBasis.replaceAll("_", " ")}
+          detail={
+            enrollmentCashBasisLabel
+              ? `Cash payout: ${enrollmentCashBasisLabel} (snapshot)`
+              : row.valueBasis.replaceAll("_", " ")
+          }
           tone="green"
         />
       </div>

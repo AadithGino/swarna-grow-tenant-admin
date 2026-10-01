@@ -32,6 +32,7 @@ import {
   useGetAgentHandoversQuery,
   useGetAgentPaymentQuery,
   useGetAgentPaymentsPageQuery,
+  type AgentPaymentListPage,
 } from "@/src/store/api/agent-api";
 import { downloadAgentPaymentReceipt } from "@/src/lib/agent-receipt";
 import type { AgentHandoverTimelineEvent, AgentPayment } from "@/src/types/agent";
@@ -123,8 +124,9 @@ function AgentCollectionsHistoryList() {
 
   const sentinelRef = useInfiniteScroll(loadMore, Boolean(payments.data?.hasMore && !payments.isFetching));
 
-  const initialLoading = payments.isLoading && !payments.data?.items.length;
-  const items = payments.data?.items ?? [];
+  const paymentPage = payments.data as AgentPaymentListPage | undefined;
+  const initialLoading = payments.isLoading && !paymentPage?.items.length;
+  const items = paymentPage?.items ?? [];
 
   if (initialLoading) return <AgentLoadingCards />;
   if (!items.length) {

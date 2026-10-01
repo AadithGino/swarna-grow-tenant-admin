@@ -32,8 +32,6 @@ import { FormFieldError } from "@/src/components/common/form-field-error";
 import {
   appTodayYmd,
   applyWideListRangePreset,
-  defaultListRangeFrom,
-  defaultListRangeTo,
   wideListRangePresetLabel,
 } from "@/src/lib/list-date-range";
 import {

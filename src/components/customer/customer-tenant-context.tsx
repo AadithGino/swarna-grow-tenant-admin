@@ -5,7 +5,7 @@ import {
   useContext,
   useEffect,
   useMemo,
-  useState,
+  useSyncExternalStore,
   type ReactNode,
 } from "react";
 import { useResolveTenantQuery } from "@/src/store/api/customer-api";
@@ -72,20 +72,19 @@ export function CustomerTenantProvider({
   const fallbackSlug = env.customerTenantCode
     ? tenantCodeToSlug(env.customerTenantCode)
     : null;
-  const [tenantSlug, setTenantSlug] = useState(initialSlug ?? fallbackSlug);
 
-  useEffect(() => {
-    if (initialSlug) {
-      setTenantSlug(initialSlug);
-      return;
-    }
-    const stored = localStorage.getItem(CUSTOMER_TENANT_SLUG_STORAGE_KEY);
-    if (stored) {
-      setTenantSlug(stored);
-      return;
-    }
-    setTenantSlug(fallbackSlug);
-  }, [initialSlug, fallbackSlug]);
+  const storedSlug = useSyncExternalStore(
+    (onChange) => {
+      if (typeof window === "undefined") return () => {};
+      const handler = () => onChange();
+      window.addEventListener("storage", handler);
+      return () => window.removeEventListener("storage", handler);
+    },
+    () => localStorage.getItem(CUSTOMER_TENANT_SLUG_STORAGE_KEY),
+    () => null,
+  );
+
+  const tenantSlug = initialSlug ?? storedSlug ?? fallbackSlug;
 
   const tenantCode = tenantSlug ? tenantSlugToCode(tenantSlug) : env.customerTenantCode;
 

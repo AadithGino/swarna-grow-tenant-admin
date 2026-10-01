@@ -572,17 +572,20 @@ export function PlanBuilderCustomerPreview({
                       value: summary.maturityDate,
                     },
                   ]
-                    .filter(Boolean)
+                    .filter(
+                      (item): item is { label: string; value: string } =>
+                        Boolean(item),
+                    )
                     .map((item) => (
                       <div
-                        key={item!.label}
+                        key={item.label}
                         className="rounded-lg bg-[#faf7f5] px-3 py-2 ring-1 ring-[#e4d7d2]"
                       >
                         <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
-                          {item!.label}
+                          {item.label}
                         </p>
                         <p className="mt-0.5 text-sm font-bold text-[#28161a]">
-                          {item!.value}
+                          {item.value}
                         </p>
                       </div>
                     ))}

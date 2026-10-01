@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import {
   Building2,
   CreditCard,
@@ -296,9 +296,22 @@ export function SettingsPage({
       ? validatePlanRequestNote(planRequestNote)
       : undefined;
 
-  useEffect(() => {
+  const profileDataSeed = profileQuery.data
+    ? JSON.stringify({
+        businessName: profileQuery.data.businessName,
+        displayName: profileQuery.data.displayName,
+        ownerName: profileQuery.data.ownerName,
+        ownerMobile: profileQuery.data.ownerMobile,
+        ownerEmail: profileQuery.data.ownerEmail,
+        supportNumber: profileQuery.data.supportNumber,
+        gstin: profileQuery.data.gstin,
+        address: profileQuery.data.address,
+      })
+    : "";
+  const [appliedProfileDataSeed, setAppliedProfileDataSeed] = useState("");
+  if (profileQuery.data && appliedProfileDataSeed !== profileDataSeed) {
     const p = profileQuery.data;
-    if (!p) return;
+    setAppliedProfileDataSeed(profileDataSeed);
     setProfileForm({
       businessName: String(p.businessName ?? ""),
       displayName: String(p.displayName ?? ""),
@@ -312,11 +325,15 @@ export function SettingsPage({
       state: String(p.address?.state ?? ""),
       pincode: String(p.address?.pincode ?? ""),
     });
-  }, [profileQuery.data]);
+  }
 
-  useEffect(() => {
+  const brandingDataSeed = brandingQuery.data
+    ? JSON.stringify(brandingQuery.data)
+    : "";
+  const [appliedBrandingDataSeed, setAppliedBrandingDataSeed] = useState("");
+  if (brandingQuery.data && appliedBrandingDataSeed !== brandingDataSeed) {
     const b = brandingQuery.data;
-    if (!b) return;
+    setAppliedBrandingDataSeed(brandingDataSeed);
     setBrandingForm({
       primaryColor: b.primaryColor ?? "#730321",
       secondaryColor:
@@ -329,11 +346,16 @@ export function SettingsPage({
         "",
     });
     if (b.previewUrls) setPreviewUrls(b.previewUrls);
-  }, [brandingQuery.data]);
+  }
 
-  useEffect(() => {
+  const operationsDataSeed = operationsQuery.data
+    ? JSON.stringify(operationsQuery.data)
+    : "";
+  const [appliedOperationsDataSeed, setAppliedOperationsDataSeed] =
+    useState("");
+  if (operationsQuery.data && appliedOperationsDataSeed !== operationsDataSeed) {
     const o = operationsQuery.data;
-    if (!o) return;
+    setAppliedOperationsDataSeed(operationsDataSeed);
     setOpsForm({
       multiSchemePerCustomer: Boolean(o.multiSchemePerCustomer),
       kycMandatory: Boolean(o.kycMandatory),
@@ -367,7 +389,7 @@ export function SettingsPage({
       paymentReversalWindowHours: Number(o.paymentReversalWindowHours ?? 48),
       termsAndConditions: String(o.termsAndConditions ?? ""),
     });
-  }, [operationsQuery.data]);
+  }
 
   const loading =
     profileQuery.isLoading ||

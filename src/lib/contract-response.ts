@@ -134,10 +134,12 @@ export function normalizeFetchBaseQueryError(
     );
   }
 
-  if (typeof error.error === "string" && error.error.trim()) {
+  const errorText =
+    "error" in error && typeof error.error === "string" ? error.error : "";
+  if (errorText.trim()) {
     const looksLikeParse =
-      error.error.includes("SyntaxError") ||
-      error.error.includes("is not valid JSON");
+      errorText.includes("SyntaxError") ||
+      errorText.includes("is not valid JSON");
     if (looksLikeParse && typeof error.data === "string" && error.data.trim()) {
       const httpStatus = typeof status === "number" ? status : 0;
       return buildCustomError(
@@ -146,7 +148,10 @@ export function normalizeFetchBaseQueryError(
       );
     }
     return buildCustomError(
-      { code: typeof status === "number" ? `HTTP_${status}` : "REQUEST_FAILED", message: error.error.trim() },
+      {
+        code: typeof status === "number" ? `HTTP_${status}` : "REQUEST_FAILED",
+        message: errorText.trim(),
+      },
       status,
     );
   }

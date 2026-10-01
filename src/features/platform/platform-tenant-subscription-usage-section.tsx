@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import {
   ExternalLink,
   Flag,
@@ -647,20 +647,27 @@ export function TenantUsage({ tenant }: { tenant: PlatformTenantDetail }) {
     () => defaultLimitOverrides(tenant),
   );
   const [limitErrors, setLimitErrors] = useState<Record<string, string>>({});
-  useEffect(() => {
-    if (flags.data?.flags) {
-      setLocal(flags.data.flags);
-      setFlagsBaseline(flags.data.flags);
-    }
-  }, [flags.data?.flags]);
+  const flagsDataSeed = flags.data?.flags
+    ? JSON.stringify(flags.data.flags)
+    : "";
+  const [appliedFlagsDataSeed, setAppliedFlagsDataSeed] = useState("");
+  if (flags.data?.flags && appliedFlagsDataSeed !== flagsDataSeed) {
+    setAppliedFlagsDataSeed(flagsDataSeed);
+    setLocal(flags.data.flags);
+    setFlagsBaseline(flags.data.flags);
+  }
 
-  useEffect(() => {
+  const limitsDataSeed = JSON.stringify(tenant.subscription.limitOverrides ?? {});
+  const [appliedLimitsDataSeed, setAppliedLimitsDataSeed] = useState("");
+  if (
+    Object.keys(tenant.subscription.limitOverrides ?? {}).length &&
+    appliedLimitsDataSeed !== limitsDataSeed
+  ) {
     const next = defaultLimitOverrides(tenant);
-    if (Object.keys(tenant.subscription.limitOverrides ?? {}).length) {
-      setLimits(next);
-      setLimitsBaseline(next);
-    }
-  }, [tenant.subscription.limitOverrides, tenant]);
+    setAppliedLimitsDataSeed(limitsDataSeed);
+    setLimits(next);
+    setLimitsBaseline(next);
+  }
 
   if (usage.isLoading || flags.isLoading) return <PageSkeleton cards={4} />;
 

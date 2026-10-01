@@ -106,15 +106,15 @@ export function PlatformShell({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
-  const [sessionReady, setSessionReady] = useState(false);
   const openSearch = useCallback(() => setSearchOpen(true), []);
   useGlobalSearchHotkey(openSearch);
 
   const mounted = useClientMounted();
+  const sessionReady = mounted && hasPlatformSession();
   const { user, initials } = usePlatformSession();
   const [logout] = usePlatformLogoutMutation();
   const dashboard = useGetPlatformDashboardQuery(undefined, {
-    skip: !mounted || !sessionReady,
+    skip: !sessionReady,
   });
   const monitoringCount = useMemo(() => {
     if (!mounted) return 0;
@@ -128,9 +128,7 @@ export function PlatformShell({ children }: { children: React.ReactNode }) {
       router.replace(
         `/platform/login?next=${encodeURIComponent(pathname)}`,
       );
-      return;
     }
-    setSessionReady(true);
   }, [mounted, pathname, router]);
 
   const signOut = async () => {

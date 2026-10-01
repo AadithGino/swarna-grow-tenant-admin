@@ -9,7 +9,6 @@ import {
   handleTenantUnauthorized,
   isUnauthorizedFetchError,
 } from "@/src/lib/auth-logout";
-import { storeAuthTokens } from "@/src/lib/auth-session";
 import {
   authRefreshGuard,
   refreshAfterUnauthorized,
@@ -26,6 +25,8 @@ import { readContractResponseBody } from "@/src/lib/contract-response";
 import { normalizeFetchBaseQueryError } from "@/src/lib/api-error";
 import { newIdempotencyKey } from "@/src/lib/idempotency";
 import { ensureMutationJsonBody } from "@/src/lib/rtk-mutation-body";
+import { rtkDataResult, rtkErrorResult } from "@/src/lib/rtk-query-result";
+import type { FetchBaseQueryMeta } from "@reduxjs/toolkit/query";
 import { businessTodayYmd } from "@/src/lib/list-date-range";
 import { mockRequest } from "@/src/mocks/mock-server";
 import type {
@@ -51,10 +52,10 @@ import {
   adaptCustomerList,
   contractPayload,
   contractMeta,
+  contractPage,
   adaptDashboard,
   adaptDashboardChart,
   adaptEnrollment,
-  adaptEnrollmentList,
   adaptEnrollments,
   adaptGlobalSearch,
   adaptGoldHistory,
@@ -80,7 +81,8 @@ import {
   adaptPlanStats,
   adaptStaffList,
   adaptStaffDetail,
-  adaptPaginatedList,
+  adaptStaffPerformanceSummary,
+  adaptStaffPerformanceSection,
   adaptBranchDetail,
   adaptBranchList,
   adaptSettingsBranding,
@@ -307,33 +309,33 @@ function unwrapContractEnvelope(result: {
         fields?: unknown;
       };
     };
-    if (envelope.success)
-      return {
-        data: { __contract: true, payload: envelope.data, meta: envelope.meta },
-      };
+    if (envelope.success) {
+      return rtkDataResult(
+        { __contract: true, payload: envelope.data, meta: envelope.meta },
+        result.meta,
+      );
+    }
     const details = envelope.error?.details ?? envelope.error?.fields;
-    return {
-      error: {
-        status: "CUSTOM_ERROR",
-        error: envelope.error?.message ?? "Request failed",
-        data: envelope.error
-          ? {
-              code: envelope.error.code,
-              message: envelope.error.message,
-              details,
-              fields: details,
-            }
-          : envelope.error,
-      },
-    };
+    return rtkErrorResult({
+      status: "CUSTOM_ERROR",
+      error: envelope.error?.message ?? "Request failed",
+      data: envelope.error
+        ? {
+            code: envelope.error.code,
+            message: envelope.error.message,
+            details,
+            fields: details,
+          }
+        : envelope.error,
+    });
   }
   if (result.error) {
-    return {
-      error: normalizeFetchBaseQueryError(result.error),
-      meta: result.meta,
-    };
+    return rtkErrorResult(
+      normalizeFetchBaseQueryError(result.error),
+      result.meta,
+    );
   }
-  return { data: result.data, meta: result.meta };
+  return rtkDataResult(result.data, result.meta);
 }
 
 const appBaseQuery = (async (args, api, extraOptions) => {
@@ -347,7 +349,7 @@ const appBaseQuery = (async (args, api, extraOptions) => {
         }),
       };
     } catch (error) {
-      return { error: error as FetchBaseQueryError };
+      return rtkErrorResult(error as FetchBaseQueryError);
     }
   }
   const requestArgs = withIdempotencyHeader(
@@ -366,12 +368,12 @@ const appBaseQuery = (async (args, api, extraOptions) => {
   if (shouldAttemptAuthRefresh(result.error, guard, env.useMocks)) {
     const refreshed = await refreshAfterUnauthorized("tenant", guard);
     if (refreshed) {
-      result = await retryAuthorizedRequest(
+      result = (await retryAuthorizedRequest(
         rawBaseQuery,
         requestArgs,
         api,
         extraOptions,
-      );
+      )) as typeof result;
     } else if (shouldForceAuthLogout("tenant", true)) {
       handleTenantUnauthorized(dispatch);
     }
@@ -385,25 +387,29 @@ const appBaseQuery = (async (args, api, extraOptions) => {
   }
 
   if (result.error) {
-    return {
-      error: normalizeFetchBaseQueryError(result.error),
-      meta: result.meta,
-    };
+    return rtkErrorResult(
+      normalizeFetchBaseQueryError(result.error),
+      result.meta,
+    );
   }
   return unwrapContractEnvelope(result);
-}) as BaseQueryFn<ApiArgs, unknown, FetchBaseQueryError, AppBaseQueryExtra>;
+}) as BaseQueryFn<
+  ApiArgs,
+  unknown,
+  FetchBaseQueryError,
+  AppBaseQueryExtra,
+  FetchBaseQueryMeta
+>;
 
-/** Stale-while-revalidate tiers (seconds) — jewellery counter ops. */
-const STALE_TIER_A = 30;
+/** Stale-while-revalidate tier (seconds) — jewellery counter ops. */
 const STALE_TIER_B = 60;
-const STALE_TIER_C = 120;
-const STALE_TIER_D = 300;
 
 export const adminApi = createApi({
   reducerPath: "adminApi",
   baseQuery: appBaseQuery,
-  /** Tier B default — lists & detail. Tier A/C/D endpoints override below. */
+  /** Tier B default — lists & detail. */
   refetchOnMountOrArgChange: STALE_TIER_B,
+  refetchOnFocus: true,
   tagTypes: [
     "Dashboard",
     "Alert",
@@ -480,7 +486,6 @@ export const adminApi = createApi({
       }),
       transformResponse: (raw) =>
         contractPayload(raw) as Record<string, unknown>,
-      refetchOnMountOrArgChange: STALE_TIER_D,
     }),
     refreshToken: builder.mutation<
       {
@@ -610,7 +615,6 @@ export const adminApi = createApi({
         const payload = contractPayload(raw);
         return Array.isArray(payload) ? payload : [];
       },
-      refetchOnMountOrArgChange: STALE_TIER_D,
     }),
     revokeDevice: builder.mutation<{ revoked: boolean }, string>({
       query: (deviceId) => ({
@@ -728,8 +732,6 @@ export const adminApi = createApi({
         };
       },
       providesTags: ["Dashboard"],
-      refetchOnMountOrArgChange: STALE_TIER_A,
-      refetchOnFocus: true,
     }),
     getAlerts: builder.query<
       PortalAlert[],
@@ -1421,7 +1423,6 @@ export const adminApi = createApi({
       query: (params) => ({ url: "/admin/dues", params, mockKey: "dues" }),
       transformResponse: adaptDueList,
       providesTags: ["Enrollment"],
-      refetchOnMountOrArgChange: STALE_TIER_A,
     }),
     getPayments: builder.query<
       ReturnType<typeof adaptPayments>,
@@ -1480,7 +1481,6 @@ export const adminApi = createApi({
       }),
       transformResponse: adaptListBundle,
       providesTags: ["Payment"],
-      refetchOnMountOrArgChange: STALE_TIER_A,
     }),
     getLateSuccessPayments: builder.query<
       ReturnType<typeof adaptListBundle>,
@@ -1493,7 +1493,6 @@ export const adminApi = createApi({
       }),
       transformResponse: adaptListBundle,
       providesTags: ["Payment"],
-      refetchOnMountOrArgChange: STALE_TIER_A,
     }),
     reversePayment: builder.mutation<
       unknown,
@@ -1559,6 +1558,7 @@ export const adminApi = createApi({
       query: (params) => ({
         url: "/admin/post-settlement-refund-cases",
         params: params ?? {},
+        mockKey: "postSettlementRefundCases",
       }),
       transformResponse: (raw) => {
         const value = contractPayload<any>(raw);
@@ -1580,6 +1580,7 @@ export const adminApi = createApi({
     >({
       query: (caseId) => ({
         url: `/admin/post-settlement-refund-cases/${caseId}`,
+        mockKey: "postSettlementRefundCase",
       }),
       transformResponse: (raw) => contractPayload(raw) as Record<string, unknown>,
       providesTags: (_result, _err, caseId) => [
@@ -1594,6 +1595,7 @@ export const adminApi = createApi({
         url: `/admin/post-settlement-refund-cases/${caseId}/resolve`,
         method: "POST",
         body,
+        mockKey: "resolvePostSettlementRefundCase",
       }),
       invalidatesTags: ["Payment"],
     }),
@@ -1830,7 +1832,6 @@ export const adminApi = createApi({
       }),
       transformResponse: adaptCashOverview,
       providesTags: ["Cash"],
-      refetchOnMountOrArgChange: STALE_TIER_A,
     }),
     getCashStaffBalances: builder.query<
       ReturnType<typeof adaptCashStaffBalances>,
@@ -1843,7 +1844,6 @@ export const adminApi = createApi({
       }),
       transformResponse: adaptCashStaffBalances,
       providesTags: ["Cash"],
-      refetchOnMountOrArgChange: STALE_TIER_A,
     }),
     getCashHandovers: builder.query<
       ReturnType<typeof adaptCashHandovers>,
@@ -1856,7 +1856,6 @@ export const adminApi = createApi({
       }),
       transformResponse: adaptCashHandovers,
       providesTags: ["Cash"],
-      refetchOnMountOrArgChange: STALE_TIER_A,
     }),
     getCashReport: builder.query<
       ReturnType<typeof adaptCashReport>,
@@ -1870,7 +1869,6 @@ export const adminApi = createApi({
       }),
       transformResponse: adaptCashReport,
       providesTags: ["Cash"],
-      refetchOnMountOrArgChange: STALE_TIER_A,
     }),
     acceptHandover: builder.mutation<
       CashHandover,
@@ -2097,7 +2095,6 @@ export const adminApi = createApi({
         };
       },
       providesTags: ["GoldRate"],
-      refetchOnMountOrArgChange: STALE_TIER_D,
     }),
     getGoldRates: builder.query<
       ReturnType<typeof adaptGoldHistory>,
@@ -2110,7 +2107,6 @@ export const adminApi = createApi({
       }),
       transformResponse: adaptGoldHistory,
       providesTags: ["GoldRate"],
-      refetchOnMountOrArgChange: STALE_TIER_D,
     }),
     addGoldRate: builder.mutation<
       GoldRate,
@@ -2174,7 +2170,6 @@ export const adminApi = createApi({
       }),
       transformResponse: adaptAdminReport,
       providesTags: ["Report"],
-      refetchOnMountOrArgChange: STALE_TIER_C,
     }),
     getPlans: builder.query<
       ReturnType<typeof adaptPlans>,
@@ -2195,7 +2190,6 @@ export const adminApi = createApi({
       }),
       transformResponse: adaptPlans,
       providesTags: ["Plan"],
-      refetchOnMountOrArgChange: STALE_TIER_D,
     }),
     createPlan: builder.mutation<
       SchemePlan,
@@ -2217,7 +2211,6 @@ export const adminApi = createApi({
       }),
       transformResponse: adaptPlanDetail,
       providesTags: (_r, _e, planId) => [{ type: "Plan", id: planId }],
-      refetchOnMountOrArgChange: STALE_TIER_D,
     }),
     getPlanStats: builder.query<Record<string, unknown>, string>({
       query: (planId) => ({
@@ -2227,7 +2220,6 @@ export const adminApi = createApi({
       }),
       transformResponse: adaptPlanStats,
       providesTags: (_r, _e, planId) => [{ type: "Plan", id: planId }],
-      refetchOnMountOrArgChange: STALE_TIER_D,
     }),
     patchPlan: builder.mutation<
       SchemePlan,
@@ -2294,7 +2286,6 @@ export const adminApi = createApi({
       }),
       transformResponse: adaptSettingsBranding,
       providesTags: ["Settings"],
-      refetchOnMountOrArgChange: STALE_TIER_D,
     }),
     getSettingsProfile: builder.query<Record<string, any>, void>({
       query: () => ({
@@ -2303,7 +2294,6 @@ export const adminApi = createApi({
       }),
       transformResponse: adaptSettingsProfile,
       providesTags: ["Settings"],
-      refetchOnMountOrArgChange: STALE_TIER_D,
     }),
     getSettingsOperations: builder.query<Record<string, any>, void>({
       query: () => ({
@@ -2312,7 +2302,6 @@ export const adminApi = createApi({
       }),
       transformResponse: adaptSettingsOperations,
       providesTags: ["Settings"],
-      refetchOnMountOrArgChange: STALE_TIER_D,
     }),
     getSubscription: builder.query<Record<string, any>, void>({
       query: () => ({
@@ -2321,7 +2310,6 @@ export const adminApi = createApi({
       }),
       transformResponse: adaptSubscription,
       providesTags: ["Settings"],
-      refetchOnMountOrArgChange: STALE_TIER_D,
     }),
     getAvailablePlans: builder.query<Record<string, any>[], void>({
       query: () => ({
@@ -2333,7 +2321,6 @@ export const adminApi = createApi({
         return Array.isArray(payload) ? payload : [];
       },
       providesTags: ["Settings"],
-      refetchOnMountOrArgChange: STALE_TIER_D,
     }),
     getSubscriptionInvoices: builder.query<Record<string, any>[], void>({
       query: () => ({
@@ -2342,7 +2329,6 @@ export const adminApi = createApi({
       }),
       transformResponse: adaptSubscriptionInvoices,
       providesTags: ["Settings"],
-      refetchOnMountOrArgChange: STALE_TIER_D,
     }),
     downloadSubscriptionInvoice: builder.query<
       { blobUrl: string; filename: string },
@@ -2418,7 +2404,6 @@ export const adminApi = createApi({
           suspended: number;
           planName?: string;
         },
-      refetchOnMountOrArgChange: STALE_TIER_D,
     }),
     getAccess: builder.query<{ summary: Record<string, number> }, void>({
       query: () => ({ url: "/admin/staff", mockKey: "access" }),
@@ -2456,7 +2441,6 @@ export const adminApi = createApi({
         };
       },
       providesTags: ["Access"],
-      refetchOnMountOrArgChange: STALE_TIER_D,
     }),
     getStaff: builder.query<
       ReturnType<typeof adaptStaffList>,
@@ -2469,7 +2453,6 @@ export const adminApi = createApi({
       }),
       transformResponse: adaptStaffList,
       providesTags: ["Access"],
-      refetchOnMountOrArgChange: STALE_TIER_D,
     }),
     getBranches: builder.query<
       ReturnType<typeof adaptBranchList>,
@@ -2482,7 +2465,6 @@ export const adminApi = createApi({
       }),
       transformResponse: adaptBranchList,
       providesTags: ["Access"],
-      refetchOnMountOrArgChange: STALE_TIER_D,
     }),
     createStaff: builder.mutation<
       unknown,
@@ -2566,38 +2548,21 @@ export const adminApi = createApi({
       providesTags: (_r, _e, staffId) => [
         { type: "Access", id: `staff-${staffId}` },
       ],
-      refetchOnMountOrArgChange: STALE_TIER_D,
     }),
     getStaffPerformanceSummary: builder.query<
-      {
-        range?: { from?: string; to?: string };
-        trendGroupBy?: "DAY" | "WEEK" | "MONTH" | "YEAR" | string;
-        collectionTotal?: { amountDisplay?: string; amountPaise?: number };
-        averageTicket?: { amountDisplay?: string; amountPaise?: number };
-        enrolments?: number;
-        customersServed?: number;
-        paymentsCount?: number;
-        collectionTrend?: Array<{
-          date?: string;
-          label?: string;
-          count?: number;
-          amount?: { amountDisplay?: string; amountPaise?: number };
-        }>;
-        cash?: Record<string, unknown>;
-      },
+      ReturnType<typeof adaptStaffPerformanceSummary>,
       { staffId: string; from?: string; to?: string }
     >({
       query: ({ staffId, from, to }) => ({
         url: `/admin/staff/${staffId}/performance/summary`,
         params: { staffId, from, to },
+        mockKey: "staffPerformanceSummary",
       }),
-      transformResponse: (raw) =>
-        contractPayload(raw) as Record<string, unknown>,
+      transformResponse: adaptStaffPerformanceSummary,
       providesTags: ["Report"],
-      refetchOnMountOrArgChange: STALE_TIER_C,
     }),
     getStaffPerformanceSection: builder.query<
-      ReturnType<typeof adaptPaginatedList>,
+      import("@/src/types/staff-performance").StaffPerformanceSectionResult,
       {
         staffId: string;
         section: "collections" | "enrolments" | "handovers";
@@ -2610,10 +2575,18 @@ export const adminApi = createApi({
       query: ({ staffId, section, from, to, cursor, limit }) => ({
         url: `/admin/staff/${staffId}/performance/${section}`,
         params: { from, to, cursor, limit },
+        mockKey: "staffPerformanceSection",
       }),
-      transformResponse: adaptPaginatedList,
+      transformResponse: (raw, _meta, arg) => {
+        if (arg.section === "collections") {
+          return adaptStaffPerformanceSection(raw, "collections");
+        }
+        if (arg.section === "enrolments") {
+          return adaptStaffPerformanceSection(raw, "enrolments");
+        }
+        return adaptStaffPerformanceSection(raw, "handovers");
+      },
       providesTags: ["Report"],
-      refetchOnMountOrArgChange: STALE_TIER_C,
     }),
     patchStaff: builder.mutation<
       Record<string, unknown>,
@@ -2707,38 +2680,21 @@ export const adminApi = createApi({
       providesTags: (_r, _e, branchId) => [
         { type: "Access", id: `branch-${branchId}` },
       ],
-      refetchOnMountOrArgChange: STALE_TIER_D,
     }),
     getBranchPerformanceSummary: builder.query<
-      {
-        range?: { from?: string; to?: string };
-        trendGroupBy?: "DAY" | "WEEK" | "MONTH" | "YEAR" | string;
-        collectionTotal?: { amountDisplay?: string; amountPaise?: number };
-        averageTicket?: { amountDisplay?: string; amountPaise?: number };
-        enrolments?: number;
-        customersServed?: number;
-        paymentsCount?: number;
-        collectionTrend?: Array<{
-          date?: string;
-          label?: string;
-          count?: number;
-          amount?: { amountDisplay?: string; amountPaise?: number };
-        }>;
-        cash?: Record<string, unknown>;
-      },
+      ReturnType<typeof adaptStaffPerformanceSummary>,
       { branchId: string; from?: string; to?: string }
     >({
       query: ({ branchId, from, to }) => ({
         url: `/admin/branches/${branchId}/performance/summary`,
         params: { from, to },
+        mockKey: "branchPerformanceSummary",
       }),
-      transformResponse: (raw) =>
-        contractPayload(raw) as Record<string, unknown>,
+      transformResponse: adaptStaffPerformanceSummary,
       providesTags: ["Report"],
-      refetchOnMountOrArgChange: STALE_TIER_C,
     }),
     getBranchPerformanceSection: builder.query<
-      ReturnType<typeof adaptPaginatedList>,
+      import("@/src/types/staff-performance").StaffPerformanceSectionResult,
       {
         branchId: string;
         section: "collections" | "enrolments" | "handovers";
@@ -2751,10 +2707,18 @@ export const adminApi = createApi({
       query: ({ branchId, section, from, to, cursor, limit }) => ({
         url: `/admin/branches/${branchId}/performance/${section}`,
         params: { from, to, cursor, limit },
+        mockKey: "branchPerformanceSection",
       }),
-      transformResponse: adaptPaginatedList,
+      transformResponse: (raw, _meta, arg) => {
+        if (arg.section === "collections") {
+          return adaptStaffPerformanceSection(raw, "collections");
+        }
+        if (arg.section === "enrolments") {
+          return adaptStaffPerformanceSection(raw, "enrolments");
+        }
+        return adaptStaffPerformanceSection(raw, "handovers");
+      },
       providesTags: ["Report"],
-      refetchOnMountOrArgChange: STALE_TIER_C,
     }),
     patchBranch: builder.mutation<
       Record<string, unknown>,
@@ -2920,7 +2884,6 @@ export const adminApi = createApi({
       }),
       transformResponse: (raw) => contractPayload(raw) as any,
       providesTags: ["Message"],
-      refetchOnMountOrArgChange: STALE_TIER_D,
     }),
     updateRemindersConfig: builder.mutation<any, Record<string, unknown>>({
       query: (body) => ({
@@ -3013,7 +2976,6 @@ export const adminApi = createApi({
         meta: contractMeta(raw),
       }),
       providesTags: ["Message"],
-      refetchOnMountOrArgChange: STALE_TIER_D,
     }),
     getMessagingTemplates: builder.query<any, void>({
       query: () => ({
@@ -3025,7 +2987,6 @@ export const adminApi = createApi({
         meta: contractMeta(raw),
       }),
       providesTags: ["Message"],
-      refetchOnMountOrArgChange: STALE_TIER_D,
     }),
     getMessagingTemplatePreview: builder.query<any, string>({
       query: (messageType) => ({
@@ -3034,7 +2995,6 @@ export const adminApi = createApi({
         mockKey: "messagingTemplatePreview",
       }),
       transformResponse: (raw) => contractPayload(raw) as any,
-      refetchOnMountOrArgChange: STALE_TIER_D,
     }),
     getMessagingSummary: builder.query<
       any,
@@ -3080,7 +3040,6 @@ export const adminApi = createApi({
         };
       },
       providesTags: ["Message"],
-      refetchOnMountOrArgChange: STALE_TIER_D,
     }),
     patchSettingsProfile: builder.mutation<any, Record<string, unknown>>({
       query: (body) => ({
@@ -3183,7 +3142,6 @@ export const adminApi = createApi({
       }),
       transformResponse: adaptDueList,
       providesTags: ["Enrollment"],
-      refetchOnMountOrArgChange: STALE_TIER_A,
     }),
     bulkSendOverdueReminders: builder.mutation<
       {
@@ -3454,7 +3412,6 @@ export const adminApi = createApi({
       }),
       transformResponse: (raw) => contractPayload(raw) as any,
       providesTags: ["Settings"],
-      refetchOnMountOrArgChange: STALE_TIER_D,
     }),
     getMessagingMessage: builder.query<Record<string, unknown>, string>({
       query: (messageId) => ({
@@ -3490,7 +3447,6 @@ export const adminApi = createApi({
       }),
       transformResponse: adaptListBundle,
       providesTags: ["Message"],
-      refetchOnMountOrArgChange: STALE_TIER_D,
     }),
     getMessagingQuota: builder.query<
       { used: number; limit: number | null },
@@ -3503,7 +3459,6 @@ export const adminApi = createApi({
       transformResponse: (raw) =>
         contractPayload(raw) as { used: number; limit: number | null },
       providesTags: ["Message"],
-      refetchOnMountOrArgChange: STALE_TIER_D,
     }),
     getMessagingDeadLetter: builder.query<
       ReturnType<typeof adaptListBundle>,
@@ -3516,7 +3471,6 @@ export const adminApi = createApi({
       }),
       transformResponse: adaptListBundle,
       providesTags: ["Message"],
-      refetchOnMountOrArgChange: STALE_TIER_D,
     }),
     requeueDeadLetter: builder.mutation<
       { id: string; queued: boolean },
@@ -3543,7 +3497,6 @@ export const adminApi = createApi({
       }),
       transformResponse: adaptListBundle,
       providesTags: ["Message"],
-      refetchOnMountOrArgChange: STALE_TIER_D,
     }),
     getMessagingInboundDetail: builder.query<Record<string, any>, string>({
       query: (id) => ({
@@ -3665,7 +3618,6 @@ export const adminApi = createApi({
       }),
       transformResponse: adaptListBundle,
       providesTags: ["Dashboard"],
-      refetchOnMountOrArgChange: STALE_TIER_A,
     }),
     getCollectionsSummary: builder.query<
       Record<string, unknown>,
@@ -3679,8 +3631,6 @@ export const adminApi = createApi({
       transformResponse: (raw) =>
         contractPayload(raw) as Record<string, unknown>,
       providesTags: ["Dashboard"],
-      refetchOnMountOrArgChange: STALE_TIER_A,
-      refetchOnFocus: true,
     }),
     getSubscriptionUsage: builder.query<Record<string, unknown>, void>({
       query: () => ({
@@ -3690,7 +3640,6 @@ export const adminApi = createApi({
       transformResponse: (raw) =>
         contractPayload(raw) as Record<string, unknown>,
       providesTags: ["Settings"],
-      refetchOnMountOrArgChange: STALE_TIER_D,
     }),
     getDefaulters: builder.query<
       ReturnType<typeof adaptListBundle>,
@@ -3703,7 +3652,6 @@ export const adminApi = createApi({
       }),
       transformResponse: adaptListBundle,
       providesTags: ["Enrollment"],
-      refetchOnMountOrArgChange: STALE_TIER_A,
     }),
     getFlexibleLocks: builder.query<
       ReturnType<typeof adaptListBundle>,
@@ -3725,7 +3673,6 @@ export const adminApi = createApi({
       transformResponse: (raw) =>
         contractPayload(raw) as Record<string, unknown>,
       providesTags: ["Enrollment"],
-      refetchOnMountOrArgChange: STALE_TIER_A,
     }),
     getNavBadges: builder.query<
       {
@@ -3751,7 +3698,6 @@ export const adminApi = createApi({
         };
       },
       providesTags: ["Dashboard", "Enrollment", "Cash", "Message"],
-      refetchOnMountOrArgChange: STALE_TIER_A,
     }),
     getMaturitiesCalendar: builder.query<
       { month?: string; days: { date: string; count: number }[]; items: any[] },

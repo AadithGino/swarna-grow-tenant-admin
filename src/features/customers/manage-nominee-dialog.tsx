@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Loader2, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -83,12 +83,20 @@ export function ManageNomineeDialog({
     nomineeFormFieldsFromDetail(customer.nomineeDetail),
   );
 
-  useEffect(() => {
+  const nomineeSeed = customer.id;
+  const [appliedNomineeSeed, setAppliedNomineeSeed] = useState<string | null>(
+    null,
+  );
+  if (open && appliedNomineeSeed !== nomineeSeed) {
     const next = nomineeFormFieldsFromDetail(customer.nomineeDetail);
+    setAppliedNomineeSeed(nomineeSeed);
     setBaseline(next);
     setForm(next);
     setFieldErrors({});
-  }, [customer, open]);
+  }
+  if (!open && appliedNomineeSeed !== null) {
+    setAppliedNomineeSeed(null);
+  }
 
   const hasNominee = Boolean(customer.nomineeDetail);
 

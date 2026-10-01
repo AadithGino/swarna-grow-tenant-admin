@@ -16,6 +16,7 @@ import { StatCard, Surface } from "@/src/components/common/page-parts";
 import { StatusBadge } from "@/src/components/common/status-badge";
 import { formatIsoDate, money } from "@/src/lib/format";
 import type { SettlementLine, SettlementPreview } from "@/src/types/domain";
+import { SettlementCashBasisPanel } from "@/src/features/enrollments/settlement-cash-basis-panel";
 import { cn } from "@/lib/utils";
 
 function lineTone(line: SettlementLine) {
@@ -246,9 +247,11 @@ function SettlementLineRow({ line }: { line: SettlementLine }) {
 export function SettlementLinesPanel({
   preview,
   compact,
+  redemptionMode,
 }: {
   preview: SettlementPreview;
   compact?: boolean;
+  redemptionMode?: string;
 }) {
   const hasContext = preview.scheme || preview.customer;
 
@@ -314,6 +317,8 @@ export function SettlementLinesPanel({
           {preview.warningText}
         </div>
       ) : null}
+
+      <SettlementCashBasisPanel preview={preview} mode={redemptionMode} />
 
       {preview.textBenefits.map((benefit) => (
         <div

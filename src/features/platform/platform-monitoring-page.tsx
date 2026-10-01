@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { AlertOctagon, CheckCircle2, Database, RefreshCcw, Search, Server, Webhook, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -92,10 +92,13 @@ export function PlatformMonitoringPage() {
   const readiness = useGetPlatformReadinessHealthQuery(undefined, { pollingInterval: 60_000 });
   const [retry] = useRetryWebhookFailureMutation();
 
-  useEffect(() => {
+  const webhookDataSignature = `${provider}|${webhooks.data?.meta.nextCursor ?? ""}|${webhooks.data?.rows?.length ?? 0}`;
+  const [syncedWebhookData, setSyncedWebhookData] = useState(webhookDataSignature);
+  if (syncedWebhookData !== webhookDataSignature) {
+    setSyncedWebhookData(webhookDataSignature);
     setWebhookRows(webhooks.data?.rows ?? []);
     setWebhookNextCursor(webhooks.data?.meta.nextCursor ?? null);
-  }, [webhooks.data, provider]);
+  }
 
   const filteredWebhookRows = useMemo(() => {
     if (webhookSearchError) return webhookRows;
@@ -111,7 +114,10 @@ export function PlatformMonitoringPage() {
     );
   }, [webhookRows, webhookSearch, webhookSearchError]);
 
-  const errorRows = skipErrorLogsQuery ? [] : (errors.data?.rows ?? []);
+  const errorRows = useMemo(
+    () => (skipErrorLogsQuery ? [] : (errors.data?.rows ?? [])),
+    [skipErrorLogsQuery, errors.data?.rows],
+  );
   const filteredErrorRows = useMemo(() => {
     if (errorSearchError) return errorRows;
     const q = errorSearch.trim().toLowerCase();

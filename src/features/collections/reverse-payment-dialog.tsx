@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -41,11 +41,13 @@ export function ReversePaymentDialog({
   const [reason, setReason] = useState("");
   const [touched, setTouched] = useState(false);
 
-  useEffect(() => {
-    if (open) return;
-    setReason("");
-    setTouched(false);
-  }, [open]);
+  const handleOpenChange = (next: boolean) => {
+    if (!next) {
+      setReason("");
+      setTouched(false);
+    }
+    onOpenChange(next);
+  };
 
   const displayError =
     touched || reason.trim()
@@ -53,7 +55,7 @@ export function ReversePaymentDialog({
       : undefined;
 
   return (
-    <AlertDialog open={open} onOpenChange={onOpenChange}>
+    <AlertDialog open={open} onOpenChange={handleOpenChange}>
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>Reverse payment?</AlertDialogTitle>

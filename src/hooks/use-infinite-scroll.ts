@@ -6,7 +6,10 @@ import { useEffect, useRef } from "react";
 export function useInfiniteScroll(onLoadMore: () => void, enabled: boolean) {
   const sentinelRef = useRef<HTMLDivElement | null>(null);
   const onLoadMoreRef = useRef(onLoadMore);
-  onLoadMoreRef.current = onLoadMore;
+
+  useEffect(() => {
+    onLoadMoreRef.current = onLoadMore;
+  }, [onLoadMore]);
 
   useEffect(() => {
     const node = sentinelRef.current;

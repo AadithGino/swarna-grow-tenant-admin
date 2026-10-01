@@ -57,7 +57,7 @@ export function longestCompactLabel(
   values: unknown[],
   labelForValue: (value: unknown) => string = compactCategoryLabel,
 ): number {
-  return values.reduce(
+  return values.reduce<number>(
     (max, value) => Math.max(max, labelForValue(value).length),
     0,
   );

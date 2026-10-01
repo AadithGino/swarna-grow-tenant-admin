@@ -6,21 +6,23 @@ import {
 } from "@/src/lib/contract-response";
 
 type RtkErrorShape = {
-  data?: {
-    success?: boolean;
-    error?: {
-      code?: string;
-      message?: string;
-      details?: unknown;
-      traceId?: string;
-      fields?: unknown;
-    };
-    code?: string;
-    message?: string;
-    details?: unknown;
-    traceId?: string;
-    httpStatus?: number | string;
-  };
+  data?:
+    | string
+    | {
+        success?: boolean;
+        error?: {
+          code?: string;
+          message?: string;
+          details?: unknown;
+          traceId?: string;
+          fields?: unknown;
+        };
+        code?: string;
+        message?: string;
+        details?: unknown;
+        traceId?: string;
+        httpStatus?: number | string;
+      };
   error?: string;
   message?: string;
   status?: number | string;
@@ -48,6 +50,12 @@ function isFetchBaseQueryError(err: unknown): err is FetchBaseQueryError {
 function errorPayload(err: unknown): RtkErrorShape["data"] | undefined {
   if (!err || typeof err !== "object") return undefined;
   return (err as RtkErrorShape).data;
+}
+
+function objectErrorPayload(
+  payload: RtkErrorShape["data"],
+): Exclude<RtkErrorShape["data"], string | undefined> | undefined {
+  return payload && typeof payload === "object" ? payload : undefined;
 }
 
 /** Strip Zod / express-validator style path prefixes for form binding. */
@@ -169,13 +177,15 @@ function inferFieldErrorsFromCode(
 
 function messageFromRtk(err: RtkErrorShape, fallback: string): string {
   const payload = err.data;
-  const nested = payload?.error;
+  const nested =
+    payload && typeof payload === "object" ? payload.error : undefined;
 
   if (typeof nested?.message === "string" && nested.message.trim()) {
     return nested.message.trim();
   }
-  if (typeof payload?.message === "string" && payload.message.trim()) {
-    return payload.message.trim();
+  const payloadObj = objectErrorPayload(payload);
+  if (typeof payloadObj?.message === "string" && payloadObj.message.trim()) {
+    return payloadObj.message.trim();
   }
   if (typeof err.error === "string" && err.error.trim()) {
     const text = err.error.trim();
@@ -216,17 +226,18 @@ export function parseApiError(
 
   const rtk = normalized as RtkErrorShape;
   const payload = errorPayload(normalized);
-  const nested = payload?.error;
+  const payloadObj = objectErrorPayload(payload);
+  const nested = payloadObj?.error;
 
-  const code = nested?.code ?? payload?.code;
+  const code = nested?.code ?? payloadObj?.code;
   const message = messageFromRtk(rtk, fallback);
   const traceId =
     nested?.traceId ??
-    (typeof payload?.traceId === "string" ? payload.traceId : undefined);
-  const details = nested?.details ?? nested?.fields ?? payload?.details;
+    (typeof payloadObj?.traceId === "string" ? payloadObj.traceId : undefined);
+  const details = nested?.details ?? nested?.fields ?? payloadObj?.details;
   let fieldErrors = fieldErrorsFromDetails(details);
   fieldErrors = inferFieldErrorsFromCode(code, message, fieldErrors);
-  const httpStatus = payload?.httpStatus ?? rtk.status;
+  const httpStatus = payloadObj?.httpStatus ?? rtk.status;
 
   return { code, message, traceId, fieldErrors, httpStatus };
 }

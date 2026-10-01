@@ -1,9 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
 import {
   Select,
   SelectContent,
@@ -46,6 +45,7 @@ import {
 import { handleFormApiError } from "@/src/lib/form-api-error";
 import { cn } from "@/lib/utils";
 import type { SchemePlan } from "@/src/types/domain";
+import { EMPTY_ENROLMENT_CREATE_FORM } from "@/src/lib/dialog-form-reset";
 
 export function EnrollmentsCreateDialog({
   trigger,
@@ -99,24 +99,6 @@ export function EnrollmentsCreateDialog({
   const debouncedAmount = useDebouncedValue(form.amount, 350);
 
   useEffect(() => {
-    if (!open) {
-      setForm({
-        customerId: "",
-        planId: "",
-        amount: 0,
-        firstInstallmentMode: "COLLECT_NOW",
-        paymentMode: "CASH",
-        paymentReference: "",
-        paymentRemarks: "",
-      });
-      setFieldErrors({});
-      setCustomerTouched(false);
-      setPlanTouched(false);
-      setAmountTouched(false);
-    }
-  }, [open]);
-
-  const runValidate = useCallback(() => {
     if (!open || !form.customerId || !form.planId) return;
     void validateEnrolment({
       customerId: form.customerId,
@@ -132,10 +114,6 @@ export function EnrollmentsCreateDialog({
     effectiveFirstMode,
     validateEnrolment,
   ]);
-
-  useEffect(() => {
-    runValidate();
-  }, [runValidate]);
 
   const enrolBlockers = validateState.data?.blockers ?? [];
 
@@ -157,8 +135,15 @@ export function EnrollmentsCreateDialog({
     <ActionDialog
       open={open}
       onOpenChange={(next) => {
+        if (!next) {
+          setForm({ ...EMPTY_ENROLMENT_CREATE_FORM });
+          setFieldErrors({});
+          setCustomerTouched(false);
+          setPlanTouched(false);
+          setAmountTouched(false);
+          setCustomerSearch("");
+        }
         setOpen(next);
-        if (!next) setCustomerSearch("");
       }}
       className="max-h-[min(90vh,880px)] w-[calc(100vw-1.5rem)] sm:max-w-[920px]"
       trigger={trigger}

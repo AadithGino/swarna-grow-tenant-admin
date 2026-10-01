@@ -15,6 +15,17 @@ import type {
   SettlementPreview,
   SettlementPreviewType,
 } from "@/src/types/domain";
+import type {
+  StaffPerformanceCollectionRow,
+  StaffPerformanceEnrolmentRow,
+  StaffPerformanceHandoverRow,
+  StaffPerformanceMoneyBlock,
+  StaffPerformanceSummaryView,
+  StaffPerformanceSectionResult,
+  StaffPerformanceCollectionsSection,
+  StaffPerformanceEnrolmentsSection,
+  StaffPerformanceHandoversSection,
+} from "@/src/types/staff-performance";
 import { initials, money } from "@/src/lib/format";
 import { mergePageMeta, type ListPageMeta } from "@/src/lib/cursor-pagination";
 import {
@@ -37,6 +48,18 @@ export const contractMeta = (value: unknown) =>
   (value as ContractWrapper)?.__contract
     ? (value as ContractWrapper).meta
     : undefined;
+
+export function contractPage(raw: unknown): ListPageMeta {
+  const meta = contractMeta(raw);
+  return mergePageMeta((meta ?? raw) as Record<string, unknown>);
+}
+
+export function parseSettlementValueBasis(
+  value: unknown,
+): SettlementPreview["valueBasis"] {
+  if (value === "GOLD_WEIGHT" || value === "CASH") return value;
+  return undefined;
+}
 
 function unwrapEnrollmentList(raw: any): any[] {
   if (Array.isArray(raw)) return raw;
@@ -459,9 +482,15 @@ export function adaptEnrollmentList(
       pendingRedemption: item.pendingRedemption ?? null,
       completedRedemption: item.completedRedemption ?? null,
       allowedRedemptionModes:
-        plan.redemptionRules?.allowedModes ??
         item.planSnapshot?.redemptionRules?.allowedModes ??
+        plan.redemptionRules?.allowedModes ??
         item.allowedRedemptionModes,
+      cashSettlementBasis:
+        item.planSnapshot?.redemptionRules?.cashSettlementBasis ??
+        plan.redemptionRules?.cashSettlementBasis,
+      paidAmountBenefitTreatment:
+        item.planSnapshot?.redemptionRules?.paidAmountBenefitTreatment ??
+        plan.redemptionRules?.paidAmountBenefitTreatment,
     };
   }) as Enrollment[];
 }
@@ -611,6 +640,12 @@ export function adaptEnrollment(raw: any): Enrollment {
       (row.valueBasis === "GOLD_WEIGHT"
         ? ["GOLD_HANDOVER", "CASH", "PURCHASE_ADJUSTMENT"]
         : ["CASH", "PURCHASE_ADJUSTMENT", "GOLD_HANDOVER"]),
+    cashSettlementBasis:
+      item.planSnapshot?.redemptionRules?.cashSettlementBasis ??
+      item.plan?.redemptionRules?.cashSettlementBasis,
+    paidAmountBenefitTreatment:
+      item.planSnapshot?.redemptionRules?.paidAmountBenefitTreatment ??
+      item.plan?.redemptionRules?.paidAmountBenefitTreatment,
     monthlyBreakdown: (flexible.freeWindow?.monthlyBreakdown ?? []).map(
       (m: any) => ({
         month: m.month,
@@ -1415,6 +1450,162 @@ export function adaptPaginatedList<T = Record<string, unknown>>(
     items: Array.isArray(items) ? items : [],
     page: mergePageMeta(meta),
     range: meta.range as { from?: string; to?: string } | undefined,
+  };
+}
+
+function adaptMoneyBlock(value: unknown): StaffPerformanceMoneyBlock | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const row = value as Record<string, unknown>;
+  const amountPaise = row.amountPaise != null ? Number(row.amountPaise) : undefined;
+  const amountDisplay =
+    row.amountDisplay != null ? String(row.amountDisplay) : undefined;
+  if (amountPaise == null && !amountDisplay) return undefined;
+  return { amountPaise, amountDisplay };
+}
+
+export function adaptStaffPerformanceSummary(
+  raw: unknown,
+): StaffPerformanceSummaryView {
+  const data = (contractPayload(raw) ?? {}) as Record<string, unknown>;
+  const cashRaw = data.cash as Record<string, unknown> | undefined;
+  return {
+    range: data.range as StaffPerformanceSummaryView["range"],
+    trendGroupBy: data.trendGroupBy != null ? String(data.trendGroupBy) : undefined,
+    collectionTotal: adaptMoneyBlock(data.collectionTotal),
+    averageTicket: adaptMoneyBlock(data.averageTicket),
+    enrolments: data.enrolments != null ? Number(data.enrolments) : undefined,
+    customersServed:
+      data.customersServed != null ? Number(data.customersServed) : undefined,
+    paymentsCount:
+      data.paymentsCount != null ? Number(data.paymentsCount) : undefined,
+    collectionTrend: Array.isArray(data.collectionTrend)
+      ? data.collectionTrend.map((point) => {
+          const p = point as Record<string, unknown>;
+          return {
+            date: p.date != null ? String(p.date) : undefined,
+            label: p.label != null ? String(p.label) : undefined,
+            count: p.count != null ? Number(p.count) : undefined,
+            amount: adaptMoneyBlock(p.amount),
+          };
+        })
+      : undefined,
+    cash: cashRaw
+      ? {
+          cashInHand: adaptMoneyBlock(cashRaw.cashInHand),
+          cashPendingAcceptance: adaptMoneyBlock(cashRaw.cashPendingAcceptance),
+          cashCollected: adaptMoneyBlock(cashRaw.cashCollected),
+          handedOver: adaptMoneyBlock(cashRaw.handedOver),
+        }
+      : undefined,
+  };
+}
+
+export function adaptStaffPerformanceCollectionRow(
+  raw: unknown,
+): StaffPerformanceCollectionRow {
+  const row = (raw ?? {}) as Record<string, unknown>;
+  const customer = row.customer as Record<string, unknown> | undefined;
+  const scheme = row.scheme as Record<string, unknown> | undefined;
+  return {
+    paidAt: row.paidAt != null ? String(row.paidAt) : undefined,
+    receiptNumber:
+      row.receiptNumber != null ? String(row.receiptNumber) : undefined,
+    mode: row.mode != null ? String(row.mode) : undefined,
+    source: row.source != null ? String(row.source) : undefined,
+    amount: adaptMoneyBlock(row.amount),
+    customer: customer
+      ? {
+          id: customer.id != null ? String(customer.id) : undefined,
+          name: customer.name != null ? String(customer.name) : undefined,
+        }
+      : undefined,
+    scheme: scheme
+      ? {
+          id: scheme.id != null ? String(scheme.id) : undefined,
+          enrollmentNumber:
+            scheme.enrollmentNumber != null
+              ? String(scheme.enrollmentNumber)
+              : undefined,
+        }
+      : undefined,
+  };
+}
+
+export function adaptStaffPerformanceEnrolmentRow(
+  raw: unknown,
+): StaffPerformanceEnrolmentRow {
+  const row = (raw ?? {}) as Record<string, unknown>;
+  const customer = row.customer as Record<string, unknown> | undefined;
+  const plan = row.plan as Record<string, unknown> | undefined;
+  return {
+    id: row.id != null ? String(row.id) : undefined,
+    createdAt: row.createdAt != null ? String(row.createdAt) : undefined,
+    enrollmentNumber:
+      row.enrollmentNumber != null ? String(row.enrollmentNumber) : undefined,
+    status: row.status != null ? String(row.status) : undefined,
+    customer: customer
+      ? {
+          id: customer.id != null ? String(customer.id) : undefined,
+          name: customer.name != null ? String(customer.name) : undefined,
+        }
+      : undefined,
+    plan: plan
+      ? {
+          name: plan.name != null ? String(plan.name) : undefined,
+          code: plan.code != null ? String(plan.code) : undefined,
+        }
+      : undefined,
+  };
+}
+
+export function adaptStaffPerformanceHandoverRow(
+  raw: unknown,
+): StaffPerformanceHandoverRow {
+  const row = (raw ?? {}) as Record<string, unknown>;
+  return {
+    submittedAt: row.submittedAt != null ? String(row.submittedAt) : undefined,
+    settledAt: row.settledAt != null ? String(row.settledAt) : undefined,
+    status: row.status != null ? String(row.status) : undefined,
+    amount: adaptMoneyBlock(row.amount),
+    acceptedAmount: adaptMoneyBlock(row.acceptedAmount),
+  };
+}
+
+export function adaptStaffPerformanceSection(
+  raw: unknown,
+  section: "collections",
+): StaffPerformanceCollectionsSection;
+export function adaptStaffPerformanceSection(
+  raw: unknown,
+  section: "enrolments",
+): StaffPerformanceEnrolmentsSection;
+export function adaptStaffPerformanceSection(
+  raw: unknown,
+  section: "handovers",
+): StaffPerformanceHandoversSection;
+export function adaptStaffPerformanceSection(
+  raw: unknown,
+  section: "collections" | "enrolments" | "handovers",
+): StaffPerformanceSectionResult {
+  const list = adaptPaginatedList(raw);
+  if (section === "collections") {
+    return {
+      kind: "collections",
+      ...list,
+      items: list.items.map((item) => adaptStaffPerformanceCollectionRow(item)),
+    };
+  }
+  if (section === "enrolments") {
+    return {
+      kind: "enrolments",
+      ...list,
+      items: list.items.map((item) => adaptStaffPerformanceEnrolmentRow(item)),
+    };
+  }
+  return {
+    kind: "handovers",
+    ...list,
+    items: list.items.map((item) => adaptStaffPerformanceHandoverRow(item)),
   };
 }
 
@@ -2416,13 +2607,21 @@ export const adaptGoldHistory = (
     ratePerGram: number;
     enteredBy: string;
     branch: string;
+    movement?: number | null;
   }[];
   page: ListPageMeta;
 } => {
   if (raw?.current && raw?.page && Array.isArray(raw?.history)) {
     return {
       current: raw.current,
-      history: raw.history,
+      history: raw.history as {
+        id: string;
+        effectiveAt: string;
+        ratePerGram: number;
+        enteredBy: string;
+        branch: string;
+        movement?: number | null;
+      }[],
       page: mergePageMeta(raw),
     };
   }
@@ -2468,10 +2667,6 @@ export const adaptGoldHistory = (
     page: mergePageMeta(meta ?? raw, { total: meta?.total ?? history.length }),
   };
 };
-
-function listMetaTotal(raw: any): number | undefined {
-  return typeof raw?.total === "number" ? raw.total : contractMeta(raw)?.total;
-}
 
 /** Mock lists spread `page` fields at the top level; real API uses `meta` or nested `page`. */
 function hasListPagination(raw: any): boolean {
@@ -3034,6 +3229,49 @@ function messageSummaryFromItems(items: any[]) {
   };
 }
 
+function settlementPreviewMetaFields(payload: Record<string, unknown>) {
+  const ratePaise = Number(
+    payload.valuationRatePerGramPaise ??
+      (payload.computation as { valuationRate?: { ratePerGramPaise?: number } })
+        ?.valuationRate?.ratePerGramPaise ??
+      0,
+  );
+  const goldMg = Number(
+    payload.goldWeightMg ?? payload.principalWeightMg ?? 0,
+  );
+  const compGold = (payload.computation as { goldWeight?: { weightDisplay?: string } })
+    ?.goldWeight?.weightDisplay;
+  return {
+    cashSettlementBasis:
+      (payload.cashSettlementBasis as SettlementPreview["cashSettlementBasis"]) ??
+      "GOLD_VALUE",
+    paidAmountBenefitTreatment:
+      (payload.paidAmountBenefitTreatment as SettlementPreview["paidAmountBenefitTreatment"]) ??
+      "EXCLUDE",
+    principalPaid: fromPaise(Number(payload.principalPaise ?? 0)),
+    includedMonetaryBenefit: fromPaise(
+      Number(payload.includedMonetaryBenefitPaise ?? 0),
+    ),
+    accruedGoldWeightDisplay:
+      compGold ?? (goldMg > 0 ? `${(goldMg / 1000).toFixed(3)} g` : undefined),
+    valuationRateEffectiveDate: String(
+      payload.valuationRateEffectiveDate ?? "",
+    ),
+    valuationRateDisplay:
+      ratePaise > 0
+        ? `${new Intl.NumberFormat("en-IN", {
+            style: "currency",
+            currency: "INR",
+            maximumFractionDigits: 0,
+          }).format(ratePaise / 100)} / g`
+        : undefined,
+    valueBasis:
+      parseSettlementValueBasis(
+        (payload.scheme as { valueBasis?: unknown })?.valueBasis,
+      ) ?? parseSettlementValueBasis(payload.valueBasis),
+  };
+}
+
 export function adaptSettlementPreview(
   raw: unknown,
   fallbackType: SettlementPreviewType,
@@ -3067,7 +3305,14 @@ export function adaptSettlementPreview(
       type: payload.type ?? fallbackType,
       eligible: Boolean(payload.eligible),
       blockers: payload.blockers ?? [],
-      scheme: payload.scheme,
+      scheme: payload.scheme
+        ? {
+            ...(payload.scheme as Record<string, unknown>),
+            valueBasis: parseSettlementValueBasis(
+              (payload.scheme as { valueBasis?: unknown }).valueBasis,
+            ),
+          }
+        : payload.scheme,
       customer: payload.customer,
       lines: payload.computation.lines.map(mapLine),
       finalValue: fromPaise(
@@ -3091,6 +3336,7 @@ export function adaptSettlementPreview(
       approvalReason: payload.approvalReason,
       warningText: payload.warningText,
       valuationNote: payload.valuationNote,
+      ...settlementPreviewMetaFields(payload),
       handoverValue: payload.handoverValuePaise != null
         ? fromPaise(Number(payload.handoverValuePaise))
         : undefined,
@@ -3145,6 +3391,7 @@ export function adaptSettlementPreview(
     blockers,
     textBenefits: [],
     approvalRequired: Boolean(payload?.approvalRequired),
+    ...settlementPreviewMetaFields(payload ?? {}),
   };
 }
 
@@ -3203,7 +3450,12 @@ export function adaptRedemptionDetail(raw: unknown): RedemptionDetailView {
   const closureType = (item.closureType ??
     "PREMATURE_CLOSURE") as SettlementPreviewType;
   const principal = Number(item.principalPaise ?? 0);
-  const benefit = Number(item.benefitPaise ?? 0);
+  const calculatedBenefit = Number(
+    item.calculatedBenefitPaise ?? item.benefitPaise ?? 0,
+  );
+  const includedBenefit = Number(
+    item.includedBenefitPaise ?? item.benefitPaise ?? 0,
+  );
   const penalty = Number(item.penaltyPaise ?? 0);
   const settlement = Number(item.settlementPaise ?? 0);
   const lines: SettlementLine[] = [];
@@ -3216,12 +3468,21 @@ export function adaptRedemptionDetail(raw: unknown): RedemptionDetailView {
       sign: "+",
     });
   }
-  if (benefit > 0) {
+  if (includedBenefit > 0) {
     lines.push({
       key: "benefit",
-      label: "Benefit credited",
-      amount: fromPaise(benefit),
+      label: "Benefit included in payout",
+      amount: fromPaise(includedBenefit),
       sign: "+",
+    });
+  } else if (calculatedBenefit > 0) {
+    lines.push({
+      key: "benefit",
+      label: "Eligible benefit (excluded from payout)",
+      amount: fromPaise(0),
+      sign: "+",
+      forfeited: true,
+      forfeitReason: `Eligible benefit ${fromPaise(calculatedBenefit)} was not paid in cash.`,
     });
   } else if (
     closureType === "PREMATURE_CLOSURE" &&

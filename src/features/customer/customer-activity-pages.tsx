@@ -1,12 +1,19 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { Gem, MapPin, Phone, Store, TrendingDown, TrendingUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CustomerPageHeader } from "@/src/components/customer/customer-ui";
 import { PageSkeleton, QueryError } from "@/src/components/common/query-state";
+import { useCustomerTenant } from "@/src/components/customer/customer-tenant-context";
+import { useCustomerGoldMetricsVisible } from "@/src/lib/customer-gold-ui";
+import {
+  useGetCustomerBranchesQuery,
+  useGetCustomerGoldHistoryQuery,
+  useGetCustomerGoldRateQuery,
+} from "@/src/store/api/customer-api";
+import { customerPath } from "@/src/lib/customer-tenant";
 export { CustomerNotificationsPage } from "@/src/features/customer/customer-notifications-page";
 
 export function CustomerGoldRatePage() {

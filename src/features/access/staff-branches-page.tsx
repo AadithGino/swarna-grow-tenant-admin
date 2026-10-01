@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
 import {
   Building2,
@@ -204,20 +204,14 @@ export function StaffBranchesPage() {
     setStaffBranchTouched(false);
   };
 
-  useEffect(() => {
-    if (branchFilter) {
-      setStaffForm((prev) =>
-        prev.branchId === branchFilter
-          ? prev
-          : { ...prev, branchId: branchFilter },
-      );
-      return;
-    }
-    const first = branchOptions[0];
-    if (first && !staffForm.branchId) {
-      setStaffForm((prev) => ({ ...prev, branchId: first.id }));
-    }
-  }, [branchOptions, branchFilter, staffForm.branchId]);
+  const defaultStaffBranchId = branchFilter ?? branchOptions[0]?.id ?? "";
+  if (
+    defaultStaffBranchId &&
+    staffForm.branchId !== defaultStaffBranchId &&
+    (branchFilter || !staffForm.branchId)
+  ) {
+    setStaffForm((prev) => ({ ...prev, branchId: defaultStaffBranchId }));
+  }
 
   const branchRequiredForStaff = staffRequiresBranch(
     staffForm.role,
@@ -252,8 +246,6 @@ export function StaffBranchesPage() {
       />
     );
 
-  const staffItems = staffQuery.data.items;
-  const branchItems = branchesQuery.data.items;
   const s = accessSummaryQuery.data;
   const staffSeatsFree = Math.max(0, s.staffLimit - s.staffUsed);
   const staffPage = staffQuery.data.page ?? emptyPageMeta();

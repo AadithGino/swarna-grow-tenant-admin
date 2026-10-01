@@ -1,7 +1,6 @@
 import {
   clearTenantTokens,
   persistTenantTokens,
-  TOKEN_KEYS,
 } from "@/src/lib/auth-token-storage";
 import type { PortalSession } from "@/src/types/session";
 

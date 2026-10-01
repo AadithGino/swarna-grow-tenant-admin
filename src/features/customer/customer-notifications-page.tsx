@@ -25,11 +25,18 @@ import {
 import type { CustomerNotification } from "@/src/types/customer";
 import { toast } from "sonner";
 
-function notificationIcon(type: CustomerNotification["type"]) {
-  if (type === "PAYMENT") return IndianRupee;
-  if (type === "GRIEVANCE") return MessageSquareText;
-  if (type === "SCHEME") return Sparkles;
-  return Bell;
+function NotificationTypeIcon({
+  type,
+  className,
+}: {
+  type: CustomerNotification["type"];
+  className?: string;
+}) {
+  const props = { className, strokeWidth: 2.25 as const };
+  if (type === "PAYMENT") return <IndianRupee {...props} />;
+  if (type === "GRIEVANCE") return <MessageSquareText {...props} />;
+  if (type === "SCHEME") return <Sparkles {...props} />;
+  return <Bell {...props} />;
 }
 
 function notificationTone(type: CustomerNotification["type"]) {
@@ -48,14 +55,13 @@ function NotificationRow({
   href: string | null;
   onOpen: () => void;
 }) {
-  const Icon = notificationIcon(item.type);
   const tone = notificationTone(item.type);
   const inner = (
     <>
       <span
         className={`relative grid size-12 shrink-0 place-items-center rounded-2xl ${tone}`}
       >
-        <Icon className="size-5" strokeWidth={2.25} />
+        <NotificationTypeIcon type={item.type} className="size-5" />
       </span>
       <div className="min-w-0 flex-1 py-0.5">
         <p

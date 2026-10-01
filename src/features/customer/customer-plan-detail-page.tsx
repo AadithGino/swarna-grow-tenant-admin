@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import {
   ArrowLeft,
   CalendarDays,
@@ -200,17 +200,17 @@ export function CustomerPlanDetailPage({ id }: { id: string }) {
   const [enrol, enrolState] = useEnrolCustomerSchemeMutation();
   const [initiatePublicLink] = useInitiatePublicPaymentLinkMutation();
 
-  useEffect(() => {
-    if (!plan) return;
+  const [syncedPlanId, setSyncedPlanId] = useState<string | undefined>();
+  if (plan && syncedPlanId !== plan.id) {
     const rules = customerPlanEnrolRules(plan);
+    setSyncedPlanId(plan.id);
     if (amountFieldLocked(rules) || amountUsesSlabs(rules)) {
-      setAmount((prev) => (prev == null ? defaultCustomerEnrolAmountRupee(plan) : prev));
+      setAmount(defaultCustomerEnrolAmountRupee(plan));
     } else {
       setAmount(undefined);
     }
-    const collectNow = plan.firstInstallmentRequired !== false;
-    setPayNow(collectNow);
-  }, [plan?.id, plan?.firstInstallmentRequired]);
+    setPayNow(plan.firstInstallmentRequired !== false);
+  }
 
   if (isLoading || !plan) return <PageSkeleton cards={3} />;
   if (isError) return <QueryError onRetry={refetch} />;

@@ -73,6 +73,12 @@ import {
   type PlanBuilderFormState,
   type RedemptionMode,
 } from "@/src/features/schemes/plan-builder-form";
+import {
+  CASH_SETTLEMENT_BASIS_OPTIONS,
+  cashSettlementBasisLabel,
+  paidAmountCashFormulaNote,
+  planShowsCashSettlementBasis,
+} from "@/src/lib/cash-settlement-basis";
 
 const REDEMPTION_MODE_OPTIONS: { id: RedemptionMode; label: string }[] = [
   { id: "CASH", label: "Cash settlement" },
@@ -160,8 +166,7 @@ export function PlanBuilderWizard({
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [previewError, setPreviewError] = useState<string | undefined>();
 
-  useEffect(() => {
-    if (!planQuery.data || hydrated) return;
+  if (planQuery.data && !hydrated) {
     const detail = planQuery.data as Record<string, unknown>;
     setForm(
       coerceBenefitForPattern(
@@ -169,7 +174,7 @@ export function PlanBuilderWizard({
       ),
     );
     setHydrated(true);
-  }, [planQuery.data, hydrated, isDuplicate]);
+  }
 
   const set = (patch: Partial<PlanBuilderFormState>) => {
     setForm((prev) => ({ ...prev, ...patch }));
@@ -188,26 +193,24 @@ export function PlanBuilderWizard({
     [form.paymentPattern],
   );
 
-  useEffect(() => {
-    setStepIndex((i) => {
-      const id = steps[i]?.id;
-      if (id) {
-        const same = steps.findIndex((s) => s.id === id);
-        if (same >= 0) return same;
-        if (id === "amount") {
-          const flex = steps.findIndex((s) => s.id === "flexible");
-          if (flex >= 0) return flex;
-        }
-        if (id === "flexible") {
-          const amount = steps.findIndex((s) => s.id === "amount");
-          if (amount >= 0) return amount;
-        }
+  const resolvedStepIndex = useMemo(() => {
+    const id = steps[stepIndex]?.id;
+    if (id) {
+      const same = steps.findIndex((s) => s.id === id);
+      if (same >= 0) return same;
+      if (id === "amount") {
+        const flex = steps.findIndex((s) => s.id === "flexible");
+        if (flex >= 0) return flex;
       }
-      return Math.min(i, Math.max(0, steps.length - 1));
-    });
-  }, [steps]);
+      if (id === "flexible") {
+        const amount = steps.findIndex((s) => s.id === "amount");
+        if (amount >= 0) return amount;
+      }
+    }
+    return Math.min(stepIndex, Math.max(0, steps.length - 1));
+  }, [steps, stepIndex]);
 
-  const current = steps[stepIndex] ?? steps[0];
+  const current = steps[resolvedStepIndex] ?? steps[0];
 
   const go = (delta: number) =>
     setStepIndex((i) => Math.max(0, Math.min(steps.length - 1, i + delta)));
@@ -238,7 +241,7 @@ export function PlanBuilderWizard({
   const previewFetchAllowed =
     isEdit ||
     (gateStepIndex >= 0 &&
-      stepIndex >= gateStepIndex &&
+      resolvedStepIndex >= gateStepIndex &&
       isPlanPreviewReady(form));
 
   useEffect(() => {
@@ -262,14 +265,30 @@ export function PlanBuilderWizard({
   const toggleRedemptionMode = (mode: RedemptionMode) => {
     setForm((prev) => {
       const has = prev.allowedRedemptionModes.includes(mode);
+      const allowedRedemptionModes = has
+        ? prev.allowedRedemptionModes.filter((m) => m !== mode)
+        : [...prev.allowedRedemptionModes, mode];
+      const showCashBasis = planShowsCashSettlementBasis(
+        prev.valueBasis,
+        allowedRedemptionModes,
+      );
       return {
         ...prev,
-        allowedRedemptionModes: has
-          ? prev.allowedRedemptionModes.filter((m) => m !== mode)
-          : [...prev.allowedRedemptionModes, mode],
+        allowedRedemptionModes,
+        ...(showCashBasis
+          ? {}
+          : {
+              cashSettlementBasis: "GOLD_VALUE",
+              includeMonetaryBenefitInPaidAmountCash: false,
+            }),
       };
     });
   };
+
+  const showCashSettlementBasisFields = planShowsCashSettlementBasis(
+    form.valueBasis,
+    form.allowedRedemptionModes,
+  );
 
   const stepCopy = STEP_COPY[current.id];
   const totalFlexibleMonths = form.flexiblePhaseCycles + form.cappedPhaseCycles;
@@ -321,7 +340,7 @@ export function PlanBuilderWizard({
       />
       <PlanBuilderStepper
         steps={steps}
-        currentIndex={stepIndex}
+        currentIndex={resolvedStepIndex}
         onSelect={setStepIndex}
       />
       {form.editLocked ? (
@@ -1362,6 +1381,73 @@ export function PlanBuilderWizard({
                     </label>
                   ))}
                 </div>
+                {showCashSettlementBasisFields ? (
+                  <div className="space-y-3 rounded-xl border border-[#eaded9] bg-[#faf7f5] p-4">
+                    <FieldLabel>Cash payout basis</FieldLabel>
+                    <p className="text-xs leading-5 text-muted-foreground">
+                      Applies when customers redeem gold accumulation as{" "}
+                      <strong>cash</strong> (not savings plans with value basis
+                      Cash). Frozen in each enrolment snapshot.
+                    </p>
+                    <div className="grid gap-2">
+                      {CASH_SETTLEMENT_BASIS_OPTIONS.map((opt) => (
+                        <label
+                          key={opt.value}
+                          className={cn(
+                            "flex cursor-pointer gap-3 rounded-lg border p-3 text-sm",
+                            form.cashSettlementBasis === opt.value &&
+                              "border-[#730321] bg-white",
+                          )}
+                        >
+                          <input
+                            type="radio"
+                            name="cashSettlementBasis"
+                            className="mt-1"
+                            checked={form.cashSettlementBasis === opt.value}
+                            onChange={() =>
+                              set({
+                                cashSettlementBasis: opt.value,
+                                ...(opt.value === "GOLD_VALUE"
+                                  ? {
+                                      includeMonetaryBenefitInPaidAmountCash:
+                                        false,
+                                    }
+                                  : {}),
+                              })
+                            }
+                          />
+                          <span>
+                            <span className="font-semibold">{opt.label}</span>
+                            <span className="mt-1 block text-xs text-muted-foreground">
+                              {opt.description}
+                            </span>
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                    {form.cashSettlementBasis === "PAID_AMOUNT" ? (
+                      <>
+                        <ToggleRow
+                          label="Include eligible monetary plan benefit"
+                          checked={form.includeMonetaryBenefitInPaidAmountCash}
+                          onCheckedChange={(v) =>
+                            set({
+                              includeMonetaryBenefitInPaidAmountCash: v,
+                            })
+                          }
+                        />
+                        <p className="text-xs leading-5 text-muted-foreground">
+                          {paidAmountCashFormulaNote(
+                            form.includeMonetaryBenefitInPaidAmountCash,
+                          )}
+                        </p>
+                      </>
+                    ) : null}
+                    <FormFieldError
+                      message={fieldErrors.cashSettlementBasis}
+                    />
+                  </div>
+                ) : null}
                 <ToggleRow
                   label="Redeem at any branch"
                   checked={form.redeemAtAnyBranch}
@@ -1492,6 +1578,16 @@ export function PlanBuilderWizard({
                         ? `Early exit · ${form.lockInMonths} mo lock-in · ${penaltyModeLabel(form.penaltyMode)} · ${redemptionModesLabel(form.allowedRedemptionModes)}`
                         : `Maturity only · ${redemptionModesLabel(form.allowedRedemptionModes)}`,
                     },
+                    ...(showCashSettlementBasisFields
+                      ? [
+                          {
+                            label: "Cash payout basis",
+                            value: cashSettlementBasisLabel(
+                              form.cashSettlementBasis,
+                            ),
+                          },
+                        ]
+                      : []),
                     {
                       label: "App",
                       value: form.visibleInCustomerApp
@@ -1520,12 +1616,12 @@ export function PlanBuilderWizard({
           <div className="flex justify-between border-t p-4">
             <Button
               variant="outline"
-              disabled={stepIndex === 0}
+              disabled={resolvedStepIndex === 0}
               onClick={() => go(-1)}
             >
               Back
             </Button>
-            {stepIndex < steps.length - 1 ? (
+            {resolvedStepIndex < steps.length - 1 ? (
               <Button
                 onClick={() => {
                   const stepErrors = validatePlanBuilderStep(current.id, form, {
@@ -1567,10 +1663,10 @@ export function PlanBuilderWizard({
                       toast.success("Plan updated");
                       router.push(`/schemes/${planId}`);
                     } else {
-                      const created = (await createPlan(
-                        buildPlanCreatePayload(form) as Record<string, unknown>,
-                      ).unwrap()) as Record<string, unknown>;
-                      const newId = String(created.id ?? created._id ?? "");
+                      const created = await createPlan(
+                        buildPlanCreatePayload(form),
+                      ).unwrap();
+                      const newId = String(created.id ?? "");
                       toast.success("Plan draft created");
                       router.push(newId ? `/schemes/${newId}` : "/schemes");
                     }

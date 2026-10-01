@@ -67,7 +67,7 @@ export function goldAccrualFromAdminPayment(payment: Payment): PaymentGoldAccrua
 }
 
 export function goldAccrualFromCustomerPayment(payment: PaymentListItem): PaymentGoldAccrual | undefined {
-  return payment.goldAccrual;
+  return payment.goldAccrual ?? undefined;
 }
 
 export function formatGoldPurchaseDate(iso?: string): string {

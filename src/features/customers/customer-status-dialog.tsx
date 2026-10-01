@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { toastApiError } from "@/src/lib/api-error";
@@ -61,14 +61,19 @@ export function CustomerStatusDialog({
   const reasonDisplayError =
     reasonTouched || reason.trim().length > 0 ? reasonLiveError : undefined;
 
-  useEffect(() => {
-    if (!open) return;
+  const dialogSeed = `${mode}-${customer.id}`;
+  const [appliedSeed, setAppliedSeed] = useState<string | null>(null);
+  if (open && appliedSeed !== dialogSeed) {
+    setAppliedSeed(dialogSeed);
     setReason("");
     setReasonTouched(false);
     setAcknowledged(false);
     setBlockAppAccess(true);
     setStopReminders(true);
-  }, [open, mode, customer.id]);
+  }
+  if (!open && appliedSeed !== null) {
+    setAppliedSeed(null);
+  }
 
   const busy =
     updateState.isLoading || blockState.isLoading || unblockState.isLoading;

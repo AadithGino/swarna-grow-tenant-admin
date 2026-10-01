@@ -40,7 +40,6 @@ import type {
   GoldRate,
   PayableQuote,
   Payment,
-  RedemptionRecord,
   SchemePlan,
   SettlementPreview,
 } from "@/src/types/domain";
@@ -1678,11 +1677,11 @@ export async function mockRequest<T>({
       return {
         __contract: true,
         payload: {
+          ...row,
           id: row.id,
           status: "DRAFT",
           version: 1,
           auditEventId: "aud_pln",
-          ...row,
         },
       } as T;
     }

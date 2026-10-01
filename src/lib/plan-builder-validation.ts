@@ -1,4 +1,5 @@
 import type { PlanBuilderFormState } from "@/src/features/schemes/plan-builder-form";
+import { validatePlanCashSettlementFields } from "@/src/lib/cash-settlement-basis";
 import type { StepId } from "@/src/features/schemes/plan-builder-wizard-types";
 
 export const PLAN_CODE_PATTERN = /^[A-Z0-9_-]{2,20}$/;
@@ -186,6 +187,17 @@ export function validatePlanRedemption(
   }
   if (form.prematureClosureAllowed && form.lockInMonths < 0) {
     errors.lockInMonths = "Lock-in months cannot be negative.";
+  }
+  const cashSettlementMessage = validatePlanCashSettlementFields({
+    valueBasis: form.valueBasis,
+    allowedRedemptionModes: form.allowedRedemptionModes,
+    cashSettlementBasis: form.cashSettlementBasis,
+    includeMonetaryBenefitInPaidAmountCash:
+      form.includeMonetaryBenefitInPaidAmountCash,
+    benefitType: form.benefitType,
+  });
+  if (cashSettlementMessage) {
+    errors.cashSettlementBasis = cashSettlementMessage;
   }
   return errors;
 }

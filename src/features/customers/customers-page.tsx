@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import {
   PageTab,
   PageTabs,
@@ -38,6 +38,7 @@ import { emptyPageMeta } from "@/src/lib/cursor-pagination";
 import { useCursorPagination } from "@/src/hooks/use-cursor-pagination";
 import { ListSearchInput } from "@/src/components/common/list-search-input";
 import { useDebouncedValue } from "@/src/hooks/use-debounced-value";
+import { useExternalValueSync } from "@/src/hooks/use-external-value-sync";
 import {
   listSearchQueryForApi,
   sanitizeListSearchQueryInput,
@@ -58,10 +59,9 @@ import { ImportCustomersDialog } from "@/src/features/customers/import-customers
 export function CustomersPage() {
   const router = useRouter();
   const globalSearch = useAppSelector((s) => s.ui.globalSearch);
-  const [q, setQ] = useState(() => sanitizeListSearchQueryInput(globalSearch));
-  useEffect(() => {
-    setQ(sanitizeListSearchQueryInput(globalSearch));
-  }, [globalSearch]);
+  const [q, setQ] = useExternalValueSync(
+    sanitizeListSearchQueryInput(globalSearch),
+  );
   const branchId = useActingBranchId();
   const branchKey = useActingBranchKey();
   const [kyc, setKyc] = useState("ALL");
@@ -81,7 +81,10 @@ export function CustomersPage() {
     branchId,
     period: "THIS_MONTH",
   });
-  const branches = branchesData?.items ?? [];
+  const branches = useMemo(
+    () => branchesData?.items ?? [],
+    [branchesData?.items],
+  );
   const [importOpen, setImportOpen] = useState(false);
   const branchCodeToId = useMemo(() => {
     const map = new Map<string, string>();
@@ -98,27 +101,26 @@ export function CustomersPage() {
   const analyticsSummary = analyticsQuery.data?.summary ?? [];
   const metric = (key: string) =>
     analyticsSummary.find((m) => m.key === key)?.value;
+  const metricNumber = (key: string): number | undefined => {
+    const value = metric(key);
+    return typeof value === "number" ? value : undefined;
+  };
   const analyticsTotals = analyticsQuery.data?.totals as
     | { kyc?: { verified?: number } }
     | undefined;
-  const kycVerified =
+  const kycVerified: number =
     typeof analyticsTotals?.kyc?.verified === "number"
       ? analyticsTotals.kyc.verified
-      : typeof metric("KYC_VERIFIED") === "number"
-        ? metric("KYC_VERIFIED")
-        : data.items.filter((x) => x.kyc === "VERIFIED").length;
-  const activeSchemesMetric =
-    typeof metric("CUSTOMERS_WITH_ACTIVE_SCHEME") === "number"
-      ? metric("CUSTOMERS_WITH_ACTIVE_SCHEME")
-      : typeof metric("WITH_ACTIVE_SCHEME") === "number"
-        ? metric("WITH_ACTIVE_SCHEME")
-        : null;
-  const totalCustomers =
-    typeof metric("TOTAL_CUSTOMERS") === "number"
-      ? metric("TOTAL_CUSTOMERS")
-      : typeof metric("TOTAL") === "number"
-        ? metric("TOTAL")
-        : data.total;
+      : metricNumber("KYC_VERIFIED") ??
+        data.items.filter((x) => x.kyc === "VERIFIED").length;
+  const activeSchemesMetric: number | null =
+    metricNumber("CUSTOMERS_WITH_ACTIVE_SCHEME") ??
+    metricNumber("WITH_ACTIVE_SCHEME") ??
+    null;
+  const totalCustomers: number =
+    metricNumber("TOTAL_CUSTOMERS") ??
+    metricNumber("TOTAL") ??
+    (typeof data.total === "number" ? data.total : data.items.length);
   return (
     <>
       <PageHeader
@@ -172,11 +174,14 @@ export function CustomersPage() {
         <StatCard
           icon={UserCheck}
           label="KYC verified"
-          value={kycVerified ?? "—"}
+          value={kycVerified}
           detail={
-            typeof metric("KYC_PENDING") === "number"
-              ? `${metric("KYC_PENDING")} pending`
-              : "Verification coverage"
+            (() => {
+              const pending = metric("KYC_PENDING");
+              return typeof pending === "number"
+                ? `${pending} pending`
+                : "Verification coverage";
+            })()
           }
           tone="green"
         />

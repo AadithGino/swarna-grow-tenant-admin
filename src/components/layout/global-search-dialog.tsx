@@ -27,8 +27,6 @@ import {
 } from "@/src/lib/list-date-range";
 import { useGetGlobalSearchQuery } from "@/src/store/api/admin-api";
 import type { GlobalSearchKind } from "@/src/types/domain";
-import { useAppSelector } from "@/src/store/hooks";
-
 const KIND_ICON: Record<GlobalSearchKind, typeof UsersRound> = {
   CUSTOMER: UsersRound,
   ENROLLMENT: ClipboardList,
@@ -64,7 +62,10 @@ export function GlobalSearchDialog({
     },
   );
 
-  const groups = searchQuery.data?.groups ?? [];
+  const groups = useMemo(
+    () => searchQuery.data?.groups ?? [],
+    [searchQuery.data?.groups],
+  );
   const hasQuery = debouncedQ.length >= 2;
   const loading = hasQuery && searchQuery.isFetching;
 

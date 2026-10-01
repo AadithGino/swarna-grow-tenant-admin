@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { TOKEN_KEYS } from "@/src/lib/auth-token-storage";
 import { useRouter } from "next/navigation";
 import { PageSkeleton } from "@/src/components/common/query-state";
@@ -9,6 +9,14 @@ import { customerNeedsOnboarding } from "@/src/lib/customer-profile-complete";
 import { customerPath } from "@/src/lib/customer-tenant";
 import { useGetCustomerProfileQuery } from "@/src/store/api/customer-api";
 import { useAppSelector } from "@/src/store/hooks";
+import { useClientMounted } from "@/src/hooks/use-client-mounted";
+
+function hasStoredCustomerTokens() {
+  return Boolean(
+    localStorage.getItem(TOKEN_KEYS.customer.access) ||
+      localStorage.getItem(TOKEN_KEYS.customer.refresh),
+  );
+}
 
 /** Redirects unauthenticated or incomplete profiles away from the main portal shell. */
 export function CustomerRegistrationGuard({
@@ -18,22 +26,13 @@ export function CustomerRegistrationGuard({
 }) {
   const router = useRouter();
   const { tenantSlug } = useCustomerTenant();
+  const mounted = useClientMounted();
   const authenticated = useAppSelector((s) => s.customerSession.authenticated);
   const sessionProfileComplete = useAppSelector(
     (s) => s.customerSession.profileComplete,
   );
-  const [tokenPresent, setTokenPresent] = useState(false);
-  const [ready, setReady] = useState(false);
-
-  useEffect(() => {
-    setTokenPresent(
-      Boolean(
-        localStorage.getItem(TOKEN_KEYS.customer.access) ||
-          localStorage.getItem(TOKEN_KEYS.customer.refresh),
-      ),
-    );
-    setReady(true);
-  }, []);
+  const tokenPresent = mounted && hasStoredCustomerTokens();
+  const ready = mounted;
 
   const hasSession = tokenPresent || authenticated;
   const { data: profile, isLoading } = useGetCustomerProfileQuery(undefined, {
@@ -55,10 +54,10 @@ export function CustomerRegistrationGuard({
   }, [ready, hasSession, needsOnboarding, router, tenantSlug]);
 
   if (!ready || !hasSession || isLoading) {
-    return <PageSkeleton />;
+    return <PageSkeleton cards={2} />;
   }
   if (needsOnboarding) {
-    return <PageSkeleton />;
+    return <PageSkeleton cards={2} />;
   }
 
   return <>{children}</>;

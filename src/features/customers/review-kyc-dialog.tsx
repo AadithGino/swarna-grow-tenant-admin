@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { FileImage, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -135,8 +135,10 @@ export function ReviewKycDialog({
   const backRef = useRef<HTMLInputElement>(null);
   const panRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    if (!open) return;
+  const kycDialogSeed = `${customer.id}`;
+  const [appliedKycSeed, setAppliedKycSeed] = useState<string | null>(null);
+  if (open && appliedKycSeed !== kycDialogSeed) {
+    setAppliedKycSeed(kycDialogSeed);
     setRejectRemarks("");
     setPanNumber("");
     setFrontUploadId(null);
@@ -145,7 +147,10 @@ export function ReviewKycDialog({
     setSubmitFieldErrors({});
     setSubmitAttempted(false);
     setRejectFieldError(undefined);
-  }, [open, customer.id]);
+  }
+  if (!open && appliedKycSeed !== null) {
+    setAppliedKycSeed(null);
+  }
 
   const busy = verifyState.isLoading || submitState.isLoading || uploadBusy;
   const canReview = status === "SUBMITTED";

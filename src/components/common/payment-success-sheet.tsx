@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo } from "react";
+import Image from "next/image";
 import {
   CheckCircle2,
   Copy,
@@ -71,23 +72,38 @@ export function PaymentSuccessSheet({
   result: PaymentSuccessPayload | null;
 }) {
   const tenantName =
-    useAppSelector((s) => s.session.session?.tenant?.name) ?? "Your jeweller";
-  const [fetchPassbook] = useLazyGetPaymentPassbookImageQuery();
-  const [fetchReceipt] = useLazyGetPaymentReceiptQuery();
+    useAppSelector(
+      (s) =>
+        s.session.session?.tenant?.displayName ??
+        s.session.session?.tenant?.name,
+    ) ?? "Your jeweller";
   const [shareWhatsapp, { isLoading: sharing }] =
     useSharePaymentWhatsappMutation();
 
-  const [passbookImageUrl, setPassbookImageUrl] = useState<string | undefined>(
-    result?.passbookImageUrl,
-  );
-  const [passbookImageStatus, setPassbookImageStatus] = useState<
-    PaymentSuccessPayload["passbookImageStatus"]
-  >(result?.passbookImageStatus);
-  const [receiptPreviewUrl, setReceiptPreviewUrl] = useState<string | null>(
-    null,
-  );
-  const [receiptLoading, setReceiptLoading] = useState(false);
-  const [receiptError, setReceiptError] = useState(false);
+  const [passbookFetch, passbookFetchState] = useLazyGetPaymentPassbookImageQuery();
+  const [receiptFetch, receiptFetchState] = useLazyGetPaymentReceiptQuery();
+
+  const passbookImageUrl =
+    result?.passbookImageUrl ?? passbookFetchState.data?.blobUrl;
+  const passbookImageStatus: PaymentSuccessPayload["passbookImageStatus"] =
+    result?.passbookImageUrl || passbookImageUrl
+      ? "READY"
+      : passbookFetchState.isFetching
+        ? "GENERATING"
+        : passbookFetchState.isError
+          ? "FAILED"
+          : result?.passbookImageStatus;
+  const receiptPreviewUrl =
+    receiptFetchState.data?.kind === "blob" &&
+    receiptFetchState.data.contentType.includes("pdf")
+      ? receiptFetchState.data.blobUrl
+      : null;
+  const receiptLoading = receiptFetchState.isFetching;
+  const receiptError =
+    receiptFetchState.isError ||
+    (receiptFetchState.data != null &&
+      (receiptFetchState.data.kind !== "blob" ||
+        !receiptFetchState.data.contentType.includes("pdf")));
 
   const whatsappPreviewText = useMemo(() => {
     if (!result) return "";
@@ -110,67 +126,14 @@ export function PaymentSuccessSheet({
   }, [result, tenantName]);
 
   useEffect(() => {
-    if (!open || !result) return;
-
-    setPassbookImageUrl(result.passbookImageUrl);
-    setPassbookImageStatus(result.passbookImageStatus);
-    setReceiptPreviewUrl(null);
-    setReceiptError(false);
-
-    if (result.passbookImageUrl) {
-      setPassbookImageStatus("READY");
-    } else if (result.paymentId) {
-      let cancelled = false;
-      setPassbookImageStatus("GENERATING");
-      void fetchPassbook(result.paymentId)
-        .unwrap()
-        .then(({ blobUrl }) => {
-          if (cancelled) {
-            URL.revokeObjectURL(blobUrl);
-            return;
-          }
-          setPassbookImageUrl(blobUrl);
-          setPassbookImageStatus("READY");
-        })
-        .catch(() => {
-          if (!cancelled) setPassbookImageStatus("FAILED");
-        });
-      return () => {
-        cancelled = true;
-      };
-    }
-  }, [open, result?.paymentId, result?.receiptNo, fetchPassbook, result]);
+    if (!open || !result?.paymentId || result.passbookImageUrl) return;
+    void passbookFetch(result.paymentId);
+  }, [open, result?.paymentId, result?.passbookImageUrl, passbookFetch]);
 
   useEffect(() => {
     if (!open || !result?.paymentId) return;
-
-    let cancelled = false;
-    setReceiptLoading(true);
-    setReceiptError(false);
-    void fetchReceipt(result.paymentId)
-      .unwrap()
-      .then((data) => {
-        if (cancelled) {
-          if (data.kind === "blob") URL.revokeObjectURL(data.blobUrl);
-          return;
-        }
-        if (data.kind === "blob" && data.contentType.includes("pdf")) {
-          setReceiptPreviewUrl(data.blobUrl);
-        } else {
-          setReceiptError(true);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) setReceiptError(true);
-      })
-      .finally(() => {
-        if (!cancelled) setReceiptLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [open, result?.paymentId, result?.receiptNo, fetchReceipt]);
+    void receiptFetch(result.paymentId);
+  }, [open, result?.paymentId, result?.receiptNo, receiptFetch]);
 
   useEffect(() => {
     const passbook = passbookImageUrl;
@@ -184,7 +147,7 @@ export function PaymentSuccessSheet({
   async function handleDownloadReceipt() {
     if (!result?.paymentId) return;
     try {
-      const data = await fetchReceipt(result.paymentId).unwrap();
+      const data = await receiptFetch(result.paymentId).unwrap();
       if (data.kind === "blob") {
         const ext = data.contentType.includes("pdf") ? "pdf" : "bin";
         downloadBlobUrl(`${result.receiptNo}.${ext}`, data.blobUrl);
@@ -199,7 +162,7 @@ export function PaymentSuccessSheet({
   async function handlePrintReceipt() {
     if (!result?.paymentId) return;
     try {
-      const data = await fetchReceipt(result.paymentId).unwrap();
+      const data = await receiptFetch(result.paymentId).unwrap();
       if (data.kind === "blob") {
         if (!printBlobUrl(data.blobUrl)) {
           toast.error("Allow pop-ups to print the receipt");
@@ -342,10 +305,13 @@ export function PaymentSuccessSheet({
                       Image unavailable — customer may get text-only receipt.
                     </p>
                   ) : passbookImageUrl ? (
-                    <img
+                    <Image
                       src={passbookImageUrl}
                       alt="Passbook entry"
                       className="w-full rounded-lg"
+                      width={640}
+                      height={480}
+                      unoptimized
                     />
                   ) : (
                     <p className="py-4 text-sm text-muted-foreground">

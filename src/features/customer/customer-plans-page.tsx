@@ -119,14 +119,13 @@ export function CustomerPlansPage() {
   const { data, isLoading, isError, refetch } = useGetCustomerPlansQuery();
   const [filter, setFilter] = useState<PlanFilter>("ALL");
 
-  const plans = data ?? [];
-
   const filtered = useMemo(() => {
+    const plans = data ?? [];
     if (filter === "ALL") return plans;
     if (filter === "FIXED") return plans.filter((p) => p.model === "FIXED" && !isGoldPlan(p));
     if (filter === "FLEXIBLE") return plans.filter((p) => p.model === "FLEXIBLE");
     return plans.filter((p) => isGoldPlan(p));
-  }, [plans, filter]);
+  }, [data, filter]);
 
   const filters: { key: PlanFilter; label: string }[] = [
     { key: "ALL", label: "All" },

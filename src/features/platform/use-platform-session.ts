@@ -1,6 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
+function readPlatformUser(): PlatformSessionUser | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem("swarnagrow.platformUser");
+    if (!raw) return null;
+    return JSON.parse(raw) as PlatformSessionUser;
+  } catch {
+    return null;
+  }
+}
 
 export type PlatformSessionUser = {
   id: string;
@@ -11,16 +20,7 @@ export type PlatformSessionUser = {
 };
 
 export function usePlatformSession() {
-  const [user, setUser] = useState<PlatformSessionUser | null>(null);
-
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem("swarnagrow.platformUser");
-      if (raw) setUser(JSON.parse(raw) as PlatformSessionUser);
-    } catch {
-      setUser(null);
-    }
-  }, []);
+  const user = readPlatformUser();
 
   const initials = user?.name
     ? user.name

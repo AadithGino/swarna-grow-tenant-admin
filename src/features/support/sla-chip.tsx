@@ -1,5 +1,6 @@
 "use client";
 
+import { useNowMs } from "@/src/hooks/use-now-ms";
 import type { Grievance } from "@/src/types/domain";
 
 export function SlaChip({
@@ -13,6 +14,7 @@ export function SlaChip({
   slaOverdue?: boolean;
   firstResponded?: boolean;
 }) {
+  const nowMs = useNowMs();
   if (firstResponded) {
     return (
       <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-800">
@@ -29,7 +31,7 @@ export function SlaChip({
   }
   if (slaDueAt) {
     const due = new Date(slaDueAt).getTime();
-    const soon = due - Date.now() < 2 * 60 * 60 * 1000;
+    const soon = due - nowMs < 2 * 60 * 60 * 1000;
     return (
       <span
         className={`rounded-full px-2 py-0.5 text-xs font-medium ${soon ? "bg-amber-50 text-amber-900" : "bg-slate-100 text-slate-700"}`}

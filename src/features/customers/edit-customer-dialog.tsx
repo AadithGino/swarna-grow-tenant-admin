@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
   Select,
@@ -57,22 +57,21 @@ export function EditCustomerDialog({
   const [updateCustomer] = useUpdateCustomerMutation();
   const { data: branchesData } = useGetBranchesQuery({ limit: 100 });
   const branches = branchesData?.items ?? [];
-  const [baseline, setBaseline] = useState<CustomerFormFields>(() =>
-    customerFormFieldsFromCustomer(customer),
-  );
-  const [form, setForm] = useState<CustomerFormFields>(() =>
-    customerFormFieldsFromCustomer(customer),
-  );
+  const seed = customerFormFieldsFromCustomer(customer);
+  const [syncCustomerId, setSyncCustomerId] = useState(customer.id);
+  const [baseline, setBaseline] = useState<CustomerFormFields>(seed);
+  const [form, setForm] = useState<CustomerFormFields>(seed);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [branchTouched, setBranchTouched] = useState(false);
 
-  useEffect(() => {
+  if (syncCustomerId !== customer.id) {
     const next = customerFormFieldsFromCustomer(customer);
+    setSyncCustomerId(customer.id);
     setBaseline(next);
     setForm(next);
     setFieldErrors({});
     setBranchTouched(false);
-  }, [customer]);
+  }
 
   const requireBranch = branches.length > 0;
 

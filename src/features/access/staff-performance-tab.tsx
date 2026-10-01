@@ -92,9 +92,18 @@ export function StaffPerformanceTab({ staffId }: { staffId: string }) {
   });
 
   const summary = summaryQuery.data;
-  const collections = collectionsQuery.data?.items ?? [];
-  const enrolments = enrolmentsQuery.data?.items ?? [];
-  const handovers = handoversQuery.data?.items ?? [];
+  const collections =
+    collectionsQuery.data?.kind === "collections"
+      ? collectionsQuery.data.items
+      : [];
+  const enrolments =
+    enrolmentsQuery.data?.kind === "enrolments"
+      ? enrolmentsQuery.data.items
+      : [];
+  const handovers =
+    handoversQuery.data?.kind === "handovers"
+      ? handoversQuery.data.items
+      : [];
 
   const collectionsPage =
     collectionsQuery.data?.page ?? emptyPageMeta();
@@ -130,7 +139,10 @@ export function StaffPerformanceTab({ staffId }: { staffId: string }) {
           </div>
           <Button
             onClick={() =>
-              setRange({ from: draftFrom || undefined, to: draftTo || undefined })
+              setRange({
+                from: draftFrom || defaults.from,
+                to: draftTo || defaults.to,
+              })
             }
           >
             Apply

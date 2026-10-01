@@ -3,6 +3,8 @@ import type {
   BaseQueryFn,
   FetchArgs,
   FetchBaseQueryError,
+  FetchBaseQueryMeta,
+  QueryReturnValue,
 } from "@reduxjs/toolkit/query";
 import { isUnauthorizedFetchError } from "@/src/lib/auth-logout";
 import {
@@ -38,11 +40,17 @@ export async function refreshAfterUnauthorized(
 }
 
 export async function retryAuthorizedRequest<TArgs extends string | FetchArgs>(
-  liveBaseQuery: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQueryError>,
+  liveBaseQuery: BaseQueryFn<
+    string | FetchArgs,
+    unknown,
+    FetchBaseQueryError,
+    AuthRetryExtra,
+    FetchBaseQueryMeta
+  >,
   requestArgs: TArgs,
   api: BaseQueryApi,
   extra: AuthRetryExtra | undefined,
-) {
+): Promise<QueryReturnValue<unknown, FetchBaseQueryError, FetchBaseQueryMeta>> {
   return liveBaseQuery(requestArgs, api, { ...extra, _authRetry: true });
 }
 
