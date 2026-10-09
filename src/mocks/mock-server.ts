@@ -2441,8 +2441,30 @@ export async function mockRequest<T>({
       return { __contract: true, payload: next } as T;
     }
     case "patchSettingsOperations": {
+      if (
+        body.ecommerceEnabled === true &&
+        mockSubscription.features?.ecommerce !== true
+      ) {
+        throw {
+          status: 403,
+          data: {
+            code: "FEATURE_NOT_ENTITLED",
+            message:
+              "Your subscription plan does not include ecommerce. Upgrade your plan to enable the online store.",
+          },
+        };
+      }
+      const ecommerceEnabled =
+        body.ecommerceEnabled ?? mockSettingsOperations.ecommerceEnabled;
+      const planEntitled = mockSubscription.features?.ecommerce === true;
       Object.assign(mockSettingsOperations, {
         ...body,
+        ecommerceEnabled: ecommerceEnabled === true,
+        ecommerce: {
+          planEntitled,
+          enabled: ecommerceEnabled === true,
+          active: planEntitled && ecommerceEnabled === true,
+        },
         audit: {
           version: mockSettingsOperations.audit.version + 1,
         },

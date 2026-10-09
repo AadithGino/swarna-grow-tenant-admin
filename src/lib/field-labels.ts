@@ -11,6 +11,7 @@ const USAGE_AND_LIMIT_LABELS: Record<string, string> = {
 
 const PLATFORM_FLAG_LABELS: Record<string, string> = {
   customerSelfEnrol: "Customer self-enrol",
+  ecommerce: "Ecommerce (online store)",
   flexibleScheme: "Flexible scheme",
   passbookImageOnPayment: "Passbook image on payment",
   onlinePayments: "Online payments",

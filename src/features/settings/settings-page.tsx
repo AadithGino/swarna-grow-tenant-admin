@@ -17,6 +17,7 @@ import {
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { ActionDialog } from "@/src/components/common/action-dialog";
 import { PermissionGate } from "@/src/components/common/permission-gate";
@@ -438,6 +439,15 @@ export function SettingsPage({
   const subscription = subscriptionQuery.data;
   const usage = subscription.usage ?? {};
   const features = subscription.features ?? {};
+  const ecommerceAccess = (subscription.ecommerce ??
+    operationsQuery.data?.ecommerce) as
+    | { planEntitled?: boolean; enabled?: boolean; active?: boolean }
+    | undefined;
+  const ecommercePlanEntitled = ecommerceAccess?.planEntitled === true;
+  const ecommerceStoreEnabled =
+    operationsQuery.data?.ecommerceEnabled === true ||
+    ecommerceAccess?.enabled === true;
+  const ecommerceStoreActive = ecommerceAccess?.active === true;
   const plans = plansQuery.data ?? [];
   const invoices = invoicesQuery.data ?? [];
   const pendingPlanChange = subscription.pendingUpgradeRequest as
@@ -447,6 +457,22 @@ export function SettingsPage({
         note?: string | null;
       }
     | undefined;
+
+  const saveEcommerceEnabled = async (enabled: boolean) => {
+    try {
+      await patchOperations({
+        ecommerceEnabled: enabled,
+        expectedVersion: operationsQuery.data?.audit?.version,
+      }).unwrap();
+      toast.success(
+        enabled ? "Online store enabled" : "Online store disabled",
+      );
+    } catch (err) {
+      handleFormApiError(err, {
+        fallback: "Could not update online store setting",
+      });
+    }
+  };
 
   const saveOperations = async () => {
     setOpsTouched({
@@ -1348,6 +1374,68 @@ export function SettingsPage({
                   on={!!features.advancedReports}
                   label="Advanced reports"
                 />
+                <FeaturePill on={!!features.ecommerce} label="Ecommerce" />
+              </div>
+            </Surface>
+
+            <Surface
+              title="Online store"
+              description="Turn on your store when your plan includes ecommerce. Product catalog, cart, and checkout are not available in this release."
+            >
+              <div className="space-y-5 p-6">
+                <div className="flex flex-wrap items-start justify-between gap-4">
+                  <div>
+                    <p className="font-semibold text-[#49121f]">
+                      Plan includes ecommerce
+                    </p>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      {ecommercePlanEntitled
+                        ? "Your subscription entitles this jeweller to run an online store."
+                        : "Upgrade to a plan with ecommerce before you can activate the store."}
+                    </p>
+                  </div>
+                  <StatusBadge
+                    status={ecommercePlanEntitled ? "ACTIVE" : "INACTIVE"}
+                  />
+                </div>
+                <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-[#eaded9] bg-[#faf6f4] px-5 py-4">
+                  <div className="flex items-start gap-3">
+                    <Store className="mt-0.5 size-5 shrink-0 text-[#730321]" />
+                    <div>
+                      <p className="font-semibold">Enable online store</p>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        {ecommercePlanEntitled
+                          ? "When enabled, the store is considered active for this jeweller (catalog and orders come later)."
+                          : "Not available on your current plan — submit an upgrade request below."}
+                      </p>
+                    </div>
+                  </div>
+                  <PermissionGate permission={ACTION.tenantSettingsWrite}>
+                    <Switch
+                      checked={ecommerceStoreEnabled}
+                      disabled={!ecommercePlanEntitled}
+                      onCheckedChange={(checked) =>
+                        void saveEcommerceEnabled(checked)
+                      }
+                      aria-label="Enable online store"
+                    />
+                  </PermissionGate>
+                </div>
+                <div className="flex flex-wrap items-center gap-2 text-sm">
+                  <span className="text-muted-foreground">Store status:</span>
+                  <strong
+                    className={
+                      ecommerceStoreActive ? "text-emerald-800" : "text-[#805817]"
+                    }
+                  >
+                    {ecommerceStoreActive ? "Active" : "Inactive"}
+                  </strong>
+                  {ecommerceStoreEnabled && !ecommerceStoreActive ? (
+                    <span className="text-muted-foreground">
+                      (enabled in settings but blocked by plan)
+                    </span>
+                  ) : null}
+                </div>
               </div>
             </Surface>
 

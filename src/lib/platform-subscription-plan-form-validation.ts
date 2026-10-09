@@ -53,6 +53,7 @@ export const DEFAULT_PLAN_FEATURES: Record<string, boolean> = {
   prematureRedemption: true,
   customerSelfEnrol: true,
   advancedReports: false,
+  ecommerce: false,
 };
 
 export const DEFAULT_PLAN_LIMITS: Record<string, number> = {
@@ -94,7 +95,7 @@ export function platformSubscriptionPlanFormFromPlan(
     sortOrder: plan.sortOrder,
     supportedBillingCycles: plan.supportedBillingCycles ?? ["MONTHLY", "ANNUAL"],
     limits: { ...plan.limits },
-    features: { ...plan.features },
+    features: { ...DEFAULT_PLAN_FEATURES, ...plan.features },
     displayFeatures: plan.displayFeatures ?? [],
     expectedVersion: plan.version ?? 1,
   };

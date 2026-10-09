@@ -1755,6 +1755,15 @@ export function adaptSettingsOperations(raw: unknown): Record<string, unknown> {
     paymentReversalWindowHours: ops.paymentReversalWindowHours ?? 48,
     redemptionApprovalRequired: ops.redemptionApprovalRequired ?? true,
     termsAndConditions: ops.termsAndConditions ?? "",
+    ecommerceEnabled: data.ecommerceEnabled === true || ops.ecommerceEnabled === true,
+    ecommerce:
+      (data.ecommerce as Record<string, unknown> | undefined) ??
+      (ops.ecommerce as Record<string, unknown> | undefined) ??
+      {
+        planEntitled: false,
+        enabled: false,
+        active: false,
+      },
     audit: data.audit ?? { version: data.version ?? 1 },
   };
 }
