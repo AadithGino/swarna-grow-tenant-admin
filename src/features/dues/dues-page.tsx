@@ -72,6 +72,10 @@ import {
   useGetOverduesQuery,
 } from "@/src/store/api/admin-api";
 import { useAppSelector } from "@/src/store/hooks";
+import {
+  CustomerLink,
+  EnrollmentLink,
+} from "@/src/components/common/portal-entity-links";
 
 const DUE_KIND_FILTERS: FilterOption[] = [
   { value: "ALL", label: "All" },
@@ -365,14 +369,22 @@ export function DuesPage() {
             onNext={() => pager.goNext(page.nextCursor)}
             onPrevious={pager.goPrevious}
             canPrevious={pager.canPrevious}
-            onRowClick={(r: any) => router.push(`/customers/${r.customerId}`)}
+            onRowClick={(r: any) => {
+              const target = r.schemeId || r.id;
+              if (target) router.push(`/enrollments/${target}`);
+              else if (r.customerId) router.push(`/customers/${r.customerId}`);
+            }}
             columns={[
               {
                 key: "customer",
                 header: "Customer",
                 render: (r: any) => (
                   <span>
-                    <strong>{r.customer}</strong>
+                    <strong>
+                      <CustomerLink customerId={r.customerId}>
+                        {r.customer}
+                      </CustomerLink>
+                    </strong>
                     <br />
                     <span className="text-xs text-muted-foreground">
                       {r.phone}
@@ -383,7 +395,11 @@ export function DuesPage() {
               {
                 key: "enrollment",
                 header: "Enrollment",
-                render: (r: any) => r.enrollmentNo,
+                render: (r: any) => (
+                  <EnrollmentLink schemeId={r.schemeId || r.id}>
+                    {r.enrollmentNo}
+                  </EnrollmentLink>
+                ),
               },
               { key: "plan", header: "Scheme", render: (r: any) => r.plan },
               { key: "branch", header: "Branch", render: (r: any) => r.branch },

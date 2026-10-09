@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useState } from "react";
 import {
   Download,
@@ -43,6 +42,11 @@ import { EditCustomerDialog } from "@/src/features/customers/edit-customer-dialo
 import { EntityAuditTab } from "@/src/features/audit/entity-audit-tab";
 import { ManageNomineeDialog } from "@/src/features/customers/manage-nominee-dialog";
 import { ReviewKycDialog } from "@/src/features/customers/review-kyc-dialog";
+import {
+  EnrollmentLink,
+  ReceiptLink,
+} from "@/src/components/common/portal-entity-links";
+import { PortalBackLink } from "@/src/components/common/portal-back-link";
 import { downloadBlobUrl, downloadText } from "@/src/lib/download";
 import { goldLedgerColumns } from "@/src/components/common/gold-payment-columns";
 import { idempotencyKey, money } from "@/src/lib/format";
@@ -237,12 +241,7 @@ export function CustomerDetailPage({ id }: { id: string }) {
         onOpenChange={setStatusOpen}
         mode={statusMode}
       />
-      <Link
-        href="/customers"
-        className="inline-flex items-center gap-2 text-sm font-semibold text-muted-foreground hover:text-[#730321]"
-      >
-        ← Back to customers
-      </Link>
+      <PortalBackLink fallbackHref="/customers">← Back</PortalBackLink>
       <PageHeader
         eyebrow="Customer record"
         title={customer.name}
@@ -507,7 +506,11 @@ export function CustomerDetailPage({ id }: { id: string }) {
                 {
                   key: "no",
                   header: "Enrollment",
-                  render: (r) => r.enrollmentNo,
+                  render: (r) => (
+                    <EnrollmentLink schemeId={r.id}>
+                      {r.enrollmentNo}
+                    </EnrollmentLink>
+                  ),
                 },
                 {
                   key: "plan",
@@ -558,7 +561,11 @@ export function CustomerDetailPage({ id }: { id: string }) {
                   key: "receipt",
                   header: "Receipt",
                   className: "whitespace-nowrap",
-                  render: (r) => <strong>{r.receiptNo}</strong>,
+                  render: (r) => (
+                    <ReceiptLink paymentId={r.id} receiptNo={r.receiptNo}>
+                      <strong>{r.receiptNo}</strong>
+                    </ReceiptLink>
+                  ),
                 },
                 {
                   key: "enrollment",
@@ -566,18 +573,9 @@ export function CustomerDetailPage({ id }: { id: string }) {
                   className: "whitespace-nowrap",
                   render: (r) =>
                     r.enrollmentNo && r.enrollmentNo !== "—" ? (
-                      <button
-                        type="button"
-                        className="font-medium text-[#7b0a2b] hover:underline"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (r.schemeId) {
-                            router.push(`/enrollments/${r.schemeId}`);
-                          }
-                        }}
-                      >
+                      <EnrollmentLink schemeId={r.schemeId}>
                         {r.enrollmentNo}
-                      </button>
+                      </EnrollmentLink>
                     ) : (
                       "—"
                     ),

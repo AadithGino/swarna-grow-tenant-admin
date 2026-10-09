@@ -25,6 +25,7 @@ import { money } from "@/src/lib/format";
 import { useGetHandoverQuery } from "@/src/store/api/admin-api";
 import type { CashHandoverDetail } from "@/src/types/domain";
 import { cn } from "@/lib/utils";
+import { ReceiptLink } from "@/src/components/common/portal-entity-links";
 
 export function HandoverDetailDialog({
   handoverId,
@@ -159,7 +160,9 @@ export function HandoverDetailDialog({
                         >
                           <div className="min-w-0">
                             <p className="font-semibold text-[#2d191d]">
-                              {p.receiptNo}
+                              <ReceiptLink paymentId={p.id} receiptNo={p.receiptNo}>
+                                {p.receiptNo}
+                              </ReceiptLink>
                             </p>
                             <p className="truncate text-xs text-muted-foreground">
                               {p.customer}

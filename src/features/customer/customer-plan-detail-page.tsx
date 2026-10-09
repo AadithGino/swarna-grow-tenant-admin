@@ -42,6 +42,7 @@ import { money } from "@/src/lib/format";
 import { cn } from "@/lib/utils";
 import { CUSTOMER_MOBILE_NAV_DOCK } from "@/src/features/customer/customer-scheme-detail-views";
 import { toast } from "sonner";
+import { toastApiError } from "@/src/lib/api-error";
 
 type ExpandSection = "benefit" | "rules" | "terms" | null;
 
@@ -265,19 +266,24 @@ export function CustomerPlanDetailPage({ id }: { id: string }) {
         router.push(customerPath(tenantSlug, "schemes"));
         return;
       }
+      const paymentType = String(result.paymentType ?? "");
       const paymentLink = result.paymentLink as Record<string, unknown> | undefined;
       const paymentIntent = result.paymentIntent as Record<string, unknown> | undefined;
+      const checkoutPayload =
+        paymentType === "FIXED_PAYMENT_LINK"
+          ? (paymentLink ?? {})
+          : (paymentIntent ?? paymentLink ?? {});
       const schemeId =
         typeof (result.scheme as { id?: string } | undefined)?.id === "string"
           ? (result.scheme as { id: string }).id
           : undefined;
       await openCustomerPaymentTarget(
         {
-          ...paymentLink,
-          ...paymentIntent,
-          paymentUrl: paymentIntent?.paymentUrl,
-          gatewayUrl: paymentLink?.gatewayUrl,
-          token: paymentLink?.token,
+          ...checkoutPayload,
+          paymentUrl: paymentIntent?.paymentUrl ?? checkoutPayload.paymentUrl,
+          gatewayUrl: paymentLink?.gatewayUrl ?? checkoutPayload.gatewayUrl,
+          token: paymentLink?.token ?? checkoutPayload.token,
+          statusPollUrl: paymentIntent?.statusPollUrl ?? checkoutPayload.statusPollUrl,
         },
         {
           tenantSlug,
@@ -288,8 +294,8 @@ export function CustomerPlanDetailPage({ id }: { id: string }) {
           navigate: (path) => router.push(path),
         },
       );
-    } catch {
-      toast.error("We couldn’t create the scheme");
+    } catch (err) {
+      toastApiError(err, "We couldn’t create the scheme. Check KYC, plan limits, and payment settings.");
     }
   };
 

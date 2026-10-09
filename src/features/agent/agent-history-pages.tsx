@@ -18,6 +18,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { toast } from "sonner";
+import { PortalBackLink } from "@/src/components/common/portal-back-link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -256,10 +257,10 @@ export function AgentHandoverPage() {
   if (summary.isLoading) return <AgentLoadingCards />;
   return (
     <div className="mx-auto max-w-2xl space-y-6">
-      <Link href="/agent" className="inline-flex items-center gap-2 text-sm font-bold text-[#776d70]">
+      <PortalBackLink fallbackHref="/agent" variant="agent">
         <ArrowLeft className="size-4" />
-        Back to home
-      </Link>
+        Back
+      </PortalBackLink>
       <AgentPageHeader
         eyebrow="Cash control"
         title="Submit cash to branch"
@@ -321,7 +322,6 @@ export function AgentHandoverPage() {
 }
 
 export function AgentPaymentDetailPage({ id }: { id: string }) {
-  const router = useRouter();
   const payment = useGetAgentPaymentQuery(id);
   const [downloading, setDownloading] = useState(false);
 
@@ -348,10 +348,10 @@ export function AgentPaymentDetailPage({ id }: { id: string }) {
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
-      <button type="button" onClick={() => router.back()} className="inline-flex items-center gap-2 text-sm font-bold text-[#776d70]">
+      <PortalBackLink fallbackHref="/agent/history" variant="agent">
         <ArrowLeft className="size-4" />
-        Back to history
-      </button>
+        Back
+      </PortalBackLink>
       <AgentCard className="overflow-hidden">
         <div className="bg-[linear-gradient(120deg,#750321,#4c0317)] px-6 py-8 text-white">
           <p className="text-xs font-black uppercase tracking-[.16em] text-[#efc96f]">Collection receipt</p>
@@ -485,7 +485,6 @@ function HandoverTimeline({ events }: { events: AgentHandoverTimelineEvent[] }) 
 }
 
 export function AgentHandoverDetailPage({ id }: { id: string }) {
-  const router = useRouter();
   const handover = useGetAgentHandoverQuery(id);
   const [cancel, state] = useCancelAgentHandoverMutation();
   const doCancel = async () => {
@@ -512,10 +511,10 @@ export function AgentHandoverDetailPage({ id }: { id: string }) {
     );
   return (
     <div className="mx-auto max-w-2xl space-y-6">
-      <button type="button" onClick={() => router.back()} className="inline-flex items-center gap-2 text-sm font-bold text-[#776d70]">
+      <PortalBackLink fallbackHref="/agent/history" variant="agent">
         <ArrowLeft className="size-4" />
-        Back to history
-      </button>
+        Back
+      </PortalBackLink>
       <AgentCard className="overflow-hidden">
         <div
           className={`px-6 py-8 text-center ${item.status === "ACCEPTED" ? "bg-[#eaf9f1] text-[#087a50]" : item.status === "PENDING" ? "bg-[#fff5dc] text-[#956400]" : "bg-[#f8eeee] text-[#8b3940]"}`}

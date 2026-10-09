@@ -16,6 +16,7 @@ import { money } from "@/src/lib/format";
 import { paymentHasGoldAccrual } from "@/src/lib/gold-payment-display";
 import { useLazyGetPaymentReceiptQuery } from "@/src/store/api/admin-api";
 import type { Enrollment, ScheduleRow } from "@/src/types/domain";
+import { ReceiptLink } from "@/src/components/common/portal-entity-links";
 
 function ScheduleActions({
   row,
@@ -303,7 +304,11 @@ export function EnrollmentSchedule({ enrollment }: { enrollment: Enrollment }) {
                       className="flex items-center justify-between rounded-lg border px-3 py-2 text-sm"
                     >
                       <span>
-                        {payment.receiptNo} · {payment.mode} · {payment.paidAt}
+                        <ReceiptLink receiptNo={payment.receiptNo}>
+                          {payment.receiptNo}
+                        </ReceiptLink>
+                        {" · "}
+                        {payment.mode} · {payment.paidAt}
                       </span>
                       <strong>{money(payment.amount)}</strong>
                     </div>
@@ -376,7 +381,14 @@ export function EnrollmentSchedule({ enrollment }: { enrollment: Enrollment }) {
           {
             key: "receipt",
             header: "Receipt",
-            render: (r) => r.receipt ?? "—",
+            render: (r) =>
+              r.receipt ? (
+                <ReceiptLink paymentId={r.paymentId} receiptNo={r.receipt}>
+                  {r.receipt}
+                </ReceiptLink>
+              ) : (
+                "—"
+              ),
           },
           ...(showGoldSchedule ? goldLedgerColumns<ScheduleRow>() : []),
           {

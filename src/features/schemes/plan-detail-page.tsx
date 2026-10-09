@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { PortalBackLink } from "@/src/components/common/portal-back-link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -311,13 +312,10 @@ export function PlanDetailPage({ planId }: { planId: string }) {
   return (
     <div className="space-y-6 pb-12">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <Link
-          href="/schemes"
-          className="inline-flex items-center gap-2 text-sm font-semibold text-muted-foreground transition hover:text-[#730321]"
-        >
+        <PortalBackLink fallbackHref="/schemes">
           <ArrowLeft className="size-4" />
-          Back to scheme plans
-        </Link>
+          Back
+        </PortalBackLink>
         {actionMenu}
       </div>
 

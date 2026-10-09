@@ -58,6 +58,7 @@ import { MessageDetailDialog } from "@/src/features/reminders/message-detail-dia
 import { TemplatePreviewDialog } from "@/src/features/reminders/template-preview-dialog";
 import { ManualPushPanel } from "@/src/features/reminders/manual-push-panel";
 import { InboundMessagesPanel } from "@/src/features/reminders/inbound-messages-panel";
+import { CustomerLink } from "@/src/components/common/portal-entity-links";
 
 function reminderConfigWriteBody(
   config: Record<string, any> | undefined,
@@ -297,7 +298,13 @@ export function RemindersPage() {
                 {
                   key: "customer",
                   header: "Customer",
-                  render: (r: any) => <strong>{r.customer}</strong>,
+                  render: (r: any) => (
+                    <strong>
+                      <CustomerLink customerId={r.customerId}>
+                        {r.customer}
+                      </CustomerLink>
+                    </strong>
+                  ),
                 },
                 {
                   key: "type",

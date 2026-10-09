@@ -23,6 +23,10 @@ import { apiErrorMessage } from "@/src/lib/api-error";
 import { validateListDateRange } from "@/src/lib/list-date-range";
 import { money } from "@/src/lib/format";
 import { useActingBranchId } from "@/src/hooks/use-acting-branch-id";
+import {
+  CustomerLink,
+  EnrollmentLink,
+} from "@/src/components/common/portal-entity-links";
 import { useGetRedemptionsQuery } from "@/src/store/api/admin-api";
 
 export function RedemptionsQueue({
@@ -161,12 +165,23 @@ export function RedemptionsQueue({
             {
               key: "customer",
               header: "Customer",
-              render: (r: any) => r.customer ?? "—",
+              render: (r: any) => (
+                <CustomerLink customerId={r.customerId}>
+                  {r.customer ?? "—"}
+                </CustomerLink>
+              ),
             },
             {
               key: "scheme",
               header: "Scheme",
-              render: (r: any) => r.scheme ?? "—",
+              render: (r: any) =>
+                r.schemeId ? (
+                  <EnrollmentLink schemeId={r.schemeId}>
+                    {r.scheme ?? "—"}
+                  </EnrollmentLink>
+                ) : (
+                  (r.scheme ?? "—")
+                ),
             },
             {
               key: "amount",

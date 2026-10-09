@@ -976,6 +976,7 @@ function enrollmentSummary(items: Enrollment[]) {
 
 export type SchemeLedgerRow = {
   id: string;
+  paymentId?: string | null;
   sequence: number | null;
   type: string | null;
   description: string | null;
@@ -1004,6 +1005,13 @@ export function adaptSchemeLedgerList(raw: unknown): SchemeLedgerRow[] {
       (typeof item.amount === "number" ? Math.round(item.amount * 100) : 0);
     return {
       id: entityId(item),
+      paymentId: item.paymentId
+        ? String(item.paymentId)
+        : item.payment?._id
+          ? String(item.payment._id)
+          : item.payment?.id
+            ? String(item.payment.id)
+            : null,
       sequence: item.sequence ?? null,
       type: item.type ?? null,
       description: item.description ?? null,
@@ -1941,6 +1949,9 @@ export function adaptGrievanceRow(
   return {
     id: entityId(g),
     ticketNo: g.ticketNumber ?? g.ticketNo ?? "",
+    customerId: String(
+      entityId(g.customer) || g.customerId || g.customer?._id || "",
+    ),
     customer:
       typeof g.customer === "object"
         ? (g.customer?.name ?? "")
@@ -3181,6 +3192,9 @@ export function adaptMessages(raw: any): {
       id: entityId(item),
       date: dateTime(item.createdAt ?? item.sentAt ?? item.date),
       customer: customerName(item),
+      customerId: String(
+        item.customerId ?? item.customer?._id ?? item.customer?.id ?? "",
+      ),
       type: item.type ?? "—",
       channel: item.channel ?? "WHATSAPP",
       status: item.status ?? "QUEUED",
@@ -3634,6 +3648,10 @@ function mapAdaptRedemptionItem(item: any) {
     redemptionNumber:
       item.redemptionNumber ?? entityId(item) ?? String(item._id ?? ""),
     customer: customerName(item),
+    customerId: String(
+      item.customerId ?? item.customer?._id ?? item.customer?.id ?? "",
+    ),
+    schemeId: String(item.schemeId ?? item.scheme?._id ?? item.scheme?.id ?? ""),
     scheme:
       item.scheme?.enrollmentNumber ??
       item.scheme?.schemeNumber ??

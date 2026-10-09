@@ -10,6 +10,7 @@ import { emptyPageMeta } from "@/src/lib/cursor-pagination";
 import { useActingBranchId, useActingBranchKey } from "@/src/hooks/use-acting-branch-id";
 import { useCursorPagination } from "@/src/hooks/use-cursor-pagination";
 import { useGetFlexibleLocksQuery } from "@/src/store/api/admin-api";
+import { CustomerLink } from "@/src/components/common/portal-entity-links";
 
 export function FlexibleLocksPanel() {
   const branchId = useActingBranchId();
@@ -63,8 +64,19 @@ export function FlexibleLocksPanel() {
             key: "customer",
             header: "Customer",
             render: (r: Record<string, unknown>) => {
-              const c = r.customer as { name?: string } | string | undefined;
-              return typeof c === "string" ? c : (c?.name ?? "—");
+              const c = r.customer as
+                | { name?: string; id?: string; _id?: string }
+                | string
+                | undefined;
+              const customerId =
+                typeof c === "object" && c
+                  ? String(c.id ?? c._id ?? r.customerId ?? "")
+                  : String(r.customerId ?? "");
+              const name =
+                typeof c === "string" ? c : (c?.name ?? "—");
+              return (
+                <CustomerLink customerId={customerId}>{name}</CustomerLink>
+              );
             },
           },
           {

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { PortalBackLink } from "@/src/components/common/portal-back-link";
 import { useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
 import {
@@ -128,12 +129,7 @@ export function BranchDetailPage({ branchId }: { branchId: string }) {
 
   return (
     <>
-      <Link
-        href="/staff-branches"
-        className="inline-flex items-center gap-2 text-sm font-semibold text-muted-foreground hover:text-[#730321]"
-      >
-        ← Back to staff & branches
-      </Link>
+      <PortalBackLink fallbackHref="/staff-branches">← Back</PortalBackLink>
 
       <PageHeader
         eyebrow="Branch record"

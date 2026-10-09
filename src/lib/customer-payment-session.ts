@@ -46,7 +46,9 @@ export function pollSessionFromInitResponse(
   const intentId =
     typeof response.id === "string" && (response.paymentUrl || response.statusPollUrl)
       ? response.id
-      : undefined;
+      : typeof response.intentId === "string"
+        ? response.intentId
+        : undefined;
   const linkToken = typeof response.token === "string" ? response.token : undefined;
   if (intentId) {
     return { kind: "intent", intentId, schemeId };

@@ -54,6 +54,7 @@ import {
   adaptCustomerPayment,
   adaptCustomerPaymentList,
   adaptCustomerSchemeDetail,
+  adaptCustomerSettlementPreview,
 } from "@/src/lib/customer-payment-adapter";
 import {
   adaptCustomerGrievance,
@@ -252,6 +253,62 @@ const mockBaseQuery: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQueryErro
   if (url.endsWith("/payable-range")) {
     const id = url.split("/")[3];
     return ok(customerSchemes.find((s) => s.id === id)?.payableRange ?? customerSchemes[0].payableRange);
+  }
+  if (url.includes("/settlement-preview")) {
+    const schemeId = url.split("/")[3];
+    const scheme =
+      customerSchemes.find((s) => s.id === schemeId) ?? customerSchemes[0];
+    const totalPaid = scheme?.passbookSummary?.totalPaid?.amountPaise ?? 2_400_000;
+    const settlement = totalPaid + 120_000;
+    return ok({
+      eligible: scheme?.redemption?.eligible ?? false,
+      blockers: scheme?.redemption?.eligible
+        ? []
+        : [
+            {
+              code: "SCHEME_NOT_MATURED",
+              message:
+                scheme?.redemption?.blocker ??
+                "This scheme is not eligible for redemption yet.",
+            },
+          ],
+      computation: {
+        lines: [
+          {
+            key: "TOTAL_PAID",
+            label: "Total paid",
+            amount: money(totalPaid),
+            sign: "+",
+          },
+          {
+            key: "BENEFIT",
+            label: "Plan benefit",
+            amount: money(120_000),
+            sign: "+",
+          },
+          {
+            key: "PENALTY",
+            label: "Penalty",
+            amount: money(0),
+            sign: "-",
+          },
+        ],
+        finalValue: money(settlement),
+        goldWeight: null,
+      },
+      allowedModes: (scheme?.redemption?.preferredModes ?? ["CASH"]).map((entry) => {
+        const mode = typeof entry === "string" ? entry : entry.mode;
+        const label =
+          typeof entry === "string"
+            ? entry.replaceAll("_", " ").toLowerCase()
+            : entry.label;
+        return { mode, label, available: true };
+      }),
+      settlementPaise: settlement,
+      principalPaise: totalPaid,
+      benefitPaise: 120_000,
+      penaltyPaise: 0,
+    });
   }
   if (url === "/app/schemes/enrol" && method === "POST") {
     const plan = schemePlans.find((p) => p.id === body?.planId) ?? schemePlans[0];
@@ -586,6 +643,7 @@ export const customerApi = createApi({
         url: `/app/schemes/${schemeId}/settlement-preview`,
         params: { mode, type },
       }),
+      transformResponse: (raw: unknown) => adaptCustomerSettlementPreview(raw),
     }),
     enrolCustomerScheme: builder.mutation<Record<string, unknown>, { planId: string; installmentAmountPaise?: number; payNow: boolean; redirectUrl?: string }>({ query: (body) => ({ url: "/app/schemes/enrol", method: "POST", body }), invalidatesTags: ["CustomerScheme", "CustomerHome"] }),
     initiatePublicPaymentLink: builder.mutation<

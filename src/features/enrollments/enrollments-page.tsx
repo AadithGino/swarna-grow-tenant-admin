@@ -42,6 +42,10 @@ import {
   useActingBranchId,
   useActingBranchKey,
 } from "@/src/hooks/use-acting-branch-id";
+import {
+  CustomerLink,
+  EnrollmentLink,
+} from "@/src/components/common/portal-entity-links";
 
 const ENROLLMENT_STATUS_FILTERS: FilterOption[] = [
   { value: "OPEN", label: "Open" },
@@ -237,12 +241,20 @@ export function EnrollmentsPage() {
                 {
                   key: "no",
                   header: "Enrollment",
-                  render: (r: any) => <strong>{r.enrollmentNo}</strong>,
+                  render: (r: any) => (
+                    <EnrollmentLink schemeId={r.id}>
+                      <strong>{r.enrollmentNo}</strong>
+                    </EnrollmentLink>
+                  ),
                 },
                 {
                   key: "customer",
                   header: "Customer",
-                  render: (r: any) => r.customer,
+                  render: (r: any) => (
+                    <CustomerLink customerId={r.customerId}>
+                      {r.customer}
+                    </CustomerLink>
+                  ),
                 },
                 { key: "scheme", header: "Scheme", render: (r: any) => r.plan },
                 {

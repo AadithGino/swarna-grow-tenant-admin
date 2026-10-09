@@ -13,6 +13,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useDebouncedValue } from "@/src/hooks/use-debounced-value";
 import { useCreateAgentPaymentLinkMutation, useGetAgentCustomerQuery, useGetAgentGoldRateQuery, useGetAgentPassbookQuery, useGetAgentPayableRangeQuery, useGetAgentSchemeQuery, useRecordAgentPaymentMutation, useSearchAgentCustomersQuery, useShareAgentPaymentWhatsAppMutation } from "@/src/store/api/agent-api";
 import { AgentCard, AgentEmpty, AgentLoadingCards, AgentPageHeader, AgentSchemeCard, AgentStatus, formatAgentDate, formatAgentMoney, formatAgentTime, formatAgentWeight } from "@/src/components/agent/agent-ui";
+import { PortalBackLink } from "@/src/components/common/portal-back-link";
+import { navigateBack } from "@/src/lib/navigate-back";
 import type { AgentManualPaymentMode, AgentPayment } from "@/src/types/agent";
 import { useAgentCapabilities } from "./use-agent-capabilities";
 
@@ -85,8 +87,8 @@ export function AgentCustomerDetailPage({ id }: { id: string }) {
   if (!customer.data) return <AgentEmpty title="Customer unavailable" description="This customer is outside your branch or could not be loaded." />;
   const item = customer.data;
   return <div className="space-y-6">
-<Link href="/agent/collect" className="inline-flex items-center gap-2 text-sm font-bold text-[#776d70]">
-<ArrowLeft className="size-4" />Back to search</Link>
+<PortalBackLink fallbackHref="/agent/collect" variant="agent">
+<ArrowLeft className="size-4" />Back</PortalBackLink>
 <AgentCard className="overflow-hidden">
 <div className="bg-[linear-gradient(120deg,#750321,#4c0317)] p-6 text-white sm:p-7">
 <div className="flex items-start gap-4">
@@ -222,7 +224,7 @@ export function AgentCollectPaymentPage({ schemeId }: { schemeId: string }) {
 </div>
 <div className="mt-5 grid gap-3 sm:grid-cols-2">
 <Button onClick={() => { setReceipt(null); setAmount(""); void range.refetch(); }} variant="outline" className="h-11 rounded-xl">Collect again</Button>
-<Button onClick={() => router.push("/agent")} className="h-11 rounded-xl bg-[#730321] hover:bg-[#5c0219]">Back to home</Button>
+<Button onClick={() => navigateBack(router, "/agent")} className="h-11 rounded-xl bg-[#730321] hover:bg-[#5c0219]">Back</Button>
 <Button disabled={shareState.isLoading} onClick={() => void sharePaymentWhatsApp(receipt.id).unwrap().then(() => toast.success("Receipt queued for WhatsApp")).catch(() => toast.error("Could not share the receipt"))} variant="outline" className="h-11 rounded-xl sm:col-span-2"><Share2 className="mr-2 size-4" />{shareState.isLoading ? "Sharing…" : "Share receipt on WhatsApp"}</Button>
 </div>
 </div>
@@ -241,8 +243,8 @@ export function AgentCollectPaymentPage({ schemeId }: { schemeId: string }) {
             ? "Approval / RR number"
             : "Reference";
   return <div className="space-y-6">
-<Link href={customer.data ? `/agent/customers/${customer.data.id}` : "/agent/collect"} className="inline-flex items-center gap-2 text-sm font-bold text-[#776d70]">
-<ArrowLeft className="size-4" />Back to customer</Link>
+<PortalBackLink fallbackHref={customer.data ? `/agent/customers/${customer.data.id}` : "/agent/collect"} variant="agent">
+<ArrowLeft className="size-4" />Back</PortalBackLink>
 <AgentPageHeader eyebrow="Record collection" title={scheme.data.planName} description={`${customer.data?.name ?? "Customer"} · ${scheme.data.enrollmentNumber}`} />
 <div className="grid gap-5 lg:grid-cols-[1fr_.72fr]">
 <div className="space-y-5">

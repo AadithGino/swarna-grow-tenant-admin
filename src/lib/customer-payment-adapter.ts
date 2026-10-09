@@ -1,4 +1,9 @@
-import type { CustomerSchemeDetail, MoneyRef, PaymentListItem } from "@/src/types/customer";
+import type {
+  CustomerSchemeDetail,
+  CustomerSettlementPreview,
+  MoneyRef,
+  PaymentListItem,
+} from "@/src/types/customer";
 import { readGoldAccrual } from "@/src/lib/gold-payment-display";
 
 function formatInr(paise: number): string {
@@ -139,6 +144,83 @@ export function adaptCustomerPaymentList(raw: unknown): PaymentListItem[] {
     return (raw as { data: unknown[] }).data.map(adaptCustomerPayment);
   }
   return [];
+}
+
+function settlementPreviewPayload(raw: unknown): Record<string, unknown> {
+  if (raw && typeof raw === "object" && "success" in raw && "data" in raw) {
+    return (raw as { data: Record<string, unknown> }).data ?? {};
+  }
+  return (raw ?? {}) as Record<string, unknown>;
+}
+
+function normalizeSettlementLine(line: unknown) {
+  const row = (line ?? {}) as Record<string, unknown>;
+  const amountRaw = row.amount;
+  const paise =
+    amountRaw && typeof amountRaw === "object"
+      ? Number((amountRaw as MoneyRef).amountPaise ?? 0)
+      : Number(row.amountPaise ?? 0);
+  const sign: "+" | "-" = row.sign === "-" ? "-" : "+";
+  return {
+    key: String(row.key ?? ""),
+    label: String(row.label ?? ""),
+    amount: readMoney(amountRaw, paise),
+    sign,
+    forfeited: row.forfeited as boolean | undefined,
+  };
+}
+
+/** Normalizes GET /app/schemes/:id/settlement-preview for the customer redemption dialog. */
+export function adaptCustomerSettlementPreview(raw: unknown): CustomerSettlementPreview {
+  const payload = settlementPreviewPayload(raw);
+  const blockers = Array.isArray(payload.blockers)
+    ? (payload.blockers as CustomerSettlementPreview["blockers"])
+    : [];
+  const eligible =
+    typeof payload.eligible === "boolean" ? payload.eligible : blockers.length === 0;
+
+  const computationRaw = payload.computation as Record<string, unknown> | undefined;
+  const lineSource = Array.isArray(computationRaw?.lines)
+    ? computationRaw.lines
+    : Array.isArray(payload.lines)
+      ? payload.lines
+      : [];
+  const finalPaise = Number(
+    (computationRaw?.finalValue as MoneyRef | undefined)?.amountPaise ??
+      (payload.finalValue as MoneyRef | undefined)?.amountPaise ??
+      payload.settlementPaise ??
+      0,
+  );
+  const goldWeight =
+    (computationRaw?.goldWeight as CustomerSettlementPreview["computation"]["goldWeight"]) ??
+    null;
+
+  return {
+    eligible,
+    blockers,
+    computation: {
+      lines: lineSource.map(normalizeSettlementLine),
+      finalValue: readMoney(computationRaw?.finalValue ?? payload.finalValue, finalPaise),
+      goldWeight,
+    },
+    allowedModes: Array.isArray(payload.allowedModes)
+      ? (payload.allowedModes as CustomerSettlementPreview["allowedModes"])
+      : [],
+    modePreviews: payload.modePreviews as CustomerSettlementPreview["modePreviews"],
+    warningText: typeof payload.warningText === "string" ? payload.warningText : undefined,
+    valuationNote: typeof payload.valuationNote === "string" ? payload.valuationNote : undefined,
+    cashSettlementBasis: payload.cashSettlementBasis as CustomerSettlementPreview["cashSettlementBasis"],
+    paidAmountBenefitTreatment:
+      payload.paidAmountBenefitTreatment as CustomerSettlementPreview["paidAmountBenefitTreatment"],
+    valuationRatePerGramPaise: payload.valuationRatePerGramPaise as number | undefined,
+    valuationRateEffectiveDate: payload.valuationRateEffectiveDate as string | undefined,
+    principalPaise: Number(payload.principalPaise ?? 0),
+    benefitPaise: Number(payload.benefitPaise ?? 0),
+    penaltyPaise: Number(payload.penaltyPaise ?? 0),
+    settlementPaise: Number(payload.settlementPaise ?? finalPaise),
+    weightMg: payload.weightMg as number | undefined,
+    mode: typeof payload.mode === "string" ? payload.mode : null,
+  };
 }
 
 /** Normalizes GET /app/schemes/:id (payments need gold accrual flattening). */

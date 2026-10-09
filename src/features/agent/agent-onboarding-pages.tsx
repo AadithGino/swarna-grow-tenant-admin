@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, CheckCircle2, Gem, UserPlus, WalletCards } from "lucide-react";
 import { toast } from "sonner";
@@ -15,6 +14,7 @@ import { apiErrorMessage } from "@/src/lib/api-error";
 import { useDebouncedValue } from "@/src/hooks/use-debounced-value";
 import { EnrolValidationPanel } from "@/src/components/common/enrol-validation-panel";
 import { AgentCard, AgentEmpty, AgentLoadingCards, AgentPageHeader, formatAgentMoney } from "@/src/components/agent/agent-ui";
+import { PortalBackLink } from "@/src/components/common/portal-back-link";
 import {
   useCreateAgentCustomerMutation,
   useEnrolAgentCustomerMutation,
@@ -80,9 +80,9 @@ export function AgentNewCustomerPage() {
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
-      <Link href="/agent/collect" className="inline-flex items-center gap-2 text-sm font-bold text-[#776d70]">
-        <ArrowLeft className="size-4" />Back to search
-      </Link>
+      <PortalBackLink fallbackHref="/agent/collect" variant="agent">
+        <ArrowLeft className="size-4" />Back
+      </PortalBackLink>
       <AgentPageHeader eyebrow="New customer" title="Register a customer" description="The customer is added to your branch. They can sign in to the app with this mobile number." />
       <AgentCard className="space-y-4 p-5 sm:p-6">
         <Field label="Full name" error={show("name")}>
@@ -227,9 +227,9 @@ function EnrolForm({
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
-      <Link href={`/agent/customers/${customerId}`} className="inline-flex items-center gap-2 text-sm font-bold text-[#776d70]">
-        <ArrowLeft className="size-4" />Back to customer
-      </Link>
+      <PortalBackLink fallbackHref={`/agent/customers/${customerId}`} variant="agent">
+        <ArrowLeft className="size-4" />Back
+      </PortalBackLink>
       <AgentPageHeader eyebrow="Enrol in scheme" title={customerName} description="Plans open at your branch. The enrolment is checked again before it is created." />
       <div className="grid gap-4 lg:grid-cols-[1fr_1fr]">
         <AgentCard className="space-y-5 p-5 sm:p-6">

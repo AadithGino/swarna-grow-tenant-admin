@@ -39,6 +39,7 @@ import { useCustomerTenant } from "@/src/components/customer/customer-tenant-con
 import { customerPath } from "@/src/lib/customer-tenant";
 import { useCustomerPortalCapabilities } from "@/src/lib/customer-portal-capabilities";
 import { toast } from "sonner";
+import { toastApiError } from "@/src/lib/api-error";
 import { isGoldWeightScheme } from "@/src/lib/customer-gold-ui";
 export function CustomerSchemeDetailPage({ id }: { id: string }) {
   const { customerAppPaymentsEnabled } = useCustomerPortalCapabilities();
@@ -120,8 +121,8 @@ export function CustomerSchemeDetailPage({ id }: { id: string }) {
       }).unwrap();
       toast.success("Redemption request sent to your jewellery");
       setRedeemOpen(false);
-    } catch {
-      toast.error("Could not submit the request");
+    } catch (err) {
+      toastApiError(err, "Could not submit the redemption request.");
     }
   };
 
@@ -215,10 +216,14 @@ export function CustomerSchemeDetailPage({ id }: { id: string }) {
             <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
               <LoaderCircle className="size-4 animate-spin" /> Calculating settlement…
             </div>
+          ) : preview.isError ? (
+            <p className="mt-4 text-sm font-semibold text-red-700">
+              Could not load settlement preview. Close and try again, or contact your branch.
+            </p>
           ) : preview.data ? (
             <div className="mt-4 rounded-xl border bg-muted/30 p-3 text-sm">
               <div className="space-y-2">
-                {preview.data.computation.lines.map((line) => (
+                {(preview.data.computation?.lines ?? []).map((line) => (
                   <div key={line.key} className="flex justify-between gap-3">
                     <span className="text-muted-foreground">{line.label}</span>
                     <span className="font-bold">{line.sign}{line.amount.amountDisplay}</span>
@@ -226,9 +231,9 @@ export function CustomerSchemeDetailPage({ id }: { id: string }) {
                 ))}
                 <div className="flex justify-between gap-3 border-t pt-2 text-base font-black">
                   <span>Settlement</span>
-                  <span>{preview.data.computation.finalValue.amountDisplay}</span>
+                  <span>{preview.data.computation?.finalValue?.amountDisplay ?? "—"}</span>
                 </div>
-                {preview.data.computation.goldWeight ? (
+                {preview.data.computation?.goldWeight ? (
                   <div className="flex justify-between gap-3">
                     <span className="text-muted-foreground">
                       {effectiveRedemptionMode === "GOLD_HANDOVER"

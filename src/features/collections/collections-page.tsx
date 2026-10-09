@@ -50,6 +50,13 @@ import {
 import { useCursorPagination } from "@/src/hooks/use-cursor-pagination";
 import { useDebouncedValue } from "@/src/hooks/use-debounced-value";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import {
+  CustomerLink,
+  EnrollmentLink,
+  ReceiptLink,
+  collectionsSearchHref,
+} from "@/src/components/common/portal-entity-links";
 import {
   useGetDashboardQuery,
   useGetPostSettlementRefundCasesQuery,
@@ -71,6 +78,7 @@ type LedgerTab = "all" | "pending" | "late" | "reversed";
 type CollectionSection = "payments" | "refunds" | "settlement" | "post-settlement-refunds";
 
 export function CollectionsPage() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const receiptFromUrl = searchParams.get("q") ?? "";
   const requestedSection = searchParams.get("view");
@@ -220,7 +228,11 @@ export function CollectionsPage() {
     {
       key: "receipt",
       header: "Receipt",
-      render: (r: (typeof rows)[number]) => <strong>{r.receiptNo}</strong>,
+      render: (r: (typeof rows)[number]) => (
+        <ReceiptLink paymentId={r.id} receiptNo={r.receiptNo}>
+          <strong>{r.receiptNo}</strong>
+        </ReceiptLink>
+      ),
     },
     {
       key: "date",
@@ -230,12 +242,16 @@ export function CollectionsPage() {
     {
       key: "customer",
       header: "Customer",
-      render: (r: (typeof rows)[number]) => r.customer,
+      render: (r: (typeof rows)[number]) => (
+        <CustomerLink customerId={r.customerId}>{r.customer}</CustomerLink>
+      ),
     },
     {
       key: "enrollment",
       header: "Enrollment",
-      render: (r: (typeof rows)[number]) => r.enrollmentNo,
+      render: (r: (typeof rows)[number]) => (
+        <EnrollmentLink schemeId={r.schemeId}>{r.enrollmentNo}</EnrollmentLink>
+      ),
     },
     {
       key: "amount",
@@ -358,15 +374,25 @@ export function CollectionsPage() {
     {
       key: "receipt",
       header: "Receipt",
-      render: (row: Payment) => <strong>{row.receiptNo}</strong>,
+      render: (row: Payment) => (
+        <ReceiptLink paymentId={row.id} receiptNo={row.receiptNo}>
+          <strong>{row.receiptNo}</strong>
+        </ReceiptLink>
+      ),
     },
     {
       key: "customer",
       header: "Customer",
       render: (row: Payment) => (
         <div>
-          <p className="font-medium">{row.customer}</p>
-          <p className="text-xs text-muted-foreground">{row.enrollmentNo}</p>
+          <p className="font-medium">
+            <CustomerLink customerId={row.customerId}>{row.customer}</CustomerLink>
+          </p>
+          <p className="text-xs text-muted-foreground">
+            <EnrollmentLink schemeId={row.schemeId}>
+              {row.enrollmentNo}
+            </EnrollmentLink>
+          </p>
         </div>
       ),
     },
@@ -578,6 +604,9 @@ export function CollectionsPage() {
           onNext={() => pager.goNext(page.nextCursor)}
           onPrevious={pager.goPrevious}
           canPrevious={pager.canPrevious}
+          onRowClick={(r: (typeof rows)[number]) =>
+            router.push(collectionsSearchHref(r.receiptNo || r.id))
+          }
           columns={ledgerColumns}
         />
       </Surface>

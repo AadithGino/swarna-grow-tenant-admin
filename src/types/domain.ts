@@ -329,6 +329,7 @@ export interface Branch {
 export interface Grievance {
   id: string;
   ticketNo: string;
+  customerId?: string;
   customer: string;
   subject: string;
   category: string;
@@ -429,6 +430,7 @@ export interface CashHandoverDetail extends CashHandover {
 export interface MessageLog {
   id: string;
   date: string;
+  customerId?: string;
   customer: string;
   type: string;
   channel: "WHATSAPP";

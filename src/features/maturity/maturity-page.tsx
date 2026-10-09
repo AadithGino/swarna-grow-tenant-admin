@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { CalendarDays, Clock3, Gift, IndianRupee, Scale } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DateRangeFilter } from "@/src/components/common/date-range-filter";
@@ -41,6 +41,10 @@ import {
 import { SettlementPreviewDialog } from "@/src/features/enrollments/settlement-dialogs";
 import { RedemptionsQueue } from "@/src/features/maturity/redemptions-queue";
 import { FlexibleLocksPanel } from "@/src/features/maturity/flexible-locks-panel";
+import {
+  CustomerLink,
+  EnrollmentLink,
+} from "@/src/components/common/portal-entity-links";
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -108,6 +112,7 @@ function maturitySettlementAction(
 }
 
 export function MaturityPage() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const reviewRedemptionId = searchParams.get("review");
   const { from, setFrom, to, setTo, dateRangeError, skipForBadDates } =
@@ -430,16 +435,29 @@ export function MaturityPage() {
               onNext={() => pager.goNext(page.nextCursor)}
               onPrevious={pager.goPrevious}
               canPrevious={pager.canPrevious}
+              onRowClick={(r: { id: string }) =>
+                router.push(`/enrollments/${r.id}`)
+              }
               columns={[
                 {
                   key: "customer",
                   header: "Customer",
-                  render: (r: any) => <strong>{r.customer}</strong>,
+                  render: (r: any) => (
+                    <strong>
+                      <CustomerLink customerId={r.customerId}>
+                        {r.customer}
+                      </CustomerLink>
+                    </strong>
+                  ),
                 },
                 {
                   key: "enr",
                   header: "Enrollment",
-                  render: (r: any) => r.enrollmentNo,
+                  render: (r: any) => (
+                    <EnrollmentLink schemeId={r.id}>
+                      {r.enrollmentNo}
+                    </EnrollmentLink>
+                  ),
                 },
                 { key: "plan", header: "Plan", render: (r: any) => r.plan },
                 {

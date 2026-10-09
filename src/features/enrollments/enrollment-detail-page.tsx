@@ -40,6 +40,8 @@ import {
   SettlementPreviewDialog,
 } from "@/src/features/enrollments/settlement-dialogs";
 import { PaymentDialog } from "@/src/features/payments/payment-dialog";
+import { ReceiptLink } from "@/src/components/common/portal-entity-links";
+import { PortalBackLink } from "@/src/components/common/portal-back-link";
 import { EntityAuditTab } from "@/src/features/audit/entity-audit-tab";
 import { goldLedgerColumns } from "@/src/components/common/gold-payment-columns";
 import { downloadJson } from "@/src/lib/download";
@@ -201,12 +203,7 @@ export function EnrollmentDetailPage({ id }: { id: string }) {
         open={closeOpen}
         onOpenChange={setCloseOpen}
       />
-      <Link
-        href="/enrollments"
-        className="inline-flex items-center gap-2 text-sm font-semibold text-muted-foreground hover:text-[#730321]"
-      >
-        ← Back to enrollments
-      </Link>
+      <PortalBackLink fallbackHref="/enrollments">← Back</PortalBackLink>
       {(inProgress || closedOut) && (
         <EnrollmentRedemptionStatus enrollment={row} />
       )}
@@ -492,7 +489,12 @@ export function EnrollmentDetailPage({ id }: { id: string }) {
                     header: "Receipt",
                     render: (r) =>
                       r.receiptNo && r.receiptNo !== "—" ? (
-                        <strong>{r.receiptNo}</strong>
+                        <ReceiptLink
+                          paymentId={r.paymentId}
+                          receiptNo={r.receiptNo}
+                        >
+                          <strong>{r.receiptNo}</strong>
+                        </ReceiptLink>
                       ) : (
                         "—"
                       ),
@@ -519,7 +521,11 @@ export function EnrollmentDetailPage({ id }: { id: string }) {
                   {
                     key: "receipt",
                     header: "Receipt",
-                    render: (r) => <strong>{r.receiptNo}</strong>,
+                    render: (r) => (
+                      <ReceiptLink paymentId={r.id} receiptNo={r.receiptNo}>
+                        <strong>{r.receiptNo}</strong>
+                      </ReceiptLink>
+                    ),
                   },
                   {
                     key: "amount",

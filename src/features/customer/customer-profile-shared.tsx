@@ -1,8 +1,10 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { ArrowLeft, Bell, ChevronRight, Lock } from "lucide-react";
 import { customerPath } from "@/src/lib/customer-tenant";
+import { navigateBack } from "@/src/lib/navigate-back";
 import { cn } from "@/lib/utils";
 import { useGetCustomerHomeQuery } from "@/src/store/api/customer-api";
 import type { LucideIcon } from "lucide-react";
@@ -14,19 +16,33 @@ export function ProfileSubpageHeader({
   backHref,
   centered,
   showNotificationBell,
+  preferHistoryBack,
 }: {
   tenantSlug: string | null;
   title: string;
   backHref?: string;
   centered?: boolean;
   showNotificationBell?: boolean;
+  /** When true (default), use browser back with fallback instead of a fixed href. */
+  preferHistoryBack?: boolean;
 }) {
+  const router = useRouter();
   const { data: home } = useGetCustomerHomeQuery(undefined, { skip: !showNotificationBell });
   const unread = home?.unreadNotificationCount ?? 0;
-  const href = backHref ?? customerPath(tenantSlug, "profile");
-  const backLink = (
+  const fallbackHref = backHref ?? customerPath(tenantSlug, "profile");
+  const useHistory = preferHistoryBack !== false && !backHref;
+  const backLink = useHistory ? (
+    <button
+      type="button"
+      onClick={() => navigateBack(router, fallbackHref)}
+      className="grid size-10 place-items-center rounded-full text-[var(--customer-primary,#730321)] transition hover:bg-[#f6f2ee]"
+      aria-label="Back"
+    >
+      <ArrowLeft className="size-5" strokeWidth={2.5} />
+    </button>
+  ) : (
     <Link
-      href={href}
+      href={fallbackHref}
       className="grid size-10 place-items-center rounded-full text-[var(--customer-primary,#730321)] transition hover:bg-[#f6f2ee]"
       aria-label="Back"
     >

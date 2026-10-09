@@ -26,6 +26,7 @@ import {
 import { PageSkeleton, QueryError } from "@/src/components/common/query-state";
 import { StatusBadge } from "@/src/components/common/status-badge";
 import { GrievanceDetailSheet } from "@/src/features/support/grievance-detail-sheet";
+import { CustomerLink } from "@/src/components/common/portal-entity-links";
 import { SlaChip } from "@/src/features/support/sla-chip";
 import { emptyPageMeta } from "@/src/lib/cursor-pagination";
 import { useCursorPagination } from "@/src/hooks/use-cursor-pagination";
@@ -192,7 +193,13 @@ export function SupportPage() {
               header: "Ticket",
               render: (r) => <strong>{r.ticketNo}</strong>,
             },
-            { key: "customer", header: "Customer", render: (r) => r.customer },
+            {
+              key: "customer",
+              header: "Customer",
+              render: (r) => (
+                <CustomerLink customerId={r.customerId}>{r.customer}</CustomerLink>
+              ),
+            },
             {
               key: "subject",
               header: "Subject",
