@@ -2502,14 +2502,85 @@ export async function mockRequest<T>({
         __contract: true,
         payload: { version: 1, defaultClassification: null, rates: [] },
       } as T;
-    case "shopAvailability":
+    case "createEcommerceCategory":
+    case "patchEcommerceCategory":
       return {
         __contract: true,
         payload: {
-          available: mockSubscription.features?.ecommerce === true,
-          ecommerce: mockSettingsOperations.ecommerce,
+          id: `ecat_${Date.now()}`,
+          version: 1,
+          active: true,
+          ...body,
         },
       } as T;
+    case "archiveEcommerceCategory":
+      return {
+        __contract: true,
+        payload: { id: String(params.categoryId ?? ""), active: false, version: 2 },
+      } as T;
+    case "createEcommerceProduct":
+    case "patchEcommerceProduct":
+    case "publishEcommerceProduct":
+      return {
+        __contract: true,
+        payload: {
+          id: String(params.productId ?? `eprd_${Date.now()}`),
+          status: mockKey === "publishEcommerceProduct" ? "PUBLISHED" : "DRAFT",
+          version: 2,
+          pricing: { computable: false, blockers: [], displayTotal: null },
+          ...body,
+        },
+      } as T;
+    case "archiveEcommerceProduct":
+      return {
+        __contract: true,
+        payload: {
+          id: String(params.productId ?? ""),
+          status: "ARCHIVED",
+          version: 2,
+        },
+      } as T;
+    case "setEcommerceGoldRate": {
+      const ratePaise = Number(body.ratePerGramPaise ?? 0);
+      return {
+        __contract: true,
+        payload: {
+          id: `egrt_${Date.now()}`,
+          purity: body.purity,
+          ratePerGramPaise: ratePaise,
+          ratePerGram: { amountDisplay: `₹${(ratePaise / 100).toFixed(2)}` },
+          effectiveAt: body.effectiveAt,
+          version: 1,
+        },
+      } as T;
+    }
+    case "putEcommerceTaxSettings":
+      return {
+        __contract: true,
+        payload: {
+          version: Number(body.expectedVersion ?? 1) + 1,
+          defaultClassification: body.defaultClassification ?? null,
+          rates: body.rates ?? [],
+        },
+      } as T;
+    case "ecommerceProductPricePreview":
+      return {
+        __contract: true,
+        payload: { computable: false, blockers: [], displayTotal: null },
+      } as T;
+    case "shopAvailability": {
+      const { resolveShopAvailability } = await import(
+        "@/src/lib/ecommerce-store-availability"
+      );
+      const resolved = resolveShopAvailability({
+        planEntitled: mockSubscription.features?.ecommerce === true,
+        ecommerceEnabled: mockSettingsOperations.ecommerceEnabled === true,
+      });
+      return {
+        __contract: true,
+        payload: resolved,
+      } as T;
+    }
     case "shopProducts":
       return { __contract: true, payload: { items: [], meta: { hasMore: false } } } as T;
     case "shopProduct":

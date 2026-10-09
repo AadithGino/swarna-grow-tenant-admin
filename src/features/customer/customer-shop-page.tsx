@@ -9,6 +9,7 @@ import {
 import { PageHeader, Surface } from "@/src/components/common/page-parts";
 import { PageSkeleton, QueryError } from "@/src/components/common/query-state";
 import { PricingPreviewPanel } from "@/src/features/ecommerce/ecommerce-shared";
+import { ShopPriceLabel } from "@/src/features/ecommerce/ecommerce-admin-shared";
 
 export function CustomerShopPage() {
   const availability = useGetShopAvailabilityQuery();
@@ -49,9 +50,9 @@ export function CustomerShopPage() {
                 <p className="text-xs uppercase text-muted-foreground">
                   {p.priceMode === "GOLD_RATE_BASED" ? "Gold-rate based" : "Fixed price"}
                 </p>
-                <p className="mt-2 text-lg font-bold">
-                  {p.pricing?.displayTotal?.amountDisplay ?? "—"}
-                </p>
+                <div className="mt-2">
+                  <ShopPriceLabel pricing={p.pricing} />
+                </div>
               </div>
             </Surface>
           </Link>

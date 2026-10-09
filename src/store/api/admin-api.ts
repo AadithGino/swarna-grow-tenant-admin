@@ -3166,6 +3166,162 @@ export const adminApi = createApi({
         (contractPayload(raw) as Record<string, unknown>) ?? {},
       providesTags: ["Ecommerce"],
     }),
+    getEcommerceProduct: builder.query<
+      Record<string, any>,
+      { productId: string }
+    >({
+      query: ({ productId }) => ({
+        url: `/admin/ecommerce/products/${productId}`,
+        mockKey: "ecommerceProduct",
+        params: { productId },
+      }),
+      transformResponse: (raw) =>
+        (contractPayload(raw) as Record<string, unknown>) ?? {},
+      providesTags: (_r, _e, arg) => [{ type: "Ecommerce", id: arg.productId }],
+    }),
+    createEcommerceCategory: builder.mutation<
+      Record<string, any>,
+      Record<string, unknown>
+    >({
+      query: (body) => ({
+        url: "/admin/ecommerce/categories",
+        method: "POST",
+        body,
+        mockKey: "createEcommerceCategory",
+      }),
+      transformResponse: (raw) =>
+        (contractPayload(raw) as Record<string, unknown>) ?? {},
+      invalidatesTags: ["Ecommerce"],
+    }),
+    patchEcommerceCategory: builder.mutation<
+      Record<string, any>,
+      { categoryId: string; body: Record<string, unknown> }
+    >({
+      query: ({ categoryId, body }) => ({
+        url: `/admin/ecommerce/categories/${categoryId}`,
+        method: "PATCH",
+        body,
+        mockKey: "patchEcommerceCategory",
+        params: { categoryId },
+      }),
+      transformResponse: (raw) =>
+        (contractPayload(raw) as Record<string, unknown>) ?? {},
+      invalidatesTags: ["Ecommerce"],
+    }),
+    archiveEcommerceCategory: builder.mutation<
+      Record<string, any>,
+      { categoryId: string; expectedVersion: number }
+    >({
+      query: ({ categoryId, expectedVersion }) => ({
+        url: `/admin/ecommerce/categories/${categoryId}/archive`,
+        method: "POST",
+        body: { expectedVersion },
+        mockKey: "archiveEcommerceCategory",
+        params: { categoryId },
+      }),
+      transformResponse: (raw) =>
+        (contractPayload(raw) as Record<string, unknown>) ?? {},
+      invalidatesTags: ["Ecommerce"],
+    }),
+    createEcommerceProduct: builder.mutation<
+      Record<string, any>,
+      Record<string, unknown>
+    >({
+      query: (body) => ({
+        url: "/admin/ecommerce/products",
+        method: "POST",
+        body,
+        mockKey: "createEcommerceProduct",
+      }),
+      transformResponse: (raw) =>
+        (contractPayload(raw) as Record<string, unknown>) ?? {},
+      invalidatesTags: ["Ecommerce"],
+    }),
+    patchEcommerceProduct: builder.mutation<
+      Record<string, any>,
+      { productId: string; body: Record<string, unknown> }
+    >({
+      query: ({ productId, body }) => ({
+        url: `/admin/ecommerce/products/${productId}`,
+        method: "PATCH",
+        body,
+        mockKey: "patchEcommerceProduct",
+        params: { productId },
+      }),
+      transformResponse: (raw) =>
+        (contractPayload(raw) as Record<string, unknown>) ?? {},
+      invalidatesTags: ["Ecommerce"],
+    }),
+    publishEcommerceProduct: builder.mutation<
+      Record<string, any>,
+      { productId: string; expectedVersion: number }
+    >({
+      query: ({ productId, expectedVersion }) => ({
+        url: `/admin/ecommerce/products/${productId}/publish`,
+        method: "POST",
+        body: { expectedVersion },
+        mockKey: "publishEcommerceProduct",
+        params: { productId },
+      }),
+      transformResponse: (raw) =>
+        (contractPayload(raw) as Record<string, unknown>) ?? {},
+      invalidatesTags: ["Ecommerce"],
+    }),
+    archiveEcommerceProduct: builder.mutation<
+      Record<string, any>,
+      { productId: string; expectedVersion: number }
+    >({
+      query: ({ productId, expectedVersion }) => ({
+        url: `/admin/ecommerce/products/${productId}/archive`,
+        method: "POST",
+        body: { expectedVersion },
+        mockKey: "archiveEcommerceProduct",
+        params: { productId },
+      }),
+      transformResponse: (raw) =>
+        (contractPayload(raw) as Record<string, unknown>) ?? {},
+      invalidatesTags: ["Ecommerce"],
+    }),
+    previewEcommerceProductPrice: builder.query<
+      Record<string, any>,
+      { productId: string }
+    >({
+      query: ({ productId }) => ({
+        url: `/admin/ecommerce/products/${productId}/price-preview`,
+        mockKey: "ecommerceProductPricePreview",
+        params: { productId },
+      }),
+      transformResponse: (raw) =>
+        (contractPayload(raw) as Record<string, unknown>) ?? {},
+    }),
+    setEcommerceGoldRate: builder.mutation<
+      Record<string, any>,
+      Record<string, unknown>
+    >({
+      query: (body) => ({
+        url: "/admin/ecommerce/gold-rates",
+        method: "POST",
+        body,
+        mockKey: "setEcommerceGoldRate",
+      }),
+      transformResponse: (raw) =>
+        (contractPayload(raw) as Record<string, unknown>) ?? {},
+      invalidatesTags: ["Ecommerce"],
+    }),
+    putEcommerceTaxSettings: builder.mutation<
+      Record<string, any>,
+      Record<string, unknown>
+    >({
+      query: (body) => ({
+        url: "/admin/ecommerce/tax-settings",
+        method: "PUT",
+        body,
+        mockKey: "putEcommerceTaxSettings",
+      }),
+      transformResponse: (raw) =>
+        (contractPayload(raw) as Record<string, unknown>) ?? {},
+      invalidatesTags: ["Ecommerce"],
+    }),
     previewPlanSchedule: builder.mutation<
       import("@/src/features/schemes/plan-preview-types").PlanSchedulePreviewData,
       Record<string, unknown>
@@ -4036,6 +4192,18 @@ export const {
   useGetEcommerceGoldRatesCurrentQuery,
   useGetEcommerceGoldRatesHistoryQuery,
   useGetEcommerceTaxSettingsQuery,
+  useGetEcommerceProductQuery,
+  useCreateEcommerceCategoryMutation,
+  usePatchEcommerceCategoryMutation,
+  useArchiveEcommerceCategoryMutation,
+  useCreateEcommerceProductMutation,
+  usePatchEcommerceProductMutation,
+  usePublishEcommerceProductMutation,
+  useArchiveEcommerceProductMutation,
+  usePreviewEcommerceProductPriceQuery,
+  useLazyPreviewEcommerceProductPriceQuery,
+  useSetEcommerceGoldRateMutation,
+  usePutEcommerceTaxSettingsMutation,
   usePreviewPlanScheduleMutation,
   useCreatePaymentLinkMutation,
   useGetOverduesQuery,
