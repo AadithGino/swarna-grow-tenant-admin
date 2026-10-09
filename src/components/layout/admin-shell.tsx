@@ -25,6 +25,7 @@ import {
   Scale,
   Search,
   Settings,
+  ShoppingBag,
   ShieldCheck,
   UserRound,
   UsersRound,
@@ -136,6 +137,19 @@ const groups: { label: string; items: NavItem[] }[] = [
       },
       { label: "Reports", href: "/reports", icon: FileBarChart },
       { label: "Support desk", href: "/support", icon: Headphones },
+    ],
+  },
+  {
+    label: "Online store",
+    items: [
+      { label: "Catalog", href: "/ecommerce", icon: ShoppingBag },
+      { label: "Categories", href: "/ecommerce/categories", icon: ShoppingBag },
+      {
+        label: "Store gold rates",
+        href: "/ecommerce/gold-rates",
+        icon: Scale,
+      },
+      { label: "Tax settings", href: "/ecommerce/tax", icon: FileBarChart },
     ],
   },
   {

@@ -425,6 +425,7 @@ export const adminApi = createApi({
     "Settings",
     "Export",
     "Report",
+    "Ecommerce",
   ],
   endpoints: (builder) => ({
     login: builder.mutation<
@@ -3082,6 +3083,89 @@ export const adminApi = createApi({
       transformResponse: adaptSettingsOperations,
       invalidatesTags: ["Settings"],
     }),
+    getEcommerceProducts: builder.query<
+      { items: Record<string, any>[]; meta?: Record<string, unknown> },
+      { includePricing?: boolean; status?: string } | void
+    >({
+      query: (params) => ({
+        url: "/admin/ecommerce/products",
+        params: params ?? {},
+        mockKey: "ecommerceProducts",
+      }),
+      transformResponse: (raw) => {
+        const payload = contractPayload(raw) as {
+          items?: Record<string, unknown>[];
+          meta?: Record<string, unknown>;
+        };
+        return {
+          items: payload?.items ?? (Array.isArray(payload) ? payload : []),
+          meta: payload?.meta,
+        };
+      },
+      providesTags: ["Ecommerce"],
+    }),
+    getEcommerceCategories: builder.query<
+      { items: Record<string, any>[]; meta?: Record<string, unknown> },
+      void
+    >({
+      query: () => ({
+        url: "/admin/ecommerce/categories",
+        mockKey: "ecommerceCategories",
+      }),
+      transformResponse: (raw) => {
+        const payload = contractPayload(raw) as {
+          items?: Record<string, unknown>[];
+        };
+        return { items: payload?.items ?? [] };
+      },
+      providesTags: ["Ecommerce"],
+    }),
+    getEcommerceGoldRatesCurrent: builder.query<
+      { rates: Record<string, any>[]; asOf?: string },
+      void
+    >({
+      query: () => ({
+        url: "/admin/ecommerce/gold-rates/current",
+        mockKey: "ecommerceGoldRatesCurrent",
+      }),
+      transformResponse: (raw) => {
+        const payload = contractPayload(raw) as {
+          rates?: Record<string, unknown>[];
+          asOf?: string;
+        };
+        return {
+          rates: payload?.rates ?? [],
+          asOf: payload?.asOf,
+        };
+      },
+      providesTags: ["Ecommerce"],
+    }),
+    getEcommerceGoldRatesHistory: builder.query<
+      { items: Record<string, any>[]; meta?: Record<string, unknown> },
+      Record<string, unknown> | void
+    >({
+      query: (params) => ({
+        url: "/admin/ecommerce/gold-rates/history",
+        params: params ?? {},
+        mockKey: "ecommerceGoldRatesHistory",
+      }),
+      transformResponse: (raw) => {
+        const payload = contractPayload(raw) as {
+          items?: Record<string, unknown>[];
+        };
+        return { items: payload?.items ?? [] };
+      },
+      providesTags: ["Ecommerce"],
+    }),
+    getEcommerceTaxSettings: builder.query<Record<string, any>, void>({
+      query: () => ({
+        url: "/admin/ecommerce/tax-settings",
+        mockKey: "ecommerceTaxSettings",
+      }),
+      transformResponse: (raw) =>
+        (contractPayload(raw) as Record<string, unknown>) ?? {},
+      providesTags: ["Ecommerce"],
+    }),
     previewPlanSchedule: builder.mutation<
       import("@/src/features/schemes/plan-preview-types").PlanSchedulePreviewData,
       Record<string, unknown>
@@ -3947,6 +4031,11 @@ export const {
   usePatchSettingsProfileMutation,
   usePatchSettingsBrandingMutation,
   usePatchSettingsOperationsMutation,
+  useGetEcommerceProductsQuery,
+  useGetEcommerceCategoriesQuery,
+  useGetEcommerceGoldRatesCurrentQuery,
+  useGetEcommerceGoldRatesHistoryQuery,
+  useGetEcommerceTaxSettingsQuery,
   usePreviewPlanScheduleMutation,
   useCreatePaymentLinkMutation,
   useGetOverduesQuery,

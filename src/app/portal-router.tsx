@@ -141,6 +141,34 @@ const SettingsPage = dynamic(
     import("@/src/features/settings/settings-page").then((m) => m.SettingsPage),
   options,
 );
+const EcommerceCatalogPage = dynamic(
+  () =>
+    import("@/src/features/ecommerce/ecommerce-catalog-page").then(
+      (m) => m.EcommerceCatalogPage,
+    ),
+  options,
+);
+const EcommerceCategoriesPage = dynamic(
+  () =>
+    import("@/src/features/ecommerce/ecommerce-categories-page").then(
+      (m) => m.EcommerceCategoriesPage,
+    ),
+  options,
+);
+const EcommerceGoldRatesPage = dynamic(
+  () =>
+    import("@/src/features/ecommerce/ecommerce-gold-rates-page").then(
+      (m) => m.EcommerceGoldRatesPage,
+    ),
+  options,
+);
+const EcommerceTaxSettingsPage = dynamic(
+  () =>
+    import("@/src/features/ecommerce/ecommerce-tax-settings-page").then(
+      (m) => m.EcommerceTaxSettingsPage,
+    ),
+  options,
+);
 const AlertsPage = dynamic(
   () => import("@/src/features/alerts/alerts-page").then((m) => m.AlertsPage),
   options,
@@ -272,6 +300,12 @@ export function PortalRouter({ slug }: { slug: string[] }) {
       break;
     case "audit":
       page = <AuditPage />;
+      break;
+    case "ecommerce":
+      if (id === "categories") page = <EcommerceCategoriesPage />;
+      else if (id === "gold-rates") page = <EcommerceGoldRatesPage />;
+      else if (id === "tax") page = <EcommerceTaxSettingsPage />;
+      else page = <EcommerceCatalogPage />;
       break;
     case "settings":
       if (id === "subscription")

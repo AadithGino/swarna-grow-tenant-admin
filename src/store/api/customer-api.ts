@@ -787,6 +787,44 @@ export const customerApi = createApi({
     >({
       query: (body) => ({ url: "/app/devices/fcm-token", method: "POST", body }),
     }),
+    getShopAvailability: builder.query<
+      { available: boolean; ecommerce?: Record<string, unknown> },
+      void
+    >({
+      query: () => ({ url: "/app/shop/availability", mockKey: "shopAvailability" }),
+      transformResponse: (raw: unknown) => {
+        if (raw && typeof raw === "object" && "data" in raw) {
+          return (raw as { data: { available: boolean } }).data;
+        }
+        return raw as { available: boolean };
+      },
+    }),
+    getShopProducts: builder.query<
+      { items: Record<string, any>[]; meta?: Record<string, unknown> },
+      void
+    >({
+      query: () => ({ url: "/app/shop/products", mockKey: "shopProducts" }),
+      transformResponse: (raw: unknown) => {
+        if (raw && typeof raw === "object" && "data" in raw) {
+          const data = (raw as { data: { items?: Record<string, unknown>[] } }).data;
+          return { items: data?.items ?? [] };
+        }
+        const direct = raw as { items?: Record<string, unknown>[] };
+        return { items: direct?.items ?? [] };
+      },
+    }),
+    getShopProduct: builder.query<Record<string, any>, string>({
+      query: (slug) => ({
+        url: `/app/shop/products/${encodeURIComponent(slug)}`,
+        mockKey: "shopProduct",
+      }),
+      transformResponse: (raw: unknown) => {
+        if (raw && typeof raw === "object" && "data" in raw) {
+          return (raw as { data: Record<string, unknown> }).data;
+        }
+        return raw as Record<string, unknown>;
+      },
+    }),
   }),
 });
 
@@ -806,4 +844,7 @@ export const {
   useGetCustomerGoldRateQuery, useGetCustomerGoldHistoryQuery, useGetCustomerBranchesQuery,
   useRequestCustomerRedemptionMutation,
   useRegisterCustomerFcmTokenMutation,
+  useGetShopAvailabilityQuery,
+  useGetShopProductsQuery,
+  useGetShopProductQuery,
 } = customerApi;

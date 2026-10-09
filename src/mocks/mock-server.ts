@@ -2479,6 +2479,41 @@ export async function mockRequest<T>({
     }
     case "subscription":
       return { __contract: true, payload: { ...mockSubscription } } as T;
+    case "ecommerceProducts":
+      return { __contract: true, payload: { items: [], meta: { hasMore: false } } } as T;
+    case "ecommerceCategories":
+      return { __contract: true, payload: { items: [], meta: { hasMore: false } } } as T;
+    case "ecommerceGoldRatesCurrent":
+      return {
+        __contract: true,
+        payload: {
+          rates: [
+            { purity: "18K", ratePerGram: null },
+            { purity: "22K", ratePerGram: null },
+            { purity: "24K", ratePerGram: null },
+          ],
+          asOf: new Date().toISOString(),
+        },
+      } as T;
+    case "ecommerceGoldRatesHistory":
+      return { __contract: true, payload: { items: [], meta: { hasMore: false } } } as T;
+    case "ecommerceTaxSettings":
+      return {
+        __contract: true,
+        payload: { version: 1, defaultClassification: null, rates: [] },
+      } as T;
+    case "shopAvailability":
+      return {
+        __contract: true,
+        payload: {
+          available: mockSubscription.features?.ecommerce === true,
+          ecommerce: mockSettingsOperations.ecommerce,
+        },
+      } as T;
+    case "shopProducts":
+      return { __contract: true, payload: { items: [], meta: { hasMore: false } } } as T;
+    case "shopProduct":
+      return { __contract: true, payload: null } as T;
     case "subscriptionUsage":
       return {
         __contract: true,

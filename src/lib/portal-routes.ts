@@ -15,8 +15,10 @@ export const PORTAL_SECTIONS = new Set([
   "support",
   "audit",
   "settings",
+  "ecommerce",
   "alerts",
   "login",
+  "shop",
 ]);
 
 export function isKnownPortalSection(section: string): boolean {

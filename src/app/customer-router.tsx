@@ -26,6 +26,8 @@ const CustomerProfileNomineePage = dynamic(() => import("@/src/features/customer
 const CustomerSecurityPage = dynamic(() => import("@/src/features/customer/customer-profile-pages").then((m) => m.CustomerSecurityPage), options);
 const CustomerSupportPage = dynamic(() => import("@/src/features/customer/customer-support-pages").then((m) => m.CustomerSupportPage), options);
 const CustomerGrievanceDetailPage = dynamic(() => import("@/src/features/customer/customer-support-pages").then((m) => m.CustomerGrievanceDetailPage), options);
+const CustomerShopPage = dynamic(() => import("@/src/features/customer/customer-shop-page").then((m) => m.CustomerShopPage), options);
+const CustomerShopProductPage = dynamic(() => import("@/src/features/customer/customer-shop-page").then((m) => m.CustomerShopProductPage), options);
 
 function CustomerRoutes({ slug }: { slug: string[] }) {
   const { section, id } = parseCustomerSlug(slug);
@@ -51,6 +53,7 @@ function CustomerRoutes({ slug }: { slug: string[] }) {
   if (section === "support") return id ? <CustomerGrievanceDetailPage id={id} /> : <CustomerSupportPage />;
   if (section === "gold-rate") return <CustomerGoldRatePage />;
   if (section === "branches") return <CustomerBranchesPage />;
+  if (section === "shop") return id ? <CustomerShopProductPage slug={id} /> : <CustomerShopPage />;
   if (section === "pay" && id === "status") return <CustomerPaymentStatusPage />;
   if (section === "pay" && id) return <CustomerPaymentLinkPage linkToken={id} />;
   return <CustomerHomePage />;
