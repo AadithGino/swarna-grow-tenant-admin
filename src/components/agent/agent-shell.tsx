@@ -9,6 +9,7 @@ import { useAppDispatch, useAppSelector } from "@/src/store/hooks";
 import { clearAgentSession, hydrateAgentSession } from "@/src/store/slices/agent-session-slice";
 import { useAgentLogoutMutation, useGetAgentMeQuery } from "@/src/store/api/agent-api";
 import { realmHasStoredSession } from "@/src/lib/auth-token-storage";
+import { recordPortalNavigation } from "@/src/lib/portal-nav";
 
 const nav = [
   { href: "/agent", label: "Home", icon: Home, exact: true },
@@ -29,6 +30,10 @@ export function AgentShell({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!hydrated) dispatch(hydrateAgentSession());
   }, [dispatch, hydrated]);
+
+  useEffect(() => {
+    if (pathname) recordPortalNavigation(pathname);
+  }, [pathname]);
 
   useEffect(() => {
     if (!hydrated) return;

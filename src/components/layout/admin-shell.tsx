@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import { recordPortalNavigation } from "@/src/lib/portal-nav";
 import { memo, useCallback, useEffect, useState } from "react";
 import { useClientMounted } from "@/src/hooks/use-client-mounted";
 import { realmHasStoredSession } from "@/src/lib/auth-token-storage";
@@ -498,6 +499,10 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
       router.replace(`/login?next=${encodeURIComponent(pathname || "/")}`);
     }
   }, [mounted, hydrated, session, pathname, router]);
+
+  useEffect(() => {
+    if (pathname) recordPortalNavigation(pathname);
+  }, [pathname]);
 
   const sessionReady =
     mounted && hydrated && Boolean(session) && realmHasStoredSession("tenant");

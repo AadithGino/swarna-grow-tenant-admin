@@ -105,7 +105,12 @@ export function CustomerSchemeDetailPage({ id }: { id: string }) {
   const redeem = async () => {
     try {
       if (!effectiveRedemptionMode) return toast.error("Choose how you would like to redeem");
-      if (!preview.data?.eligible) return toast.error(preview.data?.blockers?.[0]?.message ?? "Settlement is not currently eligible");
+      if (!preview.data?.previewAvailable) {
+        return toast.error("Settlement preview is unavailable. Try again or contact your branch.");
+      }
+      if (!preview.data.eligible) {
+        return toast.error(preview.data.blockers?.[0]?.message ?? "Settlement is not currently eligible");
+      }
       if (effectiveRedemptionMode === "PURCHASE_ADJUSTMENT" && !billNumber.trim()) {
         return toast.error("Bill number is required for purchase adjustment");
       }
@@ -220,6 +225,10 @@ export function CustomerSchemeDetailPage({ id }: { id: string }) {
             <p className="mt-4 text-sm font-semibold text-red-700">
               Could not load settlement preview. Close and try again, or contact your branch.
             </p>
+          ) : preview.data && !preview.data.previewAvailable ? (
+            <p className="mt-4 text-sm font-semibold text-red-700">
+              Settlement preview is unavailable. Submit stays disabled until a valid quote loads.
+            </p>
           ) : preview.data ? (
             <div className="mt-4 rounded-xl border bg-muted/30 p-3 text-sm">
               <div className="space-y-2">
@@ -279,7 +288,7 @@ export function CustomerSchemeDetailPage({ id }: { id: string }) {
               <Textarea id="redemption-remarks" value={redemptionRemarks} onChange={(event) => setRedemptionRemarks(event.target.value)} maxLength={500} className="mt-2" />
             </div>
           </div>
-          <Button disabled={redemptionState.isLoading || preview.isFetching || !effectiveRedemptionMode || !preview.data?.eligible || (effectiveRedemptionMode === "PURCHASE_ADJUSTMENT" && !billNumber.trim())} onClick={redeem} className="mt-4 bg-[#730321]">
+          <Button disabled={redemptionState.isLoading || preview.isFetching || !effectiveRedemptionMode || !preview.data?.previewAvailable || !preview.data?.eligible || (effectiveRedemptionMode === "PURCHASE_ADJUSTMENT" && !billNumber.trim())} onClick={redeem} className="mt-4 bg-[#730321]">
             Submit request
           </Button>
         </DialogContent>

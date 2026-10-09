@@ -3367,7 +3367,10 @@ export function adaptSettlementPreview(
   const benefit = fromPaise(payload?.benefitPaise ?? 0);
   const penalty = fromPaise(payload?.penaltyPaise ?? 0);
   return {
-    eligible: blockers.length === 0,
+    eligible:
+      typeof payload?.eligible === "boolean"
+        ? payload.eligible
+        : false,
     type: (payload?.type as SettlementPreviewType) ?? fallbackType,
     finalValue: settlementPaise / 100,
     lines:

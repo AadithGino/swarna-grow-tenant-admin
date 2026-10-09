@@ -170,42 +170,79 @@ function normalizeSettlementLine(line: unknown) {
   };
 }
 
+function isValidMoneyRef(raw: unknown): raw is MoneyRef {
+  if (!raw || typeof raw !== "object") return false;
+  const row = raw as MoneyRef;
+  const paise = Number(row.amountPaise);
+  return Number.isFinite(paise) && paise >= 0 && typeof row.amountDisplay === "string";
+}
+
+function unavailableSettlementPreview(): CustomerSettlementPreview {
+  const emptyMoney: MoneyRef = { amountPaise: 0, amountDisplay: "—" };
+  return {
+    previewAvailable: false,
+    eligible: false,
+    blockers: [],
+    computation: { lines: [], finalValue: emptyMoney, goldWeight: null },
+    allowedModes: [],
+    principalPaise: 0,
+    benefitPaise: 0,
+    penaltyPaise: 0,
+    settlementPaise: 0,
+    mode: null,
+  };
+}
+
+function validateSettlementPayload(payload: Record<string, unknown>): boolean {
+  if (typeof payload.eligible !== "boolean") return false;
+  const computationRaw = payload.computation;
+  if (!computationRaw || typeof computationRaw !== "object") return false;
+  const finalRaw =
+    (computationRaw as Record<string, unknown>).finalValue ?? payload.finalValue;
+  if (!isValidMoneyRef(finalRaw)) return false;
+  if (!Array.isArray(payload.allowedModes)) return false;
+  for (const modeRow of payload.allowedModes) {
+    if (!modeRow || typeof modeRow !== "object") return false;
+    const mode = (modeRow as { mode?: unknown }).mode;
+    if (typeof mode !== "string" || !mode.trim()) return false;
+  }
+  if (payload.eligible && (finalRaw as MoneyRef).amountPaise <= 0) return false;
+  return true;
+}
+
 /** Normalizes GET /app/schemes/:id/settlement-preview for the customer redemption dialog. */
 export function adaptCustomerSettlementPreview(raw: unknown): CustomerSettlementPreview {
+  if (raw == null || typeof raw !== "object") return unavailableSettlementPreview();
   const payload = settlementPreviewPayload(raw);
+  if (!validateSettlementPayload(payload)) return unavailableSettlementPreview();
+
   const blockers = Array.isArray(payload.blockers)
     ? (payload.blockers as CustomerSettlementPreview["blockers"])
     : [];
-  const eligible =
-    typeof payload.eligible === "boolean" ? payload.eligible : blockers.length === 0;
+  const eligible = payload.eligible === true;
 
-  const computationRaw = payload.computation as Record<string, unknown> | undefined;
-  const lineSource = Array.isArray(computationRaw?.lines)
+  const computationRaw = payload.computation as Record<string, unknown>;
+  const lineSource = Array.isArray(computationRaw.lines)
     ? computationRaw.lines
     : Array.isArray(payload.lines)
       ? payload.lines
       : [];
-  const finalPaise = Number(
-    (computationRaw?.finalValue as MoneyRef | undefined)?.amountPaise ??
-      (payload.finalValue as MoneyRef | undefined)?.amountPaise ??
-      payload.settlementPaise ??
-      0,
-  );
+  const finalValue = computationRaw.finalValue as MoneyRef;
+  const finalPaise = Number(finalValue.amountPaise);
   const goldWeight =
-    (computationRaw?.goldWeight as CustomerSettlementPreview["computation"]["goldWeight"]) ??
+    (computationRaw.goldWeight as CustomerSettlementPreview["computation"]["goldWeight"]) ??
     null;
 
   return {
+    previewAvailable: true,
     eligible,
     blockers,
     computation: {
       lines: lineSource.map(normalizeSettlementLine),
-      finalValue: readMoney(computationRaw?.finalValue ?? payload.finalValue, finalPaise),
+      finalValue,
       goldWeight,
     },
-    allowedModes: Array.isArray(payload.allowedModes)
-      ? (payload.allowedModes as CustomerSettlementPreview["allowedModes"])
-      : [],
+    allowedModes: payload.allowedModes as CustomerSettlementPreview["allowedModes"],
     modePreviews: payload.modePreviews as CustomerSettlementPreview["modePreviews"],
     warningText: typeof payload.warningText === "string" ? payload.warningText : undefined,
     valuationNote: typeof payload.valuationNote === "string" ? payload.valuationNote : undefined,

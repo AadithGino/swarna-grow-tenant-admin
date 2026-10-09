@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect } from "react";
 import { usePathname } from "next/navigation";
+import { recordPortalNavigation } from "@/src/lib/portal-nav";
 import { Bell, CircleHelp, CreditCard, Home, IndianRupee, Layers3, LogOut, Sparkles, UserRound, WalletCards } from "lucide-react";
 import { useGetCustomerHomeQuery } from "@/src/store/api/customer-api";
 import { useCustomerSignOut } from "@/src/lib/use-customer-sign-out";
@@ -31,6 +33,9 @@ const mobileNavigation = [
 
 export function CustomerShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  useEffect(() => {
+    if (pathname) recordPortalNavigation(pathname);
+  }, [pathname]);
   const { tenantSlug } = useCustomerTenant();
   const { signOut } = useCustomerSignOut();
   const { data: home } = useGetCustomerHomeQuery();

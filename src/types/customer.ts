@@ -305,6 +305,8 @@ export type CustomerPassbook = {
 };
 
 export type CustomerSettlementPreview = {
+  /** False when the API payload could not be trusted (missing fields, malformed amounts). */
+  previewAvailable: boolean;
   eligible: boolean;
   blockers: Array<{ code: string; message: string }>;
   computation: {

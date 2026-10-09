@@ -47,6 +47,7 @@ import {
   shouldForceAuthLogout,
 } from "@/src/lib/auth-base-query-refresh";
 import { newIdempotencyKey } from "@/src/lib/idempotency";
+import { buildCustomerEnrolMockResponse } from "@/src/lib/customer-enrol-mock";
 import { ensureMutationJsonBody } from "@/src/lib/rtk-mutation-body";
 import type { AppDispatch } from "@/src/store";
 import { adaptCustomerSchemePlan, adaptCustomerSchemePlanList } from "@/src/lib/customer-plan-adapter";
@@ -312,8 +313,12 @@ const mockBaseQuery: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQueryErro
   }
   if (url === "/app/schemes/enrol" && method === "POST") {
     const plan = schemePlans.find((p) => p.id === body?.planId) ?? schemePlans[0];
-    const flexible = plan.model === "FLEXIBLE";
-    return ok({ scheme: { id: "sch_new", schemeNumber: "ENR-24992" }, paymentType: flexible ? "FLEXIBLE_PAYMENT_INTENT" : "FIXED_PAYMENT_LINK", ...(flexible ? { paymentIntent: { id: "pi_new", paymentId: "pay_new", paymentUrl: "https://mercury.phonepe.com/transact/pg?token=mock", status: "PENDING" } } : { paymentLink: { id: "pl_new", token: "mock_pay_link", gatewayUrl: "/pay/mock_pay_link", amount: money(Number(body?.installmentAmountPaise ?? 250000)), expiresAt: new Date(Date.now() + 900000).toISOString() } }) });
+    const installmentAmountPaise =
+      typeof body?.installmentAmountPaise === "number"
+        ? body.installmentAmountPaise
+        : undefined;
+    const payNow = typeof body?.payNow === "boolean" ? body.payNow : undefined;
+    return ok(buildCustomerEnrolMockResponse(plan, { installmentAmountPaise, payNow }));
   }
   if ((url.endsWith("/payment-intents") || url.endsWith("/pay")) && method === "POST") {
     const isIntent = url.endsWith("/payment-intents");
