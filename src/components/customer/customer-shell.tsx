@@ -4,8 +4,8 @@ import Link from "next/link";
 import { useEffect } from "react";
 import { usePathname } from "next/navigation";
 import { recordPortalNavigation } from "@/src/lib/portal-nav";
-import { Bell, CircleHelp, CreditCard, Home, IndianRupee, Layers3, LogOut, Sparkles, UserRound, WalletCards } from "lucide-react";
-import { useGetCustomerHomeQuery } from "@/src/store/api/customer-api";
+import { Bell, CircleHelp, CreditCard, Home, IndianRupee, Layers3, LogOut, ShoppingBag, Sparkles, UserRound, WalletCards } from "lucide-react";
+import { useGetCustomerHomeQuery, useGetShopAvailabilityQuery } from "@/src/store/api/customer-api";
 import { useCustomerSignOut } from "@/src/lib/use-customer-sign-out";
 import { cn } from "@/lib/utils";
 import { useCustomerTenant } from "@/src/components/customer/customer-tenant-context";
@@ -39,10 +39,16 @@ export function CustomerShell({ children }: { children: React.ReactNode }) {
   const { tenantSlug } = useCustomerTenant();
   const { signOut } = useCustomerSignOut();
   const { data: home } = useGetCustomerHomeQuery();
+  const { data: shopAvailability } = useGetShopAvailabilityQuery();
+  const storeAvailable = shopAvailability?.available === true;
   const { customerSelfEnrol, customerAppWriteEnabled, customerAppPaymentsEnabled } = useCustomerPortalCapabilities();
   const unread = home?.unreadNotificationCount ?? 0;
   const homeHref = customerPath(tenantSlug);
-  const navigation = coreNavigation.map((item) => ({ ...item, href: item.segment ? customerPath(tenantSlug, item.segment) : homeHref }));
+  const navigation = [
+    ...coreNavigation.slice(0, 2),
+    ...(storeAvailable ? [{ segment: "shop", label: "Shop", icon: ShoppingBag, exact: false }] : []),
+    ...coreNavigation.slice(2),
+  ].map((item) => ({ ...item, href: item.segment ? customerPath(tenantSlug, item.segment) : homeHref }));
   const payScheme =
     home?.activeSchemes?.find((scheme) => scheme.id === home.actionCard?.schemeId) ??
     home?.activeSchemes?.find((scheme) => scheme.canPay) ??
@@ -52,7 +58,12 @@ export function CustomerShell({ children }: { children: React.ReactNode }) {
       ? customerPath(tenantSlug, "schemes", payScheme.id)
       : customerPath(tenantSlug, "schemes");
 
-  const mobileNav = mobileNavigation.map((item) => {
+  const mobileItems = storeAvailable
+    ? mobileNavigation.map((item) => item.segment === "notifications"
+        ? { ...item, segment: "shop", label: "Shop", icon: ShoppingBag }
+        : item)
+    : mobileNavigation;
+  const mobileNav = mobileItems.map((item) => {
     if (item.segment === "__pay__") return { ...item, href: payHref };
     return { ...item, href: item.segment ? customerPath(tenantSlug, item.segment) : homeHref };
   });
@@ -76,7 +87,7 @@ export function CustomerShell({ children }: { children: React.ReactNode }) {
             <CustomerBrand />
           </Link>
           <nav className="ml-auto hidden items-center gap-1 lg:flex" aria-label="Customer navigation">
-            {navigation.slice(0, 4).map((item) => (
+            {navigation.filter((item) => item.segment !== "profile").map((item) => (
               <Link
                 key={item.href}
                 href={item.href}

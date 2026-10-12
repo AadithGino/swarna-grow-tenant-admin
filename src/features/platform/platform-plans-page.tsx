@@ -14,9 +14,11 @@ import { FieldLabel, PageHeader, StatCard, Surface } from "@/src/components/comm
 import { handleFormApiError } from "@/src/lib/form-api-error";
 import {
   emptyPlatformSubscriptionPlanForm,
+  isKnownPlanLimitKey,
   limitFieldKey,
   livePlatformSubscriptionPlanFieldErrors,
   parsePlanLimitInput,
+  pickKnownPlanLimits,
   platformSubscriptionPlanFormFromPlan,
   platformSubscriptionPlanFormReady,
   platformSubscriptionPlanFormUnchanged,
@@ -125,7 +127,9 @@ function PlanCard({ plan, onEdit }: { plan: PlatformPlan; onEdit: () => void }) 
         </p>
         <div className="my-5 h-px bg-border" />
         <div className="space-y-3 text-sm">
-          {Object.entries(plan.limits).map(([key, value]) => (
+          {Object.entries(plan.limits)
+            .filter(([key]) => isKnownPlanLimitKey(key))
+            .map(([key, value]) => (
               <div key={key} className="flex justify-between gap-4">
                 <span className="text-muted-foreground">{formatLimitLabel(key)}</span>
                 <strong>{value?.toLocaleString("en-IN") ?? "Unlimited"}</strong>
@@ -278,10 +282,15 @@ function PlanDialog({
     setTouched(next);
   };
 
-  const submitDisabled =
-    saveState.isLoading ||
-    !platformSubscriptionPlanFormReady(form) ||
-    (plan != null && platformSubscriptionPlanFormUnchanged(form, baseline));
+  const formInvalid = !platformSubscriptionPlanFormReady(form);
+  const formUnchanged =
+    plan != null && platformSubscriptionPlanFormUnchanged(form, baseline);
+  const submitDisabled = saveState.isLoading || formInvalid || formUnchanged;
+  const submitHint = formUnchanged
+    ? "Change a field to enable Save."
+    : formInvalid
+      ? "Fix the highlighted fields to save."
+      : undefined;
 
   return (
     <ActionDialog
@@ -292,6 +301,7 @@ function PlanDialog({
       actionLabel={plan ? "Save plan" : "Create plan"}
       className="sm:max-w-3xl"
       submitDisabled={submitDisabled}
+      submitHint={submitHint}
       suppressDefaultErrorToast
       onError={(err) => {
         handleFormApiError(err, {
@@ -403,7 +413,9 @@ function PlanDialog({
       </div>
       <p className="mb-2 mt-5 text-sm font-bold">Limits</p>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {Object.entries(form.limits).map(([k, v]) => {
+        {Object.entries(form.limits)
+          .filter(([k]) => isKnownPlanLimitKey(k))
+          .map(([k, v]) => {
           const field = limitFieldKey(k);
           return (
             <PlanField
@@ -416,10 +428,10 @@ function PlanDialog({
                 setTouched((p) => ({ ...p, [field]: true }));
                 setForm((prev) => ({
                   ...prev,
-                  limits: {
+                  limits: pickKnownPlanLimits({
                     ...prev.limits,
                     [k]: parsePlanLimitInput(raw, prev.tier),
-                  },
+                  }),
                 }));
                 setFieldErrors((prev) => {
                   const next = { ...prev };

@@ -73,7 +73,7 @@ export type AdminReportView = {
   page: import("@/src/lib/cursor-pagination").ListPageMeta;
 };
 
-export const ADMIN_REPORT_KEYS = [
+export const SCHEME_ADMIN_REPORT_KEYS = [
   "COLLECTION",
   "ENROLMENT",
   "OUTSTANDING",
@@ -90,7 +90,26 @@ export const ADMIN_REPORT_KEYS = [
   "SCHEME_PERFORMANCE",
 ] as const;
 
+export const ECOMMERCE_ADMIN_REPORT_KEYS = [
+  "ECOMMERCE_SALES",
+  "ECOMMERCE_ORDERS_FULFILMENT",
+  "ECOMMERCE_PRODUCTS",
+] as const;
+
+export const ADMIN_REPORT_KEYS = [
+  ...SCHEME_ADMIN_REPORT_KEYS,
+  ...ECOMMERCE_ADMIN_REPORT_KEYS,
+] as const;
+
+export type SchemeAdminReportKey = (typeof SCHEME_ADMIN_REPORT_KEYS)[number];
+export type EcommerceAdminReportKey = (typeof ECOMMERCE_ADMIN_REPORT_KEYS)[number];
 export type AdminReportKey = (typeof ADMIN_REPORT_KEYS)[number];
+
+export function isEcommerceAdminReportKey(
+  key: string,
+): key is EcommerceAdminReportKey {
+  return (ECOMMERCE_ADMIN_REPORT_KEYS as readonly string[]).includes(key);
+}
 
 export const ADMIN_REPORT_LABELS: Record<AdminReportKey, string> = {
   COLLECTION: "Collection",
@@ -107,4 +126,7 @@ export const ADMIN_REPORT_LABELS: Record<AdminReportKey, string> = {
   DEFAULTER: "Defaulter",
   BRANCH_PERFORMANCE: "Branch performance",
   SCHEME_PERFORMANCE: "Scheme performance",
+  ECOMMERCE_SALES: "Ecommerce sales & collections",
+  ECOMMERCE_ORDERS_FULFILMENT: "Ecommerce orders & fulfilment",
+  ECOMMERCE_PRODUCTS: "Ecommerce products",
 };

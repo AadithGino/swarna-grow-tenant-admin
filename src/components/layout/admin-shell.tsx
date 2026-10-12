@@ -65,6 +65,7 @@ import { BrandMark } from "@/src/components/brand/brand-mark";
 import { PaymentSuccessHost } from "@/src/components/common/payment-success-host";
 import { SecuritySessionsDialog } from "@/src/features/auth/security-sessions-dialog";
 import { canAccessRoute } from "@/src/lib/permissions";
+import { useEcommerceWorkspaceNavVisible } from "@/src/features/ecommerce/ecommerce-admin-shared";
 import { useAppDispatch, useAppSelector } from "@/src/store/hooks";
 import { clearSession } from "@/src/store/slices/session-slice";
 import {
@@ -98,6 +99,27 @@ const groups: { label: string; items: NavItem[] }[] = [
   {
     label: "Overview",
     items: [{ label: "Dashboard", href: "/", icon: LayoutDashboard }],
+  },
+  {
+    label: "Online store",
+    items: [
+      { label: "Catalog", href: "/ecommerce", icon: ShoppingBag },
+      { label: "Categories", href: "/ecommerce/categories", icon: ShoppingBag },
+      {
+        label: "Store gold rates",
+        href: "/ecommerce/gold-rates",
+        icon: Scale,
+      },
+      { label: "Tax settings", href: "/ecommerce/tax", icon: FileBarChart },
+      { label: "Inventory", href: "/ecommerce/inventory", icon: ShoppingBag },
+      { label: "Fulfilment", href: "/ecommerce/fulfilment", icon: ShoppingBag },
+      { label: "Orders", href: "/ecommerce/orders", icon: ShoppingBag },
+      {
+        label: "Payment exceptions",
+        href: "/ecommerce/payment-exceptions",
+        icon: ShoppingBag,
+      },
+    ],
   },
   {
     label: "Customer operations",
@@ -140,19 +162,6 @@ const groups: { label: string; items: NavItem[] }[] = [
     ],
   },
   {
-    label: "Online store",
-    items: [
-      { label: "Catalog", href: "/ecommerce", icon: ShoppingBag },
-      { label: "Categories", href: "/ecommerce/categories", icon: ShoppingBag },
-      {
-        label: "Store gold rates",
-        href: "/ecommerce/gold-rates",
-        icon: Scale,
-      },
-      { label: "Tax settings", href: "/ecommerce/tax", icon: FileBarChart },
-    ],
-  },
-  {
     label: "Configuration",
     items: [
       { label: "Schemes", href: "/schemes", icon: Landmark },
@@ -173,9 +182,13 @@ function Navigation({
   const pathname = usePathname();
   const user = useAppSelector((s) => s.session.session?.user);
   const badges = useNavBadges();
+  const ecommerceNav = useEcommerceWorkspaceNavVisible();
   return (
     <nav className="flex-1 overflow-y-auto px-3 py-5 scrollbar-thin">
       {groups.map((group) => {
+        if (group.label === "Online store" && !ecommerceNav.showEcommerceNav) {
+          return null;
+        }
         const items = group.items.filter((item) =>
           canAccessRoute(item.href, user),
         );
@@ -191,7 +204,9 @@ function Navigation({
             {items.map(({ label, href, icon: Icon, badgeKey }) => {
               const count = badgeKey ? badges[badgeKey] : undefined;
               const active =
-                href === "/" ? pathname === "/" : pathname.startsWith(href);
+                href === "/" || href === "/ecommerce"
+                  ? pathname === href
+                  : pathname === href || pathname.startsWith(`${href}/`);
               const link = (
                 <Link
                   href={href}

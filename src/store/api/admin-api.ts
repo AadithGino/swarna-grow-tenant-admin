@@ -204,6 +204,9 @@ function mapReportKeyToExportType(reportKey: string): string {
     CUSTOMER: "CUSTOMER",
     SCHEME: "SCHEME",
     AUDIT: "AUDIT",
+    ECOMMERCE_SALES: "ECOMMERCE_SALES",
+    ECOMMERCE_ORDERS_FULFILMENT: "ECOMMERCE_ORDERS_FULFILMENT",
+    ECOMMERCE_PRODUCTS: "ECOMMERCE_PRODUCTS",
   };
   return map[reportKey] ?? "COLLECTION";
 }
@@ -818,6 +821,59 @@ export const adminApi = createApi({
           return Array.isArray(list) ? (list as MessageLog[]) : [];
         }),
       providesTags: ["Message"],
+    }),
+    getCustomerEcommerceOrdersMeta: builder.query<
+      { customerId: string; hasOrderHistory: boolean },
+      { customerId: string }
+    >({
+      query: ({ customerId }) => ({
+        url: `/admin/customers/${customerId}/ecommerce/orders/meta`,
+        mockKey: "customerEcommerceOrdersMeta",
+      }),
+      transformResponse: (raw: unknown) => {
+        if (raw && typeof raw === "object" && "data" in raw) {
+          return (raw as { data: { customerId: string; hasOrderHistory: boolean } }).data;
+        }
+        return raw as { customerId: string; hasOrderHistory: boolean };
+      },
+    }),
+    getCustomerEcommerceOrders: builder.query<
+      {
+        items: Array<{
+          id: string;
+          orderNumber: string;
+          createdAt?: string | null;
+          itemSummary: string;
+          totalPaise: number;
+          status: string;
+          attentionLabel?: string | null;
+        }>;
+        page: ReturnType<typeof adaptCustomerResourceList<unknown>>["page"];
+        ecommerceSummary?: {
+          orderCount: number;
+          grossCollectedPaise: number;
+          netCollectedPaise: number;
+          label: string;
+        };
+      },
+      { customerId: string } & ListQueryParams
+    >({
+      query: ({ customerId, ...params }) => ({
+        url: `/admin/customers/${customerId}/ecommerce/orders`,
+        params: { id: customerId, ...params },
+        mockKey: "customerEcommerceOrders",
+      }),
+      transformResponse: (raw: any) => {
+        const adapted = adaptCustomerResourceList(raw, (value) => {
+          const list = Array.isArray(value?.data)
+            ? value.data
+            : value?.items ?? (Array.isArray(value) ? value : []);
+          return Array.isArray(list) ? list : [];
+        });
+        const summary = raw?.meta?.ecommerceSummary;
+        return { ...adapted, ecommerceSummary: summary };
+      },
+      providesTags: ["Ecommerce"],
     }),
     createCustomer: builder.mutation<Customer, Partial<Customer>>({
       query: (body) => ({
@@ -3085,7 +3141,7 @@ export const adminApi = createApi({
     }),
     getEcommerceProducts: builder.query<
       { items: Record<string, any>[]; meta?: Record<string, unknown> },
-      { includePricing?: boolean; status?: string } | void
+      { includePricing?: boolean; status?: string; limit?: number; cursor?: string } | void
     >({
       query: (params) => ({
         url: "/admin/ecommerce/products",
@@ -3320,6 +3376,563 @@ export const adminApi = createApi({
       }),
       transformResponse: (raw) =>
         (contractPayload(raw) as Record<string, unknown>) ?? {},
+      invalidatesTags: ["Ecommerce"],
+    }),
+    getEcommerceInventory: builder.query<
+      { items: Record<string, any>[] },
+      { q?: string; limit?: number } | void
+    >({
+      query: (params) => ({
+        url: "/admin/ecommerce/inventory",
+        params: params ?? {},
+        mockKey: "ecommerceInventory",
+      }),
+      transformResponse: (raw) => {
+        const payload = contractPayload(raw) as { items?: Record<string, unknown>[] };
+        return { items: payload?.items ?? [] };
+      },
+      providesTags: ["Ecommerce"],
+    }),
+    patchEcommerceInventoryProduct: builder.mutation<
+      Record<string, any>,
+      { productId: string; body: Record<string, unknown> }
+    >({
+      query: ({ productId, body }) => ({
+        url: `/admin/ecommerce/inventory/${productId}`,
+        method: "PATCH",
+        body,
+        mockKey: "patchEcommerceInventory",
+        params: { productId },
+      }),
+      transformResponse: (raw) =>
+        (contractPayload(raw) as Record<string, unknown>) ?? {},
+      invalidatesTags: ["Ecommerce"],
+    }),
+    adjustEcommerceInventoryProduct: builder.mutation<
+      Record<string, any>,
+      { productId: string; body: Record<string, unknown> }
+    >({
+      query: ({ productId, body }) => ({
+        url: `/admin/ecommerce/inventory/${productId}/adjust`,
+        method: "POST",
+        body,
+        mockKey: "adjustEcommerceInventory",
+        params: { productId },
+      }),
+      transformResponse: (raw) =>
+        (contractPayload(raw) as Record<string, unknown>) ?? {},
+      invalidatesTags: ["Ecommerce"],
+    }),
+    getEcommerceFulfilmentSettings: builder.query<Record<string, any>, void>({
+      query: () => ({
+        url: "/admin/ecommerce/fulfilment-settings",
+        mockKey: "ecommerceFulfilmentSettings",
+      }),
+      transformResponse: (raw) =>
+        (contractPayload(raw) as Record<string, unknown>) ?? {},
+      providesTags: ["Ecommerce"],
+    }),
+    putEcommerceFulfilmentSettings: builder.mutation<
+      Record<string, any>,
+      Record<string, unknown>
+    >({
+      query: (body) => ({
+        url: "/admin/ecommerce/fulfilment-settings",
+        method: "PUT",
+        body,
+        mockKey: "putEcommerceFulfilmentSettings",
+      }),
+      transformResponse: (raw) =>
+        (contractPayload(raw) as Record<string, unknown>) ?? {},
+      invalidatesTags: ["Ecommerce"],
+    }),
+    getEcommerceOrders: builder.query<
+      {
+        items: import("@/src/types/ecommerce-order").EcommerceOrderListItem[];
+        meta: import("@/src/types/ecommerce-order").EcommerceOrdersListMeta;
+      },
+      import("@/src/lib/ecommerce-orders-list-filters.types").EcommerceOrdersListQueryParams | void
+    >({
+      query: (params) => ({
+        url: "/admin/ecommerce/orders",
+        params: params ?? {},
+        mockKey: "ecommerceOrders",
+      }),
+      transformResponse: (raw) => {
+        const payload = contractPayload(raw);
+        const meta = contractMeta(raw) as import("@/src/types/ecommerce-order").EcommerceOrdersListMeta;
+        const items = Array.isArray(payload)
+          ? payload
+          : ((payload as { items?: unknown[] })?.items ?? []);
+        return {
+          items: items as import("@/src/types/ecommerce-order").EcommerceOrderListItem[],
+          meta: {
+            nextCursor: meta?.nextCursor ?? null,
+            hasMore: Boolean(meta?.hasMore),
+            limit: Number(meta?.limit ?? 25),
+            totalCount: meta?.totalCount,
+            totalCountCapped: meta?.totalCountCapped,
+            sort: meta?.sort,
+          },
+        };
+      },
+      providesTags: ["Ecommerce"],
+    }),
+    getEcommerceWorkspaceSummary: builder.query<
+      import("@/src/types/ecommerce-order").EcommerceWorkspaceSummary,
+      { from?: string; to?: string; period?: string } | void
+    >({
+      query: (params) => ({
+        url: "/admin/ecommerce/summary",
+        params: params ?? {},
+        mockKey: "ecommerceWorkspaceSummary",
+      }),
+      transformResponse: (raw) =>
+        (contractPayload(raw) as import("@/src/types/ecommerce-order").EcommerceWorkspaceSummary) ??
+        ({} as import("@/src/types/ecommerce-order").EcommerceWorkspaceSummary),
+      providesTags: ["Ecommerce"],
+    }),
+    getEcommerceReports: builder.query<
+      ReturnType<typeof adaptAdminReport>,
+      ListQueryParams &
+        DateRangeQueryParams & {
+          reportKey: string;
+        }
+    >({
+      query: ({ reportKey, ...params }) => ({
+        url: `/admin/ecommerce/reports/${encodeURIComponent(reportKey)}`,
+        params,
+        mockKey: "ecommerceReports",
+      }),
+      transformResponse: adaptAdminReport,
+      providesTags: ["Report", "Ecommerce"],
+    }),
+    createEcommerceReportExport: builder.mutation<
+      NormalizedExportJob,
+      { reportKey: string; format: string; params?: Record<string, unknown> }
+    >({
+      query: ({ reportKey, format, params }) => ({
+        url: `/admin/ecommerce/reports/${encodeURIComponent(reportKey)}/export`,
+        method: "POST",
+        body: {
+          format,
+          filters: params ?? {},
+        },
+        mockKey: "ecommerceReportExport",
+      }),
+      transformResponse: (raw) => normalizeExportJob(raw),
+      invalidatesTags: [{ type: "Export", id: "LIST" }],
+    }),
+    getEcommerceOrder: builder.query<import("@/src/types/ecommerce-order").EcommerceOrderDetail, string>({
+      query: (orderId) => ({
+        url: `/admin/ecommerce/orders/${encodeURIComponent(orderId)}`,
+        mockKey: "ecommerceOrder",
+      }),
+      transformResponse: (raw) =>
+        (contractPayload(raw) as import("@/src/types/ecommerce-order").EcommerceOrderDetail) ??
+        ({} as import("@/src/types/ecommerce-order").EcommerceOrderDetail),
+      providesTags: ["Ecommerce"],
+    }),
+    getEcommerceOrderReturns: builder.query<
+      import("@/src/types/ecommerce-order").EcommerceOrderReturnView,
+      string
+    >({
+      query: (orderId) => ({
+        url: `/admin/ecommerce/orders/${encodeURIComponent(orderId)}/returns`,
+        mockKey: "ecommerceOrderReturns",
+      }),
+      transformResponse: (raw) =>
+        (contractPayload(raw) as import("@/src/types/ecommerce-order").EcommerceOrderReturnView) ?? {
+          orderId: "",
+          activeRequest: null,
+          items: [],
+        },
+      providesTags: ["Ecommerce"],
+    }),
+    decideEcommerceOrderCancellation: builder.mutation<
+      Record<string, unknown>,
+      {
+        orderId: string;
+        decision: "APPROVE" | "REJECT";
+        expectedVersion: number;
+        decisionReason?: string;
+        stockDisposition?: "RESTOCK_CONFIRMED" | "STOCK_EXCEPTION";
+      }
+    >({
+      query: ({ orderId, ...body }) => ({
+        url: `/admin/ecommerce/orders/${encodeURIComponent(orderId)}/cancellation/decision`,
+        method: "POST",
+        body,
+        mockKey: "decideEcommerceOrderCancellation",
+      }),
+      transformResponse: (raw) => (contractPayload(raw) as Record<string, unknown>) ?? {},
+      invalidatesTags: ["Ecommerce"],
+    }),
+    initiateEcommerceOrderCancellation: builder.mutation<
+      Record<string, unknown>,
+      {
+        orderId: string;
+        reason: string;
+        expectedVersion: number;
+        idempotencyKey: string;
+        stockDisposition?: "RESTOCK_CONFIRMED" | "STOCK_EXCEPTION";
+      }
+    >({
+      query: ({ orderId, idempotencyKey, ...body }) => ({
+        url: `/admin/ecommerce/orders/${encodeURIComponent(orderId)}/cancellation/initiate`,
+        method: "POST",
+        body,
+        headers: { "X-Idempotency-Key": idempotencyKey },
+        mockKey: "initiateEcommerceOrderCancellation",
+      }),
+      transformResponse: (raw) => (contractPayload(raw) as Record<string, unknown>) ?? {},
+      invalidatesTags: ["Ecommerce"],
+    }),
+    recordEcommerceCodCancellationManualRefund: builder.mutation<
+      Record<string, unknown>,
+      {
+        orderId: string;
+        idempotencyKey: string;
+        amountPaise: number;
+        recipient: string;
+        method: string;
+        reference: string;
+        proofNote: string;
+      }
+    >({
+      query: ({ orderId, idempotencyKey, ...body }) => ({
+        url: `/admin/ecommerce/orders/${encodeURIComponent(orderId)}/cancellation/cod-manual-refund`,
+        method: "POST",
+        body,
+        headers: { "X-Idempotency-Key": idempotencyKey },
+        mockKey: "recordEcommerceCodCancellationManualRefund",
+      }),
+      transformResponse: (raw) => (contractPayload(raw) as Record<string, unknown>) ?? {},
+      invalidatesTags: ["Ecommerce"],
+    }),
+    getEcommerceOrderCancellation: builder.query<
+      import("@/src/types/ecommerce-cancellation").EcommerceOrderCancellationView,
+      string
+    >({
+      query: (orderId) => ({
+        url: `/admin/ecommerce/orders/${encodeURIComponent(orderId)}/cancellation`,
+        mockKey: "ecommerceOrderCancellation",
+      }),
+      transformResponse: (raw) =>
+        (contractPayload(raw) as import("@/src/types/ecommerce-cancellation").EcommerceOrderCancellationView) ??
+        {},
+      providesTags: ["Ecommerce"],
+    }),
+    downloadEcommerceOrderInvoice: builder.query<
+      { blobUrl: string; filename: string },
+      { orderId: string; orderNumber?: string }
+    >({
+      async queryFn({ orderId, orderNumber }) {
+        const safeName = (orderNumber ?? `order-${orderId}`).replace(/[^\w.-]+/g, "_");
+        const filename = safeName.endsWith(".pdf") ? safeName : `${safeName}.pdf`;
+        if (env.useMocks) {
+          const blob = new Blob(["%PDF-1.4 mock ecommerce invoice"], {
+            type: "application/pdf",
+          });
+          return {
+            data: { blobUrl: URL.createObjectURL(blob), filename },
+          };
+        }
+        try {
+          const blob = await fetchAuthorizedBlob(
+            `/admin/ecommerce/orders/${encodeURIComponent(orderId)}/invoice.pdf`,
+          );
+          return {
+            data: { blobUrl: URL.createObjectURL(blob), filename },
+          };
+        } catch (error) {
+          return { error: error as FetchBaseQueryError };
+        }
+      },
+    }),
+    getEcommerceOrderPaymentAttempts: builder.query<
+      { items: Record<string, unknown>[] },
+      string
+    >({
+      query: (orderId) => ({
+        url: `/admin/ecommerce/orders/${encodeURIComponent(orderId)}/payment-attempts`,
+        mockKey: "ecommerceOrderPaymentAttempts",
+      }),
+      transformResponse: (raw) =>
+        (contractPayload(raw) as { items: Record<string, unknown>[] }) ?? { items: [] },
+      providesTags: ["Ecommerce"],
+    }),
+    getEcommerceOrderPaymentAttemptEvents: builder.query<
+      { items: Record<string, unknown>[] },
+      { orderId: string; paymentAttemptId?: string }
+    >({
+      query: ({ orderId, paymentAttemptId }) => ({
+        url: `/admin/ecommerce/orders/${encodeURIComponent(orderId)}/payment-attempt-events`,
+        params: paymentAttemptId ? { paymentAttemptId } : undefined,
+        mockKey: "ecommerceOrderPaymentAttemptEvents",
+      }),
+      transformResponse: (raw) =>
+        (contractPayload(raw) as { items: Record<string, unknown>[] }) ?? { items: [] },
+      providesTags: ["Ecommerce"],
+    }),
+    getEcommercePaymentExceptions: builder.query<
+      { items: Record<string, unknown>[] },
+      { limit?: number } | void
+    >({
+      query: (params) => ({
+        url: "/admin/ecommerce/payment-exceptions",
+        params: params ?? {},
+        mockKey: "ecommercePaymentExceptions",
+      }),
+      transformResponse: (raw) =>
+        (contractPayload(raw) as { items: Record<string, unknown>[] }) ?? { items: [] },
+      providesTags: ["Ecommerce"],
+    }),
+    getEcommerceOrderEvents: builder.query<{ items: Record<string, unknown>[] }, string>({
+      query: (orderId) => ({
+        url: `/admin/ecommerce/orders/${encodeURIComponent(orderId)}/events`,
+        mockKey: "ecommerceOrderEvents",
+      }),
+      transformResponse: (raw) =>
+        (contractPayload(raw) as { items: Record<string, unknown>[] }) ?? { items: [] },
+      providesTags: ["Ecommerce"],
+    }),
+    getEcommerceOrderPaymentExceptionRefund: builder.query<
+      Record<string, unknown>,
+      string
+    >({
+      query: (orderId) => ({
+        url: `/admin/ecommerce/orders/${encodeURIComponent(orderId)}/payment-exception-refund`,
+        mockKey: "ecommerceOrderPaymentExceptionRefund",
+      }),
+      transformResponse: (raw) => (contractPayload(raw) as Record<string, unknown>) ?? {},
+      providesTags: ["Ecommerce"],
+    }),
+    initiateEcommerceOrderPaymentExceptionRefund: builder.mutation<
+      Record<string, unknown>,
+      string
+    >({
+      query: (orderId) => ({
+        url: `/admin/ecommerce/orders/${encodeURIComponent(orderId)}/payment-exception-refund/initiate`,
+        method: "POST",
+        mockKey: "initiateEcommerceOrderPaymentExceptionRefund",
+      }),
+      invalidatesTags: ["Ecommerce"],
+    }),
+    recordEcommerceOrderPaymentExceptionRefundManual: builder.mutation<
+      Record<string, unknown>,
+      { orderId: string; providerRefundReference: string; reason: string; evidenceNote: string }
+    >({
+      query: ({ orderId, ...body }) => ({
+        url: `/admin/ecommerce/orders/${encodeURIComponent(orderId)}/payment-exception-refund/record-manual`,
+        method: "POST",
+        body,
+        mockKey: "recordEcommerceOrderPaymentExceptionRefundManual",
+      }),
+      invalidatesTags: ["Ecommerce"],
+    }),
+    transitionEcommerceOrderFulfilment: builder.mutation<
+      Record<string, unknown>,
+      { orderId: string; targetStatus: string; expectedVersion: number }
+    >({
+      query: ({ orderId, ...body }) => ({
+        url: `/admin/ecommerce/orders/${encodeURIComponent(orderId)}/fulfilment-transition`,
+        method: "POST",
+        body,
+        mockKey: "transitionEcommerceOrderFulfilment",
+      }),
+      invalidatesTags: ["Ecommerce"],
+    }),
+    patchEcommerceOrderDeliveryTracking: builder.mutation<
+      Record<string, unknown>,
+      {
+        orderId: string;
+        expectedVersion: number;
+        carrierName?: string;
+        trackingNumber?: string;
+        trackingUrl?: string;
+        dispatchedAt?: string;
+        deliveredAt?: string;
+      }
+    >({
+      query: ({ orderId, ...body }) => ({
+        url: `/admin/ecommerce/orders/${encodeURIComponent(orderId)}/delivery-tracking`,
+        method: "PATCH",
+        body,
+        mockKey: "patchEcommerceOrderDeliveryTracking",
+      }),
+      transformResponse: (raw) => (contractPayload(raw) as Record<string, unknown>) ?? {},
+      invalidatesTags: ["Ecommerce"],
+    }),
+    getEcommerceReturnRequests: builder.query<{ items: Record<string, unknown>[] }, void>({
+      query: () => ({
+        url: "/admin/ecommerce/return-requests",
+        mockKey: "ecommerceReturnRequests",
+      }),
+      transformResponse: (raw) =>
+        (contractPayload(raw) as { items: Record<string, unknown>[] }) ?? { items: [] },
+      providesTags: ["Ecommerce"],
+    }),
+    decideEcommerceReturnRequest: builder.mutation<
+      Record<string, unknown>,
+      {
+        returnRequestId: string;
+        decision: "APPROVE" | "REJECT";
+        expectedVersion: number;
+        decisionReason?: string;
+      }
+    >({
+      query: ({ returnRequestId, ...body }) => ({
+        url: `/admin/ecommerce/return-requests/${encodeURIComponent(returnRequestId)}/decision`,
+        method: "POST",
+        body,
+        mockKey: "decideEcommerceReturnRequest",
+      }),
+      transformResponse: (raw) => (contractPayload(raw) as Record<string, unknown>) ?? {},
+      invalidatesTags: ["Ecommerce"],
+    }),
+    recordEcommerceReturnReceived: builder.mutation<
+      Record<string, unknown>,
+      {
+        returnRequestId: string;
+        expectedVersion: number;
+        receiptNote?: string;
+      }
+    >({
+      query: ({ returnRequestId, ...body }) => ({
+        url: `/admin/ecommerce/return-requests/${encodeURIComponent(returnRequestId)}/received`,
+        method: "POST",
+        body,
+        mockKey: "recordEcommerceReturnReceived",
+      }),
+      transformResponse: (raw) => (contractPayload(raw) as Record<string, unknown>) ?? {},
+      invalidatesTags: ["Ecommerce"],
+    }),
+    recordEcommerceReturnInspection: builder.mutation<
+      Record<string, unknown>,
+      {
+        returnRequestId: string;
+        expectedVersion: number;
+        inspectionNote: string;
+        inspectionOutcome: "APPROVED_FOR_RESALE" | "REJECTED_NOT_RESALABLE";
+        confirmRestockInventory?: boolean;
+      }
+    >({
+      query: ({ returnRequestId, ...body }) => ({
+        url: `/admin/ecommerce/return-requests/${encodeURIComponent(returnRequestId)}/inspection`,
+        method: "POST",
+        body,
+        mockKey: "recordEcommerceReturnInspection",
+      }),
+      transformResponse: (raw) => (contractPayload(raw) as Record<string, unknown>) ?? {},
+      invalidatesTags: ["Ecommerce"],
+    }),
+    createEcommerceReturnRefundCase: builder.mutation<
+      Record<string, unknown>,
+      { returnRequestId: string; expectedVersion: number }
+    >({
+      query: ({ returnRequestId, ...body }) => ({
+        url: `/admin/ecommerce/return-requests/${encodeURIComponent(returnRequestId)}/refund-case`,
+        method: "POST",
+        body,
+        mockKey: "createEcommerceReturnRefundCase",
+      }),
+      transformResponse: (raw) => (contractPayload(raw) as Record<string, unknown>) ?? {},
+      invalidatesTags: ["Ecommerce"],
+    }),
+    recordEcommerceReturnManualRefund: builder.mutation<
+      Record<string, unknown>,
+      {
+        returnRequestId: string;
+        expectedVersion: number;
+        amountPaise: number;
+        recipient: string;
+        method: string;
+        reference: string;
+        proofNote: string;
+      }
+    >({
+      query: ({ returnRequestId, ...body }) => ({
+        url: `/admin/ecommerce/return-requests/${encodeURIComponent(returnRequestId)}/record-manual-refund`,
+        method: "POST",
+        body,
+        mockKey: "recordEcommerceReturnManualRefund",
+      }),
+      transformResponse: (raw) => (contractPayload(raw) as Record<string, unknown>) ?? {},
+      invalidatesTags: ["Ecommerce"],
+    }),
+    resolveEcommerceReturnRequest: builder.mutation<
+      Record<string, unknown>,
+      {
+        returnRequestId: string;
+        expectedVersion: number;
+        resolutionNote: string;
+        replacementOrderId?: string;
+        manualSettlementNote?: string;
+      }
+    >({
+      query: ({ returnRequestId, ...body }) => ({
+        url: `/admin/ecommerce/return-requests/${encodeURIComponent(returnRequestId)}/resolve`,
+        method: "POST",
+        body,
+        mockKey: "resolveEcommerceReturnRequest",
+      }),
+      transformResponse: (raw) => (contractPayload(raw) as Record<string, unknown>) ?? {},
+      invalidatesTags: ["Ecommerce"],
+    }),
+    acceptEcommerceCodOrder: builder.mutation<
+      Record<string, unknown>,
+      { orderId: string; expectedVersion: number }
+    >({
+      query: ({ orderId, expectedVersion }) => ({
+        url: `/admin/ecommerce/orders/${encodeURIComponent(orderId)}/cod/accept`,
+        method: "POST",
+        body: { expectedVersion },
+        mockKey: "acceptEcommerceCodOrder",
+      }),
+      invalidatesTags: ["Ecommerce"],
+    }),
+    rejectEcommerceCodOrder: builder.mutation<
+      Record<string, unknown>,
+      { orderId: string; expectedVersion: number; reason?: string }
+    >({
+      query: ({ orderId, expectedVersion, reason }) => ({
+        url: `/admin/ecommerce/orders/${encodeURIComponent(orderId)}/cod/reject`,
+        method: "POST",
+        body: { expectedVersion, reason },
+        mockKey: "rejectEcommerceCodOrder",
+      }),
+      invalidatesTags: ["Ecommerce"],
+    }),
+    recordEcommerceCodCollection: builder.mutation<
+      Record<string, unknown>,
+      {
+        orderId: string;
+        expectedVersion: number;
+        amountPaise: number;
+        reference: string;
+        idempotencyKey: string;
+      }
+    >({
+      query: ({ orderId, idempotencyKey, ...body }) => ({
+        url: `/admin/ecommerce/orders/${encodeURIComponent(orderId)}/cod/record-collection`,
+        method: "POST",
+        body,
+        headers: { "X-Idempotency-Key": idempotencyKey },
+        mockKey: "recordEcommerceCodCollection",
+      }),
+      invalidatesTags: ["Ecommerce"],
+    }),
+    retryEcommerceOrderPaymentAttemptReconcile: builder.mutation<
+      Record<string, unknown>,
+      { orderId: string; paymentAttemptId: string; reason: string }
+    >({
+      query: ({ orderId, paymentAttemptId, reason }) => ({
+        url: `/admin/ecommerce/orders/${encodeURIComponent(orderId)}/payment-attempts/${encodeURIComponent(paymentAttemptId)}/reconcile-retry`,
+        method: "POST",
+        body: { reason },
+        mockKey: "retryEcommerceOrderPaymentAttemptReconcile",
+      }),
       invalidatesTags: ["Ecommerce"],
     }),
     previewPlanSchedule: builder.mutation<
@@ -4065,6 +4678,8 @@ export const {
   useGetCustomerSchemesQuery,
   useGetCustomerPaymentsQuery,
   useGetCustomerMessagesQuery,
+  useGetCustomerEcommerceOrdersMetaQuery,
+  useGetCustomerEcommerceOrdersQuery,
   useCreateCustomerMutation,
   useUpdateCustomerMutation,
   useSetCustomerPasswordMutation,
@@ -4204,6 +4819,42 @@ export const {
   useLazyPreviewEcommerceProductPriceQuery,
   useSetEcommerceGoldRateMutation,
   usePutEcommerceTaxSettingsMutation,
+  useGetEcommerceInventoryQuery,
+  usePatchEcommerceInventoryProductMutation,
+  useAdjustEcommerceInventoryProductMutation,
+  useGetEcommerceFulfilmentSettingsQuery,
+  usePutEcommerceFulfilmentSettingsMutation,
+  useGetEcommerceOrdersQuery,
+  useGetEcommerceWorkspaceSummaryQuery,
+  useGetEcommerceReportsQuery,
+  useCreateEcommerceReportExportMutation,
+  useGetEcommerceOrderQuery,
+  useGetEcommerceOrderReturnsQuery,
+  useLazyDownloadEcommerceOrderInvoiceQuery,
+  useGetEcommerceOrderCancellationQuery,
+  useDecideEcommerceOrderCancellationMutation,
+  useInitiateEcommerceOrderCancellationMutation,
+  useRecordEcommerceCodCancellationManualRefundMutation,
+  useGetEcommerceOrderPaymentAttemptsQuery,
+  useGetEcommerceOrderPaymentAttemptEventsQuery,
+  useGetEcommercePaymentExceptionsQuery,
+  useGetEcommerceOrderEventsQuery,
+  useGetEcommerceOrderPaymentExceptionRefundQuery,
+  useInitiateEcommerceOrderPaymentExceptionRefundMutation,
+  useRecordEcommerceOrderPaymentExceptionRefundManualMutation,
+  useTransitionEcommerceOrderFulfilmentMutation,
+  usePatchEcommerceOrderDeliveryTrackingMutation,
+  useGetEcommerceReturnRequestsQuery,
+  useDecideEcommerceReturnRequestMutation,
+  useRecordEcommerceReturnReceivedMutation,
+  useRecordEcommerceReturnInspectionMutation,
+  useCreateEcommerceReturnRefundCaseMutation,
+  useRecordEcommerceReturnManualRefundMutation,
+  useResolveEcommerceReturnRequestMutation,
+  useAcceptEcommerceCodOrderMutation,
+  useRejectEcommerceCodOrderMutation,
+  useRecordEcommerceCodCollectionMutation,
+  useRetryEcommerceOrderPaymentAttemptReconcileMutation,
   usePreviewPlanScheduleMutation,
   useCreatePaymentLinkMutation,
   useGetOverduesQuery,
@@ -4261,4 +4912,5 @@ export const {
   usePresignUploadMutation,
   useCompleteUploadMutation,
   useGetUploadDownloadQuery,
+  useLazyGetUploadDownloadQuery,
 } = adminApi;

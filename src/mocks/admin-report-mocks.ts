@@ -984,6 +984,133 @@ const BUILDERS: Record<
       exportFormats: ["CSV", "XLSX", "PDF"],
     };
   },
+  ECOMMERCE_SALES() {
+    const from = "2026-10-01";
+    const to = "2026-10-31";
+    return {
+      reportKey: "ECOMMERCE_SALES",
+      title: "Ecommerce sales & collections",
+      scope,
+      period: period(from, to),
+      generatedAt: new Date().toISOString(),
+      summary: [
+        { key: "ONLINE_COLLECTED", label: "Online collected", value: amt(500), valueType: "currency" },
+        { key: "COD_COLLECTED", label: "COD collected", value: amt(250), valueType: "currency" },
+        { key: "NET_COLLECTED", label: "Net collected", value: amt(700), valueType: "currency" },
+      ],
+      charts: {
+        collectionsTrend: {
+          chartType: "line",
+          title: "Collections & refunds",
+          series: [
+            {
+              key: "ONLINE",
+              name: "Online collected",
+              data: [{ x: from, y: paise(500), yDisplay: "₹500" }],
+            },
+          ],
+        },
+      },
+      columns: [
+        { key: "label", label: "Metric", type: "text" },
+        { key: "gross", label: "Amount", type: "currency" },
+        { key: "count", label: "Count", type: "count" },
+      ],
+      rows: [
+        { key: "online", label: "Online collected", gross: amt(500), count: 1 },
+        { key: "cod", label: "COD collected", gross: amt(250), count: 1 },
+        { key: "net", label: "Net collections", gross: amt(700), count: 2 },
+      ],
+      exportFormats: ["CSV"],
+    };
+  },
+  ECOMMERCE_ORDERS_FULFILMENT() {
+    const from = "2026-10-01";
+    const to = "2026-10-31";
+    return {
+      reportKey: "ECOMMERCE_ORDERS_FULFILMENT",
+      title: "Ecommerce orders & fulfilment",
+      scope,
+      period: period(from, to),
+      generatedAt: new Date().toISOString(),
+      summary: [
+        { key: "ORDERS_PLACED", label: "Orders placed in period", value: 2, valueType: "count" },
+      ],
+      charts: {
+        placedTrend: {
+          chartType: "line",
+          title: "Orders placed",
+          series: [{ key: "PLACED", name: "Orders placed", data: [{ x: from, y: 2, yDisplay: "2" }] }],
+        },
+        statusDistribution: {
+          chartType: "donut",
+          title: "Status distribution",
+          series: [
+            {
+              key: "STATUS",
+              name: "Orders",
+              data: [
+                { x: "paid", y: 1, yDisplay: "1" },
+                { x: "delivered", y: 1, yDisplay: "1" },
+              ],
+            },
+          ],
+        },
+      },
+      columns: [
+        { key: "label", label: "Status", type: "text" },
+        { key: "count", label: "Orders placed", type: "count" },
+      ],
+      rows: [
+        { key: "PAID", label: "paid", status: "PAID", count: 1 },
+        { key: "DELIVERED", label: "delivered", status: "DELIVERED", count: 1 },
+      ],
+      exportFormats: ["CSV"],
+    };
+  },
+  ECOMMERCE_PRODUCTS() {
+    const from = "2026-10-01";
+    const to = "2026-10-31";
+    return {
+      reportKey: "ECOMMERCE_PRODUCTS",
+      title: "Ecommerce product performance",
+      scope,
+      period: period(from, to),
+      generatedAt: new Date().toISOString(),
+      summary: [
+        { key: "UNITS", label: "Units on collected orders", value: 2, valueType: "count" },
+        { key: "COLLECTED_LINE_VALUE", label: "Collected line value", value: amt(750), valueType: "currency" },
+      ],
+      charts: {
+        topProducts: {
+          chartType: "bar",
+          title: "Top products",
+          series: [
+            {
+              key: "PRODUCTS",
+              name: "Collected line value",
+              data: [{ x: "Demo ring", y: paise(750), yDisplay: "₹750" }],
+            },
+          ],
+        },
+      },
+      columns: [
+        { key: "name", label: "Product", type: "text" },
+        { key: "unitsOrdered", label: "Units", type: "count" },
+        { key: "collectedSales", label: "Collected line sales", type: "currency" },
+      ],
+      rows: [
+        {
+          key: "p1",
+          name: "Demo ring",
+          sku: "RNG-1",
+          unitsOrdered: 2,
+          collectedSales: amt(750),
+        },
+      ],
+      exportFormats: ["CSV"],
+    };
+  },
 };
 
 export function mockAdminReport(

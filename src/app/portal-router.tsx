@@ -169,6 +169,39 @@ const EcommerceTaxSettingsPage = dynamic(
     ),
   options,
 );
+const EcommerceInventoryPage = dynamic(
+  () =>
+    import("@/src/features/ecommerce/ecommerce-inventory-page").then(
+      (m) => m.EcommerceInventoryPage,
+    ),
+  options,
+);
+const EcommerceFulfilmentPage = dynamic(
+  () =>
+    import("@/src/features/ecommerce/ecommerce-fulfilment-page").then(
+      (m) => m.EcommerceFulfilmentPage,
+    ),
+  options,
+);
+const EcommerceOrdersPage = dynamic(
+  () =>
+    import("@/src/features/ecommerce/ecommerce-orders-page").then((m) => m.EcommerceOrdersPage),
+  options,
+);
+const EcommerceOrderDetailPage = dynamic(
+  () =>
+    import("@/src/features/ecommerce/ecommerce-orders-page").then(
+      (m) => m.EcommerceOrderDetailPage,
+    ),
+  options,
+);
+const EcommercePaymentExceptionsPage = dynamic(
+  () =>
+    import("@/src/features/ecommerce/ecommerce-payment-exceptions-page").then(
+      (m) => m.EcommercePaymentExceptionsPage,
+    ),
+  options,
+);
 const AlertsPage = dynamic(
   () => import("@/src/features/alerts/alerts-page").then((m) => m.AlertsPage),
   options,
@@ -305,6 +338,11 @@ export function PortalRouter({ slug }: { slug: string[] }) {
       if (id === "categories") page = <EcommerceCategoriesPage />;
       else if (id === "gold-rates") page = <EcommerceGoldRatesPage />;
       else if (id === "tax") page = <EcommerceTaxSettingsPage />;
+      else if (id === "inventory") page = <EcommerceInventoryPage />;
+      else if (id === "fulfilment") page = <EcommerceFulfilmentPage />;
+      else if (id === "orders" && action) page = <EcommerceOrderDetailPage orderId={action} />;
+      else if (id === "orders") page = <EcommerceOrdersPage />;
+      else if (id === "payment-exceptions") page = <EcommercePaymentExceptionsPage />;
       else page = <EcommerceCatalogPage />;
       break;
     case "settings":

@@ -14,18 +14,20 @@ import {
   Grid2X2,
   IndianRupee,
   Layers3,
+  ShoppingBag,
   WalletCards,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CustomerHomeSchemeCard, formatCustomerDate } from "@/src/components/customer/customer-ui";
 import { CUSTOMER_MOBILE_NAV_DOCK } from "@/src/features/customer/customer-scheme-detail-views";
 import { PageSkeleton, QueryError } from "@/src/components/common/query-state";
-import { useGetCustomerHomeQuery, useGetCustomerProfileQuery } from "@/src/store/api/customer-api";
+import { useGetCustomerHomeQuery, useGetCustomerProfileQuery, useGetShopAvailabilityQuery } from "@/src/store/api/customer-api";
 import { useCustomerTenant } from "@/src/components/customer/customer-tenant-context";
 import { customerPath } from "@/src/lib/customer-tenant";
 import { useCustomerGoldMetricsVisible } from "@/src/lib/customer-gold-ui";
 import { useCustomerPortalCapabilities } from "@/src/lib/customer-portal-capabilities";
 import { useCustomerKycEnabled } from "@/src/lib/customer-kyc-enabled";
+import { customerBrandStyle } from "@/src/lib/customer-brand-styles";
 import type { CustomerHome, CustomerProfile, SchemeCard } from "@/src/types/customer";
 
 function savingsCardIdentity(home: CustomerHome, profile?: CustomerProfile | null) {
@@ -75,6 +77,7 @@ export function CustomerHomePage() {
   const { customerSelfEnrol, customerAppPaymentsEnabled } = useCustomerPortalCapabilities();
   const kycEnabled = useCustomerKycEnabled();
   const { data: profile } = useGetCustomerProfileQuery();
+  const { data: shopAvailability } = useGetShopAvailabilityQuery();
   const [amountsVisible, setAmountsVisible] = useState(true);
 
   const trendPoints = useMemo(() => {
@@ -250,6 +253,18 @@ export function CustomerHomePage() {
           </Link>
         ))}
       </section>
+
+      {shopAvailability?.available === true ? (
+        <Link
+          href={customerPath(tenantSlug, "shop")}
+          className="mt-5 flex items-center gap-4 rounded-[1.5rem] p-5 text-white transition hover:brightness-110 sm:p-6"
+          style={customerBrandStyle.primaryPromoCard}
+        >
+          <span className="grid size-12 shrink-0 place-items-center rounded-2xl bg-white/10" style={customerBrandStyle.heroIconAccent}><ShoppingBag className="size-6" /></span>
+          <span className="min-w-0 flex-1"><strong className="block font-serif text-xl">Explore the online store</strong><small className="mt-1 block text-xs" style={customerBrandStyle.promoSubtext}>Browse jewellery and see the current price breakdown.</small></span>
+          <ChevronRight className="size-5 shrink-0" />
+        </Link>
+      ) : null}
 
       {data.emptyState && schemes.length === 0 ? (
         <section className="customer-surface mt-7 p-8 text-center">

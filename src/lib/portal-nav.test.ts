@@ -9,6 +9,11 @@ describe("portal-nav", () => {
     expect(isPortalInternalPath("/marketing-landing")).toBe(false);
   });
 
+  it("includes ecommerce admin paths", () => {
+    expect(isPortalInternalPath("/ecommerce/orders")).toBe(true);
+    expect(isPortalInternalPath("/reports")).toBe(true);
+  });
+
   it("requires matching customer tenant slug", () => {
     expect(
       samePortalRealm("/customer/kairali/schemes/1", "/customer/kairali/plans"),

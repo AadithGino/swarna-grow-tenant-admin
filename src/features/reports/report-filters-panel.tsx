@@ -15,8 +15,9 @@ import { DateRangeFilter } from "@/src/components/common/date-range-filter";
 import { FormFieldError } from "@/src/components/common/form-field-error";
 import { Surface } from "@/src/components/common/page-parts";
 import {
-  ADMIN_REPORT_KEYS,
   ADMIN_REPORT_LABELS,
+  ECOMMERCE_ADMIN_REPORT_KEYS,
+  SCHEME_ADMIN_REPORT_KEYS,
   type AdminReportKey,
 } from "@/src/types/admin-report";
 import { cn } from "@/lib/utils";
@@ -94,6 +95,7 @@ export function ReportFiltersPanel({
   customersLoading,
   onApply,
   applyDisabled,
+  showEcommerceReportOptions = false,
 }: {
   reportKey: AdminReportKey;
   onReportKeyChange: (key: AdminReportKey) => void;
@@ -131,6 +133,7 @@ export function ReportFiltersPanel({
   customersLoading: boolean;
   onApply: () => void;
   applyDisabled: boolean;
+  showEcommerceReportOptions?: boolean;
 }) {
   const primaryFilterCount =
     1 +
@@ -186,11 +189,18 @@ export function ReportFiltersPanel({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {ADMIN_REPORT_KEYS.map((key) => (
+                {SCHEME_ADMIN_REPORT_KEYS.map((key) => (
                   <SelectItem key={key} value={key}>
                     {ADMIN_REPORT_LABELS[key]}
                   </SelectItem>
                 ))}
+                {showEcommerceReportOptions
+                  ? ECOMMERCE_ADMIN_REPORT_KEYS.map((key) => (
+                      <SelectItem key={key} value={key}>
+                        {ADMIN_REPORT_LABELS[key]}
+                      </SelectItem>
+                    ))
+                  : null}
               </SelectContent>
             </Select>
           </FilterSegment>

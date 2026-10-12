@@ -1,7 +1,8 @@
-import type { AdminReportKey } from "@/src/types/admin-report";
+import type { AdminReportKey, SchemeAdminReportKey } from "@/src/types/admin-report";
+import { isEcommerceAdminReportKey } from "@/src/types/admin-report";
 
 /** Reports that honour GET /admin/reports?branchId= */
-export const REPORTS_WITH_BRANCH_FILTER = new Set<AdminReportKey>([
+export const REPORTS_WITH_BRANCH_FILTER = new Set<SchemeAdminReportKey>([
   "COLLECTION",
   "ENROLMENT",
   "OUTSTANDING",
@@ -16,7 +17,7 @@ export const REPORTS_WITH_BRANCH_FILTER = new Set<AdminReportKey>([
 ]);
 
 /** Reports that honour GET /admin/reports?planId= */
-export const REPORTS_WITH_PLAN_FILTER = new Set<AdminReportKey>([
+export const REPORTS_WITH_PLAN_FILTER = new Set<SchemeAdminReportKey>([
   "COLLECTION",
   "ENROLMENT",
   "OUTSTANDING",
@@ -27,11 +28,13 @@ export const REPORTS_WITH_PLAN_FILTER = new Set<AdminReportKey>([
 ]);
 
 export function reportSupportsBranchFilter(reportKey: AdminReportKey) {
-  return REPORTS_WITH_BRANCH_FILTER.has(reportKey);
+  if (isEcommerceAdminReportKey(reportKey)) return false;
+  return REPORTS_WITH_BRANCH_FILTER.has(reportKey as SchemeAdminReportKey);
 }
 
 export function reportSupportsPlanFilter(reportKey: AdminReportKey) {
-  return REPORTS_WITH_PLAN_FILTER.has(reportKey);
+  if (isEcommerceAdminReportKey(reportKey)) return false;
+  return REPORTS_WITH_PLAN_FILTER.has(reportKey as SchemeAdminReportKey);
 }
 
 export function reportUsesBranchFocusSelector(reportKey: AdminReportKey) {

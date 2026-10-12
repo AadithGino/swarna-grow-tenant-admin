@@ -188,6 +188,14 @@ button {
   color: var(--customer-primary);
 }
 
+.customer-theme .customer-primary-tint-surface {
+  background: color-mix(in srgb, var(--customer-primary, #730321) 5%, white);
+}
+
+.customer-theme .customer-accent-tint-surface {
+  background: color-mix(in srgb, var(--customer-accent, #c9a227) 10%, white);
+}
+
 .customer-theme .customer-scroll-row {
   scrollbar-width: none;
   scroll-snap-type: x mandatory;

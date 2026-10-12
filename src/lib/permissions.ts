@@ -46,6 +46,14 @@ export const NAV_PERMISSIONS: Record<string, string[]> = {
   "/staff-branches": ["staff.read", "staff.write", "branch.read", "branch.write"],
   "/audit": ["audit.read"],
   "/settings": ["settings.read", "settings.write"],
+  "/ecommerce": ["ecommerce.read"],
+  "/ecommerce/categories": ["ecommerce.read"],
+  "/ecommerce/gold-rates": ["ecommerce.read"],
+  "/ecommerce/tax": ["ecommerce.read"],
+  "/ecommerce/inventory": ["ecommerce.read"],
+  "/ecommerce/fulfilment": ["ecommerce.read"],
+  "/ecommerce/orders": ["ecommerce.read"],
+  "/ecommerce/payment-exceptions": ["ecommerce.read"],
 };
 
 export function canAccessRoute(

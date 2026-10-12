@@ -15,6 +15,7 @@ import {
   tenantCodeToSlug,
   tenantSlugToCode,
 } from "@/src/lib/customer-tenant";
+import { normalizeCustomerTenantBranding } from "@/src/lib/customer-tenant-branding";
 
 type CustomerTenantContextValue = {
   tenantSlug: string | null;
@@ -93,7 +94,7 @@ export function CustomerTenantProvider({
     { skip: !tenantCode },
   );
 
-  const tenant = data?.tenants?.[0] ?? null;
+  const tenant = normalizeCustomerTenantBranding(data?.tenants?.[0] ?? null);
 
   const themePrimary = normalizeHexColor(tenant?.primaryColor, "#730321");
   const themeAccent = normalizeHexColor(tenant?.accentColor, "#C9A227");

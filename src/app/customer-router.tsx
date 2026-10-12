@@ -28,9 +28,13 @@ const CustomerSupportPage = dynamic(() => import("@/src/features/customer/custom
 const CustomerGrievanceDetailPage = dynamic(() => import("@/src/features/customer/customer-support-pages").then((m) => m.CustomerGrievanceDetailPage), options);
 const CustomerShopPage = dynamic(() => import("@/src/features/customer/customer-shop-page").then((m) => m.CustomerShopPage), options);
 const CustomerShopProductPage = dynamic(() => import("@/src/features/customer/customer-shop-page").then((m) => m.CustomerShopProductPage), options);
+const CustomerShopCartPage = dynamic(() => import("@/src/features/customer/customer-shop-cart-page").then((m) => m.CustomerShopCartPage), options);
+const CustomerShopQuotePage = dynamic(() => import("@/src/features/customer/customer-shop-quote-page").then((m) => m.CustomerShopQuotePage), options);
+const CustomerShopOrderPage = dynamic(() => import("@/src/features/customer/customer-shop-order-page").then((m) => m.CustomerShopOrderPage), options);
+const CustomerShopOrdersPage = dynamic(() => import("@/src/features/customer/customer-shop-orders-page").then((m) => m.CustomerShopOrdersPage), options);
 
 function CustomerRoutes({ slug }: { slug: string[] }) {
-  const { section, id } = parseCustomerSlug(slug);
+  const { section, id, extra } = parseCustomerSlug(slug);
   if (section === "login") return <CustomerLoginPage />;
   if (section === "onboarding") return <CustomerOnboardingPage />;
   if (!section) return <CustomerHomePage />;
@@ -53,7 +57,14 @@ function CustomerRoutes({ slug }: { slug: string[] }) {
   if (section === "support") return id ? <CustomerGrievanceDetailPage id={id} /> : <CustomerSupportPage />;
   if (section === "gold-rate") return <CustomerGoldRatePage />;
   if (section === "branches") return <CustomerBranchesPage />;
-  if (section === "shop") return id ? <CustomerShopProductPage slug={id} /> : <CustomerShopPage />;
+  if (section === "shop") {
+    if (id === "cart") return <CustomerShopCartPage />;
+    if (id === "orders") return <CustomerShopOrdersPage />;
+    if (id === "quote" && extra) return <CustomerShopQuotePage quoteId={extra} />;
+    if (id === "order" && extra) return <CustomerShopOrderPage orderId={extra} />;
+    if (id) return <CustomerShopProductPage slug={id} />;
+    return <CustomerShopPage />;
+  }
   if (section === "pay" && id === "status") return <CustomerPaymentStatusPage />;
   if (section === "pay" && id) return <CustomerPaymentLinkPage linkToken={id} />;
   return <CustomerHomePage />;

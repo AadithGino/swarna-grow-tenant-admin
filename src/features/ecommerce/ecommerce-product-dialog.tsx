@@ -23,7 +23,7 @@ import {
 } from "@/components/ui/dialog";
 import { FormFieldError } from "@/src/components/common/form-field-error";
 import { FieldLabel } from "@/src/components/common/page-parts";
-import { toastApiError } from "@/src/lib/api-error";
+import { parseApiError, toastApiError } from "@/src/lib/api-error";
 import { uploadFileViaPresign } from "@/src/lib/upload-via-presign";
 import {
   useCompleteUploadMutation,
@@ -37,7 +37,14 @@ import {
   useLazyPreviewEcommerceProductPriceQuery,
 } from "@/src/store/api/admin-api";
 import { PricingPreviewPanel } from "@/src/features/ecommerce/ecommerce-shared";
-import { rupeesToPaise, useEcommerceCatalogWrite } from "@/src/features/ecommerce/ecommerce-admin-shared";
+import { useEcommerceCatalogWrite } from "@/src/features/ecommerce/ecommerce-admin-shared";
+import { EcommerceCatalogImage } from "@/src/features/ecommerce/ecommerce-catalog-image";
+import {
+  buildEcommerceProductBody,
+  productRowToFormInput,
+  saveActionLabel,
+  type ProductFormInput,
+} from "@/src/lib/ecommerce-product-form";
 
 type ProductRow = Record<string, any>;
 
@@ -53,6 +60,11 @@ function EcommerceProductDialogBody({
   const { entitled, disabledMessage } = useEcommerceCatalogWrite();
   const categories = useGetEcommerceCategoriesQuery(undefined);
   const tax = useGetEcommerceTaxSettingsQuery();
+  const defaultTax = tax.data?.defaultClassification ?? "";
+  const [form, setForm] = useState<ProductFormInput>(() =>
+    productRowToFormInput(product, defaultTax),
+  );
+  const [recordVersion, setRecordVersion] = useState(product?.version ?? 1);
   const [createProduct] = useCreateEcommerceProductMutation();
   const [patchProduct] = usePatchEcommerceProductMutation();
   const [publishProduct] = usePublishEcommerceProductMutation();
@@ -60,38 +72,13 @@ function EcommerceProductDialogBody({
   const [presignUpload] = usePresignUploadMutation();
   const [completeUpload] = useCompleteUploadMutation();
   const [fetchPreview, previewState] = useLazyPreviewEcommerceProductPriceQuery();
-
-  const [name, setName] = useState(product?.name ?? "");
-  const [slug, setSlug] = useState(product?.slug ?? "");
-  const [sku, setSku] = useState(product?.sku ?? "");
-  const [categoryId, setCategoryId] = useState<string>(product?.categoryId ?? "");
-  const [priceMode, setPriceMode] = useState<"FIXED" | "GOLD_RATE_BASED">(
-    product?.priceMode ?? "FIXED",
-  );
-  const [baseRupee, setBaseRupee] = useState(
-    product?.fixedPricing?.basePricePaise != null
-      ? String(product.fixedPricing.basePricePaise / 100)
-      : "",
-  );
-  const [purity, setPurity] = useState(product?.purity ?? "22K");
-  const [weightGrams, setWeightGrams] = useState(
-    product?.goldWeightMg != null ? String(product.goldWeightMg / 1000) : "",
-  );
-  const [makingFixedRupee, setMakingFixedRupee] = useState(
-    product?.makingCharge?.fixedPaise != null
-      ? String(product.makingCharge.fixedPaise / 100)
-      : "",
-  );
-  const [taxClassification, setTaxClassification] = useState(
-    product?.taxClassification ?? tax.data?.defaultClassification ?? "",
-  );
-  const [imageUploadIds, setImageUploadIds] = useState<string[]>(
-    product?.imageUploadIds ?? [],
-  );
   const [fieldError, setFieldError] = useState<string | undefined>();
   const [preview, setPreview] = useState<Record<string, unknown> | null>(
     product?.pricing ?? null,
   );
+
+  const patchForm = (patch: Partial<ProductFormInput>) =>
+    setForm((prev) => ({ ...prev, ...patch }));
 
   const activeCategories = (categories.data?.items ?? []).filter(
     (c: { active?: boolean }) => c.active !== false,
@@ -102,7 +89,7 @@ function EcommerceProductDialogBody({
       const data = await fetchPreview({ productId }).unwrap();
       setPreview(data);
     } catch {
-      /* preview optional */
+      /* optional */
     }
   }
 
@@ -115,97 +102,58 @@ function EcommerceProductDialogBody({
         "ECOMMERCE_PRODUCT_IMAGE",
         (id) => completeUpload(id).unwrap(),
       );
-      setImageUploadIds((prev) => [...prev, uploadId]);
+      patchForm({ imageUploadIds: [...form.imageUploadIds, uploadId] });
       toast.success("Image uploaded");
     } catch (err) {
       toastApiError(err);
     }
   }
 
-  function buildBody() {
-    const body: Record<string, unknown> = {
-      name: name.trim(),
-      slug: slug.trim() || undefined,
-      sku: sku.trim() || undefined,
-      categoryId: categoryId || null,
-      priceMode,
-      taxClassification: taxClassification || undefined,
-      imageUploadIds,
-    };
-    if (priceMode === "FIXED") {
-      const basePricePaise = rupeesToPaise(baseRupee);
-      if (basePricePaise == null) {
-        throw new Error("Enter a valid fixed price in rupees.");
-      }
-      body.fixedPricing = { basePricePaise };
-    } else {
-      const grams = Number(weightGrams);
-      if (!Number.isFinite(grams) || grams <= 0) {
-        throw new Error("Enter gold weight in grams.");
-      }
-      const makingPaise = rupeesToPaise(makingFixedRupee) ?? 0;
-      body.purity = purity;
-      body.goldWeightMg = Math.round(grams * 1000);
-      body.makingChargeMode = "FIXED_PAISE";
-      body.makingCharge = { fixedPaise: makingPaise };
-    }
-    return body;
-  }
-
-  async function saveDraft() {
+  async function persistProduct(opts?: { publishAfter?: boolean }) {
     if (!entitled) {
       toast.error(disabledMessage ?? "Not entitled");
       return;
     }
     setFieldError(undefined);
+    let body: Record<string, unknown>;
     try {
-      const body = buildBody();
-      if (product?.id) {
-        await patchProduct({
-          productId: product.id,
-          body: { ...body, expectedVersion: product.version },
-        }).unwrap();
-        await refreshPreview(product.id);
-        toast.success("Product saved");
-      } else {
-        const created = await createProduct(body).unwrap();
-        await refreshPreview(created.id);
-        toast.success("Product created as draft");
-      }
-      onSaved?.();
+      body = buildEcommerceProductBody(form);
     } catch (err) {
-      toastApiError(err);
-      setFieldError("Could not save. Check validation errors.");
+      setFieldError(err instanceof Error ? err.message : "Invalid form");
+      return;
     }
-  }
-
-  async function publish() {
-    setFieldError(undefined);
     try {
-      let body: Record<string, unknown>;
-      try {
-        body = buildBody();
-      } catch (err) {
-        setFieldError(err instanceof Error ? err.message : "Invalid form");
-        return;
-      }
       let row = product;
       if (row?.id) {
         row = await patchProduct({
           productId: row.id,
-          body: { ...body, expectedVersion: row.version },
+          body: { ...body, expectedVersion: recordVersion },
         }).unwrap();
       } else {
         row = await createProduct(body).unwrap();
       }
-      await publishProduct({
-        productId: row.id,
-        expectedVersion: row.version,
-      }).unwrap();
-      toast.success("Published");
+      setRecordVersion(row.version);
+      setPreview(row.pricing ?? preview);
+      if (opts?.publishAfter) {
+        row = await publishProduct({
+          productId: row.id,
+          expectedVersion: row.version,
+        }).unwrap();
+        setRecordVersion(row.version);
+        setPreview(row.pricing ?? preview);
+        toast.success("Published");
+        onSaved?.();
+        onOpenChange(false);
+        return;
+      }
+      await refreshPreview(row.id);
+      toast.success(form.status === "PUBLISHED" ? "Changes saved" : "Draft saved");
       onSaved?.();
-      onOpenChange(false);
     } catch (err) {
+      const parsed = parseApiError(err);
+      if (parsed.code === "VERSION_CONFLICT") {
+        setFieldError("This product was updated elsewhere. Close and reopen to refresh.");
+      }
       toastApiError(err);
     }
   }
@@ -215,7 +163,7 @@ function EcommerceProductDialogBody({
     try {
       await archiveProduct({
         productId: product.id,
-        expectedVersion: product.version,
+        expectedVersion: recordVersion,
       }).unwrap();
       toast.success("Archived");
       onSaved?.();
@@ -225,161 +173,444 @@ function EcommerceProductDialogBody({
     }
   }
 
+  const isArchived = form.status === "ARCHIVED";
+
   return (
     <>
-      <DialogContent className={dialogScrollShellClass}>
+      <DialogContent className={`${dialogScrollShellClass} sm:max-w-4xl`}>
         <DialogBody className="overflow-y-auto pb-2">
           <DialogHeader className="text-left">
-            <DialogTitle>{product?.id ? "Edit product" : "New product"}</DialogTitle>
+            <DialogTitle className="font-serif text-2xl">{product?.id ? "Edit jewellery" : "Add jewellery"}</DialogTitle>
             <DialogDescription>
-              Prices shown in preview come from the server estimate.
+              Fill in the essentials, set the price, then upload images. The server verifies the price before publication.
             </DialogDescription>
           </DialogHeader>
           <div className="py-4">
-      {!entitled ? (
-        <p className="text-sm text-amber-800">{disabledMessage}</p>
-      ) : null}
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div>
-          <FieldLabel>Name</FieldLabel>
-          <Input value={name} onChange={(e) => setName(e.target.value)} />
-        </div>
-        <div>
-          <FieldLabel>Slug</FieldLabel>
-          <Input value={slug} onChange={(e) => setSlug(e.target.value)} placeholder="auto from name" />
-        </div>
-        <div>
-          <FieldLabel>SKU</FieldLabel>
-          <Input value={sku} onChange={(e) => setSku(e.target.value)} />
-        </div>
-        <div>
-          <FieldLabel>Category</FieldLabel>
-          <Select value={categoryId || "__none"} onValueChange={(v) => setCategoryId(v === "__none" ? "" : v)}>
-            <SelectTrigger>
-              <SelectValue placeholder="Uncategorised" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="__none">Uncategorised</SelectItem>
-              {activeCategories.map((c) => (
-                <SelectItem key={String(c.id)} value={String(c.id)}>
-                  {String(c.name)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div>
-          <FieldLabel>Price mode</FieldLabel>
-          <Select value={priceMode} onValueChange={(v) => setPriceMode(v as typeof priceMode)}>
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="FIXED">Fixed (all-inclusive)</SelectItem>
-              <SelectItem value="GOLD_RATE_BASED">Gold rate based</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <div>
-          <FieldLabel>Tax classification</FieldLabel>
-          <Select value={taxClassification || "__none"} onValueChange={(v) => setTaxClassification(v === "__none" ? "" : v)}>
-            <SelectTrigger>
-              <SelectValue placeholder="Select rate code" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="__none">—</SelectItem>
-              {(tax.data?.rates ?? [])
-                .filter((r: { active?: boolean }) => r.active !== false)
-                .map((r: { code: string; label?: string }) => (
-                  <SelectItem key={r.code} value={r.code}>
-                    {r.label ?? r.code}
-                  </SelectItem>
-                ))}
-            </SelectContent>
-          </Select>
-        </div>
-        {priceMode === "FIXED" ? (
-          <div className="sm:col-span-2">
-            <FieldLabel>Base price (₹)</FieldLabel>
-            <Input value={baseRupee} onChange={(e) => setBaseRupee(e.target.value)} inputMode="decimal" />
-            <p className="mt-1 text-xs text-muted-foreground">
-              Fixed price includes making and stones; do not add them again.
-            </p>
-          </div>
-        ) : (
-          <>
-            <div>
-              <FieldLabel>Purity</FieldLabel>
-              <Select value={purity} onValueChange={setPurity}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {["18K", "22K", "24K"].map((p) => (
-                    <SelectItem key={p} value={p}>
-                      {p}
-                    </SelectItem>
+            {!entitled ? (
+              <p className="text-sm text-amber-800">{disabledMessage}</p>
+            ) : null}
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="sm:col-span-2 border-b pb-2"><h3 className="font-semibold text-[#4c2631]">Product details</h3><p className="text-xs text-muted-foreground">Name, category and the information customers will see.</p></div>
+              <div>
+                <FieldLabel>Name</FieldLabel>
+                <Input value={form.name} onChange={(e) => patchForm({ name: e.target.value })} />
+              </div>
+              <div>
+                <FieldLabel>Slug</FieldLabel>
+                <Input value={form.slug} onChange={(e) => patchForm({ slug: e.target.value })} />
+              </div>
+              <div>
+                <FieldLabel>SKU</FieldLabel>
+                <Input value={form.sku} onChange={(e) => patchForm({ sku: e.target.value })} />
+              </div>
+              <div className="sm:col-span-2">
+                <FieldLabel>Description</FieldLabel>
+                <textarea
+                  className="flex min-h-24 w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                  value={form.description}
+                  onChange={(e) => patchForm({ description: e.target.value })}
+                />
+              </div>
+              <div>
+                <FieldLabel>Category</FieldLabel>
+                <Select
+                  value={form.categoryId || "__none"}
+                  onValueChange={(v) => patchForm({ categoryId: v === "__none" ? "" : v })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Uncategorised" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none">Uncategorised</SelectItem>
+                    {activeCategories.map((c) => (
+                      <SelectItem key={String(c.id)} value={String(c.id)}>
+                        {String(c.name)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <FieldLabel>Status</FieldLabel>
+                <Select
+                  value={form.status === "ARCHIVED" ? "DRAFT" : form.status}
+                  disabled={isArchived}
+                  onValueChange={(v) =>
+                    patchForm({ status: v as ProductFormInput["status"] })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="DRAFT">Draft</SelectItem>
+                    <SelectItem value="PUBLISHED">Published</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex items-center gap-2 pt-6">
+                <input
+                  id="featured"
+                  type="checkbox"
+                  checked={form.featured}
+                  disabled={!entitled}
+                  onChange={(e) => patchForm({ featured: e.target.checked })}
+                />
+                <label htmlFor="featured" className="text-sm">
+                  Featured on storefront
+                </label>
+              </div>
+              <div className="sm:col-span-2 border-b pb-2 pt-3"><h3 className="font-semibold text-[#4c2631]">Pricing & tax</h3><p className="text-xs text-muted-foreground">Choose a fixed price or calculate from gold weight and purity.</p></div>
+              <div>
+                <FieldLabel>Price mode</FieldLabel>
+                <Select
+                  value={form.priceMode}
+                  onValueChange={(v) =>
+                    patchForm({ priceMode: v as ProductFormInput["priceMode"] })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="FIXED">Fixed (all-inclusive)</SelectItem>
+                    <SelectItem value="GOLD_RATE_BASED">Gold rate based</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <FieldLabel>Tax classification</FieldLabel>
+                <Select
+                  value={form.taxClassification || "__none"}
+                  onValueChange={(v) =>
+                    patchForm({ taxClassification: v === "__none" ? "" : v })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select rate code" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none">—</SelectItem>
+                    {(tax.data?.rates ?? [])
+                      .filter((r: { active?: boolean }) => r.active !== false)
+                      .map((r: { code: string; label?: string }) => (
+                        <SelectItem key={r.code} value={r.code}>
+                          {r.label ?? r.code}
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              {form.priceMode === "FIXED" ? (
+                <>
+                  <div>
+                    <FieldLabel>Base price (₹)</FieldLabel>
+                    <Input
+                      value={form.baseRupee}
+                      onChange={(e) => patchForm({ baseRupee: e.target.value })}
+                      inputMode="decimal"
+                    />
+                  </div>
+                  <div>
+                    <FieldLabel>Sale price (₹, optional)</FieldLabel>
+                    <Input
+                      value={form.saleRupee}
+                      onChange={(e) => patchForm({ saleRupee: e.target.value })}
+                      inputMode="decimal"
+                    />
+                  </div>
+                  <div>
+                    <FieldLabel>Sale starts</FieldLabel>
+                    <Input
+                      type="datetime-local"
+                      value={form.saleStartsAt}
+                      onChange={(e) => patchForm({ saleStartsAt: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <FieldLabel>Sale ends</FieldLabel>
+                    <Input
+                      type="datetime-local"
+                      value={form.saleEndsAt}
+                      onChange={(e) => patchForm({ saleEndsAt: e.target.value })}
+                    />
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div>
+                    <FieldLabel>Purity</FieldLabel>
+                    <Select value={form.purity} onValueChange={(v) => patchForm({ purity: v })}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {["18K", "22K", "24K"].map((p) => (
+                          <SelectItem key={p} value={p}>
+                            {p}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <FieldLabel>Gold weight (g)</FieldLabel>
+                    <Input
+                      value={form.weightGrams}
+                      onChange={(e) => patchForm({ weightGrams: e.target.value })}
+                      inputMode="decimal"
+                    />
+                  </div>
+                  <div>
+                    <FieldLabel>Making charge mode</FieldLabel>
+                    <Select
+                      value={form.makingChargeMode}
+                      onValueChange={(v) =>
+                        patchForm({
+                          makingChargeMode: v as ProductFormInput["makingChargeMode"],
+                        })
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="FIXED_PAISE">Fixed (₹)</SelectItem>
+                        <SelectItem value="PER_GRAM_PAISE">Per gram (₹)</SelectItem>
+                        <SelectItem value="PERCENT_OF_GOLD">Percent of gold (bps)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {form.makingChargeMode === "FIXED_PAISE" ? (
+                    <div>
+                      <FieldLabel>Making charge (₹)</FieldLabel>
+                      <Input
+                        value={form.makingFixedRupee}
+                        onChange={(e) => patchForm({ makingFixedRupee: e.target.value })}
+                      />
+                    </div>
+                  ) : form.makingChargeMode === "PER_GRAM_PAISE" ? (
+                    <div>
+                      <FieldLabel>Making per gram (₹)</FieldLabel>
+                      <Input
+                        value={form.makingPerGramRupee}
+                        onChange={(e) => patchForm({ makingPerGramRupee: e.target.value })}
+                      />
+                    </div>
+                  ) : (
+                    <div>
+                      <FieldLabel>Making percent (bps)</FieldLabel>
+                      <Input
+                        value={form.makingPercentBps}
+                        onChange={(e) => patchForm({ makingPercentBps: e.target.value })}
+                      />
+                    </div>
+                  )}
+                  <div>
+                    <FieldLabel>Other charges (₹)</FieldLabel>
+                    <Input
+                      value={form.otherChargesRupee}
+                      onChange={(e) => patchForm({ otherChargesRupee: e.target.value })}
+                    />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <FieldLabel>Stone lines</FieldLabel>
+                    <div className="space-y-2">
+                      {form.stones.map((row, index) => (
+                        <div key={`stone-${index}`} className="flex gap-2">
+                          <Input
+                            placeholder="Name"
+                            value={row.name}
+                            onChange={(e) => {
+                              const stones = [...form.stones];
+                              stones[index] = { ...stones[index], name: e.target.value };
+                              patchForm({ stones });
+                            }}
+                          />
+                          <Input
+                            placeholder="Charge ₹"
+                            value={row.chargeRupee}
+                            onChange={(e) => {
+                              const stones = [...form.stones];
+                              stones[index] = { ...stones[index], chargeRupee: e.target.value };
+                              patchForm({ stones });
+                            }}
+                          />
+                        </div>
+                      ))}
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() =>
+                          patchForm({ stones: [...form.stones, { name: "", chargeRupee: "" }] })
+                        }
+                      >
+                        Add stone line
+                      </Button>
+                    </div>
+                  </div>
+                  <div>
+                    <FieldLabel>Offer type</FieldLabel>
+                    <Select
+                      value={form.offerType || "__none"}
+                      onValueChange={(v) =>
+                        patchForm({
+                          offerType: v === "__none" ? "" : (v as ProductFormInput["offerType"]),
+                        })
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none">None</SelectItem>
+                        <SelectItem value="FIXED_PAISE_OFF">Fixed off making (₹)</SelectItem>
+                        <SelectItem value="PERCENT_OFF">Percent off making (bps)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {form.offerType === "FIXED_PAISE_OFF" ? (
+                    <div>
+                      <FieldLabel>Offer amount (₹)</FieldLabel>
+                      <Input
+                        value={form.offerValueRupee}
+                        onChange={(e) => patchForm({ offerValueRupee: e.target.value })}
+                      />
+                    </div>
+                  ) : null}
+                  {form.offerType === "PERCENT_OFF" ? (
+                    <div>
+                      <FieldLabel>Offer percent (bps)</FieldLabel>
+                      <Input
+                        value={form.offerPercentBps}
+                        onChange={(e) => patchForm({ offerPercentBps: e.target.value })}
+                      />
+                    </div>
+                  ) : null}
+                  {form.offerType ? (
+                    <>
+                      <div>
+                        <FieldLabel>Offer starts</FieldLabel>
+                        <Input
+                          type="datetime-local"
+                          value={form.offerStartsAt}
+                          onChange={(e) => patchForm({ offerStartsAt: e.target.value })}
+                        />
+                      </div>
+                      <div>
+                        <FieldLabel>Offer ends</FieldLabel>
+                        <Input
+                          type="datetime-local"
+                          value={form.offerEndsAt}
+                          onChange={(e) => patchForm({ offerEndsAt: e.target.value })}
+                        />
+                      </div>
+                    </>
+                  ) : null}
+                </>
+              )}
+              <div className="sm:col-span-2">
+                <div className="border-b pb-2 pt-3"><h3 className="font-semibold text-[#4c2631]">Product images</h3><p className="text-xs text-muted-foreground">The first image is the cover photo on the customer shop.</p></div>
+                <FieldLabel>Upload image</FieldLabel>
+                <Input
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp"
+                  disabled={!entitled}
+                  onChange={(e) => {
+                    void handleImagePick(e.target.files?.[0] ?? null);
+                    e.target.value = "";
+                  }}
+                />
+                <div className="mt-3 grid grid-cols-3 gap-2">
+                  {form.imageUploadIds.map((id, index) => (
+                    <div key={id} className="relative aspect-square overflow-hidden rounded-lg border">
+                      <EcommerceCatalogImage uploadId={id} channel="admin" alt="" fill className="rounded-lg" />
+                      <div className="absolute left-1 top-1 flex flex-col gap-1">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="secondary"
+                          className="h-7 px-2 text-xs"
+                          disabled={index === 0}
+                          onClick={() => {
+                            const next = [...form.imageUploadIds];
+                            [next[index - 1], next[index]] = [next[index], next[index - 1]];
+                            patchForm({ imageUploadIds: next });
+                          }}
+                        >
+                          ↑
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="secondary"
+                          className="h-7 px-2 text-xs"
+                          disabled={index === form.imageUploadIds.length - 1}
+                          onClick={() => {
+                            const next = [...form.imageUploadIds];
+                            [next[index], next[index + 1]] = [next[index + 1], next[index]];
+                            patchForm({ imageUploadIds: next });
+                          }}
+                        >
+                          ↓
+                        </Button>
+                      </div>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="secondary"
+                        className="absolute right-1 top-1 h-7 px-2 text-xs"
+                        onClick={() =>
+                          patchForm({
+                            imageUploadIds: form.imageUploadIds.filter((x) => x !== id),
+                          })
+                        }
+                      >
+                        Remove
+                      </Button>
+                    </div>
                   ))}
-                </SelectContent>
-              </Select>
+                </div>
+              </div>
             </div>
-            <div>
-              <FieldLabel>Gold weight (g)</FieldLabel>
-              <Input value={weightGrams} onChange={(e) => setWeightGrams(e.target.value)} inputMode="decimal" />
+            <FormFieldError message={fieldError} />
+            <div className="mt-6 rounded-2xl bg-[#faf6f1] p-5">
+              <p className="mb-2 font-semibold text-[#4c2631]">Server pricing preview</p>
+              {previewState.isFetching ? (
+                <p className="text-sm text-muted-foreground">Loading estimate…</p>
+              ) : (
+                <PricingPreviewPanel pricing={preview as any} />
+              )}
             </div>
-            <div className="sm:col-span-2">
-              <FieldLabel>Making charge (₹, fixed)</FieldLabel>
-              <Input value={makingFixedRupee} onChange={(e) => setMakingFixedRupee(e.target.value)} inputMode="decimal" />
-              <p className="mt-1 text-xs text-muted-foreground">
-                V1 offers apply to making charge only on gold-rate products.
-              </p>
-            </div>
-          </>
-        )}
-        <div className="sm:col-span-2">
-          <FieldLabel>Product images</FieldLabel>
-          <Input
-            type="file"
-            accept="image/png,image/jpeg,image/webp"
-            disabled={!entitled}
-            onChange={(e) => {
-              void handleImagePick(e.target.files?.[0] ?? null);
-              e.target.value = "";
-            }}
-          />
-          {imageUploadIds.length ? (
-            <p className="mt-1 text-xs text-muted-foreground">
-              {imageUploadIds.length} image(s) attached
-            </p>
-          ) : null}
-        </div>
-      </div>
-      <FormFieldError message={fieldError} />
-      <div className="mt-6">
-        <p className="mb-2 text-sm font-semibold">Pricing preview</p>
-        {previewState.isFetching ? (
-          <p className="text-sm text-muted-foreground">Loading estimate…</p>
-        ) : (
-          <PricingPreviewPanel pricing={preview as any} />
-        )}
-      </div>
           </div>
         </DialogBody>
         <DialogFooter>
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
             Close
           </Button>
-          {product?.status === "PUBLISHED" ? (
+          {form.status === "PUBLISHED" && !isArchived ? (
             <Button type="button" variant="secondary" disabled={!entitled} onClick={archive}>
               Archive
             </Button>
           ) : null}
-          <Button type="button" variant="secondary" disabled={!entitled} onClick={saveDraft}>
-            Save draft
-          </Button>
-          <Button type="button" disabled={!entitled} onClick={publish}>
-            Publish
-          </Button>
+          {!isArchived ? (
+            <>
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={!entitled}
+                onClick={() => persistProduct()}
+              >
+                {saveActionLabel(form.status)}
+              </Button>
+              {form.status !== "PUBLISHED" ? (
+                <Button type="button" disabled={!entitled} onClick={() => persistProduct({ publishAfter: true })}>
+                  Publish
+                </Button>
+              ) : null}
+            </>
+          ) : null}
         </DialogFooter>
       </DialogContent>
     </>
@@ -403,7 +634,7 @@ export function EcommerceProductDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       {open ? (
         <EcommerceProductDialogBody
-          key={`${product?.id ?? "new"}|${defaultTax}`}
+          key={`${product?.id ?? "new"}|${product?.version ?? 0}|${defaultTax}`}
           product={product}
           onOpenChange={onOpenChange}
           onSaved={onSaved}

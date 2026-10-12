@@ -20,6 +20,9 @@ export const env = {
   /** Optional default tenant code on collection-agent login (e.g. KAIRALI). */
   agentTenantCode:
     process.env.NEXT_PUBLIC_AGENT_TENANT_CODE?.trim().toUpperCase() ?? "",
+  /** Show TEST ONLY mock PhonePe completion on customer order page (local harness API only). */
+  ecommercePaymentTestUi:
+    process.env.NEXT_PUBLIC_ECOMMERCE_PAYMENT_TEST_UI?.trim().toLowerCase() === "true",
 };
 
 /** Host root for routes outside `/api/v1` (e.g. `/health`). */

@@ -31,6 +31,7 @@ import type {
   PaymentListItem,
   SchemeCard,
   SchemePlan,
+  TenantBranding,
 } from "@/src/types/customer";
 import {
   handleCustomerUnauthorized,
@@ -66,6 +67,7 @@ import {
   type CustomerPaymentPollResult,
 } from "@/src/lib/customer-payment-poll";
 import { readCustomerPaymentSession } from "@/src/lib/customer-payment-session";
+import { normalizeCustomerTenantResolve } from "@/src/lib/customer-tenant-branding";
 
 type ApiEnvelope<T> = { success: true; data: T; meta?: { nextCursor: string | null; hasMore: boolean; limit: number; total: number } };
 
@@ -410,6 +412,9 @@ const liveBaseQuery = fetchBaseQuery({
       if (token) headers.set("Authorization", `Bearer ${token}`);
     }
     headers.set("Accept", "application/json");
+    if (env.apiBaseUrl && !env.useMocks) {
+      headers.set("X-Swarna-Client-Api-Base", env.apiBaseUrl);
+    }
     return headers;
   },
 });
@@ -487,9 +492,16 @@ const dynamicBaseQuery: BaseQueryFn<
 export const customerApi = createApi({
   reducerPath: "customerApi",
   baseQuery: dynamicBaseQuery,
-  tagTypes: ["CustomerHome", "CustomerScheme", "CustomerPayment", "CustomerProfile", "CustomerNotification", "CustomerGrievance", "CustomerDevice"],
+  tagTypes: ["CustomerHome", "CustomerScheme", "CustomerPayment", "CustomerProfile", "CustomerNotification", "CustomerGrievance", "CustomerDevice", "ShopCart", "ShopAddresses"],
   endpoints: (builder) => ({
-    resolveTenant: builder.query<{ tenants: Array<typeof customerTenant> }, { tenantCode?: string; mobile?: string }>({ query: (params) => ({ url: "/public/tenants/resolve", params }) }),
+    resolveTenant: builder.query<
+      { tenants: TenantBranding[]; resolvedBy?: string; tenantCode?: string | null },
+      { tenantCode?: string; mobile?: string }
+    >({
+      query: (params) => ({ url: "/public/tenants/resolve", params }),
+      transformResponse: (raw) =>
+        normalizeCustomerTenantResolve(raw as Parameters<typeof normalizeCustomerTenantResolve>[0]),
+    }),
     requestCustomerOtp: builder.mutation<
       { otpId: string; maskedMobile: string; expiresInSeconds: number; isRegistered?: boolean },
       { tenantCode: string; mobile: string; deviceId: string; purpose: string }
@@ -799,18 +811,53 @@ export const customerApi = createApi({
         return raw as { available: boolean };
       },
     }),
-    getShopProducts: builder.query<
-      { items: Record<string, any>[]; meta?: Record<string, unknown> },
+    getShopCategories: builder.query<
+      { items: Record<string, unknown>[] },
       void
     >({
-      query: () => ({ url: "/app/shop/products", mockKey: "shopProducts" }),
+      query: () => ({ url: "/app/shop/categories", mockKey: "shopCategories" }),
       transformResponse: (raw: unknown) => {
         if (raw && typeof raw === "object" && "data" in raw) {
           const data = (raw as { data: { items?: Record<string, unknown>[] } }).data;
           return { items: data?.items ?? [] };
         }
-        const direct = raw as { items?: Record<string, unknown>[] };
-        return { items: direct?.items ?? [] };
+        return { items: (raw as { items?: Record<string, unknown>[] })?.items ?? [] };
+      },
+    }),
+    getShopStorePolicies: builder.query<
+      { published: boolean; policies: Record<string, unknown> | null },
+      void
+    >({
+      query: () => ({ url: "/app/shop/store-policies", mockKey: "shopStorePolicies" }),
+      transformResponse: (raw: unknown) => {
+        if (raw && typeof raw === "object" && "data" in raw) {
+          return (raw as { data: { published: boolean; policies: Record<string, unknown> | null } }).data;
+        }
+        return raw as { published: boolean; policies: Record<string, unknown> | null };
+      },
+    }),
+    getShopProducts: builder.query<
+      { items: Record<string, any>[]; meta?: Record<string, unknown> },
+      { categoryId?: string; cursor?: string; limit?: number; q?: string; sort?: "newest" | "name"; featured?: boolean } | void
+    >({
+      query: (params) => ({
+        url: "/app/shop/products",
+        params: params ?? {},
+        mockKey: "shopProducts",
+        mockParams: params ?? {},
+      }),
+      transformResponse: (raw: unknown) => {
+        if (raw && typeof raw === "object" && "data" in raw) {
+          const data = raw as {
+            data: { items?: Record<string, unknown>[]; meta?: Record<string, unknown> };
+          };
+          return { items: data.data?.items ?? [], meta: data.data?.meta };
+        }
+        const direct = raw as {
+          items?: Record<string, unknown>[];
+          meta?: Record<string, unknown>;
+        };
+        return { items: direct?.items ?? [], meta: direct?.meta };
       },
     }),
     getShopProduct: builder.query<Record<string, any>, string>({
@@ -825,13 +872,344 @@ export const customerApi = createApi({
         return raw as Record<string, unknown>;
       },
     }),
+    getShopCart: builder.query<Record<string, any>, void>({
+      query: () => ({ url: "/app/shop/cart", mockKey: "shopCart" }),
+      transformResponse: (raw: unknown) => {
+        if (raw && typeof raw === "object" && "data" in raw) {
+          return (raw as { data: Record<string, unknown> }).data;
+        }
+        return raw as Record<string, unknown>;
+      },
+      providesTags: ["ShopCart"],
+    }),
+    putShopCart: builder.mutation<
+      Record<string, any>,
+      { lines: { productId: string; quantity: number }[]; expectedVersion?: number }
+    >({
+      query: (body) => ({
+        url: "/app/shop/cart",
+        method: "PUT",
+        body,
+        mockKey: "putShopCart",
+      }),
+      transformResponse: (raw: unknown) => {
+        if (raw && typeof raw === "object" && "data" in raw) {
+          return (raw as { data: Record<string, unknown> }).data;
+        }
+        return raw as Record<string, unknown>;
+      },
+      invalidatesTags: ["ShopCart"],
+    }),
+    getShopFulfilmentOptions: builder.query<Record<string, any>, void>({
+      query: () => ({ url: "/app/shop/fulfilment-options", mockKey: "shopFulfilment" }),
+      transformResponse: (raw: unknown) => {
+        if (raw && typeof raw === "object" && "data" in raw) {
+          return (raw as { data: Record<string, unknown> }).data;
+        }
+        return raw as Record<string, unknown>;
+      },
+    }),
+    getShopAddresses: builder.query<{ items: Record<string, unknown>[] }, void>({
+      query: () => ({ url: "/app/shop/addresses", mockKey: "shopAddresses" }),
+      transformResponse: (raw: unknown) => {
+        if (raw && typeof raw === "object" && "data" in raw) {
+          return (raw as { data: { items: Record<string, unknown>[] } }).data;
+        }
+        return raw as { items: Record<string, unknown>[] };
+      },
+      providesTags: ["ShopAddresses"],
+    }),
+    createShopAddress: builder.mutation<
+      Record<string, unknown>,
+      {
+        line1: string;
+        city: string;
+        state: string;
+        pincode: string;
+        line2?: string;
+        label?: string;
+        recipientName?: string;
+        mobile?: string;
+        isDefault?: boolean;
+        idempotencyKey: string;
+      }
+    >({
+      query: ({ idempotencyKey, ...body }) => ({
+        url: "/app/shop/addresses",
+        method: "POST",
+        body,
+        headers: { "X-Idempotency-Key": idempotencyKey },
+        mockKey: "createShopAddress",
+      }),
+      transformResponse: (raw: unknown) => {
+        if (raw && typeof raw === "object" && "data" in raw) {
+          return (raw as { data: Record<string, unknown> }).data;
+        }
+        return raw as Record<string, unknown>;
+      },
+      invalidatesTags: ["ShopAddresses"],
+    }),
+    createShopQuote: builder.mutation<
+      Record<string, any>,
+      {
+        fulfilmentMode: string;
+        pickupBranchId?: string;
+        addressId?: string;
+        pincode?: string;
+        paymentMethod?: "ONLINE" | "COD";
+        idempotencyKey: string;
+      }
+    >({
+      query: ({ idempotencyKey, ...body }) => ({
+        url: "/app/shop/quotes",
+        method: "POST",
+        body,
+        headers: { "X-Idempotency-Key": idempotencyKey },
+        mockKey: "createShopQuote",
+      }),
+      transformResponse: (raw: unknown) => {
+        if (raw && typeof raw === "object" && "data" in raw) {
+          return (raw as { data: Record<string, unknown> }).data;
+        }
+        return raw as Record<string, unknown>;
+      },
+    }),
+    getShopQuote: builder.query<Record<string, any>, string>({
+      query: (quoteId) => ({
+        url: `/app/shop/quotes/${encodeURIComponent(quoteId)}`,
+        mockKey: "shopQuote",
+      }),
+      transformResponse: (raw: unknown) => {
+        if (raw && typeof raw === "object" && "data" in raw) {
+          return (raw as { data: Record<string, unknown> }).data;
+        }
+        return raw as Record<string, unknown>;
+      },
+    }),
+    cancelShopQuote: builder.mutation<Record<string, any>, { quoteId: string; idempotencyKey: string }>({
+      query: ({ quoteId, idempotencyKey }) => ({
+        url: `/app/shop/quotes/${encodeURIComponent(quoteId)}/cancel`,
+        method: "POST",
+        headers: { "X-Idempotency-Key": idempotencyKey },
+        mockKey: "cancelShopQuote",
+      }),
+      transformResponse: (raw: unknown) => {
+        if (raw && typeof raw === "object" && "data" in raw) {
+          return (raw as { data: Record<string, unknown> }).data;
+        }
+        return raw as Record<string, unknown>;
+      },
+    }),
+    createShopOrder: builder.mutation<
+      Record<string, unknown>,
+      { quoteId: string; idempotencyKey: string }
+    >({
+      query: ({ quoteId, idempotencyKey }) => ({
+        url: "/app/shop/orders",
+        method: "POST",
+        body: { quoteId },
+        headers: { "X-Idempotency-Key": idempotencyKey },
+        mockKey: "createShopOrder",
+      }),
+      transformResponse: (raw: unknown) => {
+        if (raw && typeof raw === "object" && "data" in raw) {
+          return (raw as { data: Record<string, unknown> }).data;
+        }
+        return raw as Record<string, unknown>;
+      },
+    }),
+    listShopOrders: builder.query<
+      { items: Record<string, unknown>[]; page?: { nextCursor?: string | null } },
+      { cursor?: string; limit?: number } | void
+    >({
+      query: (params) => ({
+        url: "/app/shop/orders",
+        params: params ?? {},
+        mockKey: "shopOrders",
+      }),
+      transformResponse: (raw: unknown) => {
+        if (raw && typeof raw === "object" && "data" in raw) {
+          const envelope = raw as {
+            data: Record<string, unknown>[] | { items?: Record<string, unknown>[] };
+            meta?: { nextCursor?: string | null };
+          };
+          const data = envelope.data;
+          const items = Array.isArray(data)
+            ? data
+            : Array.isArray((data as { items?: unknown[] })?.items)
+              ? ((data as { items: Record<string, unknown>[] }).items ?? [])
+              : [];
+          return {
+            items,
+            page: { nextCursor: envelope.meta?.nextCursor ?? null },
+          };
+        }
+        const legacy = raw as { items?: Record<string, unknown>[]; page?: { nextCursor?: string | null } };
+        return {
+          items: legacy.items ?? [],
+          page: legacy.page ?? { nextCursor: null },
+        };
+      },
+      serializeQueryArgs: ({ endpointName }) => endpointName,
+      merge: (current, incoming, { arg }) => {
+        if (!arg?.cursor) return incoming;
+        return {
+          items: [...(current?.items ?? []), ...(incoming.items ?? [])],
+          page: incoming.page,
+        };
+      },
+      forceRefetch: ({ currentArg, previousArg }) =>
+        currentArg?.cursor !== previousArg?.cursor,
+    }),
+    getShopOrder: builder.query<Record<string, unknown>, string>({
+      query: (orderId) => ({
+        url: `/app/shop/orders/${encodeURIComponent(orderId)}`,
+        mockKey: "shopOrder",
+      }),
+      transformResponse: (raw: unknown) => {
+        if (raw && typeof raw === "object" && "data" in raw) {
+          return (raw as { data: Record<string, unknown> }).data;
+        }
+        return raw as Record<string, unknown>;
+      },
+      providesTags: (_res, _err, orderId) => [{ type: "ShopCart", id: `order-${orderId}` }],
+    }),
+    createShopOrderPaymentIntent: builder.mutation<
+      { paymentIntent: Record<string, unknown> },
+      { orderId: string; idempotencyKey: string; redirectUrl: string }
+    >({
+      query: ({ orderId, idempotencyKey, redirectUrl }) => ({
+        url: `/app/shop/orders/${encodeURIComponent(orderId)}/payment-intents`,
+        method: "POST",
+        body: { redirectUrl },
+        headers: { "X-Idempotency-Key": idempotencyKey },
+        mockKey: "createShopOrderPaymentIntent",
+      }),
+      transformResponse: (raw: unknown) => {
+        if (raw && typeof raw === "object" && "data" in raw) {
+          return (raw as { data: { paymentIntent: Record<string, unknown> } }).data;
+        }
+        return raw as { paymentIntent: Record<string, unknown> };
+      },
+    }),
+    pollShopOrderPaymentIntent: builder.query<
+      { paymentIntent: Record<string, unknown> },
+      { orderId: string; paymentAttemptId: string }
+    >({
+      query: ({ orderId, paymentAttemptId }) => ({
+        url: `/app/shop/orders/${encodeURIComponent(orderId)}/payment-intents/${encodeURIComponent(paymentAttemptId)}`,
+        mockKey: "pollShopOrderPaymentIntent",
+      }),
+      transformResponse: (raw: unknown) => {
+        if (raw && typeof raw === "object" && "data" in raw) {
+          return (raw as { data: { paymentIntent: Record<string, unknown> } }).data;
+        }
+        return raw as { paymentIntent: Record<string, unknown> };
+      },
+    }),
+    cancelShopOrder: builder.mutation<Record<string, unknown>, { orderId: string; reason?: string }>({
+      query: ({ orderId, reason }) => ({
+        url: `/app/shop/orders/${encodeURIComponent(orderId)}/cancel`,
+        method: "POST",
+        body: reason ? { reason } : {},
+        mockKey: "cancelShopOrder",
+      }),
+      transformResponse: (raw: unknown) => {
+        if (raw && typeof raw === "object" && "data" in raw) {
+          return (raw as { data: Record<string, unknown> }).data;
+        }
+        return raw as Record<string, unknown>;
+      },
+      invalidatesTags: (_r, _e, { orderId }) => [
+        "ShopCart",
+        { type: "ShopCart", id: `order-${orderId}` },
+      ],
+    }),
+    getShopOrderReturn: builder.query<{ request: Record<string, unknown> | null }, string>({
+      query: (orderId) => ({
+        url: `/app/shop/orders/${encodeURIComponent(orderId)}/return`,
+        mockKey: "shopOrderReturn",
+      }),
+      transformResponse: (raw: unknown) => {
+        if (raw && typeof raw === "object" && "data" in raw) {
+          return (raw as { data: { request: Record<string, unknown> | null } }).data;
+        }
+        return raw as { request: Record<string, unknown> | null };
+      },
+      providesTags: (_r, _e, orderId) => [{ type: "ShopCart", id: `return-${orderId}` }],
+    }),
+    createShopReturnRequest: builder.mutation<
+      { request: Record<string, unknown>; created: boolean },
+      { orderId: string; reason: string; idempotencyKey: string; kind?: "RETURN" | "EXCHANGE"; evidenceNote?: string }
+    >({
+      query: ({ orderId, idempotencyKey, ...body }) => ({
+        url: `/app/shop/orders/${encodeURIComponent(orderId)}/return-requests`,
+        method: "POST",
+        body,
+        headers: { "X-Idempotency-Key": idempotencyKey },
+        mockKey: "createShopReturnRequest",
+      }),
+      transformResponse: (raw: unknown) => {
+        if (raw && typeof raw === "object" && "data" in raw) {
+          return (raw as { data: { request: Record<string, unknown>; created: boolean } }).data;
+        }
+        return raw as { request: Record<string, unknown>; created: boolean };
+      },
+      invalidatesTags: (_r, _e, { orderId }) => [
+        { type: "ShopCart", id: `return-${orderId}` },
+        { type: "ShopCart", id: `order-${orderId}` },
+      ],
+    }),
+    createShopCancellationRequest: builder.mutation<
+      { request: Record<string, unknown>; created: boolean },
+      { orderId: string; reason: string; idempotencyKey: string }
+    >({
+      query: ({ orderId, reason, idempotencyKey }) => ({
+        url: `/app/shop/orders/${encodeURIComponent(orderId)}/cancellation-requests`,
+        method: "POST",
+        body: { reason },
+        headers: { "X-Idempotency-Key": idempotencyKey },
+        mockKey: "createShopCancellationRequest",
+      }),
+      transformResponse: (raw: unknown) => {
+        if (raw && typeof raw === "object" && "data" in raw) {
+          return (raw as { data: { request: Record<string, unknown>; created: boolean } }).data;
+        }
+        return raw as { request: Record<string, unknown>; created: boolean };
+      },
+      invalidatesTags: (_r, _e, { orderId }) => [
+        "ShopCart",
+        { type: "ShopCart", id: `order-${orderId}` },
+      ],
+    }),
+    completeShopTestHarnessPayment: builder.mutation<
+      Record<string, unknown>,
+      { orderId: string; idempotencyKey: string; outcome?: "COMPLETED" | "FAILED"; paymentAttemptId?: string }
+    >({
+      query: ({ orderId, idempotencyKey, outcome, paymentAttemptId }) => ({
+        url: `/app/shop/orders/${encodeURIComponent(orderId)}/test-harness/complete-payment`,
+        method: "POST",
+        body: {
+          ...(outcome ? { outcome } : {}),
+          ...(paymentAttemptId ? { paymentAttemptId } : {}),
+        },
+        headers: { "X-Idempotency-Key": idempotencyKey },
+        mockKey: "completeShopTestHarnessPayment",
+      }),
+      transformResponse: (raw: unknown) => {
+        if (raw && typeof raw === "object" && "data" in raw) {
+          return (raw as { data: Record<string, unknown> }).data;
+        }
+        return raw as Record<string, unknown>;
+      },
+    }),
   }),
 });
 
 export const {
   useResolveTenantQuery, useRequestCustomerOtpMutation, useVerifyCustomerOtpMutation, useLoginCustomerPasswordMutation,
   useGetCustomerHomeQuery, useGetCustomerProfileQuery, useUpdateCustomerProfileMutation,
-  useCompleteCustomerProfileMutation, usePresignCustomerUploadMutation, useCompleteCustomerUploadMutation, useGetCustomerUploadDownloadQuery, useGetPublicCustomerUploadDownloadQuery, useSubmitCustomerKycMutation,
+  useCompleteCustomerProfileMutation, usePresignCustomerUploadMutation, useCompleteCustomerUploadMutation, useGetCustomerUploadDownloadQuery, useLazyGetCustomerUploadDownloadQuery, useGetPublicCustomerUploadDownloadQuery, useSubmitCustomerKycMutation,
   useUpdateCustomerNomineeMutation, useRemoveCustomerNomineeMutation,
   useGetCustomerPlansQuery, useGetCustomerPlanQuery, useGetCustomerSchemesQuery, useGetCustomerPastSchemesQuery, useGetCustomerSchemeQuery, useGetCustomerPassbookQuery, useGetCustomerPayableRangeQuery, useLazyGetCustomerPayableRangeQuery, useGetCustomerSettlementPreviewQuery,
   useEnrolCustomerSchemeMutation, useInitiateCustomerPaymentMutation, useInitiatePublicPaymentLinkMutation,
@@ -841,10 +1219,31 @@ export const {
   useGetCustomerGrievancesQuery, useGetCustomerGrievanceQuery, useCreateCustomerGrievanceMutation,
   useReplyCustomerGrievanceMutation, useGetCustomerDevicesQuery, useRevokeCustomerDeviceMutation,
   useCustomerLogoutMutation,
+  useGetShopCategoriesQuery,
   useGetCustomerGoldRateQuery, useGetCustomerGoldHistoryQuery, useGetCustomerBranchesQuery,
   useRequestCustomerRedemptionMutation,
   useRegisterCustomerFcmTokenMutation,
   useGetShopAvailabilityQuery,
+  useGetShopStorePoliciesQuery,
   useGetShopProductsQuery,
+  useLazyGetShopProductsQuery,
   useGetShopProductQuery,
+  useGetShopCartQuery,
+  usePutShopCartMutation,
+  useGetShopFulfilmentOptionsQuery,
+  useGetShopAddressesQuery,
+  useCreateShopAddressMutation,
+  useCreateShopQuoteMutation,
+  useGetShopQuoteQuery,
+  useCancelShopQuoteMutation,
+  useCreateShopOrderMutation,
+  useListShopOrdersQuery,
+  useGetShopOrderQuery,
+  useCreateShopOrderPaymentIntentMutation,
+  useLazyPollShopOrderPaymentIntentQuery,
+  useCompleteShopTestHarnessPaymentMutation,
+  useCancelShopOrderMutation,
+  useCreateShopCancellationRequestMutation,
+  useGetShopOrderReturnQuery,
+  useCreateShopReturnRequestMutation,
 } = customerApi;

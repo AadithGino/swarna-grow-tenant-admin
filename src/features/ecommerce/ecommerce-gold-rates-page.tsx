@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Plus, Scale } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,7 +13,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { ActionDialog } from "@/src/components/common/action-dialog";
-import { FieldLabel, PageHeader, Surface } from "@/src/components/common/page-parts";
+import {
+  FieldLabel,
+  PageHeader,
+  StatCard,
+  Surface,
+} from "@/src/components/common/page-parts";
 import { PageSkeleton, QueryError } from "@/src/components/common/query-state";
 import { toastApiError } from "@/src/lib/api-error";
 import {
@@ -21,6 +27,7 @@ import {
   useSetEcommerceGoldRateMutation,
 } from "@/src/store/api/admin-api";
 import { useEcommerceCatalogWrite } from "@/src/features/ecommerce/ecommerce-admin-shared";
+import { EcommerceSectionNav } from "@/src/features/ecommerce/ecommerce-section-nav";
 
 export function EcommerceGoldRatesPage() {
   const current = useGetEcommerceGoldRatesCurrentQuery();
@@ -73,51 +80,87 @@ export function EcommerceGoldRatesPage() {
     }
   }
 
+  const rateRows = current.data?.rates ?? [];
+
   return (
     <>
       <PageHeader
         eyebrow="Online store"
-        title="Ecommerce gold rates"
-        description="Rates older than seven days block new price estimates until you publish a fresh rate."
+        title="Store gold rates"
+        description="Set an independent price per purity. Published prices update the online catalog automatically."
         actions={
           <Button type="button" disabled={!entitled} onClick={() => setOpen(true)}>
-            Publish rate
+            <Plus className="mr-2 size-4" /> Publish rate
           </Button>
         }
       />
+      <EcommerceSectionNav />
       {!entitled ? (
         <p className="mb-4 text-sm text-amber-800">{disabledMessage}</p>
       ) : null}
-      <div className="grid gap-4 md:grid-cols-3">
-        {(current.data?.rates ?? []).map((row) => (
-          <Surface key={row.purity} title={row.purity}>
-            <div className="p-6 text-sm">
-              <p className="text-2xl font-bold">
-                {row.ratePerGram?.amountDisplay ?? "Not set"}
-              </p>
-              <p className="mt-2 text-muted-foreground">
-                {row.effectiveAt
-                  ? `Effective ${new Date(row.effectiveAt).toLocaleString("en-IN")}`
-                  : "Publish a rate for this purity"}
-              </p>
-            </div>
-          </Surface>
-        ))}
+      <div className="mb-5 rounded-2xl border border-[#eadfd6] bg-[#faf5ee] p-5 text-sm leading-6 text-[#665557]">
+        Each purity needs its own rate. Missing or stale rates make affected product prices unavailable;
+        they never fall back to another purity.
       </div>
-      <Surface title="Rate history">
-        <ul className="divide-y text-sm">
+      <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        {rateRows.map((row) => {
+          const display = row.ratePerGram?.amountDisplay ?? "Not set";
+          return (
+            <StatCard
+              key={row.purity}
+              icon={Scale}
+              tone="gold"
+              label={`${row.purity} · per gram`}
+              value={
+                <span className="font-mono tabular-nums tracking-tight">{display}</span>
+              }
+              detail={
+                row.effectiveAt
+                  ? `Effective ${new Date(row.effectiveAt).toLocaleString("en-IN", {
+                      dateStyle: "medium",
+                      timeStyle: "short",
+                    })}`
+                  : "Publish a rate for this purity"
+              }
+            />
+          );
+        })}
+        {rateRows.length === 0 ? (
+          <Surface className="col-span-full">
+            <p className="p-6 text-sm text-muted-foreground">
+              No purities configured yet. Publish a rate to get started.
+            </p>
+          </Surface>
+        ) : null}
+      </div>
+      <Surface title="Rate history" description="Latest published rates across all purities.">
+        <ul className="divide-y divide-[#eaded9] text-sm">
           {(history.data?.items ?? []).slice(0, 20).map((row) => (
-            <li key={row.id} className="flex justify-between px-6 py-3">
-              <span>
-                {row.purity} · {row.ratePerGram?.amountDisplay}
+            <li
+              key={row.id}
+              className="flex flex-col gap-1 px-5 py-3.5 sm:flex-row sm:items-center sm:justify-between"
+            >
+              <span className="font-medium text-[#2d191d]">
+                <span className="mr-2 inline-flex rounded-md bg-[#fff7df] px-2 py-0.5 text-xs font-bold text-[#815b1d]">
+                  {row.purity}
+                </span>
+                <span className="font-mono tabular-nums text-[#28161a]">
+                  {row.ratePerGram?.amountDisplay ?? "—"}
+                </span>
               </span>
-              <span className="text-muted-foreground">
+              <span className="text-xs text-[#807478] sm:text-sm">
                 {row.effectiveAt
-                  ? new Date(row.effectiveAt).toLocaleString("en-IN")
+                  ? new Date(row.effectiveAt).toLocaleString("en-IN", {
+                      dateStyle: "medium",
+                      timeStyle: "short",
+                    })
                   : "—"}
               </span>
             </li>
           ))}
+          {(history.data?.items ?? []).length === 0 ? (
+            <li className="px-5 py-8 text-center text-muted-foreground">No history yet.</li>
+          ) : null}
         </ul>
       </Surface>
       <ActionDialog
@@ -146,7 +189,12 @@ export function EcommerceGoldRatesPage() {
           </div>
           <div>
             <FieldLabel>Rate per gram (₹)</FieldLabel>
-            <Input value={rateRupee} onChange={(e) => setRateRupee(e.target.value)} inputMode="decimal" />
+            <Input
+              value={rateRupee}
+              onChange={(e) => setRateRupee(e.target.value)}
+              inputMode="decimal"
+              className="h-12 font-mono text-lg font-semibold tabular-nums"
+            />
           </div>
           <div>
             <FieldLabel>Effective at</FieldLabel>

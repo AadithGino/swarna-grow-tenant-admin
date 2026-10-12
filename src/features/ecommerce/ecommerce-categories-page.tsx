@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { FolderOpen, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,6 +21,8 @@ import {
   usePresignUploadMutation,
 } from "@/src/store/api/admin-api";
 import { useEcommerceCatalogWrite } from "@/src/features/ecommerce/ecommerce-admin-shared";
+import { EcommerceCatalogImage } from "@/src/features/ecommerce/ecommerce-catalog-image";
+import { EcommerceSectionNav } from "@/src/features/ecommerce/ecommerce-section-nav";
 
 type CategoryRow = {
   id: string;
@@ -143,29 +146,41 @@ export function EcommerceCategoriesPage() {
     <>
       <PageHeader
         eyebrow="Online store"
-        title="Categories"
+        title="Collections & categories"
         description="Archiving a category hides its published products from the shop until they are recategorised."
         actions={
           <Button type="button" disabled={!entitled} onClick={openCreate}>
-            New category
+            <Plus className="mr-2 size-4" /> New category
           </Button>
         }
       />
+      <EcommerceSectionNav />
       {!entitled ? (
         <p className="mb-4 text-sm text-amber-800">{disabledMessage}</p>
       ) : null}
-      <Surface title="All categories">
-        <ul className="divide-y">
+      <div className="mb-5 rounded-2xl border border-[#e9ded7] bg-[#f9f4ee] p-5 text-sm text-[#635053]">
+        <strong className="block text-[#4d2933]">Organise your storefront</strong>
+        <span className="mt-1 block">Only active categories appear in the customer shop. Archiving a category also hides its published products until you move them or reactivate it.</span>
+      </div>
+      <Surface title={`Categories (${items.length})`}>
+        <ul className="grid gap-4 p-4 sm:grid-cols-2 xl:grid-cols-3">
           {items.map((c) => (
-            <li key={c.id} className="flex flex-wrap items-center justify-between gap-3 px-6 py-4 text-sm">
-              <div>
-                <p className="font-semibold">{c.name}</p>
-                <p className="text-muted-foreground">{c.slug}</p>
+            <li key={c.id} className="overflow-hidden rounded-[1.25rem] border border-[#ede4dc] bg-white text-sm shadow-sm">
+              <div className="relative aspect-[16/9] bg-[#f8f2eb]">
+                    <EcommerceCatalogImage
+                      uploadId={c.imageUploadId ?? undefined}
+                      channel="admin"
+                      alt={c.name}
+                      fill
+                    />
               </div>
-              <div className="flex items-center gap-2">
+              <div className="space-y-3 p-4"><div className="flex items-start justify-between gap-3"><div><p className="font-semibold text-[#33262a]">{c.name}</p><p className="mt-1 text-xs text-muted-foreground">/{c.slug}</p></div>
                 <StatusBadge status={c.active ? "ACTIVE" : "INACTIVE"} />
+              </div>
+              {c.description ? <p className="line-clamp-2 min-h-9 text-xs leading-5 text-[#71686a]">{c.description}</p> : null}
+              <div className="flex items-center gap-2 border-t border-[#f1eae4] pt-3">
                 <Button type="button" size="sm" variant="outline" disabled={!entitled} onClick={() => openEdit(c)}>
-                  Edit
+                  Edit category
                 </Button>
                 {c.active ? (
                   <Button type="button" size="sm" variant="secondary" disabled={!entitled} onClick={() => archive(c)}>
@@ -173,10 +188,11 @@ export function EcommerceCategoriesPage() {
                   </Button>
                 ) : null}
               </div>
+              </div>
             </li>
           ))}
           {items.length === 0 ? (
-            <li className="px-6 py-8 text-muted-foreground">No categories yet.</li>
+            <li className="col-span-full px-6 py-12 text-center text-muted-foreground"><FolderOpen className="mx-auto mb-3 size-9 text-[#b99466]" />No categories yet. Create one to organise your jewellery.</li>
           ) : null}
         </ul>
       </Surface>
@@ -218,7 +234,15 @@ export function EcommerceCategoriesPage() {
               }}
             />
             {imageUploadId ? (
-              <p className="mt-1 text-xs text-muted-foreground">Image attached</p>
+              <div className="relative mt-2 aspect-video max-w-xs overflow-hidden rounded-lg border">
+                <EcommerceCatalogImage
+                  uploadId={imageUploadId}
+                  channel="admin"
+                  alt=""
+                  fill
+                  className="rounded-lg"
+                />
+              </div>
             ) : null}
           </div>
           <FormFieldError message={error} />

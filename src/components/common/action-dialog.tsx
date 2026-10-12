@@ -28,6 +28,7 @@ export function ActionDialog({
   open: controlledOpen,
   onOpenChange,
   submitDisabled,
+  submitHint,
   className,
   onError,
   suppressDefaultErrorToast,
@@ -41,6 +42,8 @@ export function ActionDialog({
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
   submitDisabled?: boolean;
+  /** Shown beside Save when the action is disabled (e.g. no edits yet). */
+  submitHint?: string;
   className?: string;
   /** When set, called on submit failure; dialog stays open. */
   onError?: (err: unknown) => void;
@@ -80,7 +83,12 @@ export function ActionDialog({
             ) : null}
           </div>
         </DialogBody>
-        <DialogFooter>
+        <DialogFooter className="flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
+          {submitHint && submitDisabled && !busy ? (
+            <p className="w-full text-sm text-muted-foreground sm:order-first sm:mr-auto sm:w-auto">
+              {submitHint}
+            </p>
+          ) : null}
           <Button
             type="button"
             variant="outline"

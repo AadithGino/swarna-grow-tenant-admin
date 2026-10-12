@@ -35,6 +35,11 @@ export const ALL_PERMISSION_KEYS = [
   "grievance.assign",
   "grievance.resolve",
   "audit.read",
+  "ecommerce.read",
+  "ecommerce.write",
+  "ecommerce.payment.operate",
+  "ecommerce.refund.operate",
+  "ecommerce.fulfilment.operate",
 ] as const;
 
 const PERMISSION_LABELS: Record<string, string> = {
@@ -72,6 +77,11 @@ const PERMISSION_LABELS: Record<string, string> = {
   "grievance.assign": "Assign tickets to staff",
   "grievance.resolve": "Close and resolve tickets",
   "audit.read": "View audit trail",
+  "ecommerce.read": "View ecommerce catalog, orders, and inventory",
+  "ecommerce.write": "Edit ecommerce catalog, tax, and inventory settings",
+  "ecommerce.payment.operate": "Reconcile ecommerce payments and clear operational alerts",
+  "ecommerce.refund.operate": "Initiate and record ecommerce payment exception refunds",
+  "ecommerce.fulfilment.operate": "Update paid order fulfilment status",
 };
 
 export const PERMISSION_GROUP_ORDER = [
@@ -86,6 +96,7 @@ export const PERMISSION_GROUP_ORDER = [
   "staff",
   "branch",
   "gold-rate",
+  "ecommerce",
   "settings",
   "grievance",
   "audit",
@@ -104,6 +115,7 @@ export const PERMISSION_GROUP_LABELS: Record<string, string> = {
   staff: "Staff",
   branch: "Branches",
   "gold-rate": "Gold rates",
+  ecommerce: "Ecommerce",
   settings: "Settings",
   grievance: "Support & grievances",
   audit: "Audit",

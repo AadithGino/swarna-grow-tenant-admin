@@ -46,6 +46,12 @@ const tones: Record<string, string> = {
   COMPLETED: "border-emerald-200 bg-emerald-50 text-emerald-700",
   REDEEMED: "border-emerald-200 bg-emerald-50 text-emerald-800",
   CLOSED_PREMATURE: "border-stone-300 bg-stone-100 text-stone-800",
+  COD_PENDING_ACCEPTANCE: "border-amber-200 bg-amber-50 text-amber-800",
+  PROCESSING: "border-blue-200 bg-blue-50 text-blue-700",
+  SHIPPED: "border-indigo-200 bg-indigo-50 text-indigo-700",
+  READY_FOR_PICKUP: "border-indigo-200 bg-indigo-50 text-indigo-700",
+  PAYMENT_EXPIRED: "border-stone-200 bg-stone-100 text-stone-600",
+  CANCELLED: "border-red-200 bg-red-50 text-red-700",
 };
 
 function formatStatusLabel(status: string) {

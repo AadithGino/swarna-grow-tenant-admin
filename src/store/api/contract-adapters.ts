@@ -1814,7 +1814,18 @@ export function adaptSubscriptionInvoices(
 
 export function adaptSubscription(raw: unknown): Record<string, unknown> {
   const data = (contractPayload(raw) ?? raw) as Record<string, unknown>;
-  if (data.currentPlan && data.usage) return data;
+  if (data.currentPlan && data.usage) {
+    return {
+      ...data,
+      ecommerce:
+        data.ecommerce ??
+        ({
+          planEntitled: false,
+          enabled: false,
+          active: false,
+        } as const),
+    };
+  }
   const sub = (data.subscription ?? data) as Record<string, unknown>;
   const limits = (sub.limits ?? {}) as Record<string, number>;
   const tier = String(sub.tier ?? "STARTER");

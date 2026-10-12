@@ -50,18 +50,23 @@ import { useCursorPagination } from "@/src/hooks/use-cursor-pagination";
 import { useDebouncedValue } from "@/src/hooks/use-debounced-value";
 import { useThrottledValue } from "@/src/hooks/use-throttled-value";
 import {
+  useCreateEcommerceReportExportMutation,
   useCreateReportExportMutation,
   useGetBranchesQuery,
   useGetCustomersQuery,
+  useGetEcommerceReportsQuery,
   useGetPlansQuery,
   useGetReportsQuery,
   useLazyGetExportStatusQuery,
 } from "@/src/store/api/admin-api";
+import { useEcommerceWorkspaceNavVisible } from "@/src/features/ecommerce/ecommerce-admin-shared";
+import { EcommerceReportDefinitions } from "@/src/features/reports/ecommerce-report-definitions";
 import { useAppSelector } from "@/src/store/hooks";
 import { portalPathFromContract } from "@/src/lib/contract-paths";
 import {
   ADMIN_REPORT_KEYS,
   ADMIN_REPORT_LABELS,
+  isEcommerceAdminReportKey,
   type AdminReportKey,
   type AdminReportRow,
   type ChartSeriesBlock,
@@ -100,9 +105,12 @@ export function ReportsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [createExport] = useCreateReportExportMutation();
+  const [createEcommerceExport] = useCreateEcommerceReportExportMutation();
   const [fetchExportStatus] = useLazyGetExportStatusQuery();
+  const ecommerceNav = useEcommerceWorkspaceNavVisible();
   const [exportFormat, setExportFormat] = useState("CSV");
   const [reportKey, setReportKey] = useState<AdminReportKey>("COLLECTION");
+  const isEcommerceReport = isEcommerceAdminReportKey(reportKey);
   const [from, setFrom] = useState(() => defaultListRangeFrom());
   const [to, setTo] = useState(() => defaultListRangeTo());
   const [reportBranchId, setReportBranchId] = useState("ALL");
@@ -271,9 +279,20 @@ export function ReportsPage() {
     ],
   );
 
-  const query = useGetReportsQuery(queryArgs, {
-    skip: skipReportQuery || skipReportForBadDates || !mounted,
+  const skipSchemeReport =
+    skipReportQuery || skipReportForBadDates || !mounted || isEcommerceReport;
+  const skipEcommerceReport =
+    skipReportQuery
+    || skipReportForBadDates
+    || !mounted
+    || !isEcommerceReport
+    || !ecommerceNav.showEcommerceReports;
+
+  const schemeQuery = useGetReportsQuery(queryArgs, { skip: skipSchemeReport });
+  const ecommerceQuery = useGetEcommerceReportsQuery(queryArgs, {
+    skip: skipEcommerceReport,
   });
+  const query = isEcommerceReport ? ecommerceQuery : schemeQuery;
   const report = skipReportQuery || !mounted ? undefined : query.data;
   const page = report?.page ?? emptyPageMeta();
   const chartEntries = Object.entries(
@@ -371,19 +390,28 @@ export function ReportsPage() {
       toast.error(first ?? "Fix export filters.");
       return;
     }
-    void createExport({
-      reportKey,
-      format: exportFormat,
-      params: {
-        from,
-        to,
-        ...(isCustomerPerformance &&
-        customerFocusMode === "INDIVIDUAL" &&
-        customerId.trim()
-          ? { customerId: customerId.trim() }
-          : {}),
-      },
-    })
+    const exportParams = {
+      from,
+      to,
+      period: "CUSTOM" as const,
+      ...(isCustomerPerformance &&
+      customerFocusMode === "INDIVIDUAL" &&
+      customerId.trim()
+        ? { customerId: customerId.trim() }
+        : {}),
+    };
+    const run = isEcommerceReport
+      ? createEcommerceExport({
+          reportKey,
+          format: exportFormat,
+          params: exportParams,
+        })
+      : createExport({
+          reportKey,
+          format: exportFormat,
+          params: exportParams,
+        });
+    void run
       .unwrap()
       .then((job) => {
         if (!job.exportId) {
@@ -494,7 +522,14 @@ export function ReportsPage() {
         customersLoading={customersQuery.isLoading}
         onApply={() => query.refetch()}
         applyDisabled={skipReportQuery || Boolean(dateRangeError)}
+        showEcommerceReportOptions={ecommerceNav.showEcommerceReports}
       />
+
+      {isEcommerceReport && ecommerceNav.showEcommerceReports ? (
+        <div className="mb-5">
+          <EcommerceReportDefinitions reportKey={reportKey} />
+        </div>
+      ) : null}
 
       {skipReportForBadDates && !skipReportQuery ? (
         <Surface title="Invalid period">

@@ -50,6 +50,13 @@ import { PortalBackLink } from "@/src/components/common/portal-back-link";
 import { downloadBlobUrl, downloadText } from "@/src/lib/download";
 import { goldLedgerColumns } from "@/src/components/common/gold-payment-columns";
 import { idempotencyKey, money } from "@/src/lib/format";
+import {
+  canViewEcommerceHistoricalWorkspace,
+  resolveEcommerceServerAccess,
+} from "@/src/lib/ecommerce-entitlement";
+import { hasPermission } from "@/src/lib/permissions";
+import { useAppSelector } from "@/src/store/hooks";
+import { CustomerEcommerceOrdersTab } from "@/src/features/customers/customer-ecommerce-orders-tab";
 import { paymentHasGoldAccrual } from "@/src/lib/gold-payment-display";
 import { emptyPageMeta } from "@/src/lib/cursor-pagination";
 import { useCursorPagination } from "@/src/hooks/use-cursor-pagination";
@@ -58,7 +65,10 @@ import {
   useGetCustomerMessagesQuery,
   useGetCustomerPaymentsQuery,
   useGetCustomerQuery,
+  useGetCustomerEcommerceOrdersMetaQuery,
   useGetCustomerSchemesQuery,
+  useGetSubscriptionQuery,
+  useGetSettingsOperationsQuery,
   useLazyGetCustomerStatementQuery,
   useLazyGetPaymentReceiptQuery,
   useSetCustomerPasswordMutation,
@@ -79,7 +89,23 @@ export function CustomerDetailPage({ id }: { id: string }) {
   const [setCustomerPassword] = useSetCustomerPasswordMutation();
   const [fetchStatement, statementState] = useLazyGetCustomerStatementQuery();
   const [fetchReceipt] = useLazyGetPaymentReceiptQuery();
+  const sessionUser = useAppSelector((s) => s.session.session?.user);
+  const subscriptionQuery = useGetSubscriptionQuery();
+  const operationsQuery = useGetSettingsOperationsQuery();
+  const ecommerceAccess = resolveEcommerceServerAccess(
+    subscriptionQuery.data,
+    operationsQuery.data,
+  );
+  const canEcommerceRead = hasPermission(sessionUser, "ecommerce.read");
   const customerQuery = useGetCustomerQuery(id);
+  const ecommerceOrdersMetaQuery = useGetCustomerEcommerceOrdersMetaQuery(
+    { customerId: id },
+    { skip: !canEcommerceRead },
+  );
+  const showEcommerceOrdersTab =
+    canEcommerceRead
+    && (canViewEcommerceHistoricalWorkspace(ecommerceAccess)
+      || ecommerceOrdersMetaQuery.data?.hasOrderHistory === true);
   const schemesOverviewQuery = useGetCustomerSchemesQuery({
     customerId: id,
     limit: 100,
@@ -432,6 +458,9 @@ export function CustomerDetailPage({ id }: { id: string }) {
           <PageTab value="summary">Summary</PageTab>
           <PageTab value="schemes">Schemes</PageTab>
           <PageTab value="payments">Contributions</PageTab>
+          {showEcommerceOrdersTab ? (
+            <PageTab value="ecommerce-orders">Orders</PageTab>
+          ) : null}
           <PageTab value="messages">Messages</PageTab>
           <PageTab value="profile">Customer</PageTab>
           <PageTab value="audit">Activity & audit</PageTab>
@@ -538,6 +567,11 @@ export function CustomerDetailPage({ id }: { id: string }) {
             />
           </Surface>
         </PageTabsPanel>
+        {showEcommerceOrdersTab ? (
+          <PageTabsPanel value="ecommerce-orders">
+            <CustomerEcommerceOrdersTab customerId={id} />
+          </PageTabsPanel>
+        ) : null}
         <PageTabsPanel value="payments">
           <Surface
             title="Contribution ledger"

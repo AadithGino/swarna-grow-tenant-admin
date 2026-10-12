@@ -29,6 +29,25 @@ export const DEFAULT_PLAN_LIMIT_KEYS = [
 
 export type PlanLimitKey = (typeof DEFAULT_PLAN_LIMIT_KEYS)[number];
 
+const PLAN_LIMIT_KEY_SET = new Set<string>(DEFAULT_PLAN_LIMIT_KEYS);
+
+/** API/plan DTOs may include legacy keys (e.g. storageMb); backend plan PATCH does not accept them. */
+export function pickKnownPlanLimits(
+  limits: Record<string, number | null | undefined> | undefined,
+): Record<string, number | null> {
+  const src = limits ?? {};
+  const out: Record<string, number | null> = {};
+  for (const key of DEFAULT_PLAN_LIMIT_KEYS) {
+    const value = src[key];
+    out[key] = value === undefined || value === null ? null : value;
+  }
+  return out;
+}
+
+export function isKnownPlanLimitKey(key: string): key is PlanLimitKey {
+  return PLAN_LIMIT_KEY_SET.has(key);
+}
+
 export type PlatformSubscriptionPlanForm = {
   tier: SubscriptionTier;
   name: string;
@@ -94,7 +113,7 @@ export function platformSubscriptionPlanFormFromPlan(
     highlighted: plan.highlighted,
     sortOrder: plan.sortOrder,
     supportedBillingCycles: plan.supportedBillingCycles ?? ["MONTHLY", "ANNUAL"],
-    limits: { ...plan.limits },
+    limits: pickKnownPlanLimits(plan.limits),
     features: { ...DEFAULT_PLAN_FEATURES, ...plan.features },
     displayFeatures: plan.displayFeatures ?? [],
     expectedVersion: plan.version ?? 1,
@@ -218,8 +237,8 @@ export function validatePlatformSubscriptionPlanForm(
   const sortErr = validateSortOrder(form.sortOrder);
   if (sortErr) errors.sortOrder = sortErr;
 
-  for (const [key, value] of Object.entries(form.limits)) {
-    const err = validatePlanLimitValue(value, form.tier);
+  for (const key of DEFAULT_PLAN_LIMIT_KEYS) {
+    const err = validatePlanLimitValue(form.limits[key] ?? null, form.tier);
     if (err) errors[limitFieldKey(key)] = err;
   }
 
@@ -259,9 +278,9 @@ export function livePlatformSubscriptionPlanFieldErrors(
     const e = validateSortOrder(form.sortOrder);
     if (e) errors.sortOrder = e;
   }
-  for (const key of Object.keys(form.limits)) {
+  for (const key of DEFAULT_PLAN_LIMIT_KEYS) {
     if (touched[limitFieldKey(key)]) {
-      const err = validatePlanLimitValue(form.limits[key], form.tier);
+      const err = validatePlanLimitValue(form.limits[key] ?? null, form.tier);
       if (err) errors[limitFieldKey(key)] = err;
     }
   }
@@ -274,11 +293,21 @@ export function platformSubscriptionPlanFormReady(
   return Object.keys(validatePlatformSubscriptionPlanForm(form)).length === 0;
 }
 
+function planFormComparableSnapshot(form: PlatformSubscriptionPlanForm) {
+  return {
+    ...form,
+    limits: pickKnownPlanLimits(form.limits),
+  };
+}
+
 export function platformSubscriptionPlanFormUnchanged(
   form: PlatformSubscriptionPlanForm,
   baseline: PlatformSubscriptionPlanForm,
 ): boolean {
-  return JSON.stringify(form) === JSON.stringify(baseline);
+  return (
+    JSON.stringify(planFormComparableSnapshot(form))
+    === JSON.stringify(planFormComparableSnapshot(baseline))
+  );
 }
 
 export function subscriptionPlanBodyForApi(
@@ -295,7 +324,7 @@ export function subscriptionPlanBodyForApi(
     highlighted: form.highlighted,
     sortOrder: form.sortOrder,
     supportedBillingCycles: form.supportedBillingCycles,
-    limits: form.limits,
+    limits: pickKnownPlanLimits(form.limits),
     features: form.features,
     displayFeatures: form.displayFeatures,
   };

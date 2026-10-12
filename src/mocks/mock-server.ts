@@ -2563,6 +2563,54 @@ export async function mockRequest<T>({
           rates: body.rates ?? [],
         },
       } as T;
+    case "ecommerceFulfilmentSettings":
+      return {
+        __contract: true,
+        payload: {
+          version: 1,
+          pickupEnabled: false,
+          pickupBranchIds: [],
+          deliveryEnabled: false,
+          deliveryConfigured: false,
+          deliveryChargePaise: null,
+          serviceablePincodes: [],
+          checkoutTaxConfig: { presentation: "UNCONFIGURED" },
+          checkoutReadiness: {
+            checkoutTaxReady: false,
+            checkoutUsable: false,
+            blockers: [],
+          },
+        },
+      } as T;
+    case "putEcommerceFulfilmentSettings": {
+      const pincodes = Array.isArray(body.serviceablePincodes)
+        ? (body.serviceablePincodes as string[]).filter((p) => /^\d{6}$/.test(String(p)))
+        : [];
+      const charge =
+        body.deliveryChargePaise != null && Number.isInteger(Number(body.deliveryChargePaise))
+          ? Number(body.deliveryChargePaise)
+          : null;
+      const deliveryConfigured = pincodes.length > 0 && charge != null && charge >= 0;
+      const deliveryEnabled = body.deliveryEnabled === true && deliveryConfigured;
+      return {
+        __contract: true,
+        payload: {
+          version: Number(body.expectedVersion ?? 1) + 1,
+          pickupEnabled: body.pickupEnabled === true,
+          pickupBranchIds: body.pickupBranchIds ?? [],
+          deliveryEnabled,
+          deliveryConfigured,
+          deliveryChargePaise: charge,
+          serviceablePincodes: pincodes,
+          checkoutTaxConfig: body.checkoutTaxConfig ?? {},
+          checkoutReadiness: {
+            checkoutTaxReady: false,
+            checkoutUsable: false,
+            blockers: [],
+          },
+        },
+      } as T;
+    }
     case "ecommerceProductPricePreview":
       return {
         __contract: true,
@@ -2581,10 +2629,135 @@ export async function mockRequest<T>({
         payload: resolved,
       } as T;
     }
+    case "shopCategories":
+      return { __contract: true, payload: { items: [] } } as T;
     case "shopProducts":
       return { __contract: true, payload: { items: [], meta: { hasMore: false } } } as T;
     case "shopProduct":
       return { __contract: true, payload: null } as T;
+    case "cancelShopOrder":
+      return {
+        __contract: true,
+        payload: { status: "CANCELLED", cancelled: true },
+      } as T;
+    case "createShopCancellationRequest": {
+      const orderId = String(params.orderId ?? "order_mock");
+      return {
+        __contract: true,
+        payload: {
+          created: true,
+          request: {
+            id: `ecan_mock_${orderId}`,
+            orderId,
+            status: "PENDING_DECISION",
+            reason: String(body.reason ?? "Mock cancellation request"),
+            version: 1,
+          },
+        },
+      } as T;
+    }
+    case "ecommerceOrders":
+      return {
+        __contract: true,
+        payload: [],
+        meta: { nextCursor: null, hasMore: false, limit: 25, totalCount: 0 },
+      } as T;
+    case "ecommerceOrder":
+      return {
+        __contract: true,
+        payload: {
+          id: String(params.orderId ?? "ord_mock"),
+          status: "PAID",
+          paymentMethod: "ONLINE",
+          totalPaise: 0,
+          lines: [],
+          version: 1,
+        },
+      } as T;
+    case "ecommerceWorkspaceSummary":
+      return {
+        __contract: true,
+        payload: {
+          period: { from: "2026-10-01", to: "2026-10-31", timezone: "Asia/Kolkata" },
+          generatedAt: new Date().toISOString(),
+          placement: {
+            ordersPlaced: 2,
+            onlinePaidOrdersPlacedInPeriod: 1,
+            codPendingAcceptancePlacedInPeriod: 0,
+          },
+          pipeline: {
+            awaitingFulfilment: 1,
+            readyForPickup: 0,
+            shipped: 0,
+            delivered: 1,
+            openCancellationRequests: 0,
+            openReturnRequests: 0,
+            paymentExceptionsOpen: 0,
+          },
+          collections: {
+            onlineCollected: { amountPaise: 50000, amountDisplay: "₹500.00" },
+            codCollected: { amountPaise: 25000, amountDisplay: "₹250.00" },
+            grossCollected: { amountPaise: 75000, amountDisplay: "₹750.00" },
+            refundOutflow: { amountPaise: 5000, amountDisplay: "₹50.00" },
+            netCollected: { amountPaise: 70000, amountDisplay: "₹700.00" },
+            collectedOrderCount: 2,
+          },
+        },
+      } as T;
+    case "ecommerceReports": {
+      const reportKey = String(params.reportKey ?? "ECOMMERCE_SALES");
+      return mockAdminReport(reportKey, params) as T;
+    }
+    case "ecommerceReportExport":
+      return {
+        __contract: true,
+        payload: {
+          exportId: `exp_ecom_${Date.now()}`,
+          status: "QUEUED",
+        },
+      } as T;
+    case "ecommerceOrderReturns":
+      return {
+        __contract: true,
+        payload: {
+          orderId: String(params.orderId ?? ""),
+          activeRequest: null,
+          items: [],
+        },
+      } as T;
+    case "ecommerceOrderCancellation":
+      return {
+        __contract: true,
+        payload: {
+          activeRequest: null,
+          history: [],
+          capabilities: {
+            adminCancelAllowed: true,
+            contactStoreForReturn: false,
+          },
+        },
+      } as T;
+    case "decideEcommerceOrderCancellation":
+      return {
+        __contract: true,
+        payload: {
+          decision: body.decision ?? "APPROVE",
+          refundInitiationAttempted: body.decision === "APPROVE",
+          request: { status: body.decision === "REJECT" ? "REJECTED" : "APPROVED_PROCESSING" },
+        },
+      } as T;
+    case "initiateEcommerceOrderCancellation":
+      return {
+        __contract: true,
+        payload: {
+          request: { status: "APPROVED_PROCESSING", reason: body.reason },
+        },
+      } as T;
+    case "recordEcommerceCodCancellationManualRefund":
+      return {
+        __contract: true,
+        payload: { recorded: true, status: "CANCELLED" },
+      } as T;
     case "subscriptionUsage":
       return {
         __contract: true,

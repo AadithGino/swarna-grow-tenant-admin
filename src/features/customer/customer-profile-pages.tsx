@@ -9,11 +9,13 @@ import {
   LogOut,
   MapPin,
   MessageCircle,
+  Package,
   Shield,
   ShieldCheck,
   Smartphone,
   UserRound,
 } from "lucide-react";
+import { customerShopOrdersPath } from "@/src/lib/customer-shop-paths";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -141,6 +143,11 @@ export function CustomerProfilePage() {
           icon={UserRound}
           label="Nominee"
           href={customerPath(tenantSlug, "profile", "nominee")}
+        />
+        <ProfileMenuRow
+          icon={Package}
+          label="Shop order history"
+          href={customerShopOrdersPath(tenantSlug)}
         />
         <ProfileMenuRow
           icon={Smartphone}

@@ -10,6 +10,7 @@ export const CUSTOMER_ROUTE_SECTIONS = new Set([
   "support",
   "gold-rate",
   "branches",
+  "shop",
   "pay",
   "onboarding",
 ]);

@@ -34,8 +34,13 @@ import {
   useGetAlertsQuery,
   useGetBranchesQuery,
   useGetDashboardQuery,
+  useGetEcommerceReportsQuery,
+  useGetEcommerceWorkspaceSummaryQuery,
   useGetGoldRateCurrentQuery,
 } from "@/src/store/api/admin-api";
+import { useEcommerceWorkspaceNavVisible } from "@/src/features/ecommerce/ecommerce-admin-shared";
+import { EcommerceDashboardSection } from "@/src/features/dashboard/ecommerce-dashboard-section";
+import { ecommerceInsightsQueryFromDashboard } from "@/src/lib/ecommerce-dashboard-period";
 import { useClientMounted } from "@/src/hooks/use-client-mounted";
 import {
   useActingBranchId,
@@ -117,6 +122,34 @@ export function DashboardPage() {
   const { data, isLoading, isError, error, refetch } = useGetDashboardQuery(
     dashboardArg,
     { skip: skipDashboard || !mounted },
+  );
+  const ecommerceNav = useEcommerceWorkspaceNavVisible();
+  const ecommercePeriodQuery = useMemo(
+    () => ecommerceInsightsQueryFromDashboard(dashboardArg),
+    [dashboardArg],
+  );
+  const ecommerceSummary = useGetEcommerceWorkspaceSummaryQuery(ecommercePeriodQuery, {
+    skip: skipDashboard || !mounted || !ecommerceNav.showEcommerceDashboard,
+  });
+  const fulfilmentFrom =
+    ecommercePeriodQuery.from ?? ecommerceSummary.data?.period.from;
+  const fulfilmentTo = ecommercePeriodQuery.to ?? ecommerceSummary.data?.period.to;
+  const ecommerceFulfilmentReport = useGetEcommerceReportsQuery(
+    {
+      reportKey: "ECOMMERCE_ORDERS_FULFILMENT",
+      period: "CUSTOM",
+      from: fulfilmentFrom,
+      to: fulfilmentTo,
+      limit: 50,
+    },
+    {
+      skip:
+        skipDashboard
+        || !mounted
+        || !ecommerceNav.showEcommerceDashboard
+        || !fulfilmentFrom
+        || !fulfilmentTo,
+    },
   );
   const alertsQuery = useGetAlertsQuery(branchId ? { branchId } : undefined);
   const [dismissAlert] = useDismissAlertMutation();
@@ -330,6 +363,19 @@ export function DashboardPage() {
         })}
         <PlanUsageCard className="h-full min-h-[23.75rem]" />
       </div>
+
+      {ecommerceNav.showEcommerceDashboard ? (
+        <EcommerceDashboardSection
+          periodQuery={ecommercePeriodQuery}
+          periodLabel={data.period?.label ?? period.replaceAll("_", " ").toLowerCase()}
+          summary={ecommerceSummary.data}
+          summaryLoading={ecommerceSummary.isFetching}
+          summaryError={ecommerceSummary.isError ? ecommerceSummary.error : undefined}
+          onRetrySummary={() => void ecommerceSummary.refetch()}
+          fulfilmentRows={ecommerceFulfilmentReport.data?.rows}
+          fulfilmentLoading={ecommerceFulfilmentReport.isFetching}
+        />
+      ) : null}
 
       <Surface
         title="Alert centre"

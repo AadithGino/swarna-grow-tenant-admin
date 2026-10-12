@@ -1380,7 +1380,7 @@ export function SettingsPage({
 
             <Surface
               title="Online store"
-              description="Turn on your store when your plan includes ecommerce. Product catalog, cart, and checkout are not available in this release."
+              description="Turn on your store when your plan includes ecommerce. Customers can browse published products; payment checkout has separate readiness and rollout requirements."
             >
               <div className="space-y-5 p-6">
                 <div className="flex flex-wrap items-start justify-between gap-4">
@@ -1405,7 +1405,7 @@ export function SettingsPage({
                       <p className="font-semibold">Enable online store</p>
                       <p className="mt-1 text-sm text-muted-foreground">
                         {ecommercePlanEntitled
-                          ? "When enabled, the store is considered active for this jeweller (catalog and orders come later)."
+                          ? "When enabled, published products are visible to your customers. Online payment remains subject to separate checkout readiness."
                           : "Not available on your current plan — submit an upgrade request below."}
                       </p>
                     </div>
