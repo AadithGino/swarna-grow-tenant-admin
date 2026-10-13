@@ -7,7 +7,8 @@ const DEFINITIONS: Record<EcommerceAdminReportKey, { title: string; lines: strin
     title: "Sales & collections",
     lines: [
       "Online collected: online orders with paidAt in the selected period (confirmed gateway payment).",
-      "COD collected: cash recorded in the period (codCollection.collectedAt), not merely placed or accepted.",
+      "COD courier collection confirmed: courierCod.collectionConfirmedAt (courier POD; not bank receipt).",
+      "COD bank remittance reconciled: net bank credit (courierCod.bankCreditedAt) in the period.",
       "Refund outflow: provider succeeded refunds plus manual refund records in the period.",
       "Net collections: gross collected minus refund outflow. Scheme collections are excluded.",
     ],

@@ -2697,13 +2697,50 @@ export async function mockRequest<T>({
           collections: {
             onlineCollected: { amountPaise: 50000, amountDisplay: "₹500.00" },
             codCollected: { amountPaise: 25000, amountDisplay: "₹250.00" },
-            grossCollected: { amountPaise: 75000, amountDisplay: "₹750.00" },
+            codCourierCollectionConfirmed: { amountPaise: 25000, amountDisplay: "₹250.00" },
+            codBankRemittanceReconciled: { amountPaise: 20000, amountDisplay: "₹200.00" },
+            grossCollected: { amountPaise: 70000, amountDisplay: "₹700.00" },
             refundOutflow: { amountPaise: 5000, amountDisplay: "₹50.00" },
             netCollected: { amountPaise: 70000, amountDisplay: "₹700.00" },
             collectedOrderCount: 2,
           },
         },
       } as T;
+    case "getEcommerceCourierCodSummary":
+      return {
+        __contract: true,
+        payload: {
+          courierIntegrationConfigured: false,
+          courierIntegrationLabel: "Manual courier confirmation and statement reconciliation",
+          collectionPendingCount: 2,
+          collectionConfirmedCount: 5,
+          remittanceOwedCount: 3,
+          remittanceBatchPendingCount: 1,
+          bankReconciledCount: 4,
+          remittanceOwedPaise: 150_000,
+        },
+      } as T;
+    case "listEcommerceCodRemittanceBatches":
+      return {
+        __contract: true,
+        payload: [{ _id: "ecrb_mock_1", status: "DRAFT", statementReference: "STMT-MOCK-1" }],
+        meta: { nextCursor: null, hasMore: false, limit: 20 },
+      } as T;
+    case "createEcommerceCodRemittanceBatch":
+      return {
+        __contract: true,
+        payload: { _id: "ecrb_mock_new", status: "DRAFT", statementReference: "STMT-NEW" },
+      } as T;
+    case "getEcommerceCodRemittanceBatch":
+      return {
+        __contract: true,
+        payload: {
+          batch: { _id: String(params.batchId ?? "ecrb_mock_1"), status: "DRAFT", grossTotalPaise: 100_000 },
+          lines: [],
+        },
+      } as T;
+    case "confirmEcommerceCourierCodCollection":
+      return { __contract: true, payload: { id: String(params.orderId ?? ""), courierCod: { collectionStatus: "CONFIRMED" } } } as T;
     case "ecommerceReports": {
       const reportKey = String(params.reportKey ?? "ECOMMERCE_SALES");
       return mockAdminReport(reportKey, params) as T;

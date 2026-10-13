@@ -46,7 +46,6 @@ import {
   useTransitionEcommerceOrderFulfilmentMutation,
   useAcceptEcommerceCodOrderMutation,
   useRejectEcommerceCodOrderMutation,
-  useRecordEcommerceCodCollectionMutation,
   useLazyDownloadEcommerceOrderInvoiceQuery,
   useGetEcommerceOrderCancellationQuery,
   useDecideEcommerceOrderCancellationMutation,
@@ -84,6 +83,7 @@ import type {
   EcommerceOrderReturnSummary,
 } from "@/src/types/ecommerce-order";
 import { toastApiError } from "@/src/lib/api-error";
+import { EcommerceCourierCodOrderPanel } from "@/src/features/ecommerce/ecommerce-courier-cod-order-panel";
 
 export function EcommerceOrderDetailPage({ orderId }: { orderId: string }) {
   const searchParams = useSearchParams();
@@ -112,8 +112,6 @@ export function EcommerceOrderDetailPage({ orderId }: { orderId: string }) {
   const [transitionFulfilment, transitionState] = useTransitionEcommerceOrderFulfilmentMutation();
   const [acceptCod, acceptCodState] = useAcceptEcommerceCodOrderMutation();
   const [rejectCod, rejectCodState] = useRejectEcommerceCodOrderMutation();
-  const [recordCodCollection, recordCodState] = useRecordEcommerceCodCollectionMutation();
-  const [codReference, setCodReference] = useState("");
   const [initiateRefund, initiateRefundState] =
     useInitiateEcommerceOrderPaymentExceptionRefundMutation();
   const [recordManual, recordManualState] =
@@ -145,7 +143,6 @@ export function EcommerceOrderDetailPage({ orderId }: { orderId: string }) {
   };
   const onMutationError = (err: unknown) =>
     toastEcommerceOrderMutationError(err, { onVersionConflict: refreshOrder });
-  const [codCollectionReviewOpen, setCodCollectionReviewOpen] = useState(false);
   const [codCancelRefundReviewOpen, setCodCancelRefundReviewOpen] = useState(false);
   const [manualRefundReviewOpen, setManualRefundReviewOpen] = useState(false);
   const [decideReturn] = useDecideEcommerceReturnRequestMutation();
@@ -385,55 +382,15 @@ export function EcommerceOrderDetailPage({ orderId }: { orderId: string }) {
                 </Button>
               </>
             ) : null}
-            {o.codCollectionStatus !== "COLLECTED" &&
-            ["PROCESSING", "SHIPPED", "READY_FOR_PICKUP", "DELIVERED"].includes(
-              String(o.status ?? ""),
-            ) ? (
-              <div className="flex w-full flex-wrap items-end gap-2">
-                <div className="space-y-1">
-                  <Label htmlFor="cod-ref">Receipt / reference</Label>
-                  <Input
-                    id="cod-ref"
-                    value={codReference}
-                    onChange={(e) => setCodReference(e.target.value)}
-                    placeholder="RCPT-1001"
-                  />
-                </div>
-                <Button
-                  type="button"
-                  disabled={recordCodState.isLoading || !codReference.trim()}
-                  onClick={() => setCodCollectionReviewOpen(true)}
-                >
-                  Record cash collected…
-                </Button>
-                <EcommerceOrderFinancialReviewDialog
-                  open={codCollectionReviewOpen}
-                  onOpenChange={setCodCollectionReviewOpen}
-                  title="Record COD cash collection"
-                  amountPaise={Number(o.totalPaise ?? 0)}
-                  recipient={order.customerDisplay?.name ?? "Customer"}
-                  consequence="Marks this order as cash collected in your books. Only record after physical cash is in hand."
-                  permissionNote="Requires ecommerce fulfilment permission."
-                  actionLabel="Confirm collection"
-                  submitDisabled={!codReference.trim()}
-                  onConfirm={async () => {
-                    await recordCodCollection({
-                      orderId,
-                      expectedVersion: Number(order.version ?? 1),
-                      amountPaise: Number(o.totalPaise ?? 0),
-                      reference: codReference.trim(),
-                      idempotencyKey: newIdempotencyKey(),
-                    }).unwrap();
-                    toast.success("Cash collection recorded");
-                    setCodReference("");
-                    setCodCollectionReviewOpen(false);
-                    refreshOrder();
-                  }}
-                />
-              </div>
-            ) : null}
           </div>
         </Surface>
+      ) : null}
+      {order.paymentMethod === "COD" ? (
+        <EcommerceCourierCodOrderPanel
+          order={order}
+          canFulfilmentOperate={canFulfilmentOperate}
+          onRefresh={refreshOrder}
+        />
       ) : null}
       {fulfilmentMode === "DELIVERY" ? (
         <Surface title="Delivery tracking">
@@ -613,7 +570,8 @@ export function EcommerceOrderDetailPage({ orderId }: { orderId: string }) {
               && !activeCancellation.codManualRefund ? (
                 <div className="mt-3 space-y-2 rounded-md border border-dashed p-3">
                   <p className="text-xs text-muted-foreground">
-                    Record COD cancellation refund once ({formatOrderInr(codRefundAmountPaise)}).
+                    Record customer refund execution evidence once ({formatOrderInr(codRefundAmountPaise)}).
+                    Approval alone does not complete a refund; courier remittance may still be pending.
                   </p>
                   <div className="grid gap-2 sm:grid-cols-2">
                     <Input
@@ -651,7 +609,7 @@ export function EcommerceOrderDetailPage({ orderId }: { orderId: string }) {
                     title="Record COD cancellation refund"
                     amountPaise={codRefundAmountPaise}
                     recipient={codRefundRecipient.trim()}
-                    consequence="Audited manual refund for a cancelled COD order. Cannot be undone."
+                    consequence="Records actual refund paid to the customer (UTR/proof). Does not assume staff hold courier cash or bank remittance."
                     permissionNote="Requires ecommerce refund permission."
                     actionLabel="Record refund"
                     submitDisabled={!codRefundFormValid}

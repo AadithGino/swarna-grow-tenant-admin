@@ -195,6 +195,13 @@ const EcommerceOrderDetailPage = dynamic(
     ),
   options,
 );
+const EcommerceCourierCodWorkspacePage = dynamic(
+  () =>
+    import("@/src/features/ecommerce/ecommerce-courier-cod-workspace-page").then(
+      (m) => m.EcommerceCourierCodWorkspacePage,
+    ),
+  options,
+);
 const EcommercePaymentExceptionsPage = dynamic(
   () =>
     import("@/src/features/ecommerce/ecommerce-payment-exceptions-page").then(
@@ -342,6 +349,7 @@ export function PortalRouter({ slug }: { slug: string[] }) {
       else if (id === "fulfilment") page = <EcommerceFulfilmentPage />;
       else if (id === "orders" && action) page = <EcommerceOrderDetailPage orderId={action} />;
       else if (id === "orders") page = <EcommerceOrdersPage />;
+      else if (id === "courier-cod") page = <EcommerceCourierCodWorkspacePage />;
       else if (id === "payment-exceptions") page = <EcommercePaymentExceptionsPage />;
       else page = <EcommerceCatalogPage />;
       break;

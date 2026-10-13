@@ -3,9 +3,11 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Download, MapPin, Package } from "lucide-react";
+import { Download, Headphones, MapPin, Package } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { useCustomerTenant } from "@/src/components/customer/customer-tenant-context";
 import { PageSkeleton, QueryError } from "@/src/components/common/query-state";
 import { toastApiError } from "@/src/lib/api-error";
@@ -19,8 +21,10 @@ import {
 } from "@/src/lib/shop-payment-idempotency";
 import { env } from "@/src/config/env";
 import { customerShopOrderPath, customerShopOrdersPath } from "@/src/lib/customer-shop-paths";
+import { customerPath } from "@/src/lib/customer-tenant";
 import {
   useCancelShopOrderMutation,
+  useCreateCustomerGrievanceMutation,
   useCompleteShopTestHarnessPaymentMutation,
   useCreateShopCancellationRequestMutation,
   useCreateShopOrderPaymentIntentMutation,
@@ -96,6 +100,10 @@ export function CustomerShopOrderPage({ orderId }: { orderId: string }) {
   const [cancelReason, setCancelReason] = useState("");
   const [returnReason, setReturnReason] = useState("");
   const [returnDialogOpen, setReturnDialogOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
+  const [helpSubject, setHelpSubject] = useState("");
+  const [helpDescription, setHelpDescription] = useState("");
+  const [createGrievance, helpState] = useCreateCustomerGrievanceMutation();
   const orderReturn = useGetShopOrderReturnQuery(orderId);
   const [createReturnRequest, returnRequestState] = useCreateShopReturnRequestMutation();
   const [completeHarness, completeHarnessState] = useCompleteShopTestHarnessPaymentMutation();
@@ -292,6 +300,26 @@ export function CustomerShopOrderPage({ orderId }: { orderId: string }) {
               Store must confirm by {new Date(String(o.expiresAt)).toLocaleString()}
             </p>
           ) : null}
+        </section>
+
+        <section className="customer-surface space-y-3 p-4">
+          <h2 className="text-xs font-black uppercase tracking-wide text-[#999]">Support</h2>
+          <p className="text-xs text-[#777280]">
+            Open a ticket linked to this order so staff can see your order number and history.
+          </p>
+          <Button
+            type="button"
+            variant="outline"
+            className="w-full rounded-xl font-bold"
+            onClick={() => {
+              setHelpSubject(`Help with order ${String(o.orderNumber ?? orderId)}`);
+              setHelpDescription("");
+              setHelpOpen(true);
+            }}
+          >
+            <Headphones className="mr-2 size-4" />
+            Get help with this order
+          </Button>
         </section>
 
         {o.fulfilmentMode === "DELIVERY" &&
@@ -584,6 +612,63 @@ export function CustomerShopOrderPage({ orderId }: { orderId: string }) {
               }
             >
               Submit request
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={helpOpen} onOpenChange={setHelpOpen}>
+        <DialogContent className="max-w-lg rounded-2xl">
+          <DialogHeader>
+            <DialogTitle>Get help with this order</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <Label className="text-xs font-bold uppercase text-[#999]">Subject</Label>
+              <Input
+                className="mt-1"
+                value={helpSubject}
+                onChange={(e) => setHelpSubject(e.target.value)}
+              />
+            </div>
+            <div>
+              <Label className="text-xs font-bold uppercase text-[#999]">What do you need help with?</Label>
+              <Textarea
+                className="mt-1 min-h-28"
+                value={helpDescription}
+                onChange={(e) => setHelpDescription(e.target.value)}
+                placeholder="Describe the issue (delivery, payment, items, etc.)"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setHelpOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              disabled={
+                helpState.isLoading
+                || helpSubject.trim().length < 5
+                || helpDescription.trim().length < 10
+              }
+              onClick={() =>
+                void createGrievance({
+                  category: "OTHER",
+                  subject: helpSubject.trim(),
+                  description: helpDescription.trim(),
+                  relatedEntity: { type: "ORDER", id: orderId },
+                })
+                  .unwrap()
+                  .then((ticket) => {
+                    toast.success("Support ticket created");
+                    setHelpOpen(false);
+                    router.push(customerPath(tenantSlug, "support", ticket.id));
+                  })
+                  .catch(toastApiError)
+              }
+            >
+              Submit ticket
             </Button>
           </DialogFooter>
         </DialogContent>

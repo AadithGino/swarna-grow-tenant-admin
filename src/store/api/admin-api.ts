@@ -851,7 +851,11 @@ export const adminApi = createApi({
         page: ReturnType<typeof adaptCustomerResourceList<unknown>>["page"];
         ecommerceSummary?: {
           orderCount: number;
+          onlineCollectedPaise?: number;
+          codCourierConfirmedPaise?: number;
+          codBankRemittanceReconciledPaise?: number;
           grossCollectedPaise: number;
+          refundOutflowPaise?: number;
           netCollectedPaise: number;
           label: string;
         };
@@ -3904,23 +3908,175 @@ export const adminApi = createApi({
       }),
       invalidatesTags: ["Ecommerce"],
     }),
-    recordEcommerceCodCollection: builder.mutation<
+    confirmEcommerceCourierCodCollection: builder.mutation<
       Record<string, unknown>,
       {
         orderId: string;
         expectedVersion: number;
-        amountPaise: number;
         reference: string;
+        evidenceNote?: string;
+        providerId?: string;
+        trackingReference?: string;
         idempotencyKey: string;
       }
     >({
       query: ({ orderId, idempotencyKey, ...body }) => ({
-        url: `/admin/ecommerce/orders/${encodeURIComponent(orderId)}/cod/record-collection`,
+        url: `/admin/ecommerce/orders/${encodeURIComponent(orderId)}/courier-cod/confirm-collection`,
         method: "POST",
         body,
         headers: { "X-Idempotency-Key": idempotencyKey },
-        mockKey: "recordEcommerceCodCollection",
+        mockKey: "confirmEcommerceCourierCodCollection",
       }),
+      invalidatesTags: ["Ecommerce"],
+    }),
+    listCourierCodOrders: builder.query<
+      {
+        items: Array<{
+          orderId: string;
+          orderNumber: string;
+          status: string;
+          totalPaise: number;
+          expectedCodPaise: number;
+          version: number;
+          updatedAt?: string;
+          courierCod?: Record<string, unknown> | null;
+        }>;
+        meta: { nextCursor: string | null; hasMore: boolean };
+      },
+      { queue: string; cursor?: string; limit?: number }
+    >({
+      query: (params) => ({
+        url: "/admin/ecommerce/courier-cod/orders",
+        params,
+        mockKey: "listCourierCodOrders",
+      }),
+      transformResponse: (raw) => {
+        const meta = contractMeta(raw) as { nextCursor?: string | null; hasMore?: boolean };
+        const payload = contractPayload(raw);
+        const items = Array.isArray(payload) ? payload : [];
+        return {
+          items,
+          meta: { nextCursor: meta?.nextCursor ?? null, hasMore: Boolean(meta?.hasMore) },
+        };
+      },
+      providesTags: ["Ecommerce"],
+    }),
+    getEcommerceCourierCodSummary: builder.query<
+      import("@/src/types/ecommerce-order").EcommerceCourierCodWorkspaceSummary,
+      void
+    >({
+      query: () => ({
+        url: "/admin/ecommerce/courier-cod/summary",
+        mockKey: "getEcommerceCourierCodSummary",
+      }),
+      transformResponse: (raw) =>
+        contractPayload(raw) as import("@/src/types/ecommerce-order").EcommerceCourierCodWorkspaceSummary,
+      providesTags: ["Ecommerce"],
+    }),
+    listEcommerceCodRemittanceBatches: builder.query<
+      {
+        items: import("@/src/types/ecommerce-order").EcommerceCodRemittanceBatch[];
+        meta: { nextCursor: string | null; hasMore: boolean };
+      },
+      { cursor?: string; limit?: number }
+    >({
+      query: (params) => ({
+        url: "/admin/ecommerce/courier-cod/remittance-batches",
+        params,
+        mockKey: "listEcommerceCodRemittanceBatches",
+      }),
+      transformResponse: (raw) => {
+        const meta = contractMeta(raw) as { nextCursor?: string | null; hasMore?: boolean };
+        const payload = contractPayload(raw);
+        const items = (Array.isArray(payload) ? payload : []) as import("@/src/types/ecommerce-order").EcommerceCodRemittanceBatch[];
+        return {
+          items,
+          meta: { nextCursor: meta?.nextCursor ?? null, hasMore: Boolean(meta?.hasMore) },
+        };
+      },
+      providesTags: ["Ecommerce"],
+    }),
+    createEcommerceCodRemittanceBatch: builder.mutation<
+      import("@/src/types/ecommerce-order").EcommerceCodRemittanceBatch,
+      { statementReference: string; providerId?: string; idempotencyKey: string }
+    >({
+      query: ({ idempotencyKey, ...body }) => ({
+        url: "/admin/ecommerce/courier-cod/remittance-batches",
+        method: "POST",
+        body,
+        headers: { "X-Idempotency-Key": idempotencyKey },
+        mockKey: "createEcommerceCodRemittanceBatch",
+      }),
+      transformResponse: (raw) =>
+        contractPayload(raw) as import("@/src/types/ecommerce-order").EcommerceCodRemittanceBatch,
+      invalidatesTags: ["Ecommerce"],
+    }),
+    getEcommerceCodRemittanceBatch: builder.query<
+      {
+        batch: import("@/src/types/ecommerce-order").EcommerceCodRemittanceBatch;
+        lines: Array<{
+          _id: string;
+          orderId: string;
+          orderNumber?: string | null;
+          grossPaise: number;
+          feePaise?: number;
+          netPaise?: number;
+          status: string;
+        }>;
+      },
+      string
+    >({
+      query: (batchId) => ({
+        url: `/admin/ecommerce/courier-cod/remittance-batches/${encodeURIComponent(batchId)}`,
+        mockKey: "getEcommerceCodRemittanceBatch",
+      }),
+      transformResponse: (raw) =>
+        contractPayload(raw) as {
+          batch: import("@/src/types/ecommerce-order").EcommerceCodRemittanceBatch;
+          lines: Array<{
+            _id: string;
+            orderId: string;
+            orderNumber?: string | null;
+            grossPaise: number;
+            feePaise?: number;
+            netPaise?: number;
+            status: string;
+          }>;
+        },
+      providesTags: ["Ecommerce"],
+    }),
+    addEcommerceCodRemittanceBatchLine: builder.mutation<
+      Record<string, unknown>,
+      { batchId: string; orderId: string; grossPaise: number; feePaise?: number; idempotencyKey: string }
+    >({
+      query: ({ batchId, orderId, idempotencyKey, ...body }) => ({
+        url: `/admin/ecommerce/courier-cod/remittance-batches/${encodeURIComponent(batchId)}/orders/${encodeURIComponent(orderId)}/lines`,
+        method: "POST",
+        body,
+        headers: { "X-Idempotency-Key": idempotencyKey },
+        mockKey: "addEcommerceCodRemittanceBatchLine",
+      }),
+      invalidatesTags: ["Ecommerce"],
+    }),
+    reconcileEcommerceCodRemittanceBatch: builder.mutation<
+      import("@/src/types/ecommerce-order").EcommerceCodRemittanceBatch,
+      {
+        batchId: string;
+        bankCreditReference: string;
+        bankCreditPaise: number;
+        bankCreditedAt?: string;
+        idempotencyKey: string;
+      }
+    >({
+      query: ({ batchId, idempotencyKey, ...body }) => ({
+        url: `/admin/ecommerce/courier-cod/remittance-batches/${encodeURIComponent(batchId)}/reconcile`,
+        method: "POST",
+        body,
+        headers: { "X-Idempotency-Key": idempotencyKey },
+        mockKey: "reconcileEcommerceCodRemittanceBatch",
+      }),
+      transformResponse: (raw) =>
+        contractPayload(raw) as import("@/src/types/ecommerce-order").EcommerceCodRemittanceBatch,
       invalidatesTags: ["Ecommerce"],
     }),
     retryEcommerceOrderPaymentAttemptReconcile: builder.mutation<
@@ -4853,7 +5009,14 @@ export const {
   useResolveEcommerceReturnRequestMutation,
   useAcceptEcommerceCodOrderMutation,
   useRejectEcommerceCodOrderMutation,
-  useRecordEcommerceCodCollectionMutation,
+  useConfirmEcommerceCourierCodCollectionMutation,
+  useGetEcommerceCourierCodSummaryQuery,
+  useListCourierCodOrdersQuery,
+  useListEcommerceCodRemittanceBatchesQuery,
+  useCreateEcommerceCodRemittanceBatchMutation,
+  useGetEcommerceCodRemittanceBatchQuery,
+  useAddEcommerceCodRemittanceBatchLineMutation,
+  useReconcileEcommerceCodRemittanceBatchMutation,
   useRetryEcommerceOrderPaymentAttemptReconcileMutation,
   usePreviewPlanScheduleMutation,
   useCreatePaymentLinkMutation,

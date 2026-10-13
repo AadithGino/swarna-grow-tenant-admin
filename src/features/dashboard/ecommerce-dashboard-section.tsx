@@ -208,9 +208,15 @@ export function EcommerceDashboardSection({
               emphasis="money"
             />
             <MetricCard
-              label="COD collected"
-              value={c?.codCollected?.amountDisplay ?? "—"}
-              hint="Cash recorded in period"
+              label="COD courier confirmed"
+              value={c?.codCourierCollectionConfirmed?.amountDisplay ?? c?.codCollected?.amountDisplay ?? "—"}
+              hint="Courier POD in period — not bank receipt or scheme cash"
+              emphasis="money"
+            />
+            <MetricCard
+              label="COD bank remittance"
+              value={c?.codBankRemittanceReconciled?.amountDisplay ?? "—"}
+              hint="Reconciled bank credit in period"
               emphasis="money"
             />
             <MetricCard

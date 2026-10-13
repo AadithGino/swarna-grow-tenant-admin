@@ -46,18 +46,30 @@ export function CustomerEcommerceOrdersTab({ customerId }: { customerId: string 
         <p className="text-xs text-muted-foreground">{summary.label}</p>
       ) : null}
       {summary ? (
-        <div className="grid gap-3 sm:grid-cols-3">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <div className="rounded-lg border bg-card p-3">
             <p className="text-xs text-muted-foreground">Orders</p>
             <p className="text-lg font-semibold">{summary.orderCount}</p>
           </div>
           <div className="rounded-lg border bg-card p-3">
-            <p className="text-xs text-muted-foreground">Gross collected</p>
-            <p className="text-lg font-semibold">{money(summary.grossCollectedPaise)}</p>
+            <p className="text-xs text-muted-foreground">Online captured</p>
+            <p className="text-lg font-semibold">{money(summary.onlineCollectedPaise ?? 0)}</p>
           </div>
           <div className="rounded-lg border bg-card p-3">
-            <p className="text-xs text-muted-foreground">Net collected</p>
+            <p className="text-xs text-muted-foreground">Courier COD confirmed (owed until bank)</p>
+            <p className="text-lg font-semibold">{money(summary.codCourierConfirmedPaise ?? 0)}</p>
+          </div>
+          <div className="rounded-lg border bg-card p-3">
+            <p className="text-xs text-muted-foreground">COD bank remittance (net)</p>
+            <p className="text-lg font-semibold">{money(summary.codBankRemittanceReconciledPaise ?? 0)}</p>
+          </div>
+          <div className="rounded-lg border bg-card p-3 sm:col-span-2">
+            <p className="text-xs text-muted-foreground">Net collected (online + bank COD − refunds)</p>
             <p className="text-lg font-semibold">{money(summary.netCollectedPaise)}</p>
+          </div>
+          <div className="rounded-lg border bg-card p-3 sm:col-span-2">
+            <p className="text-xs text-muted-foreground">Refund outflow</p>
+            <p className="text-lg font-semibold">{money(summary.refundOutflowPaise ?? 0)}</p>
           </div>
         </div>
       ) : null}

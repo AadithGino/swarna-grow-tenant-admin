@@ -14,13 +14,45 @@ export type EcommerceOrderLine = {
   lineTotalPaise?: number;
 };
 
+export type EcommerceCourierCodBlock = {
+  providerId?: string;
+  trackingReference?: string | null;
+  expectedAmountPaise?: number | null;
+  collectionStatus?: string | null;
+  collectionConfirmedAt?: string | null;
+  collectionReference?: string | null;
+  collectionSource?: string | null;
+  collectionSourceLabel?: string | null;
+  collectionEvidenceNote?: string | null;
+  remittanceStatus?: string | null;
+  activeRemittanceBatchId?: string | null;
+  remittanceGrossPaise?: number | null;
+  remittanceFeePaise?: number | null;
+  remittanceNetPaise?: number | null;
+  bankCreditReference?: string | null;
+  bankCreditedAt?: string | null;
+  reconciliationStatus?: string | null;
+  reconciliationDiscrepancyPaise?: number | null;
+  courierIntegrationLive?: boolean;
+};
+
+export type EcommerceFulfilmentHandoverBlock = {
+  method?: string | null;
+  recipientName?: string | null;
+  recordedAt?: string | null;
+  deliveryProofReference?: string | null;
+  pickupCodeActive?: boolean;
+  pickupCodeExpiresAt?: string | null;
+};
+
 export type EcommerceOrderListItem = {
   id: string;
   orderNumber?: string;
   status: string;
   statusLabel?: string;
   paymentMethod?: string;
-  codCollectionStatus?: string | null;
+  courierCodCollectionStatus?: string | null;
+  courierCodRemittanceStatus?: string | null;
   paidAt?: string | null;
   paymentCompleted?: boolean;
   paymentExceptionStatus?: string | null;
@@ -67,6 +99,10 @@ export type EcommerceWorkspaceSummary = {
   collections: {
     onlineCollected?: EcommerceMoneyRef;
     codCollected?: EcommerceMoneyRef;
+    codCourierCollectionConfirmed?: EcommerceMoneyRef;
+    codBankRemittanceReconciled?: EcommerceMoneyRef;
+    codBankRemittanceGross?: EcommerceMoneyRef;
+    codBankRemittanceFees?: EcommerceMoneyRef;
     grossCollected: EcommerceMoneyRef;
     providerRefundOutflow?: EcommerceMoneyRef;
     manualRefundOutflow?: EcommerceMoneyRef;
@@ -95,6 +131,32 @@ export type EcommerceOrderReturnView = {
   items: EcommerceOrderReturnSummary[];
 };
 
+export type EcommerceCourierCodWorkspaceSummary = {
+  courierIntegrationConfigured: boolean;
+  courierIntegrationLabel: string;
+  collectionPendingCount: number;
+  collectionConfirmedCount: number;
+  remittanceOwedCount: number;
+  remittanceBatchPendingCount: number;
+  bankReconciledCount: number;
+  remittanceOwedPaise: number;
+  remittanceDiscrepancyCount?: number;
+};
+
+export type EcommerceCodRemittanceBatch = {
+  _id: string;
+  status: string;
+  statementReference?: string;
+  grossTotalPaise?: number;
+  feeTotalPaise?: number;
+  netExpectedPaise?: number;
+  bankCreditReference?: string;
+  bankCreditPaise?: number;
+  bankCreditedAt?: string;
+  reconciliationStatus?: string;
+  reconciliationNote?: string;
+};
+
 export type EcommerceOrderDetail = EcommerceOrderListItem & {
   quoteId?: string | null;
   subtotalPaise?: number;
@@ -111,6 +173,11 @@ export type EcommerceOrderDetail = EcommerceOrderListItem & {
     recent: EcommerceOrderReturnSummary[];
   };
   stockReleaseReason?: string | null;
+  courierCod?: EcommerceCourierCodBlock | null;
+  fulfilmentHandover?: EcommerceFulfilmentHandoverBlock | null;
+  courierCodCollectionStatus?: string | null;
+  courierCodRemittanceStatus?: string | null;
+  codBankRemittanceReconciled?: boolean | null;
 };
 
 export type EcommerceOrderPaymentExceptionRefund = {

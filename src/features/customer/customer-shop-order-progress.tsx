@@ -43,7 +43,7 @@ export function buildShopOrderTimeline(order: Record<string, unknown>): OrderTim
   const status = String(order.status ?? "");
   const delivery = isDelivery(order);
   const cod = isCod(order);
-  const codCollected = order.codCollectionStatus === "COLLECTED";
+  const codCollected = order.courierCodCollectionStatus === "CONFIRMED";
   const cancelled = status === "CANCELLED";
   const refunded = status === "REFUNDED" || status === "REFUND_PENDING";
   const cancellation = order.cancellation as

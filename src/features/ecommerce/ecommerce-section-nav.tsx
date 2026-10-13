@@ -12,6 +12,7 @@ const sections = [
   { href: "/ecommerce/tax", label: "Tax" },
   { href: "/ecommerce/fulfilment", label: "Fulfilment" },
   { href: "/ecommerce/orders", label: "Orders" },
+  { href: "/ecommerce/courier-cod", label: "Courier COD" },
   { href: "/ecommerce/payment-exceptions", label: "Exceptions" },
 ] as const;
 

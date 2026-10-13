@@ -407,8 +407,8 @@ export function OrderDetailHero({
           ) : null}
           {order.paymentMethod === "COD" ? (
             <DetailFact
-              label="COD collection"
-              value={String(order.codCollectionStatus ?? "PENDING").replaceAll("_", " ").toLowerCase()}
+              label="Courier COD"
+              value={String(order.courierCodCollectionStatus ?? "PENDING").replaceAll("_", " ").toLowerCase()}
             />
           ) : null}
           {order.stockReleaseReason ? (

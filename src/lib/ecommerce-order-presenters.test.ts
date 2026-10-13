@@ -13,7 +13,7 @@ describe("orderPaymentPresentation", () => {
       status: "PENDING_PAYMENT",
       paidAt: null,
       paymentCompleted: false,
-      codCollectionStatus: null,
+      courierCodCollectionStatus: null,
       paymentExceptionStatus: null,
     });
     expect(p.collected).toBe(false);
@@ -25,7 +25,7 @@ describe("orderPaymentPresentation", () => {
       paymentMethod: "COD",
       status: "PROCESSING",
       paidAt: null,
-      codCollectionStatus: "PENDING",
+      courierCodCollectionStatus: "PENDING",
       paymentCompleted: false,
       paymentExceptionStatus: null,
     });
@@ -38,7 +38,7 @@ describe("orderPaymentPresentation", () => {
       status: "PAID",
       paidAt: "2026-01-01T00:00:00Z",
       paymentCompleted: true,
-      codCollectionStatus: null,
+      courierCodCollectionStatus: null,
       paymentExceptionStatus: "STUCK_RECONCILE",
     });
     expect(p.tone).toBe("danger");

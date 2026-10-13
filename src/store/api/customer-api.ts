@@ -752,7 +752,12 @@ export const customerApi = createApi({
     }),
     createCustomerGrievance: builder.mutation<
       CustomerGrievance,
-      { category: string; subject: string; description: string }
+      {
+        category: string;
+        subject: string;
+        description: string;
+        relatedEntity?: { type: "ORDER" | "PAYMENT" | "SCHEME" | "REDEMPTION"; id: string };
+      }
     >({
       query: (body) => ({ url: "/app/grievances", method: "POST", body }),
       transformResponse: (raw: unknown) => adaptCustomerGrievance(raw),

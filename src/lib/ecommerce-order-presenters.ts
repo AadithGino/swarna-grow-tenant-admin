@@ -30,7 +30,12 @@ export function formatOrderInr(paise: number) {
 
 export function orderPaymentPresentation(order: Pick<
   EcommerceOrderListItem,
-  "paymentMethod" | "status" | "paidAt" | "codCollectionStatus" | "paymentExceptionStatus" | "paymentCompleted"
+  | "paymentMethod"
+  | "status"
+  | "paidAt"
+  | "courierCodCollectionStatus"
+  | "paymentExceptionStatus"
+  | "paymentCompleted"
 >): OrderPaymentPresentation {
   const method = String(order.paymentMethod ?? "ONLINE");
   if (order.paymentExceptionStatus) {
@@ -43,21 +48,27 @@ export function orderPaymentPresentation(order: Pick<
     };
   }
   if (method === "COD") {
-    const collected = order.codCollectionStatus === "COLLECTED";
+    const courierConfirmed =
+      order.courierCodCollectionStatus === "CONFIRMED"
+      || order.courierCodCollectionStatus === "BANK_RECONCILED"
+      || order.courierCodCollectionStatus === "REMITTANCE_DISCREPANCY";
     if (order.status === "COD_PENDING_ACCEPTANCE") {
       return {
         methodLabel: "Cash on delivery",
-        stateLabel: "Awaiting your acceptance",
+        stateLabel: "Awaiting store acceptance",
         collected: false,
         tone: "warning",
-        helper: "Not collected until you accept and later record cash.",
+        helper: "Courier collects at delivery; bank remittance is reconciled separately.",
       };
     }
     return {
       methodLabel: "Cash on delivery",
-      stateLabel: collected ? "Cash recorded" : "Due on delivery",
-      collected,
-      tone: collected ? "success" : "warning",
+      stateLabel: courierConfirmed ? "Courier collection confirmed" : "Due on delivery",
+      collected: courierConfirmed,
+      tone: courierConfirmed ? "success" : "warning",
+      helper: courierConfirmed
+        ? "Confirmed from courier evidence — not the same as bank receipt."
+        : undefined,
     };
   }
   const paid = Boolean(order.paidAt) || order.paymentCompleted === true;
