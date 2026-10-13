@@ -54,6 +54,7 @@ export const NAV_PERMISSIONS: Record<string, string[]> = {
   "/ecommerce/fulfilment": ["ecommerce.read"],
   "/ecommerce/orders": ["ecommerce.read"],
   "/ecommerce/payment-exceptions": ["ecommerce.read"],
+  "/ecommerce/courier-cod": ["ecommerce.read"],
 };
 
 export function canAccessRoute(

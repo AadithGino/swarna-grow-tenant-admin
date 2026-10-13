@@ -1,12 +1,19 @@
 "use client";
 
+import { MapPin, ShieldCheck, Truck } from "lucide-react";
 import { useExternalValueSync } from "@/src/hooks/use-external-value-sync";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
-import { PageHeader, Surface, FieldLabel } from "@/src/components/common/page-parts";
+import { PageHeader, FieldLabel } from "@/src/components/common/page-parts";
+import {
+  PageTab,
+  PageTabs,
+  PageTabsBar,
+  PageTabsPanel,
+} from "@/src/components/common/page-tabs";
 import { PageSkeleton, QueryError } from "@/src/components/common/query-state";
 import { toastApiError, parseApiError } from "@/src/lib/api-error";
 import { rupeesToPaise, useEcommerceAdminAccess } from "@/src/features/ecommerce/ecommerce-admin-shared";
@@ -15,7 +22,6 @@ import {
   isDeliveryConfigured,
   parseServiceablePincodes,
 } from "@/src/features/ecommerce/ecommerce-delivery-config";
-import { EcommerceSectionNav } from "@/src/features/ecommerce/ecommerce-section-nav";
 import {
   checkoutTaxConfigPayload,
   checkoutTaxFormFromApi,
@@ -34,6 +40,14 @@ import {
   storePolicyFieldIssues,
   type StorePoliciesForm,
 } from "@/src/features/ecommerce/ecommerce-store-policies-panel";
+import {
+  EcommerceReadinessPanel,
+  EcommerceRelatedLink,
+  EcommerceSettingsHint,
+  EcommerceSettingsToggle,
+  EcommerceCatalogNav,
+  EcommerceSetupSteps,
+} from "@/src/features/ecommerce/ecommerce-settings-ui";
 
 const EMPTY_BRANCH_IDS: string[] = [];
 
@@ -81,9 +95,10 @@ export function EcommerceFulfilmentPage() {
 
   if (!access.canRead) {
     return (
-      <Surface title="Fulfilment">
-        <p className="p-6 text-sm text-muted-foreground">{access.readBlockedMessage}</p>
-      </Surface>
+      <PageHeader
+        title="Fulfilment"
+        description={access.readBlockedMessage ?? "Ecommerce read access required."}
+      />
     );
   }
   if (query.isLoading) return <PageSkeleton cards={2} />;
@@ -183,163 +198,194 @@ export function EcommerceFulfilmentPage() {
     <>
       <PageHeader
         eyebrow="Online store"
-        title="Fulfilment & checkout readiness"
-        description="Pickup, delivery, and accountant checkout tax. Quotes use these rules — display GST alone is not enough for checkout."
+        title="Fulfilment & checkout"
+        description="Step 2: how orders are fulfilled, what shoppers agree to, and GST on the payment screen."
         actions={
           <Button type="button" disabled={!access.entitled || !access.canWrite} onClick={save}>
-            Save settings
+            Save fulfilment settings
           </Button>
         }
       />
-      <EcommerceSectionNav />
       {!access.entitled ? (
         <p className="mb-4 text-sm text-amber-800">{access.disabledMessage}</p>
       ) : null}
-      <Surface title={`Configuration v${version}`}>
-        <div className="space-y-6 p-6 text-sm">
-          <div>
-            <h3 className="font-semibold">Checkout readiness</h3>
-            <p className="mt-1 text-muted-foreground">
-              Checkout tax ready: {readiness?.checkoutTaxReady ? "Yes" : "No"} · Payment checkout:{" "}
-              {readiness?.checkoutUsable ? "Enabled" : "Blocked (payments need separate entitlement)"}
-            </p>
-            {blockers.length ? (
-              <ul className="mt-2 space-y-1 text-amber-900">
-                {blockers.map((b) => (
-                  <li key={b.code ?? b.message}>
-                    <span className="font-mono text-xs text-amber-950">{b.code ?? "BLOCKER"}</span>
-                    {" — "}
-                    {b.message}
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="mt-2 text-emerald-800">No checkout tax blockers from the server.</p>
-            )}
-          </div>
-          <div className="flex items-center gap-2">
-            <Checkbox
+
+      <EcommerceCatalogNav />
+      <EcommerceSetupSteps active="fulfilment" />
+
+      <EcommerceReadinessPanel
+        blockers={blockers}
+        checkoutTaxReady={readiness?.checkoutTaxReady}
+        checkoutUsable={readiness?.checkoutUsable}
+      />
+
+      <p className="mb-4 text-sm text-muted-foreground">
+        Configuration version {version}. Product GST is on{" "}
+        <EcommerceRelatedLink href="/ecommerce/tax" label="Tax settings" />.
+      </p>
+
+      <PageTabs defaultValue="fulfilment">
+        <PageTabsBar sectionLabel="Store checkout setup">
+          <PageTab value="fulfilment">Delivery & pickup</PageTab>
+          <PageTab value="policies">Shopper policies</PageTab>
+          <PageTab value="checkout-tax">GST on payment</PageTab>
+        </PageTabsBar>
+
+        <PageTabsPanel value="fulfilment">
+          <div className="space-y-6 p-5 sm:p-6">
+            <EcommerceSettingsHint icon={Truck} title="At least one fulfilment method">
+              Turn on branch pickup, home delivery, or both. Customers choose at checkout; you can
+              restrict COD to specific pincodes inside delivery.
+            </EcommerceSettingsHint>
+
+            <EcommerceSettingsToggle
+              id="pickup-enabled"
+              title="Branch pickup"
+              description="Customers collect orders from selected showrooms."
               checked={pickupEnabled}
               disabled={!access.canWrite}
-              onCheckedChange={(v) => setPickupEnabled(v === true)}
+              onCheckedChange={setPickupEnabled}
             />
-            <span>Enable branch pickup</span>
-          </div>
-          {pickupEnabled ? (
-            <div className="space-y-2">
-              <FieldLabel>Pickup branches (must belong to this jeweller)</FieldLabel>
-              {branchItems.map((b) => (
-                <label key={String(b.id)} className="flex items-center gap-2">
-                  <Checkbox
-                    checked={pickupBranchIds.includes(String(b.id))}
-                    disabled={!access.canWrite}
-                    onCheckedChange={() => toggleBranch(String(b.id))}
-                  />
-                  {String(b.name)} ({String(b.code)})
-                </label>
-              ))}
-            </div>
-          ) : null}
-          <div className="space-y-3 rounded-lg border border-border/80 p-4">
-            <div className="flex items-start gap-2">
-              <Checkbox
-                id="delivery-enabled"
-                checked={deliveryEnabled}
-                disabled={!access.canWrite}
-                onCheckedChange={(v) => setDeliveryEnabled(v === true)}
-              />
-              <label htmlFor="delivery-enabled" className="cursor-pointer leading-snug">
-                <span className="font-medium">Offer delivery</span>
-                <span className="mt-1 block text-xs text-muted-foreground">
-                  Fill pincodes and delivery charge below, then save. For checkout tax, also add
-                  supported destination states and inter-state IGST lines in the section below.
-                </span>
-              </label>
-            </div>
-            {deliveryEnabled && !deliveryReady ? (
-              <ul className="list-disc space-y-1 pl-5 text-xs text-amber-900">
-                {deliveryIssues.map((issue) => (
-                  <li key={issue}>{issue}</li>
-                ))}
-              </ul>
-            ) : null}
-            {deliveryEnabled && deliveryReady ? (
-              <p className="text-xs text-emerald-800">
-                Delivery details look complete — click Save settings to apply.
-              </p>
-            ) : null}
-            <FieldLabel>Serviceable pincodes (one per line or comma-separated, 6 digits)</FieldLabel>
-            <Textarea
-              value={pincodesText}
-              disabled={!access.canWrite}
-              onChange={(e) => setPincodesText(e.target.value)}
-              rows={4}
-              placeholder="686691"
-            />
-            <FieldLabel>Delivery charge (₹, server-authoritative — use 0 for free delivery)</FieldLabel>
-            <Input
-              value={deliveryChargeRupees}
-              disabled={!access.canWrite}
-              onChange={(e) => setDeliveryChargeRupees(e.target.value)}
-              placeholder="0"
-              inputMode="decimal"
-            />
-            <label className="mt-3 flex items-start gap-2 text-sm">
-              <Checkbox
-                checked={requireCourierTracking}
-                disabled={!access.canWrite}
-                onCheckedChange={(v) => setRequireCourierTracking(v === true)}
-              />
-              <span>
-                Require courier name or tracking number before marking delivery orders as shipped. Turn
-                off for store-managed delivery without courier tracking.
-              </span>
-            </label>
-            <div className="mt-4 space-y-2 border-t border-border/60 pt-4">
-              <div className="flex items-start gap-2">
-                <Checkbox
-                  id="cod-enabled"
-                  checked={codEnabled}
-                  disabled={!access.canWrite || !deliveryEnabled}
-                  onCheckedChange={(v) => setCodEnabled(v === true)}
-                />
-                <label htmlFor="cod-enabled" className="cursor-pointer leading-snug">
-                  <span className="font-medium">Cash on delivery (COD)</span>
-                  <span className="mt-1 block text-xs text-muted-foreground">
-                    COD pincodes must be a subset of serviceable delivery pincodes. Delivery coverage
-                    and COD coverage are configured separately.
-                  </span>
-                </label>
+            {pickupEnabled ? (
+              <div className="rounded-xl border border-[#eaded9] bg-white p-4">
+                <FieldLabel>Which branches offer pickup?</FieldLabel>
+                <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                  {branchItems.map((b) => (
+                    <label
+                      key={String(b.id)}
+                      className="flex cursor-pointer items-center gap-2 rounded-lg border border-[#efe7e1] px-3 py-2.5 text-sm hover:bg-[#faf7f5]"
+                    >
+                      <Checkbox
+                        checked={pickupBranchIds.includes(String(b.id))}
+                        disabled={!access.canWrite}
+                        onCheckedChange={() => toggleBranch(String(b.id))}
+                      />
+                      <span>
+                        {String(b.name)}{" "}
+                        <span className="text-muted-foreground">({String(b.code)})</span>
+                      </span>
+                    </label>
+                  ))}
+                </div>
               </div>
-              {codEnabled ? (
-                <>
-                  <FieldLabel>COD pincodes (subset of delivery list above)</FieldLabel>
-                  <Textarea
-                    value={codPincodesText}
+            ) : null}
+
+            <EcommerceSettingsToggle
+              id="delivery-enabled"
+              title="Home delivery"
+              description="Ship to pincodes you list below. Set ₹0 for free delivery."
+              checked={deliveryEnabled}
+              disabled={!access.canWrite}
+              onCheckedChange={setDeliveryEnabled}
+            />
+
+            {deliveryEnabled ? (
+              <div className="space-y-4 rounded-xl border border-[#eaded9] bg-white p-4 sm:p-5">
+                <div className="grid gap-4 lg:grid-cols-2">
+                  <div>
+                    <FieldLabel>Serviceable pincodes</FieldLabel>
+                    <Textarea
+                      value={pincodesText}
+                      disabled={!access.canWrite}
+                      onChange={(e) => setPincodesText(e.target.value)}
+                      rows={5}
+                      placeholder={"686691\n686692\n(one per line or comma-separated)"}
+                      className="font-mono text-sm"
+                    />
+                    <p className="mt-1.5 text-xs text-muted-foreground">Six-digit Indian pincodes only.</p>
+                  </div>
+                  <div>
+                    <FieldLabel>Delivery fee (₹)</FieldLabel>
+                    <Input
+                      value={deliveryChargeRupees}
+                      disabled={!access.canWrite}
+                      onChange={(e) => setDeliveryChargeRupees(e.target.value)}
+                      placeholder="0"
+                      inputMode="decimal"
+                      className="h-11 text-lg tabular-nums"
+                    />
+                    <p className="mt-1.5 text-xs text-muted-foreground">
+                      Charged once per order. Use 0 for free delivery.
+                    </p>
+                    {deliveryIssues.length ? (
+                      <ul className="mt-3 list-disc space-y-1 pl-4 text-xs text-amber-900">
+                        {deliveryIssues.map((issue) => (
+                          <li key={issue}>{issue}</li>
+                        ))}
+                      </ul>
+                    ) : deliveryReady ? (
+                      <p className="mt-3 text-xs text-emerald-800">Looks good — save to apply.</p>
+                    ) : null}
+                  </div>
+                </div>
+
+                <EcommerceSettingsToggle
+                  id="courier-tracking"
+                  title="Require courier name or tracking when marking shipped"
+                  description="Turn off if you deliver with your own staff and do not use courier AWB numbers."
+                  checked={requireCourierTracking}
+                  disabled={!access.canWrite}
+                  onCheckedChange={setRequireCourierTracking}
+                />
+
+                <div className="border-t border-[#eaded9] pt-4">
+                  <EcommerceSettingsToggle
+                    id="cod-enabled"
+                    title="Cash on delivery (COD)"
+                    description="Only for pincodes listed below — must be inside your delivery list."
+                    checked={codEnabled}
                     disabled={!access.canWrite}
-                    onChange={(e) => setCodPincodesText(e.target.value)}
-                    rows={3}
-                    placeholder="686692"
+                    onCheckedChange={setCodEnabled}
                   />
-                </>
-              ) : null}
-            </div>
+                  {codEnabled ? (
+                    <div className="mt-4">
+                      <FieldLabel>COD pincodes</FieldLabel>
+                      <Textarea
+                        value={codPincodesText}
+                        disabled={!access.canWrite}
+                        onChange={(e) => setCodPincodesText(e.target.value)}
+                        rows={3}
+                        placeholder="686691"
+                        className="font-mono text-sm"
+                      />
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
+
+            <EcommerceSettingsHint icon={MapPin} title="Inter-state delivery">
+              If you ship outside your registered state, also add destination states under the{" "}
+              <strong>GST on payment</strong> tab so IGST lines can apply.
+            </EcommerceSettingsHint>
           </div>
-          <EcommerceStorePoliciesPanel
-            form={storePoliciesForm}
-            disabled={!access.canWrite}
-            onChange={setStorePoliciesForm}
-          />
-          <hr />
-          <h3 className="font-semibold">Checkout tax (accountant-approved components)</h3>
-          <EcommerceCheckoutTaxPanel
-            form={checkoutForm}
-            setForm={setCheckoutForm}
-            blockers={blockers}
-            disabled={!access.canWrite}
-          />
-        </div>
-      </Surface>
+        </PageTabsPanel>
+
+        <PageTabsPanel value="policies">
+          <div className="p-5 sm:p-6">
+            <EcommerceStorePoliciesPanel
+              form={storePoliciesForm}
+              disabled={!access.canWrite}
+              onChange={setStorePoliciesForm}
+            />
+          </div>
+        </PageTabsPanel>
+
+        <PageTabsPanel value="checkout-tax">
+          <div className="space-y-4 p-5 sm:p-6">
+            <EcommerceSettingsHint icon={ShieldCheck} title="Accountant-approved checkout GST">
+              This is separate from catalog GST buckets. Enter what your accountant signed off for
+              live payment quotes (seller GSTIN, CGST/SGST or IGST splits, approval reference).
+            </EcommerceSettingsHint>
+            <EcommerceCheckoutTaxPanel
+              form={checkoutForm}
+              setForm={setCheckoutForm}
+              blockers={blockers}
+              disabled={!access.canWrite}
+            />
+          </div>
+        </PageTabsPanel>
+      </PageTabs>
     </>
   );
 }

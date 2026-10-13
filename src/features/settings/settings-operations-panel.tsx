@@ -11,10 +11,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { FormFieldError } from "@/src/components/common/form-field-error";
 import { FieldLabel, Surface } from "@/src/components/common/page-parts";
+import {
+  EcommerceSettingsHint,
+  SettingsToggleRow,
+} from "@/src/features/ecommerce/ecommerce-settings-ui";
+import { Settings2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export type OperationsFormState = {
@@ -185,24 +189,18 @@ function PolicyRow({
   disabled?: boolean;
   onChange: (next: boolean) => void;
 }) {
+  const description = policy.code
+    ? `${policy.detail} · API: ${policy.code}`
+    : policy.detail;
   return (
-    <div className="flex items-center justify-between gap-4 px-4 py-2.5 sm:px-5">
-      <div className="min-w-0">
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-          <span className="text-sm font-medium text-[#28161a]">{policy.title}</span>
-          {policy.code ? (
-            <code className="text-[10px] text-[#9a6f2a]">{policy.code}</code>
-          ) : null}
-        </div>
-        <p className="text-xs text-[#776a6d]">{policy.detail}</p>
-      </div>
-      <Switch
-        checked={enabled}
-        disabled={disabled}
-        onCheckedChange={(value) => onChange(value === true)}
-        className="shrink-0"
-      />
-    </div>
+    <SettingsToggleRow
+      id={`policy-${policy.key}`}
+      title={policy.title}
+      description={description}
+      checked={enabled}
+      disabled={disabled}
+      onCheckedChange={onChange}
+    />
   );
 }
 
@@ -266,15 +264,20 @@ export function SettingsOperationsPanel({
 
   return (
     <div className="space-y-4">
+      <EcommerceSettingsHint icon={Settings2} title="How operations settings work">
+        Toggles apply immediately on save. They gate enrolment, the customer app, agents, and
+        redemptions — separate from online store catalog and checkout under{" "}
+        <span className="font-semibold text-[#28161a]">Online store</span> in the sidebar.
+      </EcommerceSettingsHint>
       <Surface
         title="Operational rules"
         description="Enforced on enrolment, payments, receipts and redemptions"
       >
-        <div className="divide-y divide-[#efe6ea]">
+        <div className="space-y-6 p-4 sm:p-5">
           {POLICY_SECTIONS.map((section) => (
             <div key={section.label}>
               <SectionLabel>{section.label}</SectionLabel>
-              <div className="divide-y divide-[#f3eef0]">
+              <div className="mt-3 grid gap-3">
                 {section.policies.map((policy) => (
                   <PolicyRow
                     key={policy.key}

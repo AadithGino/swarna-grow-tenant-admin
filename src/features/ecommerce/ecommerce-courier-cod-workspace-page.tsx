@@ -6,10 +6,11 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { PageHeader, Surface } from "@/src/components/common/page-parts";
+import { PageHeader, StatCard, Surface } from "@/src/components/common/page-parts";
 import { PageSkeleton, QueryError } from "@/src/components/common/query-state";
-import { EcommerceSectionNav } from "@/src/features/ecommerce/ecommerce-section-nav";
+import { AlertTriangle, Banknote, Package, Truck } from "lucide-react";
 import { useEcommerceAdminAccess } from "@/src/features/ecommerce/ecommerce-admin-shared";
+import { EcommerceOperationsNav } from "@/src/features/ecommerce/ecommerce-settings-ui";
 import { formatOrderInr } from "@/src/features/ecommerce/ecommerce-order-ui";
 import { newIdempotencyKey } from "@/src/lib/idempotency";
 import { toastApiError } from "@/src/lib/api-error";
@@ -168,23 +169,33 @@ export function EcommerceCourierCodWorkspacePage() {
   return (
     <div>
       <PageHeader
-        title="Courier COD workspace"
-        description="Manual courier POD and statement reconciliation until live courier integration is configured."
+        eyebrow="Store operations"
+        title="Courier COD"
+        description="Confirm courier collection, build remittance batches, and reconcile bank credits."
       />
-      <EcommerceSectionNav />
+      <EcommerceOperationsNav />
       <p className="mb-4 text-sm text-muted-foreground">{summary.data?.courierIntegrationLabel}</p>
-      <div className="mb-6 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-        {queues.map((q) => (
-          <div key={q.label} className="rounded-xl border bg-muted/20 px-4 py-3">
-            <p className="text-xs text-muted-foreground">{q.label}</p>
-            <p className="mt-1 text-lg font-semibold tabular-nums">{q.count}</p>
-          </div>
-        ))}
+      <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        {queues.map((q, i) => {
+          const icons = [Truck, Package, Banknote, Package];
+          const tones = ["gold", "cream", "wine", "green"] as const;
+          const Icon = icons[i] ?? Truck;
+          const tone = tones[i] ?? "wine";
+          return (
+            <StatCard
+              key={q.label}
+              icon={q.label.includes("discrepancy") ? AlertTriangle : Icon}
+              tone={q.label.includes("discrepancy") ? "red" : tone}
+              label={q.label}
+              value={q.count}
+            />
+          );
+        })}
       </div>
       {summary.data ? (
-        <p className="mb-4 text-sm">
+        <p className="mb-4 rounded-xl border border-[#eaded9] bg-[#faf7f5] px-4 py-3 text-sm">
           Outstanding courier remittance (owed):{" "}
-          <strong>{formatOrderInr(summary.data.remittanceOwedPaise)}</strong>
+          <strong className="tabular-nums">{formatOrderInr(summary.data.remittanceOwedPaise)}</strong>
         </p>
       ) : null}
 

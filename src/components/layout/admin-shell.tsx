@@ -8,6 +8,7 @@ import { useClientMounted } from "@/src/hooks/use-client-mounted";
 import { realmHasStoredSession } from "@/src/lib/auth-token-storage";
 import {
   Activity,
+  AlertTriangle,
   Bell,
   Building2,
   CalendarClock,
@@ -19,14 +20,19 @@ import {
   Headphones,
   Landmark,
   LayoutDashboard,
+  Layers3,
   Menu,
+  Package,
+  PackageCheck,
   PanelLeftClose,
   PanelLeftOpen,
+  Percent,
   Scale,
   Search,
   Settings,
   ShoppingBag,
   ShieldCheck,
+  Truck,
   UserRound,
   UsersRound,
   WalletCards,
@@ -101,24 +107,30 @@ const groups: { label: string; items: NavItem[] }[] = [
     items: [{ label: "Dashboard", href: "/", icon: LayoutDashboard }],
   },
   {
+    label: "Store operations",
+    items: [
+      { label: "Orders", href: "/ecommerce/orders", icon: ClipboardList },
+      { label: "Courier COD", href: "/ecommerce/courier-cod", icon: Truck },
+      {
+        label: "Payment exceptions",
+        href: "/ecommerce/payment-exceptions",
+        icon: AlertTriangle,
+      },
+    ],
+  },
+  {
     label: "Online store",
     items: [
       { label: "Catalog", href: "/ecommerce", icon: ShoppingBag },
-      { label: "Categories", href: "/ecommerce/categories", icon: ShoppingBag },
+      { label: "Categories", href: "/ecommerce/categories", icon: Layers3 },
+      { label: "Inventory", href: "/ecommerce/inventory", icon: Package },
       {
         label: "Store gold rates",
         href: "/ecommerce/gold-rates",
         icon: Scale,
       },
-      { label: "Tax settings", href: "/ecommerce/tax", icon: FileBarChart },
-      { label: "Inventory", href: "/ecommerce/inventory", icon: ShoppingBag },
-      { label: "Fulfilment", href: "/ecommerce/fulfilment", icon: ShoppingBag },
-      { label: "Orders", href: "/ecommerce/orders", icon: ShoppingBag },
-      {
-        label: "Payment exceptions",
-        href: "/ecommerce/payment-exceptions",
-        icon: ShoppingBag,
-      },
+      { label: "Tax settings", href: "/ecommerce/tax", icon: Percent },
+      { label: "Fulfilment", href: "/ecommerce/fulfilment", icon: PackageCheck },
     ],
   },
   {
@@ -186,7 +198,10 @@ function Navigation({
   return (
     <nav className="flex-1 overflow-y-auto px-3 py-5 scrollbar-thin">
       {groups.map((group) => {
-        if (group.label === "Online store" && !ecommerceNav.showEcommerceNav) {
+        if (
+          (group.label === "Online store" || group.label === "Store operations")
+          && !ecommerceNav.showEcommerceNav
+        ) {
           return null;
         }
         const items = group.items.filter((item) =>

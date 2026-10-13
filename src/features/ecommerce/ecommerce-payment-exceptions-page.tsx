@@ -1,11 +1,17 @@
 "use client";
 
 import Link from "next/link";
-import { PageHeader, Surface } from "@/src/components/common/page-parts";
+import { AlertTriangle, ArrowRight } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { PageHeader, StatCard, Surface } from "@/src/components/common/page-parts";
 import { PageSkeleton, QueryError } from "@/src/components/common/query-state";
+import { StatusBadge } from "@/src/components/common/status-badge";
 import { useGetEcommercePaymentExceptionsQuery } from "@/src/store/api/admin-api";
 import { useEcommerceAdminAccess } from "@/src/features/ecommerce/ecommerce-admin-shared";
-import { EcommerceSectionNav } from "@/src/features/ecommerce/ecommerce-section-nav";
+import {
+  EcommerceOperationsNav,
+  EcommerceSettingsHint,
+} from "@/src/features/ecommerce/ecommerce-settings-ui";
 
 function formatInr(paise: number) {
   return `₹${(paise / 100).toLocaleString("en-IN", { minimumFractionDigits: 2 })}`;
@@ -22,7 +28,7 @@ function kindLabel(kind: string) {
     case "LATE_SUCCESS_REFUND_REQUIRED":
       return "Late success — refund required";
     default:
-      return kind;
+      return kind.replaceAll("_", " ").toLowerCase();
   }
 }
 
@@ -44,53 +50,81 @@ export function EcommercePaymentExceptionsPage() {
   return (
     <>
       <PageHeader
-        eyebrow="Ecommerce"
+        eyebrow="Store operations"
         title="Payment exceptions"
-        description="Late-success refunds, provider failures, stuck reconciliation, and initiation uncertainty."
+        description="Provider failures, late captures, and refunds that need a decision."
         actions={
-          <Link href="/ecommerce/orders" className="text-sm underline-offset-4 hover:underline">
-            All orders
-          </Link>
+          <Button variant="outline" size="sm" asChild>
+            <Link href="/ecommerce/orders">
+              All orders
+              <ArrowRight className="size-4" />
+            </Link>
+          </Button>
         }
       />
-      <EcommerceSectionNav />
-      <Surface title="Open queue">
+      <EcommerceOperationsNav />
+      <div className="mb-6 grid gap-4 sm:grid-cols-2">
+        <StatCard
+          icon={AlertTriangle}
+          label="Open exceptions"
+          value={items.length}
+          detail="Resolve from the order detail screen"
+          tone={items.length ? "red" : "green"}
+        />
+        <StatCard
+          icon={AlertTriangle}
+          label="Queue status"
+          value={items.length ? "Action needed" : "Clear"}
+          detail="Check orders with online payment issues"
+          tone={items.length ? "gold" : "green"}
+        />
+      </div>
+      <EcommerceSettingsHint icon={AlertTriangle} title="What belongs here">
+        These are not courier COD items — use{" "}
+        <Link href="/ecommerce/courier-cod" className="font-semibold text-[#730321] underline">
+          Courier COD
+        </Link>{" "}
+        for cash collection and bank remittance. Open each order to retry reconciliation or issue
+        refunds.
+      </EcommerceSettingsHint>
+      <Surface title="Open queue" className="mt-6">
         {items.length === 0 ? (
           <p className="p-6 text-sm text-muted-foreground">No open payment exceptions.</p>
         ) : (
-          <ul className="divide-y text-sm">
+          <ul className="divide-y divide-[#eaded9]">
             {items.map((row) => {
               const orderId = String(row.orderId ?? "");
               const key = `${String(row.kind)}-${orderId}-${String(row.refundCaseId ?? row.paymentAttemptId ?? "")}`;
               return (
-                <li key={key} className="flex flex-col gap-1 p-4 sm:flex-row sm:items-center sm:justify-between">
-                  <div>
-                    <div className="font-medium">{kindLabel(String(row.kind ?? ""))}</div>
-                    <div className="text-muted-foreground">
-                      Order {orderId.slice(-8)} ·{" "}
-                      {row.amountPaise != null ? formatInr(Number(row.amountPaise)) : "—"}
+                <li
+                  key={key}
+                  className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between"
+                >
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-semibold text-[#28161a]">
+                        {kindLabel(String(row.kind ?? ""))}
+                      </span>
+                      {row.status ? (
+                        <StatusBadge status="PENDING" label={String(row.status)} />
+                      ) : null}
                     </div>
-                    {row.status ? (
-                      <div className="text-xs text-muted-foreground">State: {String(row.status)}</div>
-                    ) : null}
-                    {row.providerRefundId ? (
-                      <div className="font-mono text-xs text-muted-foreground">
-                        Ref: {String(row.providerRefundId)}
-                      </div>
-                    ) : null}
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      {row.amountPaise != null ? formatInr(Number(row.amountPaise)) : "—"}
+                      {orderId ? ` · Order …${orderId.slice(-8)}` : null}
+                    </p>
                     {row.updatedAt ? (
-                      <div className="text-xs text-muted-foreground">
+                      <p className="mt-1 text-xs text-muted-foreground">
                         Updated {new Date(String(row.updatedAt)).toLocaleString()}
-                      </div>
+                      </p>
                     ) : null}
                   </div>
                   {orderId ? (
-                    <Link
-                      href={`/ecommerce/orders/${encodeURIComponent(orderId)}`}
-                      className="text-primary underline-offset-4 hover:underline"
-                    >
-                      Open order
-                    </Link>
+                    <Button size="sm" variant="outline" asChild>
+                      <Link href={`/ecommerce/orders/${encodeURIComponent(orderId)}`}>
+                        Open order
+                      </Link>
+                    </Button>
                   ) : null}
                 </li>
               );

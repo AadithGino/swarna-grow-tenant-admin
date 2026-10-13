@@ -32,13 +32,13 @@ const DEFINITIONS: Record<EcommerceAdminReportKey, { title: string; lines: strin
 export function EcommerceReportDefinitions({ reportKey }: { reportKey: EcommerceAdminReportKey }) {
   const block = DEFINITIONS[reportKey];
   return (
-    <div className="rounded-xl border border-[#e4d7d2] bg-[#faf7f5] px-4 py-3 text-sm text-[#5c4a50]">
-      <p className="font-semibold text-[#28161a]">{block.title} — definitions</p>
-      <ul className="mt-2 list-disc space-y-1 pl-5">
-        {block.lines.map((line) => (
-          <li key={line}>{line}</li>
-        ))}
+    <details className="group rounded-xl border border-[#e4d7d2] bg-[#faf7f5] px-4 py-3 text-sm text-[#5c4a50]">
+      <summary className="cursor-pointer font-semibold text-[#28161a] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#730321]">
+        How {block.title.toLowerCase()} is calculated
+      </summary>
+      <ul className="mt-3 list-disc space-y-1.5 border-t border-[#eaded9] pt-3 pl-5 leading-6">
+        {block.lines.map((line) => <li key={line}>{line}</li>)}
       </ul>
-    </div>
+    </details>
   );
 }

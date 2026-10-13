@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { ArrowLeft, ArrowRight, Gem, ShieldCheck, ShoppingBag, Sparkles, Truck } from "lucide-react";
+import { ArrowLeft, ArrowRight, Gem, Search, ShieldCheck, ShoppingBag, Sparkles, Truck, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -81,7 +81,17 @@ export function CustomerShopPage() {
 
   function applySearch() {
     const trimmed = searchInput.trim();
+    if (trimmed.length === 1) {
+      toast.message("Enter at least two letters to search products.");
+      return;
+    }
     setSearchQ(trimmed.length >= 2 ? trimmed : undefined);
+    resetCatalogTail();
+  }
+
+  function clearSearch() {
+    setSearchInput("");
+    setSearchQ(undefined);
     resetCatalogTail();
   }
 
@@ -112,13 +122,12 @@ export function CustomerShopPage() {
         <ShoppingBag className={cn("mx-auto size-10", customerBrandClass.accentText)} />
         <h1 className="mt-5 font-serif text-3xl">The online store is unavailable</h1>
         <p className="mt-3 text-sm text-muted-foreground">This jeweller has not opened their online catalog yet.</p>
-        <Link
-          href={customerPath(tenantSlug)}
-          className="mt-6 inline-flex rounded-xl px-5 py-3 text-sm font-semibold text-white"
-          style={customerBrandStyle.primaryBg}
-        >
-          Go to home
-        </Link>
+        <div className="mt-6 flex flex-wrap justify-center gap-3">
+          {availability.data?.hasOrderHistory ? (
+            <Link href={customerShopOrdersPath(tenantSlug)} className="inline-flex rounded-xl px-5 py-3 text-sm font-semibold text-white" style={customerBrandStyle.primaryBg}>View your orders</Link>
+          ) : null}
+          <Link href={customerPath(tenantSlug)} className="inline-flex rounded-xl border border-[#e7d9d2] px-5 py-3 text-sm font-semibold text-[#543a42]">Go to home</Link>
+        </div>
       </div>
     );
   }
@@ -159,7 +168,7 @@ export function CustomerShopPage() {
       <div className="mb-9 grid gap-3 sm:grid-cols-3">
         {[
           { icon: Gem, title: "Clear pricing", detail: "Gold and making breakdowns" },
-          { icon: ShieldCheck, title: "Secure checkout", detail: "Payment is confirmed by the server" },
+          { icon: ShieldCheck, title: "Clear order status", detail: "See whether checkout is available" },
           { icon: Truck, title: "Flexible fulfilment", detail: "Pickup or delivery when available" },
         ].map(({ icon: Icon, title, detail }) => (
           <div key={title} className="flex items-center gap-3 rounded-2xl border border-[#ece3da] bg-white px-4 py-4">
@@ -199,12 +208,16 @@ export function CustomerShopPage() {
           ))}
         </div>
       ) : null}
-      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end">
-        <div className="flex flex-1 gap-2">
+      <div className="mb-6 rounded-2xl border border-[#ece3da] bg-white p-3 shadow-sm sm:p-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+        <div className="relative flex flex-1 gap-2">
+          <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[#82777a]" aria-hidden />
           <Input
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
-            placeholder="Search by product name (2+ letters)"
+            aria-label="Search jewellery by name"
+            className="pl-9"
+            placeholder="Search jewellery by name"
             onKeyDown={(e) => e.key === "Enter" && applySearch()}
           />
           <Button type="button" variant="secondary" onClick={applySearch}>
@@ -213,18 +226,25 @@ export function CustomerShopPage() {
         </div>
         <Select value={sort} onValueChange={onSortChange}>
           <SelectTrigger className="w-full sm:w-44">
-            <SelectValue placeholder="Sort" />
+            <SelectValue placeholder="Sort products" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="newest">Newest</SelectItem>
             <SelectItem value="name">Name (A–Z)</SelectItem>
           </SelectContent>
         </Select>
+        </div>
+        {(searchQ || categoryId) ? (
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-[#f0e8e3] pt-3 text-xs text-[#6e6265]">
+            <p>Showing {searchQ ? `“${searchQ}”` : "all jewellery"}{categoryId ? ` in ${String(categoryRows.find((row) => String(row.id) === categoryId)?.name ?? "this category")}` : ""}</p>
+            <button type="button" onClick={() => { selectCategory(undefined); clearSearch(); }} className={cn("inline-flex items-center gap-1 font-semibold underline-offset-2 hover:underline", customerBrandClass.accentText)}><X className="size-3.5" aria-hidden /> Clear filters</button>
+          </div>
+        ) : null}
       </div>
       {products.isLoading && !mergedItems.length ? <PageSkeleton cards={3} /> : products.isError ? (
         <QueryError error={products.error} onRetry={products.refetch} />
       ) : !mergedItems.length ? (
-        <div className="rounded-3xl border bg-white p-12 text-center"><Gem className={cn("mx-auto size-9", customerBrandClass.accentText)} /><h3 className="mt-4 font-serif text-xl">{searchQ ? "No matching products" : "No pieces in this collection yet"}</h3><p className="mt-2 text-sm text-muted-foreground">{searchQ ? "Try another search or clear filters." : "Choose another category or check back soon."}</p></div>
+        <div className="rounded-3xl border bg-white p-12 text-center"><Gem className={cn("mx-auto size-9", customerBrandClass.accentText)} /><h3 className="mt-4 font-serif text-xl">{searchQ ? "No matching products" : "No pieces in this collection yet"}</h3><p className="mt-2 text-sm text-muted-foreground">{searchQ ? "Try another search or clear filters." : "Choose another category or check back soon."}</p>{(searchQ || categoryId) ? <Button type="button" variant="outline" className="mt-5" onClick={() => { selectCategory(undefined); clearSearch(); }}>Show all jewellery</Button> : null}</div>
       ) : (
         <>
           <div className="grid grid-cols-2 gap-3 sm:gap-5 lg:grid-cols-3 xl:grid-cols-4">
@@ -288,6 +308,7 @@ export function CustomerShopProductPage({ slug }: { slug: string }) {
   const images = (p.imageUploadIds as string[] | undefined) ?? [];
   const imageIndex = Math.min(selectedImage, Math.max(0, images.length - 1));
   const availabilityInfo = p.availability as { label?: string; purchasable?: boolean } | undefined;
+  const priceReady = (p.pricing as { computable?: boolean } | undefined)?.computable === true;
   const weightMg = Number(p.goldWeightMg ?? 0);
   return (
     <div className="pb-10">
@@ -314,7 +335,7 @@ export function CustomerShopProductPage({ slug }: { slug: string }) {
               type="button"
               className="h-12 min-w-40 rounded-xl text-white"
               style={customerBrandStyle.primaryBg}
-              disabled={availabilityInfo?.purchasable === false || putState.isLoading || cart.isLoading}
+              disabled={!priceReady || availabilityInfo?.purchasable === false || putState.isLoading || cart.isLoading}
               onClick={async () => {
                 try {
                   const existing =
@@ -345,6 +366,7 @@ export function CustomerShopProductPage({ slug }: { slug: string }) {
               </Button>
             </Link>
           </div>
+          {!priceReady ? <p className="mt-3 text-sm text-amber-800">Price is temporarily unavailable. This item can be added when the jeweller updates its pricing.</p> : null}
           </div>
           {p.description ? <div className="rounded-2xl border border-[#efe7e1] bg-white p-5"><h2 className="font-semibold text-[#302428]">About this piece</h2><p className="mt-2 whitespace-pre-wrap text-sm leading-7 text-[#6d6265]">{String(p.description)}</p></div> : null}
           {weightMg > 0 ? <div className="flex items-center gap-3 rounded-2xl customer-accent-tint-surface p-4 text-sm text-[#5b4a42]"><Gem className={cn("size-5 shrink-0", customerBrandClass.accentText)} /><span>Gold weight: <strong>{(weightMg / 1000).toFixed(3)} g</strong>{p.purity ? ` · ${String(p.purity)} purity` : ""}</span></div> : null}

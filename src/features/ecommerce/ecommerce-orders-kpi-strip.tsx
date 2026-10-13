@@ -1,5 +1,12 @@
 "use client";
 
+import {
+  AlertTriangle,
+  IndianRupee,
+  PackageOpen,
+  ShoppingBag,
+} from "lucide-react";
+import { StatCard } from "@/src/components/common/page-parts";
 import type { EcommerceWorkspaceSummary } from "@/src/types/ecommerce-order";
 import { formatOrderInr } from "@/src/lib/ecommerce-order-presenters";
 
@@ -14,50 +21,52 @@ export function EcommerceOrdersKpiStrip({
 }) {
   if (loading && !summary) {
     return (
-      <div className="mb-5 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="mb-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {[1, 2, 3, 4].map((k) => (
-          <div key={k} className="h-20 animate-pulse rounded-xl bg-muted/40" />
+          <div key={k} className="h-[8.5rem] animate-pulse rounded-2xl bg-[#f5ebe6]" />
         ))}
       </div>
     );
   }
   if (!summary) return null;
-  const cells = [
-    { label: "Orders placed", value: String(summary.placement.ordersPlaced) },
-    {
-      label: "Net collected",
-      value: summary.collections.netCollected?.amountDisplay ?? formatOrderInr(0),
-      hint: `${summary.collections.collectedOrderCount} collected orders`,
-    },
-    {
-      label: "Awaiting fulfilment",
-      value: String(summary.pipeline.awaitingFulfilment),
-    },
-    {
-      label: "Needs attention",
-      value: String(
-        summary.pipeline.paymentExceptionsOpen
-          + summary.placement.codPendingAcceptancePlacedInPeriod,
-      ),
-      hint: "Exceptions + COD acceptance (period)",
-    },
-  ];
+
+  const attention =
+    summary.pipeline.paymentExceptionsOpen + summary.placement.codPendingAcceptancePlacedInPeriod;
+
   return (
     <div className="mb-5">
-      <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-[#9a6f2a]">
-        Summary · {periodLabel}
+      <p className="mb-3 text-xs font-bold uppercase tracking-[0.14em] text-[#9a6f2a]">
+        Orders summary · {periodLabel}
       </p>
-      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-        {cells.map((cell) => (
-          <div
-            key={cell.label}
-            className="rounded-xl border border-[#e4d7d2] bg-[#faf7f5] px-4 py-3"
-          >
-            <p className="text-xs text-muted-foreground">{cell.label}</p>
-            <p className="mt-1 font-semibold tabular-nums text-[#28161a]">{cell.value}</p>
-            {cell.hint ? <p className="mt-0.5 text-[10px] text-muted-foreground">{cell.hint}</p> : null}
-          </div>
-        ))}
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard
+          icon={ShoppingBag}
+          label="Orders placed"
+          value={summary.placement.ordersPlaced}
+          detail="In selected period"
+          tone="cream"
+        />
+        <StatCard
+          icon={IndianRupee}
+          label="Net collected"
+          value={summary.collections.netCollected?.amountDisplay ?? formatOrderInr(0)}
+          detail={`${summary.collections.collectedOrderCount} collected orders`}
+          tone="green"
+        />
+        <StatCard
+          icon={PackageOpen}
+          label="Awaiting fulfilment"
+          value={summary.pipeline.awaitingFulfilment}
+          detail="Live pipeline"
+          tone="gold"
+        />
+        <StatCard
+          icon={AlertTriangle}
+          label="Needs attention"
+          value={attention}
+          detail="Exceptions + COD acceptance (period)"
+          tone={attention > 0 ? "red" : "wine"}
+        />
       </div>
     </div>
   );

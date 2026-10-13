@@ -805,15 +805,15 @@ export const customerApi = createApi({
       query: (body) => ({ url: "/app/devices/fcm-token", method: "POST", body }),
     }),
     getShopAvailability: builder.query<
-      { available: boolean; ecommerce?: Record<string, unknown> },
+      { available: boolean; hasOrderHistory?: boolean; ecommerce?: Record<string, unknown> },
       void
     >({
       query: () => ({ url: "/app/shop/availability", mockKey: "shopAvailability" }),
       transformResponse: (raw: unknown) => {
         if (raw && typeof raw === "object" && "data" in raw) {
-          return (raw as { data: { available: boolean } }).data;
+          return (raw as { data: { available: boolean; hasOrderHistory?: boolean } }).data;
         }
-        return raw as { available: boolean };
+        return raw as { available: boolean; hasOrderHistory?: boolean };
       },
     }),
     getShopCategories: builder.query<

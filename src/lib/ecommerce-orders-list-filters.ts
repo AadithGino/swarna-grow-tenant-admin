@@ -21,7 +21,7 @@ export const ECOMMERCE_ORDER_LIST_VIEWS: Array<{
   {
     id: "needs_action",
     label: "Needs action",
-    description: "COD acceptance, unpaid online, or payment exceptions on this page",
+    description: "COD acceptance, pending online payment, or payment exceptions across all pages",
   },
   {
     id: "cod_acceptance",
@@ -109,6 +109,9 @@ export function buildEcommerceOrdersListQuery(input: {
   if (input.createdTo.trim()) params.createdTo = input.createdTo.trim();
 
   switch (input.view) {
+    case "needs_action":
+      params.needsAction = "true";
+      break;
     case "cod_acceptance":
       params.codPendingAcceptance = "true";
       break;

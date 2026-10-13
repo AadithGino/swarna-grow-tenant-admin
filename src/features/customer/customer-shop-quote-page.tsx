@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import { useRef } from "react";
 import { useRouter } from "next/navigation";
+import { CheckCircle2, Clock3, ShoppingBag } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { PageHeader, Surface } from "@/src/components/common/page-parts";
@@ -16,12 +18,6 @@ import {
   useCreateShopOrderMutation,
   useGetShopQuoteQuery,
 } from "@/src/store/api/customer-api";
-import {
-  formatPaymentBlockedReason,
-  paymentGateBlockers,
-  taxBlockers,
-  type CapabilityBlocker,
-} from "@/src/lib/ecommerce-payment-blockers";
 import { CustomerShopPoliciesLinks } from "@/src/features/customer/customer-shop-policies";
 
 function formatInr(paise: number) {
@@ -34,6 +30,8 @@ export function CustomerShopQuotePage({ quoteId }: { quoteId: string }) {
   const quote = useGetShopQuoteQuery(quoteId, { pollingInterval: 30_000 });
   const [cancelQuote, cancelState] = useCancelShopQuoteMutation();
   const [createOrder, createOrderState] = useCreateShopOrderMutation();
+  // Keep the same key on an uncertain retry so a double click/network timeout cannot create another order.
+  const orderIdempotencyKey = useRef<string>(newIdempotencyKey());
 
   if (quote.isLoading) return <PageSkeleton cards={2} />;
   if (quote.isError) return <QueryError error={quote.error} onRetry={quote.refetch} />;
@@ -46,10 +44,6 @@ export function CustomerShopQuotePage({ quoteId }: { quoteId: string }) {
   const expired = status === "EXPIRED";
 
   const checkoutTaxReady = q.checkoutTaxReady === true;
-  const quoteBlockers = (q.blockers as CapabilityBlocker[] | undefined) ?? [];
-  const taxOnlyBlockers = taxBlockers(quoteBlockers);
-  const paymentOnlyBlockers = paymentGateBlockers(quoteBlockers);
-  const paymentBlockedReason = formatPaymentBlockedReason(quoteBlockers);
   const paymentMethod = String(q.paymentMethod ?? "ONLINE");
   const orderPlacementAllowed = q.orderPlacementAllowed === true;
   const canPlaceOrder =
@@ -70,9 +64,9 @@ export function CustomerShopQuotePage({ quoteId }: { quoteId: string }) {
     try {
       const order = await createOrder({
         quoteId,
-        idempotencyKey: newIdempotencyKey(),
+        idempotencyKey: orderIdempotencyKey.current,
       }).unwrap();
-      toast.success("Order created");
+      toast.success(paymentMethod === "COD" ? "COD order placed" : "Order created — continue to payment");
       router.push(customerShopOrderPath(tenantSlug, String(order.id)));
     } catch (err) {
       toastApiError(err);
@@ -94,7 +88,7 @@ export function CustomerShopQuotePage({ quoteId }: { quoteId: string }) {
       <PageHeader
         eyebrow="Shop"
         title="Price preview"
-        description="Server-generated quote for your cart. Amounts and tax are authoritative from the server."
+        description="Check the final item, tax and fulfilment amounts before placing your order."
         actions={
           <Link href={customerPath(tenantSlug, "shop", "cart")}>
             <Button type="button" variant="outline">
@@ -103,10 +97,17 @@ export function CustomerShopQuotePage({ quoteId }: { quoteId: string }) {
           </Link>
         }
       />
+      <div className="mb-5 flex flex-wrap items-center gap-2 rounded-2xl border border-[#eee1d9] bg-white px-4 py-3 text-xs font-semibold text-[#66595b]">
+        <span className="inline-flex items-center gap-1.5 text-emerald-800"><CheckCircle2 className="size-4" aria-hidden /> Cart</span>
+        <span aria-hidden>→</span>
+        <span className="inline-flex items-center gap-1.5 text-[#730321]"><Clock3 className="size-4" aria-hidden /> Review price</span>
+        <span aria-hidden>→</span>
+        <span className="inline-flex items-center gap-1.5"><ShoppingBag className="size-4" aria-hidden /> Order</span>
+      </div>
       <Surface title="Quote status">
         <div className="space-y-2 p-6 text-sm">
           <p>
-            Status: <strong>{status}</strong>
+            {status === "ACTIVE" ? "Your price preview is ready" : status === "EXPIRED" ? "This price preview has expired" : "This price preview is no longer active"}
             {expired || status === "EXPIRED" ? (
               <span className="ml-2 text-amber-900">
                 This preview expired — request a new quote from your cart if prices or stock changed.
@@ -115,22 +116,13 @@ export function CustomerShopQuotePage({ quoteId }: { quoteId: string }) {
           </p>
           {expiresAt ? (
             <p className="text-muted-foreground">
-              Valid until {expiresAt.toLocaleString()} (server time)
+              Valid until {expiresAt.toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}
             </p>
           ) : null}
-          {!checkoutTaxReady && taxOnlyBlockers.length ? (
+          {!checkoutTaxReady ? (
             <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-950">
-              <p className="font-semibold">Checkout tax not ready</p>
-              <ul className="mt-2 list-disc pl-5">
-                {taxOnlyBlockers.map((b) => (
-                  <li key={b.code ?? b.message}>
-                    {b.message ?? b.code}
-                    {b.code ? (
-                      <span className="ml-1 font-mono text-[10px]">{b.code}</span>
-                    ) : null}
-                  </li>
-                ))}
-              </ul>
+              <p className="font-semibold">Checkout is temporarily unavailable</p>
+              <p className="mt-1 leading-5">This store is finishing its checkout setup. Your preview is for reference; you cannot place this order yet.</p>
             </div>
           ) : null}
           {paymentMethod === "COD" ? (
@@ -141,25 +133,7 @@ export function CustomerShopQuotePage({ quoteId }: { quoteId: string }) {
           {checkoutTaxReady && paymentMethod === "ONLINE" && q.paymentAllowed !== true ? (
             <div className="rounded-lg border border-stone-200 bg-stone-50 p-3 text-xs text-stone-900">
               <p className="font-semibold">Online payment is not available for this store</p>
-              {paymentBlockedReason ? (
-                <p className="mt-2 leading-5">{paymentBlockedReason}</p>
-              ) : null}
-              {paymentOnlyBlockers.length ? (
-                <ul className="mt-2 list-disc pl-5">
-                  {paymentOnlyBlockers.map((b) => (
-                    <li key={b.code ?? b.message}>
-                      {b.message ?? b.code}
-                      {b.code ? (
-                        <span className="ml-1 font-mono text-[10px]">{b.code}</span>
-                      ) : null}
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="mt-2 text-muted-foreground">
-                  You can review this quote; place order when your jeweller enables payments.
-                </p>
-              )}
+              <p className="mt-2 leading-5">You can review this price, but the jeweller has not enabled online checkout. Contact the store for availability.</p>
             </div>
           ) : null}
         </div>
@@ -177,14 +151,14 @@ export function CustomerShopQuotePage({ quoteId }: { quoteId: string }) {
           ))}
         </ul>
       </Surface>
-      <Surface title="Amounts (server)">
+      <Surface title="Order total">
         <dl className="space-y-2 p-6 text-sm">
           <div className="flex justify-between">
             <dt>Subtotal (pre-tax)</dt>
             <dd>{formatInr(Number(q.subtotalPaise ?? 0))}</dd>
           </div>
           <div className="flex justify-between">
-            <dt>Tax (accountant components)</dt>
+            <dt>Tax</dt>
             <dd>{formatInr(Number(q.taxPaise ?? 0))}</dd>
           </div>
           <div className="flex justify-between">
@@ -192,7 +166,7 @@ export function CustomerShopQuotePage({ quoteId }: { quoteId: string }) {
             <dd>{formatInr(Number(q.fulfilmentChargePaise ?? 0))}</dd>
           </div>
           <div className="flex justify-between border-t pt-2 font-semibold">
-            <dt>Total preview</dt>
+            <dt>Amount to pay</dt>
             <dd>{formatInr(Number(q.totalPaise ?? 0))}</dd>
           </div>
         </dl>
@@ -203,8 +177,8 @@ export function CustomerShopQuotePage({ quoteId }: { quoteId: string }) {
             onClick={onPlaceOrder}
             title={
               canPlaceOrder
-                ? "Create order and continue to payment"
-                : "Requires server checkout and payment readiness"
+                ? paymentMethod === "COD" ? "Place your cash on delivery order" : "Create order and continue to payment"
+                : "Checkout is currently unavailable for this quote"
             }
           >
             {placeOrderLabel}

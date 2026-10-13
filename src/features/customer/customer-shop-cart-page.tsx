@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
+import { Minus, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -16,13 +17,14 @@ import {
   useGetShopAvailabilityQuery,
   useGetShopCartQuery,
   useGetShopFulfilmentOptionsQuery,
+  usePutShopCartMutation,
 } from "@/src/store/api/customer-api";
 import { parseApiError, toastApiError } from "@/src/lib/api-error";
 import { formatCheckoutNotReadyMessage } from "@/src/features/ecommerce/ecommerce-checkout-blockers";
 import { newIdempotencyKey } from "@/src/lib/idempotency";
 import { useCustomerTenant } from "@/src/components/customer/customer-tenant-context";
 import { customerPath } from "@/src/lib/customer-tenant";
-import { customerShopQuotePath } from "@/src/lib/customer-shop-paths";
+import { customerShopOrdersPath, customerShopQuotePath } from "@/src/lib/customer-shop-paths";
 import { CustomerShopPoliciesLinks } from "@/src/features/customer/customer-shop-policies";
 
 type FulfilmentChoice = "BRANCH_PICKUP" | "DELIVERY";
@@ -38,6 +40,7 @@ export function CustomerShopCartPage() {
   const addresses = useGetShopAddressesQuery(undefined, { skip: !availability.data?.available });
   const [createQuote, createState] = useCreateShopQuoteMutation();
   const [createAddress, createAddressState] = useCreateShopAddressMutation();
+  const [putCart, putCartState] = usePutShopCartMutation();
 
   const [mode, setMode] = useState<FulfilmentChoice>("BRANCH_PICKUP");
   const [paymentMethod, setPaymentMethod] = useState<"ONLINE" | "COD">("ONLINE");
@@ -77,7 +80,10 @@ export function CustomerShopCartPage() {
   if (!availability.data?.available) {
     return (
       <Surface title="Shop unavailable">
-        <p className="p-6 text-sm text-muted-foreground">Store is not active.</p>
+        <div className="space-y-3 p-6 text-sm">
+          <p className="text-muted-foreground">The online store is closed right now. Your previous orders remain available.</p>
+          {availability.data?.hasOrderHistory ? <Link href={customerShopOrdersPath(tenantSlug)} className="font-semibold text-[var(--customer-primary,#730321)] underline-offset-2 hover:underline">View your orders</Link> : null}
+        </div>
       </Surface>
     );
   }
@@ -86,6 +92,19 @@ export function CustomerShopCartPage() {
   const lines = (cart.data?.lines as Record<string, unknown>[]) ?? [];
   const pickupEnabled = pickup?.enabled === true && (pickup.branches?.length ?? 0) > 0;
   const deliveryEnabled = delivery?.enabled === true;
+
+  async function updateLine(productId: string, quantity: number) {
+    const nextLines = lines
+      .map((line) => ({ productId: String(line.productId), quantity: Number(line.quantity) }))
+      .filter((line) => line.productId !== productId);
+    if (quantity > 0) nextLines.push({ productId, quantity });
+    try {
+      await putCart({ lines: nextLines, expectedVersion: cart.data?.version as number | undefined }).unwrap();
+    } catch (err) {
+      toastApiError(err);
+      void cart.refetch();
+    }
+  }
 
   async function onCreateQuote() {
     try {
@@ -198,7 +217,7 @@ export function CustomerShopCartPage() {
       <PageHeader
         eyebrow="Shop"
         title="Cart"
-        description="Choose fulfilment validated by the server, then request a quote. Prices, tax, and delivery charges come from the server only."
+        description="Review your pieces, choose pickup or delivery, then see the final price before ordering."
         actions={
           <Link href={customerPath(tenantSlug, "shop")}>
             <Button type="button" variant="outline">
@@ -207,9 +226,12 @@ export function CustomerShopCartPage() {
           </Link>
         }
       />
+      <div className="mb-5 rounded-2xl border border-[#eee1d9] bg-white px-4 py-3 text-xs font-semibold text-[#66595b]">
+        <span className="text-[var(--customer-primary,#730321)]">1. Your cart</span> <span className="mx-2 text-[#aaa]">→</span> 2. Price preview <span className="mx-2 text-[#aaa]">→</span> 3. Place order
+      </div>
       {!lines.length ? (
         <Surface title="Your cart is empty">
-          <p className="p-6 text-sm text-muted-foreground">Browse products to add items.</p>
+          <div className="p-6"><p className="text-sm text-muted-foreground">Browse the collection and add pieces to continue.</p><Link href={customerPath(tenantSlug, "shop")} className="mt-4 inline-flex text-sm font-semibold text-[var(--customer-primary,#730321)] underline-offset-2 hover:underline">Browse jewellery</Link></div>
         </Surface>
       ) : (
         <Surface title="Items">
@@ -222,13 +244,18 @@ export function CustomerShopCartPage() {
                 stockPolicy?: string;
               } | null;
               return (
-                <li key={String(line.productId)} className="flex justify-between gap-4 py-3">
+                <li key={String(line.productId)} className="flex flex-wrap items-center justify-between gap-4 py-4">
                   <div>
                     <div className="font-medium">{product?.name ?? "Product"}</div>
-                    <div className="text-muted-foreground">Qty {String(line.quantity)}</div>
                     {avail ? (
                       <div className="text-xs text-amber-900">{avail.label ?? avail.stockPolicy}</div>
                     ) : null}
+                  </div>
+                  <div className="flex items-center gap-1" role="group" aria-label={`Quantity for ${product?.name ?? "product"}`}>
+                    <Button type="button" size="icon" variant="outline" aria-label="Decrease quantity" disabled={putCartState.isLoading} onClick={() => void updateLine(String(line.productId), Number(line.quantity) - 1)}><Minus className="size-4" /></Button>
+                    <span className="w-10 text-center text-sm font-semibold tabular-nums" aria-live="polite">{String(line.quantity)}</span>
+                    <Button type="button" size="icon" variant="outline" aria-label="Increase quantity" disabled={putCartState.isLoading || Number(line.quantity) >= 99} onClick={() => void updateLine(String(line.productId), Number(line.quantity) + 1)}><Plus className="size-4" /></Button>
+                    <Button type="button" size="icon" variant="ghost" className="ml-2 text-red-700" aria-label={`Remove ${product?.name ?? "product"}`} disabled={putCartState.isLoading} onClick={() => void updateLine(String(line.productId), 0)}><Trash2 className="size-4" /></Button>
                   </div>
                 </li>
               );
@@ -236,7 +263,7 @@ export function CustomerShopCartPage() {
           </ul>
         </Surface>
       )}
-      <Surface title="Fulfilment">
+      {lines.length > 0 ? <Surface title="Fulfilment & payment">
         <div className="space-y-4 p-6 text-sm">
           <div className="flex flex-wrap gap-2">
             <Button
@@ -392,11 +419,11 @@ export function CustomerShopCartPage() {
             disabled={!lines.length || createState.isLoading}
             onClick={() => void onCreateQuote()}
           >
-            Continue to server quote
+            {createState.isLoading ? "Preparing your price…" : "Review final price"}
           </Button>
           <CustomerShopPoliciesLinks className="mt-6 border-t pt-4" />
         </div>
-      </Surface>
+      </Surface> : null}
     </>
   );
 }

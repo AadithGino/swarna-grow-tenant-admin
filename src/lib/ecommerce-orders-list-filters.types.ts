@@ -9,6 +9,7 @@ export type EcommerceOrdersListQueryParams = {
   createdTo?: string;
   period?: string;
   paymentException?: "true";
+  needsAction?: "true";
   codPendingAcceptance?: "true";
   cancellationPending?: "true";
   returnPending?: "true";

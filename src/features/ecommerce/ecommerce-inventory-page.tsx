@@ -20,8 +20,11 @@ import {
   usePatchEcommerceInventoryProductMutation,
 } from "@/src/store/api/admin-api";
 import { useEcommerceAdminAccess } from "@/src/features/ecommerce/ecommerce-admin-shared";
-import { EcommerceSectionNav } from "@/src/features/ecommerce/ecommerce-section-nav";
-
+import {
+  EcommerceCatalogNav,
+  EcommerceSettingsHint,
+} from "@/src/features/ecommerce/ecommerce-settings-ui";
+import { Boxes } from "lucide-react";
 const STOCK_POLICIES = [
   { value: "MADE_TO_ORDER", label: "Made to order" },
   { value: "QUANTITY_TRACKED", label: "Quantity tracked" },
@@ -134,14 +137,18 @@ export function EcommerceInventoryPage() {
         title="Inventory"
         description="Published products do not imply stock. Set quantity tracked or made-to-order per SKU."
       />
-      <EcommerceSectionNav />
       {!entitled ? (
         <p className="mb-4 text-sm text-amber-800">{disabledMessage}</p>
       ) : null}
       {!canWrite ? (
         <p className="mb-4 text-sm text-muted-foreground">{writeBlockedMessage}</p>
       ) : null}
-      <div className="mb-4 flex gap-2">
+      <EcommerceCatalogNav />
+      <EcommerceSettingsHint icon={Boxes} title="Stock vs made-to-order">
+        Publishing a product does not imply stock. Set quantity tracked or made-to-order per SKU so
+        checkout and fulfilment stay accurate.
+      </EcommerceSettingsHint>
+      <div className="mb-4 mt-5 flex gap-2">
         <Input
           placeholder="Search products…"
           value={q}

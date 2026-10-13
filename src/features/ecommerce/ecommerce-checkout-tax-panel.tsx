@@ -17,11 +17,16 @@ import {
   CHECKOUT_BLOCKER_TAX_LINK,
   type CheckoutBlocker,
 } from "@/src/features/ecommerce/ecommerce-checkout-blockers";
+import {
+  gstBpsFromPercentInput,
+  gstPercentFromBps,
+} from "@/src/features/ecommerce/ecommerce-settings-ui";
 
 export type ComponentLineForm = {
   componentKey: string;
   label: string;
   rateBps: string;
+  ratePercent?: string;
 };
 
 export type CheckoutTaxFormState = {
@@ -42,22 +47,22 @@ const PRESENTATION_OPTIONS = [
   {
     value: "UNCONFIGURED",
     label: "Not configured",
-    hint: "Checkout blocked until an accountant workflow is chosen.",
+    hint: "Checkout blocked until you choose how tax appears at payment.",
   },
   {
     value: "SINGLE_ESTIMATE_ONLY",
-    label: "Display estimate only",
-    hint: "Catalog may show single-rate estimates; live checkout stays blocked.",
+    label: "Catalog estimate only",
+    hint: "Products may show a single rate; live checkout stays blocked.",
   },
   {
     value: "ACCOUNTANT_COMPONENT_APPROVED",
-    label: "Accountant component lines (checkout)",
-    hint: "Requires seller details, approval evidence, and CGST/SGST or IGST lines entered by your accountant.",
+    label: "Full GST breakdown at checkout",
+    hint: "Use when your accountant supplied CGST/SGST or IGST component lines.",
   },
 ] as const;
 
 function emptyLine(): ComponentLineForm {
-  return { componentKey: "", label: "", rateBps: "" };
+  return { componentKey: "", label: "", rateBps: "", ratePercent: "" };
 }
 
 export function checkoutTaxFormFromApi(
@@ -67,11 +72,15 @@ export function checkoutTaxFormFromApi(
   const intraRule = rules.find((r) => r.supplyCase === "INTRA_STATE");
   const interRule = rules.find((r) => r.supplyCase === "INTER_STATE");
   const mapLines = (lines: Record<string, unknown>[] | undefined) =>
-    (lines?.length ? lines : [emptyLine()]).map((line) => ({
-      componentKey: String(line.componentKey ?? ""),
-      label: String(line.label ?? ""),
-      rateBps: line.rateBps != null ? String(line.rateBps) : "",
-    }));
+    (lines?.length ? lines : [emptyLine()]).map((line) => {
+      const bps = line.rateBps != null ? Number(line.rateBps) : NaN;
+      return {
+        componentKey: String(line.componentKey ?? ""),
+        label: String(line.label ?? ""),
+        rateBps: line.rateBps != null ? String(line.rateBps) : "",
+        ratePercent: Number.isFinite(bps) ? gstPercentFromBps(bps) : "",
+      };
+    });
   const legacy = (cfg?.componentLines as Record<string, unknown>[]) ?? [];
   return {
     presentation: String(cfg?.presentation ?? "UNCONFIGURED"),
@@ -93,12 +102,19 @@ export function checkoutTaxFormFromApi(
 export function checkoutTaxConfigPayload(form: CheckoutTaxFormState) {
   const parseLines = (rows: ComponentLineForm[]) =>
     rows
-      .filter((r) => r.componentKey.trim() && r.label.trim() && Number.isInteger(Number(r.rateBps)))
-      .map((r) => ({
-        componentKey: r.componentKey.trim(),
-        label: r.label.trim(),
-        rateBps: Number(r.rateBps),
-      }));
+      .filter((r) => r.componentKey.trim() && r.label.trim())
+      .map((r) => {
+        const bps =
+          r.ratePercent != null && r.ratePercent !== ""
+            ? gstBpsFromPercentInput(r.ratePercent)
+            : Number(r.rateBps);
+        return {
+          componentKey: r.componentKey.trim(),
+          label: r.label.trim(),
+          rateBps: bps,
+        };
+      })
+      .filter((r) => Number.isInteger(r.rateBps));
 
   const intraLines = parseLines(form.intraLines);
   const interLines = parseLines(form.interLines);
@@ -162,6 +178,7 @@ function BlockerHints({
 
 function ComponentLinesEditor({
   title,
+  description,
   lines,
   disabled,
   onChange,
@@ -169,6 +186,7 @@ function ComponentLinesEditor({
   fieldKey,
 }: {
   title: string;
+  description?: string;
   lines: ComponentLineForm[];
   disabled: boolean;
   onChange: (lines: ComponentLineForm[]) => void;
@@ -180,9 +198,14 @@ function ComponentLinesEditor({
   }
 
   return (
-    <div className="space-y-2 rounded-xl border border-[#efe7e1] p-4">
-      <div className="flex items-center justify-between gap-2">
-        <h4 className="font-semibold text-[#362a2e]">{title}</h4>
+    <div className="space-y-3 rounded-xl border border-[#eaded9] bg-[#faf7f5] p-4">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <h4 className="font-bold text-[#362a2e]">{title}</h4>
+          {description ? (
+            <p className="mt-0.5 text-xs text-muted-foreground">{description}</p>
+          ) : null}
+        </div>
         <Button
           type="button"
           size="sm"
@@ -190,31 +213,60 @@ function ComponentLinesEditor({
           disabled={disabled}
           onClick={() => onChange([...lines, emptyLine()])}
         >
-          Add line
+          Add component
         </Button>
       </div>
       <BlockerHints blockers={blockers} fieldKey={fieldKey} />
+      <div className="hidden grid-cols-[100px_minmax(0,1fr)_88px_40px] gap-2 px-1 text-xs font-bold uppercase tracking-wide text-muted-foreground sm:grid">
+        <span>Key</span>
+        <span>Label on receipt</span>
+        <span>Rate %</span>
+        <span />
+      </div>
       {lines.map((line, index) => (
-        <div key={index} className="grid gap-2 sm:grid-cols-3">
+        <div
+          key={index}
+          className="grid gap-2 sm:grid-cols-[100px_minmax(0,1fr)_88px_40px] sm:items-center"
+        >
           <Input
-            placeholder="Key (e.g. CGST)"
+            placeholder="CGST"
             value={line.componentKey}
             disabled={disabled}
             onChange={(e) => updateLine(index, { componentKey: e.target.value })}
+            className="h-10 font-mono uppercase"
           />
           <Input
-            placeholder="Label"
+            placeholder="Central GST"
             value={line.label}
             disabled={disabled}
             onChange={(e) => updateLine(index, { label: e.target.value })}
+            className="h-10"
           />
           <Input
-            placeholder="Rate (bps)"
-            value={line.rateBps}
+            placeholder="1.5"
+            value={line.ratePercent ?? (line.rateBps ? gstPercentFromBps(Number(line.rateBps)) : "")}
             disabled={disabled}
-            inputMode="numeric"
-            onChange={(e) => updateLine(index, { rateBps: e.target.value })}
+            inputMode="decimal"
+            onChange={(e) => {
+              const ratePercent = e.target.value;
+              updateLine(index, {
+                ratePercent,
+                rateBps: String(gstBpsFromPercentInput(ratePercent)),
+              });
+            }}
+            className="h-10 tabular-nums"
           />
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            disabled={disabled || lines.length <= 1}
+            className="text-muted-foreground"
+            onClick={() => onChange(lines.filter((_, i) => i !== index))}
+            aria-label="Remove line"
+          >
+            ×
+          </Button>
         </div>
       ))}
     </div>
@@ -235,19 +287,15 @@ export function EcommerceCheckoutTaxPanel({
   const selectedPresentation = PRESENTATION_OPTIONS.find((o) => o.value === form.presentation);
 
   return (
-    <div className="space-y-4">
-      <p className="rounded-xl bg-[#f8f4ef] px-4 py-3 text-xs leading-5 text-[#5d4c43]">
-        Saving this form stores what your accountant supplied. It does not replace professional
-        sign-off — enter the reference and approval date from your accountant&apos;s records.
-      </p>
+    <div className="space-y-6">
       <div>
-        <FieldLabel>Checkout tax presentation</FieldLabel>
+        <FieldLabel>How should tax appear at payment?</FieldLabel>
         <Select
           value={form.presentation}
           disabled={disabled}
           onValueChange={(v) => setForm({ ...form, presentation: v })}
         >
-          <SelectTrigger>
+          <SelectTrigger className="h-11">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -259,84 +307,113 @@ export function EcommerceCheckoutTaxPanel({
           </SelectContent>
         </Select>
         {selectedPresentation?.hint ? (
-          <p className="mt-1 text-xs text-muted-foreground">{selectedPresentation.hint}</p>
+          <p className="mt-1.5 text-sm text-muted-foreground">{selectedPresentation.hint}</p>
         ) : null}
         <BlockerHints blockers={blockers} fieldKey="presentation" />
       </div>
 
       {form.presentation === "ACCOUNTANT_COMPONENT_APPROVED" ? (
         <>
-          <FieldLabel>Seller legal name</FieldLabel>
-          <Input
-            value={form.sellerLegalName}
-            disabled={disabled}
-            onChange={(e) => setForm({ ...form, sellerLegalName: e.target.value })}
-          />
-          <BlockerHints blockers={blockers} fieldKey="sellerLegalName" />
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="sm:col-span-2">
+              <FieldLabel>Seller legal name (on invoice)</FieldLabel>
+              <Input
+                value={form.sellerLegalName}
+                disabled={disabled}
+                onChange={(e) => setForm({ ...form, sellerLegalName: e.target.value })}
+                className="h-11"
+              />
+              <BlockerHints blockers={blockers} fieldKey="sellerLegalName" />
+            </div>
+            <div>
+              <FieldLabel>GSTIN (15 characters)</FieldLabel>
+              <Input
+                value={form.sellerGstin}
+                disabled={disabled}
+                onChange={(e) => setForm({ ...form, sellerGstin: e.target.value })}
+                className="h-11 font-mono uppercase"
+              />
+              <BlockerHints blockers={blockers} fieldKey="sellerGstin" />
+            </div>
+            <div>
+              <FieldLabel>Registered state</FieldLabel>
+              <Input
+                value={form.registeredState}
+                disabled={disabled}
+                onChange={(e) => setForm({ ...form, registeredState: e.target.value })}
+                className="h-11"
+              />
+              <BlockerHints blockers={blockers} fieldKey="registeredState" />
+            </div>
+            <div>
+              <FieldLabel>Default place of supply (pickup orders)</FieldLabel>
+              <Input
+                value={form.defaultPlaceOfSupplyState}
+                disabled={disabled}
+                onChange={(e) => setForm({ ...form, defaultPlaceOfSupplyState: e.target.value })}
+                className="h-11"
+              />
+              <BlockerHints blockers={blockers} fieldKey="defaultPlaceOfSupplyState" />
+            </div>
+            <div>
+              <FieldLabel>Default item tax classification</FieldLabel>
+              <Input
+                value={form.defaultItemTaxClassification}
+                disabled={disabled}
+                onChange={(e) =>
+                  setForm({ ...form, defaultItemTaxClassification: e.target.value })
+                }
+                className="h-11 font-mono"
+              />
+              <BlockerHints blockers={blockers} fieldKey="defaultItemTaxClassification" />
+            </div>
+          </div>
 
-          <FieldLabel>Seller GSTIN (15 characters, accountant verified)</FieldLabel>
-          <Input
-            value={form.sellerGstin}
-            disabled={disabled}
-            onChange={(e) => setForm({ ...form, sellerGstin: e.target.value })}
-            className="font-mono uppercase"
-          />
-          <BlockerHints blockers={blockers} fieldKey="sellerGstin" />
+          <div className="grid gap-4 rounded-xl border border-[#eaded9] bg-white p-4 sm:grid-cols-2">
+            <div>
+              <FieldLabel>Accountant sign-off reference</FieldLabel>
+              <Input
+                value={form.accountantSignOffReference}
+                disabled={disabled}
+                onChange={(e) =>
+                  setForm({ ...form, accountantSignOffReference: e.target.value })
+                }
+                placeholder="Email / memo / file ref"
+                className="h-11"
+              />
+              <BlockerHints blockers={blockers} fieldKey="accountantSignOffReference" />
+            </div>
+            <div>
+              <FieldLabel>Accountant approved on</FieldLabel>
+              <Input
+                type="datetime-local"
+                value={form.accountantApprovedAt}
+                disabled={disabled}
+                onChange={(e) => setForm({ ...form, accountantApprovedAt: e.target.value })}
+                className="h-11"
+              />
+              <BlockerHints blockers={blockers} fieldKey="accountantApprovedAt" />
+            </div>
+          </div>
 
-          <FieldLabel>Registered state</FieldLabel>
-          <Input
-            value={form.registeredState}
-            disabled={disabled}
-            onChange={(e) => setForm({ ...form, registeredState: e.target.value })}
-          />
-          <BlockerHints blockers={blockers} fieldKey="registeredState" />
-
-          <FieldLabel>Default place of supply (pickup)</FieldLabel>
-          <Input
-            value={form.defaultPlaceOfSupplyState}
-            disabled={disabled}
-            onChange={(e) => setForm({ ...form, defaultPlaceOfSupplyState: e.target.value })}
-          />
-          <BlockerHints blockers={blockers} fieldKey="defaultPlaceOfSupplyState" />
-
-          <FieldLabel>Default item tax classification</FieldLabel>
-          <Input
-            value={form.defaultItemTaxClassification}
-            disabled={disabled}
-            onChange={(e) => setForm({ ...form, defaultItemTaxClassification: e.target.value })}
-            className="font-mono"
-          />
-          <BlockerHints blockers={blockers} fieldKey="defaultItemTaxClassification" />
-
-          <FieldLabel>Accountant sign-off reference</FieldLabel>
-          <Input
-            value={form.accountantSignOffReference}
-            disabled={disabled}
-            onChange={(e) => setForm({ ...form, accountantSignOffReference: e.target.value })}
-          />
-          <BlockerHints blockers={blockers} fieldKey="accountantSignOffReference" />
-
-          <FieldLabel>Accountant approved at</FieldLabel>
-          <Input
-            type="datetime-local"
-            value={form.accountantApprovedAt}
-            disabled={disabled}
-            onChange={(e) => setForm({ ...form, accountantApprovedAt: e.target.value })}
-          />
-          <BlockerHints blockers={blockers} fieldKey="accountantApprovedAt" />
-
-          <FieldLabel>Supported destination states (delivery / inter-state)</FieldLabel>
-          <Textarea
-            value={form.supportedDestinationStatesText}
-            disabled={disabled}
-            rows={3}
-            placeholder="One state per line"
-            onChange={(e) => setForm({ ...form, supportedDestinationStatesText: e.target.value })}
-          />
-          <BlockerHints blockers={blockers} fieldKey="supportedDestinationStates" />
+          <div>
+            <FieldLabel>States you deliver to (for inter-state IGST)</FieldLabel>
+            <Textarea
+              value={form.supportedDestinationStatesText}
+              disabled={disabled}
+              rows={3}
+              placeholder="Kerala&#10;Tamil Nadu&#10;(one per line)"
+              onChange={(e) =>
+                setForm({ ...form, supportedDestinationStatesText: e.target.value })
+              }
+              className="text-sm"
+            />
+            <BlockerHints blockers={blockers} fieldKey="supportedDestinationStates" />
+          </div>
 
           <ComponentLinesEditor
-            title="Intra-state component lines (CGST/SGST)"
+            title="Same-state orders (CGST + SGST)"
+            description="Typical split when customer and seller are in the same state."
             lines={form.intraLines}
             disabled={disabled}
             blockers={blockers}
@@ -344,7 +421,8 @@ export function EcommerceCheckoutTaxPanel({
             onChange={(intraLines) => setForm({ ...form, intraLines })}
           />
           <ComponentLinesEditor
-            title="Inter-state component lines (IGST)"
+            title="Other-state delivery (IGST)"
+            description="When place of supply is outside your registered state."
             lines={form.interLines}
             disabled={disabled}
             blockers={blockers}

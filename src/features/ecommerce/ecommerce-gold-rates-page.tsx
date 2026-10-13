@@ -27,8 +27,10 @@ import {
   useSetEcommerceGoldRateMutation,
 } from "@/src/store/api/admin-api";
 import { useEcommerceCatalogWrite } from "@/src/features/ecommerce/ecommerce-admin-shared";
-import { EcommerceSectionNav } from "@/src/features/ecommerce/ecommerce-section-nav";
-
+import {
+  EcommerceCatalogNav,
+  EcommerceSettingsHint,
+} from "@/src/features/ecommerce/ecommerce-settings-ui";
 export function EcommerceGoldRatesPage() {
   const current = useGetEcommerceGoldRatesCurrentQuery();
   const history = useGetEcommerceGoldRatesHistoryQuery({ limit: 20 });
@@ -94,15 +96,15 @@ export function EcommerceGoldRatesPage() {
           </Button>
         }
       />
-      <EcommerceSectionNav />
       {!entitled ? (
         <p className="mb-4 text-sm text-amber-800">{disabledMessage}</p>
       ) : null}
-      <div className="mb-5 rounded-2xl border border-[#eadfd6] bg-[#faf5ee] p-5 text-sm leading-6 text-[#665557]">
-        Each purity needs its own rate. Missing or stale rates make affected product prices unavailable;
-        they never fall back to another purity.
-      </div>
-      <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+      <EcommerceCatalogNav />
+      <EcommerceSettingsHint icon={Scale} title="Store pricing">
+        Each purity needs its own rate. Missing or stale rates make affected product prices
+        unavailable — they never fall back to another purity or scheme gold rates.
+      </EcommerceSettingsHint>
+      <div className="mb-6 mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {rateRows.map((row) => {
           const display = row.ratePerGram?.amountDisplay ?? "Not set";
           return (

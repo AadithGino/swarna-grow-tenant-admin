@@ -1,13 +1,10 @@
 "use client";
 
-import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { PageHeader, Surface } from "@/src/components/common/page-parts";
 import { PageSkeleton, QueryError } from "@/src/components/common/query-state";
-import { CursorPagination } from "@/src/components/common/cursor-pagination";
-import { EcommerceSectionNav } from "@/src/features/ecommerce/ecommerce-section-nav";
-import { EcommerceOrdersKpiStrip } from "@/src/features/ecommerce/ecommerce-orders-kpi-strip";
+import { CursorPagination } from "@/src/components/common/cursor-pagination";import { EcommerceOrdersKpiStrip } from "@/src/features/ecommerce/ecommerce-orders-kpi-strip";
 import { EcommerceOrdersListToolbar } from "@/src/features/ecommerce/ecommerce-orders-list-toolbar";
 import { EcommerceOrdersListTable } from "@/src/features/ecommerce/ecommerce-order-ui";
 import { useDebouncedValue } from "@/src/hooks/use-debounced-value";
@@ -23,8 +20,8 @@ import {
   ordersListFiltersToSearchParams,
   parseOrdersListFiltersFromSearchParams,
 } from "@/src/lib/ecommerce-orders-url-state";
-import { orderListItemNeedsAttention } from "@/src/lib/ecommerce-order-presenters";
 import { useEcommerceAdminAccess } from "@/src/features/ecommerce/ecommerce-admin-shared";
+import { EcommerceOperationsNav } from "@/src/features/ecommerce/ecommerce-settings-ui";
 import {
   useGetEcommerceOrdersQuery,
   useGetEcommerceWorkspaceSummaryQuery,
@@ -80,11 +77,7 @@ export function EcommerceOrdersPage() {
     { skip: !canRead },
   );
 
-  const items: EcommerceOrderListItem[] = useMemo(() => {
-    const rawItems = query.data?.items ?? [];
-    if (filters.view !== "needs_action") return rawItems;
-    return rawItems.filter(orderListItemNeedsAttention);
-  }, [query.data?.items, filters.view]);
+  const items: EcommerceOrderListItem[] = query.data?.items ?? [];
 
   const meta = query.data?.meta;
   const listHref = (orderId: string) => {
@@ -103,30 +96,29 @@ export function EcommerceOrdersPage() {
   return (
     <>
       <PageHeader
-        eyebrow="Online store"
+        eyebrow="Store operations"
         title="Orders"
         description="Daily storefront orders — accept COD, fulfil, and resolve payment exceptions."
-        actions={
-          <Link
-            href="/ecommerce/payment-exceptions"
-            className="text-sm font-medium text-[#730321] underline-offset-4 hover:underline"
-          >
-            Payment exceptions
-          </Link>
-        }
       />
-      <EcommerceSectionNav />
+      <EcommerceOperationsNav />
       <EcommerceOrdersKpiStrip
         summary={summaryQuery.data}
         periodLabel={periodLabel(filters)}
         loading={summaryQuery.isFetching}
       />
-      <div className="mb-4 flex gap-2 overflow-x-auto pb-1">
+      {summaryQuery.isError ? (
+        <div className="mb-5 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950" role="alert">
+          Order totals could not be refreshed. The order list below can still be used.
+          <button type="button" onClick={() => void summaryQuery.refetch()} className="ml-2 font-semibold underline underline-offset-2">Retry totals</button>
+        </div>
+      ) : null}
+      <div className="mb-4 flex gap-2 overflow-x-auto pb-1" role="group" aria-label="Order queues">
         {ECOMMERCE_ORDER_LIST_VIEWS.map((view) => (
           <button
             key={view.id}
             type="button"
             title={view.description}
+            aria-pressed={filters.view === view.id}
             className={cn(
               "shrink-0 rounded-full border px-3 py-1.5 text-sm font-medium transition-colors",
               filters.view === view.id
@@ -160,7 +152,7 @@ export function EcommerceOrdersPage() {
         <Surface title="Results">
           <p className="p-8 text-center text-sm text-muted-foreground">
             {filters.view === "needs_action"
-              ? "No urgent orders on this page. Try another view or go to the next page."
+              ? "No orders need attention for these filters. Try another period or view."
               : "No orders match these filters."}
           </p>
         </Surface>

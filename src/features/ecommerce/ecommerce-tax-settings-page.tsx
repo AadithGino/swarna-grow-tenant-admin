@@ -1,7 +1,6 @@
 "use client";
 
-import Link from "next/link";
-import { Plus } from "lucide-react";
+import { Plus, Receipt, Tags, Trash2 } from "lucide-react";
 import { useExternalValueSync } from "@/src/hooks/use-external-value-sync";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -14,9 +13,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { PageHeader, Surface } from "@/src/components/common/page-parts";
+import { PageHeader, FieldLabel } from "@/src/components/common/page-parts";
+import {
+  PageTab,
+  PageTabs,
+  PageTabsBar,
+  PageTabsPanel,
+} from "@/src/components/common/page-tabs";
 import { PageSkeleton, QueryError } from "@/src/components/common/query-state";
-import { FieldLabel } from "@/src/components/common/page-parts";
 import { toastApiError } from "@/src/lib/api-error";
 import { cn } from "@/lib/utils";
 import {
@@ -26,13 +30,23 @@ import {
 } from "@/src/store/api/admin-api";
 import { blockersFromReadiness } from "@/src/features/ecommerce/ecommerce-checkout-blockers";
 import { useEcommerceCatalogWrite } from "@/src/features/ecommerce/ecommerce-admin-shared";
-import { EcommerceSectionNav } from "@/src/features/ecommerce/ecommerce-section-nav";
+import {
+  EcommerceReadinessPanel,
+  EcommerceRelatedLink,
+  EcommerceSettingsHint,
+  EcommerceCatalogNav,
+  EcommerceSetupSteps,
+  gstBpsFromPercentInput,
+  gstPercentFromBps,
+} from "@/src/features/ecommerce/ecommerce-settings-ui";
 
 type RateRow = {
   code: string;
   label?: string;
   rateBps: number;
   active?: boolean;
+  /** Local-only percent string for the input */
+  ratePercent?: string;
 };
 
 type HsnRow = {
@@ -41,9 +55,11 @@ type HsnRow = {
   hsnSacType: "HSN" | "SAC";
 };
 
-function bpsToPercentLabel(bps: number) {
-  if (!Number.isFinite(bps)) return "";
-  return `${(bps / 100).toFixed(2)}%`;
+function rateRowFromApi(r: RateRow): RateRow {
+  return {
+    ...r,
+    ratePercent: gstPercentFromBps(r.rateBps),
+  };
 }
 
 export function EcommerceTaxSettingsPage() {
@@ -52,7 +68,7 @@ export function EcommerceTaxSettingsPage() {
   const [putTax] = usePutEcommerceTaxSettingsMutation();
   const { entitled, disabledMessage } = useEcommerceCatalogWrite();
   const [rates, setRates] = useExternalValueSync<RateRow[]>(
-    (query.data?.rates as RateRow[]) ?? [],
+    ((query.data?.rates as RateRow[]) ?? []).map(rateRowFromApi),
   );
   const [defaultClassification, setDefaultClassification] = useExternalValueSync(
     query.data?.defaultClassification ?? "",
@@ -74,7 +90,11 @@ export function EcommerceTaxSettingsPage() {
   }
 
   function addRate() {
-    setRates([...rates, { code: "", label: "", rateBps: 300, active: true }]);
+    setRates([...rates, { code: "", label: "", rateBps: 300, ratePercent: "3", active: true }]);
+  }
+
+  function removeRate(index: number) {
+    setRates(rates.filter((_, i) => i !== index));
   }
 
   async function save() {
@@ -84,9 +104,10 @@ export function EcommerceTaxSettingsPage() {
     }
     const cleaned = rates
       .map((r) => ({
-        ...r,
         code: r.code.trim(),
         label: r.label?.trim() || undefined,
+        rateBps: r.ratePercent != null ? gstBpsFromPercentInput(r.ratePercent) : r.rateBps,
+        active: r.active !== false,
       }))
       .filter((r) => r.code);
     try {
@@ -129,50 +150,57 @@ export function EcommerceTaxSettingsPage() {
     setHsnMappings(hsnMappings.map((row, i) => (i === index ? { ...row, ...patch } : row)));
   }
 
+  const readiness = fulfilment.data?.checkoutReadiness as
+    | { checkoutTaxReady?: boolean; checkoutUsable?: boolean }
+    | undefined;
+
   return (
     <>
       <PageHeader
         eyebrow="Online store"
         title="Tax settings"
-        description="Catalog display rates and HSN/SAC mappings. Checkout component tax is configured separately under Fulfilment."
+        description="Step 1 of store checkout: GST labels on products and HSN/SAC codes for quotes and invoices."
         actions={
           <Button type="button" disabled={!entitled} onClick={save}>
-            Save settings
+            Save tax settings
           </Button>
         }
       />
-      <EcommerceSectionNav />
       {!entitled ? (
         <p className="mb-4 text-sm text-amber-800">{disabledMessage}</p>
       ) : null}
 
-      {taxBlockers.length ? (
-        <div className="mb-5 rounded-2xl border border-amber-200 bg-amber-50 p-5 text-amber-950">
-          <p className="font-semibold">Checkout blockers tied to tax settings</p>
-          <ul className="mt-2 list-disc space-y-1 pl-5 text-sm">
-            {taxBlockers.map((b) => (
-              <li key={b.code ?? b.message}>
-                <span className="font-mono text-xs">{b.code}</span> — {b.message}
-              </li>
-            ))}
-          </ul>
-          <Link
-            href="/ecommerce/fulfilment"
-            className="mt-3 inline-block text-sm font-semibold text-[#730321] underline"
-          >
-            Fulfilment & checkout tax
-          </Link>
-        </div>
-      ) : null}
+      <EcommerceCatalogNav />
+      <EcommerceSetupSteps active="tax" />
 
-      <div className="space-y-5">
-        <Surface
-          title="Catalog tax classifications"
-          description={`Display-only GST buckets for products. Saved as version ${version}.`}
-        >
+      <EcommerceReadinessPanel
+        blockers={taxBlockers}
+        checkoutTaxReady={readiness?.checkoutTaxReady}
+        checkoutUsable={readiness?.checkoutUsable}
+        description="Issues tied to catalog GST or HSN/SAC on this page."
+      />
+
+      <EcommerceSettingsHint icon={Receipt} title="Two layers of tax">
+        <p>
+          <strong>Here</strong> you define how products are labelled in the catalog (e.g. 3% demo
+          bucket) and map each bucket to an HSN or SAC code.{" "}
+          <strong>Checkout GST</strong> (CGST/SGST/IGST split, seller GSTIN, accountant sign-off) lives
+          on{" "}
+          <EcommerceRelatedLink href="/ecommerce/fulfilment" label="Fulfilment settings" /> — both are
+          required before customers can pay.
+        </p>
+      </EcommerceSettingsHint>
+
+      <PageTabs defaultValue="rates" className="mt-6">
+        <PageTabsBar sectionLabel="Configure">
+          <PageTab value="rates">Product GST rates</PageTab>
+          <PageTab value="hsn">HSN / SAC codes</PageTab>
+        </PageTabsBar>
+
+        <PageTabsPanel value="rates">
           <div className="space-y-5 p-5 sm:p-6">
-            <div className="max-w-md">
-              <FieldLabel>Default classification</FieldLabel>
+            <div className="max-w-lg">
+              <FieldLabel>Default GST bucket for new products</FieldLabel>
               <Select
                 value={defaultClassification || "__none"}
                 onValueChange={(v) => setDefaultClassification(v === "__none" ? "" : v)}
@@ -181,154 +209,197 @@ export function EcommerceTaxSettingsPage() {
                   <SelectValue placeholder="Choose default" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="__none">None (explicit null on save)</SelectItem>
+                  <SelectItem value="__none">No default — set per product</SelectItem>
                   {activeCodes.map((r) => (
                     <SelectItem key={r.code} value={r.code}>
-                      {r.label ?? r.code}
+                      {r.label ?? r.code} ({gstPercentFromBps(r.rateBps)}%)
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
-              <p className="mt-1.5 text-xs text-muted-foreground">
-                Used when a product does not specify its own classification.
+              <p className="mt-1.5 text-sm text-muted-foreground">
+                Applied when a product does not pick its own classification.
               </p>
             </div>
 
-            <div className="space-y-3">
-              {rates.length === 0 ? (
-                <p className="rounded-xl border border-dashed border-[#e4d7d2] bg-[#faf7f5] px-4 py-8 text-center text-sm text-muted-foreground">
-                  No tax rates yet. Add a row for each catalog classification code.
-                </p>
-              ) : null}
-              {rates.map((r, index) => (
-                <div
-                  key={`${r.code}-${index}`}
-                  className="rounded-xl border border-[#eaded9] bg-[#faf7f5] p-4"
-                >
-                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)_140px_auto] lg:items-end">
-                    <div>
-                      <FieldLabel>Code</FieldLabel>
-                      <Input
-                        value={r.code}
+            {rates.length === 0 ? (
+              <p className="rounded-xl border border-dashed border-[#e4d7d2] bg-[#faf7f5] px-4 py-10 text-center text-sm text-muted-foreground">
+                Add at least one GST bucket — for example a 3% jewellery rate and a 0% exempt bucket.
+              </p>
+            ) : (
+              <div className="overflow-hidden rounded-xl border border-[#eaded9]">
+                <div className="hidden grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)_100px_88px_40px] gap-3 border-b border-[#eaded9] bg-[#faf7f5] px-4 py-2.5 text-xs font-bold uppercase tracking-wide text-muted-foreground lg:grid">
+                  <span>Code</span>
+                  <span>Customer-facing label</span>
+                  <span>GST %</span>
+                  <span>Active</span>
+                  <span className="sr-only">Remove</span>
+                </div>
+                <div className="divide-y divide-[#eaded9]">
+                  {rates.map((r, index) => (
+                    <div
+                      key={`${r.code}-${index}`}
+                      className="grid gap-3 p-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)_100px_88px_40px] lg:items-center"
+                    >
+                      <div>
+                        <p className="mb-1.5 text-sm font-medium text-[#4f3d41] lg:sr-only">Code</p>
+                        <Input
+                          value={r.code}
+                          disabled={!entitled}
+                          placeholder="JEWellery_3"
+                          onChange={(e) => updateRate(index, { code: e.target.value.toUpperCase() })}
+                          className="h-10 font-mono uppercase"
+                        />
+                      </div>
+                      <div>
+                        <p className="mb-1.5 text-sm font-medium text-[#4f3d41] lg:sr-only">Label</p>
+                        <Input
+                          value={r.label ?? ""}
+                          disabled={!entitled}
+                          placeholder="GST 3% (display)"
+                          onChange={(e) => updateRate(index, { label: e.target.value })}
+                          className="h-10"
+                        />
+                      </div>
+                      <div>
+                        <p className="mb-1.5 text-sm font-medium text-[#4f3d41] lg:sr-only">GST %</p>
+                        <Input
+                          value={r.ratePercent ?? gstPercentFromBps(r.rateBps)}
+                          disabled={!entitled}
+                          inputMode="decimal"
+                          placeholder="3"
+                          onChange={(e) => {
+                            const ratePercent = e.target.value;
+                            updateRate(index, {
+                              ratePercent,
+                              rateBps: gstBpsFromPercentInput(ratePercent),
+                            });
+                          }}
+                          className="h-10 tabular-nums"
+                        />
+                      </div>
+                      <label
+                        className={cn(
+                          "flex h-10 items-center justify-center gap-2 rounded-lg border border-[#e4d7d2] bg-white text-sm font-medium",
+                          !entitled && "opacity-60",
+                        )}
+                      >
+                        <Checkbox
+                          checked={r.active !== false}
+                          disabled={!entitled}
+                          onCheckedChange={(checked) =>
+                            updateRate(index, { active: checked === true })
+                          }
+                        />
+                        <span className="lg:sr-only">Active</span>
+                      </label>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
                         disabled={!entitled}
-                        placeholder="DEMO_GST_3"
-                        onChange={(e) => updateRate(index, { code: e.target.value.toUpperCase() })}
+                        className="text-muted-foreground hover:text-red-600"
+                        onClick={() => removeRate(index)}
+                        aria-label="Remove rate"
+                      >
+                        <Trash2 className="size-4" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <Button type="button" size="sm" variant="outline" disabled={!entitled} onClick={addRate}>
+              <Plus className="mr-1.5 size-4" />
+              Add GST bucket
+            </Button>
+          </div>
+        </PageTabsPanel>
+
+        <PageTabsPanel value="hsn">
+          <div className="space-y-5 p-5 sm:p-6">
+            <EcommerceSettingsHint icon={Tags} title="Why HSN/SAC matters">
+              Checkout quotes and tax invoices need a statutory code for each GST bucket. Add one row
+              per active classification code above.
+            </EcommerceSettingsHint>
+
+            {hsnMappings.length === 0 ? (
+              <p className="rounded-xl border border-dashed border-[#e4d7d2] bg-[#faf7f5] px-4 py-10 text-center text-sm text-muted-foreground">
+                No mappings yet. Use &quot;Add code&quot; to link each classification to HSN (goods) or SAC
+                (services).
+              </p>
+            ) : (
+              <div className="space-y-3">
+                {hsnMappings.map((m, index) => (
+                  <div
+                    key={`${m.classification}-${index}`}
+                    className="grid gap-4 rounded-xl border border-[#eaded9] bg-[#faf7f5] p-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_140px_auto] md:items-end"
+                  >
+                    <div>
+                      <FieldLabel>Classification code</FieldLabel>
+                      <Input
+                        value={m.classification}
+                        disabled={!entitled}
+                        list={`hsn-classifications-${index}`}
+                        placeholder="Same code as GST bucket"
+                        onChange={(e) =>
+                          updateHsn(index, { classification: e.target.value.toUpperCase() })
+                        }
+                        className="h-10 font-mono uppercase"
+                      />
+                      {activeCodes.length ? (
+                        <datalist id={`hsn-classifications-${index}`}>
+                          {activeCodes.map((r) => (
+                            <option key={r.code} value={r.code} />
+                          ))}
+                        </datalist>
+                      ) : null}
+                    </div>
+                    <div>
+                      <FieldLabel>HSN / SAC number</FieldLabel>
+                      <Input
+                        value={m.hsnSacCode}
+                        disabled={!entitled}
+                        placeholder="7113"
+                        onChange={(e) => updateHsn(index, { hsnSacCode: e.target.value })}
                         className="h-10 font-mono uppercase"
                       />
                     </div>
                     <div>
-                      <FieldLabel>Label</FieldLabel>
-                      <Input
-                        value={r.label ?? ""}
+                      <FieldLabel>Code type</FieldLabel>
+                      <Select
+                        value={m.hsnSacType}
                         disabled={!entitled}
-                        placeholder="Demo GST 3%"
-                        onChange={(e) => updateRate(index, { label: e.target.value })}
-                        className="h-10"
-                      />
-                    </div>
-                    <div>
-                      <FieldLabel>Rate (basis points)</FieldLabel>
-                      <Input
-                        value={String(r.rateBps)}
-                        disabled={!entitled}
-                        inputMode="numeric"
-                        onChange={(e) =>
-                          updateRate(index, { rateBps: Number(e.target.value) || 0 })
+                        onValueChange={(v) =>
+                          updateHsn(index, { hsnSacType: v as HsnRow["hsnSacType"] })
                         }
-                        className="h-10 font-mono tabular-nums"
-                      />
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        {bpsToPercentLabel(r.rateBps) || "—"} display rate
-                      </p>
+                      >
+                        <SelectTrigger className="h-10">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="HSN">HSN — goods</SelectItem>
+                          <SelectItem value="SAC">SAC — services</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </div>
-                    <label
-                      className={cn(
-                        "flex h-10 items-center gap-2 rounded-lg border border-[#e4d7d2] bg-white px-3 text-sm font-medium text-[#4f3d41]",
-                        !entitled && "opacity-60",
-                      )}
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      disabled={!entitled}
+                      className="text-muted-foreground hover:text-red-600 md:mb-0.5"
+                      onClick={() => setHsnMappings(hsnMappings.filter((_, i) => i !== index))}
+                      aria-label="Remove mapping"
                     >
-                      <Checkbox
-                        checked={r.active !== false}
-                        disabled={!entitled}
-                        onCheckedChange={(checked) =>
-                          updateRate(index, { active: checked === true })
-                        }
-                      />
-                      Active
-                    </label>
+                      <Trash2 className="size-4" />
+                    </Button>
                   </div>
-                </div>
-              ))}
-            </div>
-
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              disabled={!entitled}
-              onClick={addRate}
-            >
-              <Plus className="mr-1.5 size-4" />
-              Add classification
-            </Button>
-          </div>
-        </Surface>
-
-        <Surface
-          title="HSN / SAC mappings"
-          description="Required for checkout quotes and invoices — map each classification to a statutory code."
-        >
-          <div className="space-y-3 p-5 sm:p-6">
-            {hsnMappings.length === 0 ? (
-              <p className="rounded-xl border border-dashed border-[#e4d7d2] bg-[#faf7f5] px-4 py-8 text-center text-sm text-muted-foreground">
-                Add a mapping for each active classification code.
-              </p>
-            ) : null}
-            {hsnMappings.map((m, index) => (
-              <div
-                key={`${m.classification}-${index}`}
-                className="grid gap-4 rounded-xl border border-[#eaded9] bg-[#faf7f5] p-4 md:grid-cols-3 md:items-end"
-              >
-                <div>
-                  <FieldLabel>Classification</FieldLabel>
-                  <Input
-                    value={m.classification}
-                    disabled={!entitled}
-                    placeholder="DEMO_GST_3"
-                    onChange={(e) => updateHsn(index, { classification: e.target.value.toUpperCase() })}
-                    className="h-10 font-mono uppercase"
-                  />
-                </div>
-                <div>
-                  <FieldLabel>HSN / SAC code</FieldLabel>
-                  <Input
-                    value={m.hsnSacCode}
-                    disabled={!entitled}
-                    placeholder="7113"
-                    onChange={(e) => updateHsn(index, { hsnSacCode: e.target.value })}
-                    className="h-10 font-mono uppercase"
-                  />
-                </div>
-                <div>
-                  <FieldLabel>Type</FieldLabel>
-                  <Select
-                    value={m.hsnSacType}
-                    disabled={!entitled}
-                    onValueChange={(v) =>
-                      updateHsn(index, { hsnSacType: v as HsnRow["hsnSacType"] })
-                    }
-                  >
-                    <SelectTrigger className="h-10">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="HSN">HSN (goods)</SelectItem>
-                      <SelectItem value="SAC">SAC (services)</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+                ))}
               </div>
-            ))}
+            )}
+
             <Button
               type="button"
               size="sm"
@@ -338,7 +409,7 @@ export function EcommerceTaxSettingsPage() {
                 setHsnMappings([
                   ...hsnMappings,
                   {
-                    classification: defaultClassification || "",
+                    classification: defaultClassification || activeCodes[0]?.code || "",
                     hsnSacCode: "",
                     hsnSacType: "HSN",
                   },
@@ -346,11 +417,16 @@ export function EcommerceTaxSettingsPage() {
               }
             >
               <Plus className="mr-1.5 size-4" />
-              Add mapping
+              Add code mapping
             </Button>
           </div>
-        </Surface>
-      </div>
+        </PageTabsPanel>
+      </PageTabs>
+
+      <p className="mt-4 text-center text-sm text-muted-foreground">
+        Saved as configuration version {version}. Next:{" "}
+        <EcommerceRelatedLink href="/ecommerce/fulfilment" label="Delivery, policies & checkout GST" />
+      </p>
     </>
   );
 }

@@ -42,32 +42,36 @@ export function CustomerEcommerceOrdersTab({ customerId }: { customerId: string 
 
   return (
     <div className="space-y-4">
+      <div className="rounded-2xl border border-[#e8d9d0] bg-[#faf7f4] px-5 py-4">
+        <h2 className="font-serif text-xl font-semibold text-[#31242a]">Online store orders</h2>
+        <p className="mt-1 text-xs leading-5 text-muted-foreground">Store order totals are separate from this customer’s gold scheme payments. Courier confirmation is not a bank credit.</p>
+      </div>
       {summary ? (
         <p className="text-xs text-muted-foreground">{summary.label}</p>
       ) : null}
       {summary ? (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <div className="rounded-lg border bg-card p-3">
+          <div className="rounded-xl border bg-card p-4">
             <p className="text-xs text-muted-foreground">Orders</p>
             <p className="text-lg font-semibold">{summary.orderCount}</p>
           </div>
-          <div className="rounded-lg border bg-card p-3">
+          <div className="rounded-xl border bg-card p-4">
             <p className="text-xs text-muted-foreground">Online captured</p>
             <p className="text-lg font-semibold">{money(summary.onlineCollectedPaise ?? 0)}</p>
           </div>
-          <div className="rounded-lg border bg-card p-3">
+          <div className="rounded-xl border bg-card p-4">
             <p className="text-xs text-muted-foreground">Courier COD confirmed (owed until bank)</p>
             <p className="text-lg font-semibold">{money(summary.codCourierConfirmedPaise ?? 0)}</p>
           </div>
-          <div className="rounded-lg border bg-card p-3">
+          <div className="rounded-xl border bg-card p-4">
             <p className="text-xs text-muted-foreground">COD bank remittance (net)</p>
             <p className="text-lg font-semibold">{money(summary.codBankRemittanceReconciledPaise ?? 0)}</p>
           </div>
-          <div className="rounded-lg border bg-card p-3 sm:col-span-2">
+          <div className="rounded-xl border bg-card p-4 sm:col-span-2">
             <p className="text-xs text-muted-foreground">Net collected (online + bank COD − refunds)</p>
             <p className="text-lg font-semibold">{money(summary.netCollectedPaise)}</p>
           </div>
-          <div className="rounded-lg border bg-card p-3 sm:col-span-2">
+          <div className="rounded-xl border bg-card p-4 sm:col-span-2">
             <p className="text-xs text-muted-foreground">Refund outflow</p>
             <p className="text-lg font-semibold">{money(summary.refundOutflowPaise ?? 0)}</p>
           </div>

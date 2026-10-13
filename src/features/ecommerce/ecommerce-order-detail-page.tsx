@@ -23,7 +23,6 @@ import {
   Surface,
 } from "@/src/components/common/page-parts";
 import { PageSkeleton, QueryError } from "@/src/components/common/query-state";
-import { EcommerceSectionNav } from "@/src/features/ecommerce/ecommerce-section-nav";
 import { EcommerceOrderFinancialReviewDialog } from "@/src/features/ecommerce/ecommerce-order-financial-review-dialog";
 import {
   formatOrderInr,
@@ -281,7 +280,7 @@ export function EcommerceOrderDetailPage({ orderId }: { orderId: string }) {
   return (
     <>
       <PageHeader
-        eyebrow="Online store"
+        eyebrow="Store operations"
         title={String(o.orderNumber ?? "Order")}
         description="Order detail, fulfilment, payments, and staff actions."
         actions={
@@ -290,7 +289,6 @@ export function EcommerceOrderDetailPage({ orderId }: { orderId: string }) {
           </Link>
         }
       />
-      <EcommerceSectionNav />
       <OrderDetailHero
         order={order}
         primaryAction={

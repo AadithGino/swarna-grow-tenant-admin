@@ -11,7 +11,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { PageHeader } from "@/src/components/common/page-parts";
+import { PageHeader, StatCard, Surface } from "@/src/components/common/page-parts";
+import {
+  EcommerceCatalogNav,
+  EcommerceRelatedLink,
+  EcommerceSettingsHint,
+} from "@/src/features/ecommerce/ecommerce-settings-ui";
 import { PageSkeleton, QueryError } from "@/src/components/common/query-state";
 import { StatusBadge } from "@/src/components/common/status-badge";
 import { useCursorPagination } from "@/src/hooks/use-cursor-pagination";
@@ -22,8 +27,6 @@ import { PricingPreviewPanel } from "@/src/features/ecommerce/ecommerce-shared";
 import { ShopPriceLabel, useEcommerceCatalogWrite } from "@/src/features/ecommerce/ecommerce-admin-shared";
 import { EcommerceProductDialog } from "@/src/features/ecommerce/ecommerce-product-dialog";
 import { EcommerceCatalogImage } from "@/src/features/ecommerce/ecommerce-catalog-image";
-import { EcommerceSectionNav } from "@/src/features/ecommerce/ecommerce-section-nav";
-
 export function EcommerceCatalogPage() {
   const [statusFilter, setStatusFilter] = useState<string>("ALL");
   const pager = useCursorPagination(10, `ecommerce-products:${statusFilter}`);
@@ -32,19 +35,9 @@ export function EcommerceCatalogPage() {
     status: statusFilter === "ALL" ? undefined : statusFilter,
     ...pager.queryParams,
   });
-  const catalogStatsQuery = useGetEcommerceProductsQuery({
-    includePricing: true,
-    limit: 100,
-  });
   const { entitled, disabledMessage } = useEcommerceCatalogWrite();
   const operations = useGetSettingsOperationsQuery();
   const storeActive = operations.data?.ecommerce?.active === true;
-  const catalogStats = catalogStatsQuery.data?.items ?? [];
-  const publishedTotal = catalogStats.filter((item) => item.status === "PUBLISHED").length;
-  const computableTotal = catalogStats.filter(
-    (item) => (item.pricing as { computable?: boolean } | undefined)?.computable === true,
-  ).length;
-  const storefrontPurchasable = storeActive && publishedTotal > 0 && computableTotal > 0;
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Record<string, unknown> | null>(null);
 
@@ -89,40 +82,50 @@ export function EcommerceCatalogPage() {
           </div>
         }
       />
-      <EcommerceSectionNav />
-      <div className="mb-6 overflow-hidden rounded-[1.7rem] bg-[#401222] px-6 py-7 text-white shadow-[0_16px_40px_rgba(64,18,34,.15)] sm:px-8">
-        <div className="flex flex-wrap items-center justify-between gap-5">
-          <div className="flex items-start gap-4">
-            <span className="grid size-12 shrink-0 place-items-center rounded-2xl bg-white/10 text-[#f1d4a4]"><ShoppingBag className="size-6" /></span>
-            <div>
-              <p className="text-xs font-bold uppercase tracking-[.18em] text-[#e9cda0]">Storefront</p>
-              <h2 className="mt-1 font-serif text-2xl">
-                {!storeActive
-                  ? "Your store is not live"
-                  : storefrontPurchasable
-                    ? "Your store is open"
-                    : "Store enabled — catalog not ready"}
-              </h2>
-              <p className="mt-2 max-w-lg text-sm leading-6 text-[#f2dfe5]">
-                {!storeActive
-                  ? "Build your catalog here. Customers can browse only after you enable the online store in Settings."
-                  : storefrontPurchasable
-                    ? `${publishedTotal} published product${publishedTotal === 1 ? "" : "s"} with computable prices are eligible for the customer shop (active categories only).`
-                    : `The online store toggle is on, but customers need at least one published product with a computable price (currently ${publishedTotal} published, ${computableTotal} with prices). Finish tax, gold rates, and publish from this catalog.`}
-              </p>
-            </div>
-          </div>
-          <Link href="/settings" className="inline-flex items-center gap-2 rounded-xl border border-white/30 px-4 py-2.5 text-sm font-semibold hover:bg-white/10">Store settings <ArrowRight className="size-4" /></Link>
+      <EcommerceCatalogNav />
+      <Surface
+        title="Storefront visibility"
+        description="Controlled in Settings → Subscription when your plan includes ecommerce."
+        className="mb-6"
+        action={
+          <Link
+            href="/settings/subscription"
+            className="text-sm font-semibold text-[#730321] underline-offset-2 hover:underline"
+          >
+            Store settings
+            <ArrowRight className="ml-1 inline size-4" />
+          </Link>
+        }
+      >
+        <div className="flex flex-wrap items-center gap-3 p-5">
+          <StatusBadge status={storeActive ? "ACTIVE" : "INACTIVE"} label={storeActive ? "Live for customers" : "Not live"} />
+          <p className="text-sm text-muted-foreground">
+            {storeActive
+              ? "Published products in active categories are visible. Checkout still needs tax and fulfilment setup."
+              : "Turn on the online store in Settings, then publish products and categories."}
+          </p>
         </div>
-      </div>
-      <div className="mb-6 grid gap-3 sm:grid-cols-3">
-        {[
-          { label: "Products on this page", value: items.length, icon: Package },
-          { label: "Published on this page", value: items.filter((item) => item.status === "PUBLISHED").length, icon: Sparkles },
-          { label: "Drafts on this page", value: items.filter((item) => item.status === "DRAFT").length, icon: ImageIcon },
-        ].map(({ label, value, icon: Icon }) => (
-          <div key={label} className="flex items-center gap-4 rounded-2xl border border-[#ede3dd] bg-white p-4"><span className="grid size-11 place-items-center rounded-xl bg-[#f8f0ed] text-[#84364b]"><Icon className="size-5" /></span><div><p className="text-2xl font-bold text-[#37242a]">{value}</p><p className="text-xs text-muted-foreground">{label}</p></div></div>
-        ))}
+      </Surface>
+      <EcommerceSettingsHint icon={ShoppingBag} title="This page">
+        Add products, preview live pricing, and publish when ready. Finish{" "}
+        <EcommerceRelatedLink href="/ecommerce/gold-rates" label="gold rates" />,{" "}
+        <EcommerceRelatedLink href="/ecommerce/tax" label="tax" />, and{" "}
+        <EcommerceRelatedLink href="/ecommerce/fulfilment" label="fulfilment" /> before taking payments.
+      </EcommerceSettingsHint>
+      <div className="mb-6 mt-6 grid gap-4 sm:grid-cols-3">
+        <StatCard icon={Package} label="On this page" value={items.length} detail="Products loaded" tone="cream" />
+        <StatCard
+          icon={Sparkles}
+          label="Published"
+          value={items.filter((item) => item.status === "PUBLISHED").length}
+          tone="green"
+        />
+        <StatCard
+          icon={ImageIcon}
+          label="Drafts"
+          value={items.filter((item) => item.status === "DRAFT").length}
+          tone="gold"
+        />
       </div>
       {!entitled ? (
         <p className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">{disabledMessage}</p>

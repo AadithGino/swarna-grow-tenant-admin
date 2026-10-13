@@ -17,7 +17,6 @@ import {
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { ActionDialog } from "@/src/components/common/action-dialog";
 import { PermissionGate } from "@/src/components/common/permission-gate";
@@ -61,6 +60,12 @@ import { env } from "@/src/config/env";
 import { CustomerPortalUrlField } from "@/src/features/settings/customer-portal-url-field";
 import { SettingsOperationsPanel } from "@/src/features/settings/settings-operations-panel";
 import { SubscriptionInvoicesPanel } from "@/src/features/settings/subscription-invoices-panel";
+import {
+  EcommerceCatalogNav,
+  EcommerceRelatedLink,
+  EcommerceSettingsHint,
+  SettingsToggleRow,
+} from "@/src/features/ecommerce/ecommerce-settings-ui";
 import {
   useCompleteUploadMutation,
   useGetAvailablePlansQuery,
@@ -1380,7 +1385,7 @@ export function SettingsPage({
 
             <Surface
               title="Online store"
-              description="Turn on your store when your plan includes ecommerce. Customers can browse published products; payment checkout has separate readiness and rollout requirements."
+              description="Enable the storefront on your plan, then finish catalog and checkout setup in the Online store sidebar."
             >
               <div className="space-y-5 p-6">
                 <div className="flex flex-wrap items-start justify-between gap-4">
@@ -1398,44 +1403,49 @@ export function SettingsPage({
                     status={ecommercePlanEntitled ? "ACTIVE" : "INACTIVE"}
                   />
                 </div>
-                <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-[#eaded9] bg-[#faf6f4] px-5 py-4">
-                  <div className="flex items-start gap-3">
-                    <Store className="mt-0.5 size-5 shrink-0 text-[#730321]" />
-                    <div>
-                      <p className="font-semibold">Enable online store</p>
-                      <p className="mt-1 text-sm text-muted-foreground">
-                        {ecommercePlanEntitled
-                          ? "When enabled, published products are visible to your customers. Online payment remains subject to separate checkout readiness."
-                          : "Not available on your current plan — submit an upgrade request below."}
-                      </p>
-                    </div>
-                  </div>
-                  <PermissionGate permission={ACTION.tenantSettingsWrite}>
-                    <Switch
-                      checked={ecommerceStoreEnabled}
-                      disabled={!ecommercePlanEntitled}
-                      onCheckedChange={(checked) =>
-                        void saveEcommerceEnabled(checked)
-                      }
-                      aria-label="Enable online store"
-                    />
-                  </PermissionGate>
-                </div>
-                <div className="flex flex-wrap items-center gap-2 text-sm">
-                  <span className="text-muted-foreground">Store status:</span>
-                  <strong
-                    className={
-                      ecommerceStoreActive ? "text-emerald-800" : "text-[#805817]"
+                <PermissionGate permission={ACTION.tenantSettingsWrite}>
+                  <SettingsToggleRow
+                    id="ecommerce-store-enabled"
+                    title="Show online store to customers"
+                    description={
+                      ecommercePlanEntitled
+                        ? "When on, published products in active categories are visible. Checkout and payments still need tax, fulfilment, and plan entitlements."
+                        : "Not available on your current plan — request an upgrade below."
                     }
-                  >
-                    {ecommerceStoreActive ? "Active" : "Inactive"}
-                  </strong>
+                    checked={ecommerceStoreEnabled}
+                    disabled={!ecommercePlanEntitled}
+                    onCheckedChange={(checked) => void saveEcommerceEnabled(checked)}
+                  />
+                </PermissionGate>
+                <div className="flex flex-wrap items-center gap-2 text-sm">
+                  <span className="text-muted-foreground">Live storefront:</span>
+                  <StatusBadge
+                    status={ecommerceStoreActive ? "ACTIVE" : "PENDING"}
+                    label={ecommerceStoreActive ? "Active" : "Not live"}
+                  />
                   {ecommerceStoreEnabled && !ecommerceStoreActive ? (
                     <span className="text-muted-foreground">
-                      (enabled in settings but blocked by plan)
+                      Enabled here but blocked by plan or provisioning
                     </span>
                   ) : null}
                 </div>
+                {ecommercePlanEntitled ? (
+                  <>
+                    <EcommerceSettingsHint icon={Store} title="After you turn the store on">
+                      Set up products, gold rates, tax, and fulfilment. Use the quick links below or
+                      the <strong>Online store</strong> section in the sidebar.
+                    </EcommerceSettingsHint>
+                    <EcommerceCatalogNav />
+                    <p className="text-sm text-muted-foreground">
+                      Checkout readiness:{" "}
+                      <EcommerceRelatedLink href="/ecommerce/tax" label="Tax settings" /> →{" "}
+                      <EcommerceRelatedLink
+                        href="/ecommerce/fulfilment"
+                        label="Fulfilment & checkout"
+                      />
+                    </p>
+                  </>
+                ) : null}
               </div>
             </Surface>
 

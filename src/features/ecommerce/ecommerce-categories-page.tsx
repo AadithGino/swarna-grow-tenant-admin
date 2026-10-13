@@ -22,8 +22,10 @@ import {
 } from "@/src/store/api/admin-api";
 import { useEcommerceCatalogWrite } from "@/src/features/ecommerce/ecommerce-admin-shared";
 import { EcommerceCatalogImage } from "@/src/features/ecommerce/ecommerce-catalog-image";
-import { EcommerceSectionNav } from "@/src/features/ecommerce/ecommerce-section-nav";
-
+import {
+  EcommerceCatalogNav,
+  EcommerceSettingsHint,
+} from "@/src/features/ecommerce/ecommerce-settings-ui";
 type CategoryRow = {
   id: string;
   name: string;
@@ -154,15 +156,15 @@ export function EcommerceCategoriesPage() {
           </Button>
         }
       />
-      <EcommerceSectionNav />
       {!entitled ? (
         <p className="mb-4 text-sm text-amber-800">{disabledMessage}</p>
       ) : null}
-      <div className="mb-5 rounded-2xl border border-[#e9ded7] bg-[#f9f4ee] p-5 text-sm text-[#635053]">
-        <strong className="block text-[#4d2933]">Organise your storefront</strong>
-        <span className="mt-1 block">Only active categories appear in the customer shop. Archiving a category also hides its published products until you move them or reactivate it.</span>
-      </div>
-      <Surface title={`Categories (${items.length})`}>
+      <EcommerceCatalogNav />
+      <EcommerceSettingsHint icon={FolderOpen} title="Organise your storefront">
+        Only active categories appear in the customer shop. Archiving a category hides its published
+        products until you move them or reactivate the category.
+      </EcommerceSettingsHint>
+      <Surface title={`Categories (${items.length})`} className="mt-5">
         <ul className="grid gap-4 p-4 sm:grid-cols-2 xl:grid-cols-3">
           {items.map((c) => (
             <li key={c.id} className="overflow-hidden rounded-[1.25rem] border border-[#ede4dc] bg-white text-sm shadow-sm">
