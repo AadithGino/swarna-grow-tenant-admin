@@ -5,8 +5,8 @@ import { useCallback, useState } from "react";
 import { cn } from "@/lib/utils";
 import { uploadIdFromCatalogRef } from "@/src/lib/ecommerce-upload-id";
 import {
-  useGetUploadDownloadQuery,
-  useLazyGetUploadDownloadQuery,
+  useGetEcommerceUploadDownloadQuery,
+  useLazyGetEcommerceUploadDownloadQuery,
 } from "@/src/store/api/admin-api";
 import {
   useGetCustomerUploadDownloadQuery,
@@ -31,7 +31,7 @@ export function EcommerceCatalogImage({
   fill?: boolean;
 }) {
   const resolvedId = uploadId ?? uploadIdFromCatalogRef(viewUrl);
-  const adminQuery = useGetUploadDownloadQuery(resolvedId as string, {
+  const adminQuery = useGetEcommerceUploadDownloadQuery(resolvedId as string, {
     skip: !resolvedId || channel !== "admin",
     pollingInterval: REFRESH_MS,
   });
@@ -39,7 +39,7 @@ export function EcommerceCatalogImage({
     skip: !resolvedId || channel !== "customer",
     pollingInterval: REFRESH_MS,
   });
-  const [lazyAdmin] = useLazyGetUploadDownloadQuery();
+  const [lazyAdmin] = useLazyGetEcommerceUploadDownloadQuery();
   const [lazyCustomer] = useLazyGetCustomerUploadDownloadQuery();
   const [imgError, setImgError] = useState(false);
 

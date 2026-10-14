@@ -48,6 +48,7 @@ export const NAV_PERMISSIONS: Record<string, string[]> = {
   "/settings": ["settings.read", "settings.write"],
   "/ecommerce": ["ecommerce.read"],
   "/ecommerce/categories": ["ecommerce.read"],
+  "/ecommerce/banners": ["ecommerce.read"],
   "/ecommerce/gold-rates": ["ecommerce.read"],
   "/ecommerce/tax": ["ecommerce.read"],
   "/ecommerce/inventory": ["ecommerce.read"],

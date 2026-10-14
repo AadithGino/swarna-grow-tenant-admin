@@ -3164,22 +3164,6 @@ export const adminApi = createApi({
       },
       providesTags: ["Ecommerce"],
     }),
-    getEcommerceCategories: builder.query<
-      { items: Record<string, any>[]; meta?: Record<string, unknown> },
-      void
-    >({
-      query: () => ({
-        url: "/admin/ecommerce/categories",
-        mockKey: "ecommerceCategories",
-      }),
-      transformResponse: (raw) => {
-        const payload = contractPayload(raw) as {
-          items?: Record<string, unknown>[];
-        };
-        return { items: payload?.items ?? [] };
-      },
-      providesTags: ["Ecommerce"],
-    }),
     getEcommerceGoldRatesCurrent: builder.query<
       { rates: Record<string, any>[]; asOf?: string },
       void
@@ -3281,6 +3265,117 @@ export const adminApi = createApi({
       }),
       transformResponse: (raw) =>
         (contractPayload(raw) as Record<string, unknown>) ?? {},
+      invalidatesTags: ["Ecommerce"],
+    }),
+    getEcommerceBanners: builder.query<
+      { items: Record<string, any>[]; meta?: Record<string, unknown> },
+      { limit?: number; cursor?: string; status?: string; placement?: string } | void
+    >({
+      query: (params) => ({
+        url: "/admin/ecommerce/banners",
+        params: params ?? {},
+        mockKey: "ecommerceBanners",
+      }),
+      transformResponse: (raw) => {
+        const payload = contractPayload(raw) as {
+          items?: Record<string, unknown>[];
+          meta?: Record<string, unknown>;
+        };
+        return { items: payload?.items ?? [], meta: payload?.meta };
+      },
+      providesTags: ["Ecommerce"],
+    }),
+    getEcommerceCategories: builder.query<
+      { items: Record<string, any>[]; meta?: Record<string, unknown> },
+      { limit?: number; cursor?: string; activeOnly?: boolean } | void
+    >({
+      query: (params) => ({
+        url: "/admin/ecommerce/categories",
+        params: params ?? {},
+        mockKey: "ecommerceCategories",
+      }),
+      transformResponse: (raw) => {
+        const payload = contractPayload(raw) as {
+          items?: Record<string, unknown>[];
+          meta?: Record<string, unknown>;
+        };
+        return { items: payload?.items ?? [], meta: payload?.meta };
+      },
+      providesTags: ["Ecommerce"],
+    }),
+    getEcommerceCategory: builder.query<Record<string, any>, { categoryId: string }>({
+      query: ({ categoryId }) => ({
+        url: `/admin/ecommerce/categories/${categoryId}`,
+        mockKey: "ecommerceCategory",
+        params: { categoryId },
+      }),
+      transformResponse: (raw) =>
+        (contractPayload(raw) as Record<string, unknown>) ?? {},
+    }),
+    createEcommerceBanner: builder.mutation<Record<string, any>, Record<string, unknown>>({
+      query: (body) => ({
+        url: "/admin/ecommerce/banners",
+        method: "POST",
+        body,
+        mockKey: "createEcommerceBanner",
+      }),
+      transformResponse: (raw) => (contractPayload(raw) as Record<string, unknown>) ?? {},
+      invalidatesTags: ["Ecommerce"],
+    }),
+    patchEcommerceBanner: builder.mutation<
+      Record<string, any>,
+      { bannerId: string; body: Record<string, unknown> }
+    >({
+      query: ({ bannerId, body }) => ({
+        url: `/admin/ecommerce/banners/${bannerId}`,
+        method: "PATCH",
+        body,
+        mockKey: "patchEcommerceBanner",
+        params: { bannerId },
+      }),
+      transformResponse: (raw) => (contractPayload(raw) as Record<string, unknown>) ?? {},
+      invalidatesTags: ["Ecommerce"],
+    }),
+    publishEcommerceBanner: builder.mutation<
+      Record<string, any>,
+      { bannerId: string; expectedVersion: number }
+    >({
+      query: ({ bannerId, expectedVersion }) => ({
+        url: `/admin/ecommerce/banners/${bannerId}/publish`,
+        method: "POST",
+        body: { expectedVersion },
+        mockKey: "publishEcommerceBanner",
+        params: { bannerId },
+      }),
+      transformResponse: (raw) => (contractPayload(raw) as Record<string, unknown>) ?? {},
+      invalidatesTags: ["Ecommerce"],
+    }),
+    unpublishEcommerceBanner: builder.mutation<
+      Record<string, any>,
+      { bannerId: string; expectedVersion: number }
+    >({
+      query: ({ bannerId, expectedVersion }) => ({
+        url: `/admin/ecommerce/banners/${bannerId}/unpublish`,
+        method: "POST",
+        body: { expectedVersion },
+        mockKey: "unpublishEcommerceBanner",
+        params: { bannerId },
+      }),
+      transformResponse: (raw) => (contractPayload(raw) as Record<string, unknown>) ?? {},
+      invalidatesTags: ["Ecommerce"],
+    }),
+    archiveEcommerceBanner: builder.mutation<
+      Record<string, any>,
+      { bannerId: string; expectedVersion: number }
+    >({
+      query: ({ bannerId, expectedVersion }) => ({
+        url: `/admin/ecommerce/banners/${bannerId}/archive`,
+        method: "POST",
+        body: { expectedVersion },
+        mockKey: "archiveEcommerceBanner",
+        params: { bannerId },
+      }),
+      transformResponse: (raw) => (contractPayload(raw) as Record<string, unknown>) ?? {},
       invalidatesTags: ["Ecommerce"],
     }),
     createEcommerceProduct: builder.mutation<
@@ -4744,6 +4839,53 @@ export const adminApi = createApi({
       transformResponse: adaptListBundle,
       providesTags: [{ type: "Export", id: "LIST" }],
     }),
+    presignEcommerceUpload: builder.mutation<
+      {
+        uploadId: string;
+        uploadUrl: string;
+        method: string;
+        headers: Record<string, string>;
+        expiresAt: string;
+      },
+      {
+        purpose: string;
+        fileName: string;
+        contentType: string;
+        sizeBytes: number;
+      }
+    >({
+      query: (body) => ({
+        url: "/admin/ecommerce/uploads/presign",
+        method: "POST",
+        body,
+        mockKey: "presignEcommerceUpload",
+      }),
+      transformResponse: (raw) =>
+        contractPayload(raw) as {
+          uploadId: string;
+          uploadUrl: string;
+          method: string;
+          headers: Record<string, string>;
+          expiresAt: string;
+        },
+    }),
+    completeEcommerceUpload: builder.mutation<
+      { uploadId: string; status: string; viewUrl?: string },
+      string
+    >({
+      query: (uploadId) => ({
+        url: `/admin/ecommerce/uploads/${uploadId}/complete`,
+        method: "POST",
+        params: { uploadId },
+        mockKey: "completeEcommerceUpload",
+      }),
+      transformResponse: (raw) =>
+        contractPayload(raw) as {
+          uploadId: string;
+          status: string;
+          viewUrl?: string;
+        },
+    }),
     presignUpload: builder.mutation<
       {
         uploadId: string;
@@ -4789,6 +4931,24 @@ export const adminApi = createApi({
           uploadId: string;
           status: string;
           viewUrl?: string;
+        },
+    }),
+    getEcommerceUploadDownload: builder.query<
+      { uploadId: string; status: string; fileName?: string | null; contentType?: string | null; downloadUrl: string },
+      string
+    >({
+      query: (uploadId) => ({
+        url: `/admin/ecommerce/uploads/${uploadId}`,
+        params: { uploadId },
+        mockKey: "getEcommerceUploadDownload",
+      }),
+      transformResponse: (raw) =>
+        contractPayload(raw) as {
+          uploadId: string;
+          status: string;
+          fileName?: string | null;
+          contentType?: string | null;
+          downloadUrl: string;
         },
     }),
     getUploadDownload: builder.query<
@@ -4964,9 +5124,20 @@ export const {
   useGetEcommerceGoldRatesHistoryQuery,
   useGetEcommerceTaxSettingsQuery,
   useGetEcommerceProductQuery,
+  useLazyGetEcommerceProductQuery,
   useCreateEcommerceCategoryMutation,
   usePatchEcommerceCategoryMutation,
   useArchiveEcommerceCategoryMutation,
+  useGetEcommerceBannersQuery,
+  useLazyGetEcommerceBannersQuery,
+  useLazyGetEcommerceCategoriesQuery,
+  useLazyGetEcommerceCategoryQuery,
+  useLazyGetEcommerceProductsQuery,
+  useCreateEcommerceBannerMutation,
+  usePatchEcommerceBannerMutation,
+  usePublishEcommerceBannerMutation,
+  useUnpublishEcommerceBannerMutation,
+  useArchiveEcommerceBannerMutation,
   useCreateEcommerceProductMutation,
   usePatchEcommerceProductMutation,
   usePublishEcommerceProductMutation,
@@ -5073,7 +5244,11 @@ export const {
   useGetMaturitiesCalendarQuery,
   useListExportsQuery,
   usePresignUploadMutation,
+  usePresignEcommerceUploadMutation,
+  useCompleteEcommerceUploadMutation,
   useCompleteUploadMutation,
   useGetUploadDownloadQuery,
+  useGetEcommerceUploadDownloadQuery,
+  useLazyGetEcommerceUploadDownloadQuery,
   useLazyGetUploadDownloadQuery,
 } = adminApi;

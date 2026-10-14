@@ -21,6 +21,7 @@ const ROOT_ALLOW_FILES = new Set([
   "postcss.config.mjs",
   "next.config.ts",
   "vitest.config.ts",
+  "vitest.setup.ts",
 ]);
 
 const ROOT_ALLOW_PREFIXES = [

@@ -1,4 +1,5 @@
 import { configureStore } from "@reduxjs/toolkit";
+import { setupListeners } from "@reduxjs/toolkit/query";
 import uiReducer from "./slices/ui-slice";
 import sessionReducer from "./slices/session-slice";
 import { adminApi } from "./api/admin-api";
@@ -28,6 +29,8 @@ export const store = configureStore({
       .concat(agentApi.middleware)
       .prepend(branchListener.middleware),
 });
+
+setupListeners(store.dispatch);
 
 export type RootState = ReturnType<typeof store.getState>;
 export type AppDispatch = typeof store.dispatch;

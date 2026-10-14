@@ -2483,6 +2483,11 @@ export async function mockRequest<T>({
       return { __contract: true, payload: { items: [], meta: { hasMore: false } } } as T;
     case "ecommerceCategories":
       return { __contract: true, payload: { items: [], meta: { hasMore: false } } } as T;
+    case "ecommerceBanners":
+      return { __contract: true, payload: { items: [], meta: { hasMore: false } } } as T;
+    case "homeBanners":
+    case "shopBanners":
+      return { __contract: true, payload: { items: [] } } as T;
     case "ecommerceGoldRatesCurrent":
       return {
         __contract: true,
@@ -2517,6 +2522,32 @@ export async function mockRequest<T>({
       return {
         __contract: true,
         payload: { id: String(params.categoryId ?? ""), active: false, version: 2 },
+      } as T;
+    case "createEcommerceBanner":
+    case "patchEcommerceBanner":
+      return {
+        __contract: true,
+        payload: {
+          id: String(params.bannerId ?? `ebnr_${Date.now()}`),
+          status: "DRAFT",
+          version: 2,
+          ...body,
+        },
+      } as T;
+    case "publishEcommerceBanner":
+      return {
+        __contract: true,
+        payload: { id: String(params.bannerId ?? ""), status: "PUBLISHED", version: 3 },
+      } as T;
+    case "unpublishEcommerceBanner":
+      return {
+        __contract: true,
+        payload: { id: String(params.bannerId ?? ""), status: "DRAFT", version: 3 },
+      } as T;
+    case "archiveEcommerceBanner":
+      return {
+        __contract: true,
+        payload: { id: String(params.bannerId ?? ""), status: "ARCHIVED", version: 3 },
       } as T;
     case "createEcommerceProduct":
     case "patchEcommerceProduct":
@@ -3841,6 +3872,7 @@ export async function mockRequest<T>({
       const { items, page } = paginateSlice(rows, params);
       return { items, total: rows.length, ...page } as T;
     }
+    case "presignEcommerceUpload":
     case "presignUpload":
       return {
         __contract: true,
@@ -3852,6 +3884,7 @@ export async function mockRequest<T>({
           expiresAt: "2026-09-14T10:15:00+05:30",
         },
       } as T;
+    case "completeEcommerceUpload":
     case "completeUpload":
       return {
         __contract: true,
@@ -3861,6 +3894,7 @@ export async function mockRequest<T>({
           viewUrl: `/uploads/${String(params.uploadId ?? "upl_mock")}`,
         },
       } as T;
+    case "getEcommerceUploadDownload":
     case "getUploadDownload":
       return {
         __contract: true,

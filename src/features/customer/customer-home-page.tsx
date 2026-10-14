@@ -3,6 +3,10 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import {
+  customerBannerQueryOptions,
+  useCustomerBannerScheduleRefetch,
+} from "@/src/lib/customer-banner-refresh";
+import {
   AlertTriangle,
   BarChart3,
   Check,
@@ -21,7 +25,13 @@ import { Button } from "@/components/ui/button";
 import { CustomerHomeSchemeCard, formatCustomerDate } from "@/src/components/customer/customer-ui";
 import { CUSTOMER_MOBILE_NAV_DOCK } from "@/src/features/customer/customer-scheme-detail-views";
 import { PageSkeleton, QueryError } from "@/src/components/common/query-state";
-import { useGetCustomerHomeQuery, useGetCustomerProfileQuery, useGetShopAvailabilityQuery } from "@/src/store/api/customer-api";
+import {
+  useGetCustomerHomeQuery,
+  useGetCustomerProfileQuery,
+  useGetHomeBannersQuery,
+  useGetShopAvailabilityQuery,
+} from "@/src/store/api/customer-api";
+import { CustomerPromoBanners, type CustomerPromoBanner } from "@/src/features/customer/customer-promo-banners";
 import { useCustomerTenant } from "@/src/components/customer/customer-tenant-context";
 import { customerPath } from "@/src/lib/customer-tenant";
 import { useCustomerGoldMetricsVisible } from "@/src/lib/customer-gold-ui";
@@ -78,6 +88,20 @@ export function CustomerHomePage() {
   const kycEnabled = useCustomerKycEnabled();
   const { data: profile } = useGetCustomerProfileQuery();
   const { data: shopAvailability } = useGetShopAvailabilityQuery();
+  const homeBannersQuery = useGetHomeBannersQuery(undefined, {
+    ...customerBannerQueryOptions([], null),
+    pollingInterval: 60_000,
+  });
+  const homeBanners = homeBannersQuery.data;
+  const homeBannerItems = (homeBanners?.items ?? []) as {
+    startsAt?: string | null;
+    endsAt?: string | null;
+  }[];
+  useCustomerBannerScheduleRefetch(
+    homeBannerItems,
+    homeBannersQuery.refetch,
+    homeBanners?.meta,
+  );
   const [amountsVisible, setAmountsVisible] = useState(true);
 
   const trendPoints = useMemo(() => {
@@ -302,6 +326,14 @@ export function CustomerHomePage() {
           </div>
         </section>
       ) : null}
+
+      <CustomerPromoBanners
+        tenantSlug={tenantSlug}
+        className="mt-7"
+        placement="home-feed"
+        shopAvailable={shopAvailability?.available === true}
+        items={(homeBanners?.items ?? []) as CustomerPromoBanner[]}
+      />
 
       {showGoldMetrics && data.goldRate ? (
         <Link

@@ -160,6 +160,8 @@ const mockBaseQuery: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQueryErro
     });
   }
   if (url === "/app/home") return ok(customerHome);
+  if (url === "/app/home/banners") return ok({ items: [] });
+  if (url === "/app/shop/banners") return ok({ items: [] });
   if (url === "/app/profile" && method === "GET") return ok(customerProfile);
   if (url === "/app/profile" && method === "PATCH") return ok({ ...customerProfile, ...body });
   if (url === "/app/profile/complete" && method === "POST") {
@@ -804,6 +806,36 @@ export const customerApi = createApi({
     >({
       query: (body) => ({ url: "/app/devices/fcm-token", method: "POST", body }),
     }),
+    getHomeBanners: builder.query<
+      {
+        items: Record<string, unknown>[];
+        meta?: { nextVisibilityChangeAt?: string | null; serverTime?: string | null };
+      },
+      void
+    >({
+      query: () => ({ url: "/app/home/banners", mockKey: "homeBanners" }),
+      transformResponse: (raw) => {
+        const payload = (raw as { data?: { items?: Record<string, unknown>[]; meta?: Record<string, unknown> } })?.data ?? raw;
+        const items = (payload as { items?: Record<string, unknown>[] })?.items ?? [];
+        const meta = (payload as { meta?: { nextVisibilityChangeAt?: string | null; serverTime?: string | null } }).meta;
+        return { items, meta };
+      },
+    }),
+    getShopBanners: builder.query<
+      {
+        items: Record<string, unknown>[];
+        meta?: { nextVisibilityChangeAt?: string | null; serverTime?: string | null };
+      },
+      void
+    >({
+      query: () => ({ url: "/app/shop/banners", mockKey: "shopBanners" }),
+      transformResponse: (raw) => {
+        const payload = (raw as { data?: { items?: Record<string, unknown>[]; meta?: Record<string, unknown> } })?.data ?? raw;
+        const items = (payload as { items?: Record<string, unknown>[] })?.items ?? [];
+        const meta = (payload as { meta?: { nextVisibilityChangeAt?: string | null; serverTime?: string | null } }).meta;
+        return { items, meta };
+      },
+    }),
     getShopAvailability: builder.query<
       { available: boolean; hasOrderHistory?: boolean; ecommerce?: Record<string, unknown> },
       void
@@ -1228,6 +1260,8 @@ export const {
   useGetCustomerGoldRateQuery, useGetCustomerGoldHistoryQuery, useGetCustomerBranchesQuery,
   useRequestCustomerRedemptionMutation,
   useRegisterCustomerFcmTokenMutation,
+  useGetHomeBannersQuery,
+  useGetShopBannersQuery,
   useGetShopAvailabilityQuery,
   useGetShopStorePoliciesQuery,
   useGetShopProductsQuery,

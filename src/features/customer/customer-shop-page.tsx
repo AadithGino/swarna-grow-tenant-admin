@@ -1,21 +1,16 @@
 "use client";
 
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useState } from "react";
-import { ArrowLeft, ArrowRight, Gem, Search, ShieldCheck, ShoppingBag, Sparkles, Truck, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, Gem, ShoppingBag } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { cn } from "@/lib/utils";
+import { useDebouncedValue } from "@/src/hooks/use-debounced-value";
 import {
   useGetShopAvailabilityQuery,
+  useGetShopBannersQuery,
   useGetShopCategoriesQuery,
   useGetShopProductQuery,
   useGetShopProductsQuery,
@@ -34,6 +29,21 @@ import { customerPath } from "@/src/lib/customer-tenant";
 import { customerShopOrdersPath } from "@/src/lib/customer-shop-paths";
 import { customerBrandClass, customerBrandStyle } from "@/src/lib/customer-brand-styles";
 import { CustomerShopPoliciesLinks } from "@/src/features/customer/customer-shop-policies";
+import {
+  CustomerShopCatalogToolbar,
+  CustomerShopEmptyState,
+  CustomerShopProductCard,
+} from "@/src/features/customer/customer-shop-catalog-ui";
+import {
+  CustomerPromoBanners,
+  SHOP_PROMO_GRID_INSERT_AFTER,
+  shouldShowShopPromoRail,
+  type CustomerPromoBanner,
+} from "@/src/features/customer/customer-promo-banners";
+import {
+  customerBannerQueryOptions,
+  useCustomerBannerScheduleRefetch,
+} from "@/src/lib/customer-banner-refresh";
 
 function dedupeAppend(
   head: Record<string, unknown>[],
@@ -46,58 +56,91 @@ function dedupeAppend(
 
 export function CustomerShopPage() {
   const { tenantSlug } = useCustomerTenant();
+  const searchParams = useSearchParams();
+  const initialCategoryId = searchParams.get("categoryId") ?? undefined;
   const availability = useGetShopAvailabilityQuery();
+  const shopBanners = useGetShopBannersQuery(undefined, {
+    skip: !availability.data?.available,
+    ...customerBannerQueryOptions([], null),
+    pollingInterval: 60_000,
+    refetchOnFocus: true,
+    refetchOnReconnect: true,
+  });
+  const shopBannerItems = (shopBanners.data?.items ?? []) as CustomerPromoBanner[];
+  useCustomerBannerScheduleRefetch(
+    shopBannerItems,
+    shopBanners.refetch,
+    shopBanners.data?.meta,
+    { enabled: availability.data?.available === true },
+  );
   const categories = useGetShopCategoriesQuery(undefined, {
     skip: !availability.data?.available,
   });
-  const [categoryId, setCategoryId] = useState<string | undefined>();
+  const [categoryId, setCategoryId] = useState<string | undefined>(initialCategoryId);
   const [searchInput, setSearchInput] = useState("");
-  const [searchQ, setSearchQ] = useState<string | undefined>();
   const [sort, setSort] = useState<"newest" | "name">("newest");
-  const [tailItems, setTailItems] = useState<Record<string, unknown>[]>([]);
-  const [nextCursor, setNextCursor] = useState<string | null | undefined>();
+  const [catalogPagination, setCatalogPagination] = useState<{
+    catalogKey: string;
+    tailItems: Record<string, unknown>[];
+    nextCursor: string | null | undefined;
+  }>({ catalogKey: "", tailItems: [], nextCursor: undefined });
+  const [addingProductId, setAddingProductId] = useState<string | null>(null);
+
+  const debouncedSearch = useDebouncedValue(searchInput.trim(), 400);
+  const searchQ = debouncedSearch.length >= 2 ? debouncedSearch : undefined;
+  const catalogKey = `${categoryId ?? ""}|${searchQ ?? ""}|${sort}`;
 
   const products = useGetShopProductsQuery(
     { categoryId, limit: 12, q: searchQ, sort },
     { skip: !availability.data?.available },
   );
+  const cart = useGetShopCartQuery(undefined, { skip: !availability.data?.available });
+  const [putCart] = usePutShopCartMutation();
   const [fetchMore, fetchMoreState] = useLazyGetShopProductsQuery();
-
   const firstPage = products.data?.items ?? [];
+  const tailItems =
+    catalogPagination.catalogKey === catalogKey ? catalogPagination.tailItems : [];
   const mergedItems = [...firstPage, ...tailItems];
-  const cursorForMore = nextCursor === undefined
-    ? (products.data?.meta?.nextCursor as string | null | undefined)
-    : nextCursor;
-
-  function resetCatalogTail() {
-    setTailItems([]);
-    setNextCursor(undefined);
-  }
+  const storedCursor =
+    catalogPagination.catalogKey === catalogKey ? catalogPagination.nextCursor : undefined;
+  const cursorForMore =
+    storedCursor === undefined
+      ? (products.data?.meta?.nextCursor as string | null | undefined)
+      : storedCursor;
 
   function selectCategory(id: string | undefined) {
     setCategoryId(id);
-    resetCatalogTail();
   }
 
-  function applySearch() {
-    const trimmed = searchInput.trim();
-    if (trimmed.length === 1) {
-      toast.message("Enter at least two letters to search products.");
-      return;
-    }
-    setSearchQ(trimmed.length >= 2 ? trimmed : undefined);
-    resetCatalogTail();
-  }
-
-  function clearSearch() {
+  function clearAllFilters() {
     setSearchInput("");
-    setSearchQ(undefined);
-    resetCatalogTail();
+    setCategoryId(undefined);
   }
 
-  function onSortChange(value: string) {
-    setSort(value === "name" ? "name" : "newest");
-    resetCatalogTail();
+  function onSortChange(value: "newest" | "name") {
+    setSort(value);
+  }
+
+  async function addProductToCart(product: Record<string, unknown>) {
+    const pid = String(product.id);
+    setAddingProductId(pid);
+    try {
+      const existing = (cart.data?.lines as { productId: string; quantity: number }[]) ?? [];
+      const merged = existing.some((l) => l.productId === pid)
+        ? existing.map((l) =>
+            l.productId === pid ? { ...l, quantity: Math.min(99, l.quantity + 1) } : l,
+          )
+        : [...existing, { productId: pid, quantity: 1 }];
+      await putCart({
+        lines: merged,
+        expectedVersion: cart.data?.version as number | undefined,
+      }).unwrap();
+      toast.success("Added to cart");
+    } catch (err) {
+      toastApiError(err);
+    } finally {
+      setAddingProductId(null);
+    }
   }
 
   async function loadMore() {
@@ -105,8 +148,14 @@ export function CustomerShopPage() {
     if (!cursor) return;
     try {
       const data = await fetchMore({ categoryId, limit: 12, cursor, q: searchQ, sort }).unwrap();
-      setTailItems((prev) => dedupeAppend(firstPage, prev, data.items ?? []));
-      setNextCursor((data.meta?.nextCursor as string | null) ?? null);
+      setCatalogPagination((prev) => {
+        const baseTail = prev.catalogKey === catalogKey ? prev.tailItems : [];
+        return {
+          catalogKey,
+          tailItems: dedupeAppend(firstPage, baseTail, data.items ?? []),
+          nextCursor: (data.meta?.nextCursor as string | null) ?? null,
+        };
+      });
     } catch (err) {
       toastApiError(err);
     }
@@ -131,137 +180,82 @@ export function CustomerShopPage() {
       </div>
     );
   }
-  const categoryRows = categories.data?.items ?? [];
+  const categoryRows = (categories.data?.items ?? []).map((c) => ({
+    id: String(c.id),
+    name: String(c.name),
+  }));
+
+  const hasActiveFilters = Boolean(searchQ || categoryId);
+  const slug = tenantSlug ?? "";
+  const showShopPromos = shouldShowShopPromoRail(shopBannerItems, hasActiveFilters);
+
+  const shopPromoBanners = showShopPromos ? (
+    <CustomerPromoBanners
+      tenantSlug={slug}
+      placement="shop-grid"
+      shopAvailable
+      items={shopBannerItems}
+    />
+  ) : null;
+  const promoRail = shopPromoBanners ? (
+    <div key="shop-promo-rail" className="col-span-2 py-1 lg:col-span-3">
+      {shopPromoBanners}
+    </div>
+  ) : null;
 
   return (
     <>
-      <section
-        className="relative mb-8 overflow-hidden rounded-[2rem] px-7 py-10 text-white sm:px-12 sm:py-14"
-        style={customerBrandStyle.primaryHero}
-      >
-        <div className="pointer-events-none absolute -right-20 -top-28 size-80 rounded-full border border-white/15" />
-        <div className="pointer-events-none absolute right-3 top-16 size-48 rounded-full border border-white/10" />
-        <div className="relative max-w-xl">
-          <span
-            className="inline-flex items-center gap-2 rounded-full border border-white/25 bg-white/10 px-3 py-1.5 text-xs font-semibold"
-            style={customerBrandStyle.heroBadgeText}
-          >
-            <Sparkles className="size-3.5" /> The online collection
-          </span>
-          <h1 className="mt-5 font-serif text-4xl leading-tight sm:text-5xl">Find something worth keeping.</h1>
-          <p className="mt-4 text-sm leading-7 sm:text-base" style={customerBrandStyle.heroBodyText}>
-            Browse jewellery from your jeweller. See current server pricing before you request a final quote.
-          </p>
-          <div className="mt-7 flex flex-wrap gap-3">
-            <a
-              href="#collection"
-              className="inline-flex items-center gap-2 rounded-xl px-5 py-3 text-sm font-bold"
-              style={customerBrandStyle.accentCta}
-            >
-              Explore collection <ArrowRight className="size-4" />
-            </a>
-            <Link href={customerPath(tenantSlug, "shop", "cart")} className="inline-flex items-center gap-2 rounded-xl border border-white/40 px-5 py-3 text-sm font-semibold text-white"><ShoppingBag className="size-4" /> Your cart</Link>
-            <Link href={customerShopOrdersPath(tenantSlug)} className="inline-flex items-center gap-2 rounded-xl border border-white/25 px-5 py-3 text-sm font-semibold text-white/95">Order history</Link>
-          </div>
-        </div>
-      </section>
-      <div className="mb-9 grid gap-3 sm:grid-cols-3">
-        {[
-          { icon: Gem, title: "Clear pricing", detail: "Gold and making breakdowns" },
-          { icon: ShieldCheck, title: "Clear order status", detail: "See whether checkout is available" },
-          { icon: Truck, title: "Flexible fulfilment", detail: "Pickup or delivery when available" },
-        ].map(({ icon: Icon, title, detail }) => (
-          <div key={title} className="flex items-center gap-3 rounded-2xl border border-[#ece3da] bg-white px-4 py-4">
-            <span
-              className={cn("grid size-10 shrink-0 place-items-center rounded-xl customer-accent-tint-surface", customerBrandClass.accentText)}
-            >
-              <Icon className="size-5" />
-            </span>
-            <span><strong className="block text-sm">{title}</strong><small className="text-xs text-muted-foreground">{detail}</small></span>
-          </div>
-        ))}
-      </div>
-      <div id="collection" className="mb-5 scroll-mt-24">
-        <p className={cn("text-xs font-bold uppercase tracking-[.2em]", customerBrandClass.accentText)}>The collection</p>
-        <h2 className="mt-1 font-serif text-3xl text-[#312027]">{categoryRows.find((row) => String(row.id) === categoryId)?.name?.toString() ?? "Browse jewellery"}</h2>
-      </div>
-      {categoryRows.length ? (
-        <div className="mb-6 flex gap-2 overflow-x-auto pb-2" role="group" aria-label="Product categories">
-          <Button
-            type="button"
-            size="sm"
-            variant={categoryId ? "outline" : "default"}
-            onClick={() => selectCategory(undefined)}
-          >
-            All
-          </Button>
-          {categoryRows.map((c) => (
-            <Button
-              key={String(c.id)}
-              type="button"
-              size="sm"
-              variant={categoryId === c.id ? "default" : "outline"}
-              onClick={() => selectCategory(String(c.id))}
-            >
-              {String(c.name)}
-            </Button>
-          ))}
-        </div>
-      ) : null}
-      <div className="mb-6 rounded-2xl border border-[#ece3da] bg-white p-3 shadow-sm sm:p-4">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-        <div className="relative flex flex-1 gap-2">
-          <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[#82777a]" aria-hidden />
-          <Input
-            value={searchInput}
-            onChange={(e) => setSearchInput(e.target.value)}
-            aria-label="Search jewellery by name"
-            className="pl-9"
-            placeholder="Search jewellery by name"
-            onKeyDown={(e) => e.key === "Enter" && applySearch()}
-          />
-          <Button type="button" variant="secondary" onClick={applySearch}>
-            Search
-          </Button>
-        </div>
-        <Select value={sort} onValueChange={onSortChange}>
-          <SelectTrigger className="w-full sm:w-44">
-            <SelectValue placeholder="Sort products" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="newest">Newest</SelectItem>
-            <SelectItem value="name">Name (A–Z)</SelectItem>
-          </SelectContent>
-        </Select>
-        </div>
-        {(searchQ || categoryId) ? (
-          <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-[#f0e8e3] pt-3 text-xs text-[#6e6265]">
-            <p>Showing {searchQ ? `“${searchQ}”` : "all jewellery"}{categoryId ? ` in ${String(categoryRows.find((row) => String(row.id) === categoryId)?.name ?? "this category")}` : ""}</p>
-            <button type="button" onClick={() => { selectCategory(undefined); clearSearch(); }} className={cn("inline-flex items-center gap-1 font-semibold underline-offset-2 hover:underline", customerBrandClass.accentText)}><X className="size-3.5" aria-hidden /> Clear filters</button>
-          </div>
-        ) : null}
-      </div>
+      <CustomerShopCatalogToolbar
+        tenantSlug={slug}
+        searchInput={searchInput}
+        onSearchInputChange={setSearchInput}
+        categoryId={categoryId}
+        onCategoryChange={selectCategory}
+        categories={categoryRows}
+        sort={sort}
+        onSortChange={onSortChange}
+        showOrdersLink={availability.data?.hasOrderHistory === true}
+        resultCount={mergedItems.length}
+        loadingResults={products.isFetching}
+        hasActiveFilters={hasActiveFilters}
+        onClearFilters={clearAllFilters}
+        searchQ={searchQ}
+      />
       {products.isLoading && !mergedItems.length ? <PageSkeleton cards={3} /> : products.isError ? (
         <QueryError error={products.error} onRetry={products.refetch} />
       ) : !mergedItems.length ? (
-        <div className="rounded-3xl border bg-white p-12 text-center"><Gem className={cn("mx-auto size-9", customerBrandClass.accentText)} /><h3 className="mt-4 font-serif text-xl">{searchQ ? "No matching products" : "No pieces in this collection yet"}</h3><p className="mt-2 text-sm text-muted-foreground">{searchQ ? "Try another search or clear filters." : "Choose another category or check back soon."}</p>{(searchQ || categoryId) ? <Button type="button" variant="outline" className="mt-5" onClick={() => { selectCategory(undefined); clearSearch(); }}>Show all jewellery</Button> : null}</div>
+        <>
+          {shopPromoBanners ? <div className="mb-4">{shopPromoBanners}</div> : null}
+          <CustomerShopEmptyState
+            searchQ={searchQ}
+            hasFilters={hasActiveFilters}
+            onReset={clearAllFilters}
+          />
+        </>
       ) : (
         <>
-          <div className="grid grid-cols-2 gap-3 sm:gap-5 lg:grid-cols-3 xl:grid-cols-4">
-            {mergedItems.map((p) => (
-              <Link key={String(p.id)} href={customerPath(tenantSlug, "shop", encodeURIComponent(String(p.slug)))} className="group min-w-0 overflow-hidden rounded-[1.5rem] border border-[#ede3db] bg-white shadow-sm transition hover:-translate-y-1 hover:shadow-lg">
-                <div className="relative aspect-[4/4.4] customer-primary-tint-surface">
-                  <EcommerceCatalogImage uploadId={(p.imageUploadIds as string[] | undefined)?.[0]} viewUrl={(p.imageUrls as any)?.[0]?.viewUrl} channel="customer" alt={String(p.name)} fill className="transition duration-500 group-hover:scale-105" />
-                  {p.featured === true ? <span className={cn("absolute left-3 top-3 rounded-full bg-white px-3 py-1 text-[.65rem] font-bold uppercase tracking-wider shadow-sm", customerBrandClass.primaryText)}>Featured</span> : null}
-                </div>
-                <div className="space-y-2 p-4 sm:p-5">
-                  <p className={cn("text-[.65rem] font-bold uppercase tracking-[.16em]", customerBrandClass.accentText)}>{p.purity ? `${String(p.purity)} gold` : "Jewellery"}</p>
-                  <h3 className="line-clamp-2 min-h-11 text-sm font-semibold leading-snug text-[#30262a] sm:text-lg">{String(p.name)}</h3>
-                  <div className="flex items-center justify-between border-t border-[#f2e9e3] pt-3"><ShopPriceLabel pricing={p.pricing as any} className={cn("text-base font-bold", customerBrandClass.price)} /><ArrowRight className={cn("size-4 shrink-0", customerBrandClass.primaryText)} /></div>
-                  {(p.availability as { label?: string } | undefined)?.label ? <p className="text-xs text-[#6b7067]">{(p.availability as { label: string }).label}</p> : null}
-                </div>
-              </Link>
-            ))}
+          <div id="collection" className="grid grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-3">
+            {mergedItems.flatMap((p, index) => {
+              const card = (
+                <CustomerShopProductCard
+                  key={String(p.id)}
+                  product={p}
+                  tenantSlug={slug}
+                  adding={addingProductId === String(p.id)}
+                  onAddToCart={() => void addProductToCart(p)}
+                />
+              );
+              if (
+                showShopPromos &&
+                index === SHOP_PROMO_GRID_INSERT_AFTER - 1
+              ) {
+                return [card, promoRail];
+              }
+              return [card];
+            })}
+            {showShopPromos && mergedItems.length < SHOP_PROMO_GRID_INSERT_AFTER
+              ? promoRail
+              : null}
           </div>
           {cursorForMore ? (
             <div className="mt-6 flex justify-center">
@@ -277,8 +271,11 @@ export function CustomerShopPage() {
           ) : null}
         </>
       )}
-      <CustomerShopPoliciesLinks className="mt-10 rounded-2xl border border-[#ede3db] bg-white p-5" />
-      <p className="mt-8 text-center text-xs text-[#85797c]">Prices are estimates. Your final amount is confirmed in the quote before payment.</p>
+      <CustomerShopPoliciesLinks className="mt-8 rounded-2xl border border-[#ede3db] bg-white p-4 sm:p-5" />
+      <p className="mt-4 pb-2 text-center text-xs leading-relaxed text-[#85797c]">
+        Prices show gold, making and tax where applicable. Pickup or delivery and final payment are
+        confirmed in your quote.
+      </p>
     </>
   );
 }

@@ -35,6 +35,7 @@ export type ParsedApiError = {
   traceId?: string;
   fieldErrors: Record<string, string>;
   httpStatus?: number | string;
+  details?: unknown;
 };
 
 function isFetchBaseQueryError(err: unknown): err is FetchBaseQueryError {
@@ -239,7 +240,7 @@ export function parseApiError(
   fieldErrors = inferFieldErrorsFromCode(code, message, fieldErrors);
   const httpStatus = payloadObj?.httpStatus ?? rtk.status;
 
-  return { code, message, traceId, fieldErrors, httpStatus };
+  return { code, message, traceId, fieldErrors, httpStatus, details };
 }
 
 /** Extract user-facing text from RTK Query / contract envelope errors. */

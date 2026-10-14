@@ -288,6 +288,7 @@ const OPERATIONS_NAV: WorkspaceNavStep[] = [
 const CATALOG_NAV: WorkspaceNavStep[] = [
   { href: "/ecommerce", label: "Catalog", hint: "Products & publish" },
   { href: "/ecommerce/categories", label: "Categories", hint: "Shop collections" },
+  { href: "/ecommerce/banners", label: "Banners", hint: "Offers rail — home & store" },
   { href: "/ecommerce/inventory", label: "Inventory", hint: "Stock per SKU" },
   { href: "/ecommerce/gold-rates", label: "Gold rates", hint: "Store pricing" },
   { href: "/ecommerce/tax", label: "Tax", hint: "GST & HSN" },

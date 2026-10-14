@@ -18,6 +18,7 @@ import {
   Gift,
   HandCoins,
   Headphones,
+  ImageIcon,
   Landmark,
   LayoutDashboard,
   Layers3,
@@ -123,6 +124,7 @@ const groups: { label: string; items: NavItem[] }[] = [
     items: [
       { label: "Catalog", href: "/ecommerce", icon: ShoppingBag },
       { label: "Categories", href: "/ecommerce/categories", icon: Layers3 },
+      { label: "Banners", href: "/ecommerce/banners", icon: ImageIcon },
       { label: "Inventory", href: "/ecommerce/inventory", icon: Package },
       {
         label: "Store gold rates",
