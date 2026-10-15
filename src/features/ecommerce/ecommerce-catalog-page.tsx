@@ -27,6 +27,7 @@ import { PricingPreviewPanel } from "@/src/features/ecommerce/ecommerce-shared";
 import { ShopPriceLabel, useEcommerceCatalogWrite } from "@/src/features/ecommerce/ecommerce-admin-shared";
 import { EcommerceProductDialog } from "@/src/features/ecommerce/ecommerce-product-dialog";
 import { EcommerceCatalogImage } from "@/src/features/ecommerce/ecommerce-catalog-image";
+import { EcommercePromotionComposerDialog } from "@/src/features/ecommerce/ecommerce-promotion-composer-dialog";
 export function EcommerceCatalogPage() {
   const [statusFilter, setStatusFilter] = useState<string>("ALL");
   const pager = useCursorPagination(10, `ecommerce-products:${statusFilter}`);
@@ -40,6 +41,11 @@ export function EcommerceCatalogPage() {
   const storeActive = operations.data?.ecommerce?.active === true;
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Record<string, unknown> | null>(null);
+  const [notifyTarget, setNotifyTarget] = useState<{
+    kind: "product";
+    productId: string;
+    label: string;
+  } | null>(null);
 
   if (query.isLoading) return <PageSkeleton cards={3} />;
   if (query.isError) return <QueryError error={query.error} onRetry={query.refetch} />;
@@ -147,7 +153,7 @@ export function EcommerceCatalogPage() {
                 </div>
                 <div className="flex min-w-0 flex-1 flex-col justify-between gap-3">
                   <div><div className="flex flex-wrap items-center gap-2"><StatusBadge status={p.status === "PUBLISHED" ? "ACTIVE" : p.status === "ARCHIVED" ? "INACTIVE" : p.status === "DRAFT" ? "DRAFT" : "PENDING"} />{p.featured === true ? <span className="rounded-full bg-[#f9f0df] px-2.5 py-1 text-[.65rem] font-bold text-[#89601e]">Featured</span> : null}</div><h3 className="mt-2 line-clamp-2 text-lg font-semibold text-[#33252a]">{p.name}</h3><p className="mt-1 text-xs text-muted-foreground">{p.sku ? `SKU ${p.sku} · ` : ""}{p.purity ? `${p.purity} gold · ` : ""}{p.priceMode === "FIXED" ? "Fixed price" : "Gold rate based"}</p></div>
-                  <div className="flex flex-wrap items-center justify-between gap-3"><div><span className="text-[.65rem] font-semibold uppercase tracking-wider text-muted-foreground">Estimated total</span><div className="text-[#730321]"><ShopPriceLabel pricing={p.pricing} /></div></div><Button type="button" size="sm" variant="outline" disabled={!entitled} onClick={() => { setEditing(p); setDialogOpen(true); }}>Edit product</Button></div>
+                  <div className="flex flex-wrap items-center justify-between gap-3"><div><span className="text-[.65rem] font-semibold uppercase tracking-wider text-muted-foreground">Estimated total</span><div className="text-[#730321]"><ShopPriceLabel pricing={p.pricing} /></div></div><div className="flex flex-wrap gap-2">{p.status === "PUBLISHED" ? (<Button type="button" size="sm" variant="secondary" disabled={!entitled} onClick={() => setNotifyTarget({ kind: "product", productId: String(p.id), label: String(p.name) })}>Notify</Button>) : null}<Button type="button" size="sm" variant="outline" disabled={!entitled} onClick={() => { setEditing(p); setDialogOpen(true); }}>Edit product</Button></div></div>
                 </div>
               </div>
               <details className="border-t border-[#f0e9e4] px-5 py-3 text-sm"><summary className="cursor-pointer font-semibold text-[#704753]">Price breakdown</summary><div className="py-4"><PricingPreviewPanel pricing={p.pricing} /></div></details>
@@ -167,6 +173,14 @@ export function EcommerceCatalogPage() {
         onOpenChange={setDialogOpen}
         product={editing}
         onSaved={() => query.refetch()}
+      />
+      <EcommercePromotionComposerDialog
+        target={notifyTarget}
+        open={Boolean(notifyTarget)}
+        onOpenChange={(open) => {
+          if (!open) setNotifyTarget(null);
+        }}
+        onSent={() => query.refetch()}
       />
     </>
   );

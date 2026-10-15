@@ -26,6 +26,7 @@ import {
   EcommerceCatalogNav,
   EcommerceSettingsHint,
 } from "@/src/features/ecommerce/ecommerce-settings-ui";
+import { EcommercePromotionComposerDialog } from "@/src/features/ecommerce/ecommerce-promotion-composer-dialog";
 type CategoryRow = {
   id: string;
   name: string;
@@ -54,6 +55,11 @@ export function EcommerceCategoriesPage() {
   const [displayOrder, setDisplayOrder] = useState("0");
   const [imageUploadId, setImageUploadId] = useState<string | null>(null);
   const [error, setError] = useState<string | undefined>();
+  const [notifyTarget, setNotifyTarget] = useState<{
+    kind: "category";
+    categoryId: string;
+    label: string;
+  } | null>(null);
 
   if (query.isLoading) return <PageSkeleton cards={2} />;
   if (query.isError) return <QueryError error={query.error} onRetry={query.refetch} />;
@@ -185,9 +191,26 @@ export function EcommerceCategoriesPage() {
                   Edit category
                 </Button>
                 {c.active ? (
-                  <Button type="button" size="sm" variant="secondary" disabled={!entitled} onClick={() => archive(c)}>
-                    Archive
-                  </Button>
+                  <>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="secondary"
+                      disabled={!entitled}
+                      onClick={() =>
+                        setNotifyTarget({
+                          kind: "category",
+                          categoryId: c.id,
+                          label: c.name,
+                        })
+                      }
+                    >
+                      Notify
+                    </Button>
+                    <Button type="button" size="sm" variant="secondary" disabled={!entitled} onClick={() => archive(c)}>
+                      Archive
+                    </Button>
+                  </>
                 ) : null}
               </div>
               </div>
@@ -250,6 +273,14 @@ export function EcommerceCategoriesPage() {
           <FormFieldError message={error} />
         </div>
       </ActionDialog>
+      <EcommercePromotionComposerDialog
+        target={notifyTarget}
+        open={Boolean(notifyTarget)}
+        onOpenChange={(open) => {
+          if (!open) setNotifyTarget(null);
+        }}
+        onSent={() => query.refetch()}
+      />
     </>
   );
 }

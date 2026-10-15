@@ -2170,26 +2170,48 @@ export const adminApi = createApi({
       providesTags: ["GoldRate"],
     }),
     addGoldRate: builder.mutation<
-      GoldRate,
-      { ratePerGram: number; branch: string; idempotencyKey: string }
+      GoldRate & { notification?: Record<string, unknown> },
+      {
+        ratePerGram: number;
+        branch: string;
+        idempotencyKey: string;
+        effectiveDate?: string;
+        notification?: { enabled: boolean };
+      }
     >({
       query: (body) => ({
         url: "/admin/gold-rate",
         method: "POST",
         body: {
           ratePerGramPaise: Math.round(body.ratePerGram * 100),
-          effectiveDate: businessTodayYmd(),
+          effectiveDate: body.effectiveDate ?? businessTodayYmd(),
           branchId:
             !body.branch ||
             body.branch === "ALL" ||
             body.branch === "All branches"
               ? null
               : body.branch,
+          ...(body.notification ? { notification: body.notification } : {}),
         },
         headers: { "X-Idempotency-Key": body.idempotencyKey },
         mockKey: "addGoldRate",
       }),
+      transformResponse: (raw) => contractPayload(raw) as GoldRate & { notification?: Record<string, unknown> },
       invalidatesTags: ["GoldRate", "Dashboard"],
+    }),
+    getGoldRateNotifications: builder.query<
+      { items: Record<string, unknown>[]; meta: Record<string, unknown> },
+      { limit?: number; cursor?: string } | void
+    >({
+      query: (params) => ({
+        url: "/admin/gold-rate/notifications",
+        params: params ?? {},
+        mockKey: "goldRateNotifications",
+      }),
+      transformResponse: (raw) => ({
+        items: (contractPayload(raw) as Record<string, unknown>[]) ?? [],
+        meta: contractMeta(raw) as Record<string, unknown>,
+      }),
     }),
     getMessages: builder.query<
       ReturnType<typeof adaptMessages>,
@@ -3409,18 +3431,114 @@ export const adminApi = createApi({
     }),
     publishEcommerceProduct: builder.mutation<
       Record<string, any>,
-      { productId: string; expectedVersion: number }
+      {
+        productId: string;
+        expectedVersion: number;
+        notification?: Record<string, unknown>;
+        idempotencyKey?: string;
+      }
     >({
-      query: ({ productId, expectedVersion }) => ({
+      query: ({ productId, expectedVersion, notification, idempotencyKey }) => ({
         url: `/admin/ecommerce/products/${productId}/publish`,
         method: "POST",
-        body: { expectedVersion },
+        body: {
+          expectedVersion,
+          ...(notification ? { notification } : {}),
+        },
         mockKey: "publishEcommerceProduct",
         params: { productId },
+        ...(idempotencyKey
+          ? { headers: { "X-Idempotency-Key": idempotencyKey } }
+          : {}),
       }),
       transformResponse: (raw) =>
         (contractPayload(raw) as Record<string, unknown>) ?? {},
       invalidatesTags: ["Ecommerce"],
+    }),
+    previewEcommerceProductPromotion: builder.mutation<
+      Record<string, any>,
+      { productId: string; body?: Record<string, unknown> }
+    >({
+      query: ({ productId, body = {} }) => ({
+        url: `/admin/ecommerce/products/${productId}/notifications/preview`,
+        method: "POST",
+        body,
+        mockKey: "previewEcommerceProductPromotion",
+        params: { productId },
+      }),
+      transformResponse: (raw) =>
+        (contractPayload(raw) as Record<string, unknown>) ?? {},
+    }),
+    sendEcommerceProductPromotion: builder.mutation<
+      Record<string, any>,
+      { productId: string; body: Record<string, unknown>; idempotencyKey: string }
+    >({
+      query: ({ productId, body, idempotencyKey }) => ({
+        url: `/admin/ecommerce/products/${productId}/notifications`,
+        method: "POST",
+        body,
+        mockKey: "sendEcommerceProductPromotion",
+        params: { productId },
+        headers: { "X-Idempotency-Key": idempotencyKey },
+      }),
+      transformResponse: (raw) =>
+        (contractPayload(raw) as Record<string, unknown>) ?? {},
+      invalidatesTags: ["Ecommerce"],
+    }),
+    previewEcommerceCategoryPromotion: builder.mutation<
+      Record<string, any>,
+      { categoryId: string; body?: Record<string, unknown> }
+    >({
+      query: ({ categoryId, body = {} }) => ({
+        url: `/admin/ecommerce/categories/${categoryId}/notifications/preview`,
+        method: "POST",
+        body,
+        mockKey: "previewEcommerceCategoryPromotion",
+        params: { categoryId },
+      }),
+      transformResponse: (raw) =>
+        (contractPayload(raw) as Record<string, unknown>) ?? {},
+    }),
+    sendEcommerceCategoryPromotion: builder.mutation<
+      Record<string, any>,
+      { categoryId: string; body: Record<string, unknown>; idempotencyKey: string }
+    >({
+      query: ({ categoryId, body, idempotencyKey }) => ({
+        url: `/admin/ecommerce/categories/${categoryId}/notifications`,
+        method: "POST",
+        body,
+        mockKey: "sendEcommerceCategoryPromotion",
+        params: { categoryId },
+        headers: { "X-Idempotency-Key": idempotencyKey },
+      }),
+      transformResponse: (raw) =>
+        (contractPayload(raw) as Record<string, unknown>) ?? {},
+      invalidatesTags: ["Ecommerce"],
+    }),
+    getEcommercePromotionCampaigns: builder.query<
+      Record<string, any>,
+      { productId?: string; categoryId?: string; cursor?: string; limit?: number }
+    >({
+      query: (params) => ({
+        url: "/admin/ecommerce/notifications",
+        mockKey: "getEcommercePromotionCampaigns",
+        params,
+      }),
+      transformResponse: (raw) =>
+        (contractPayload(raw) as Record<string, unknown>) ?? {},
+      providesTags: ["Ecommerce"],
+    }),
+    getEcommercePromotionCampaign: builder.query<
+      Record<string, any>,
+      { campaignId: string }
+    >({
+      query: ({ campaignId }) => ({
+        url: `/admin/ecommerce/notifications/${campaignId}`,
+        mockKey: "getEcommercePromotionCampaign",
+        params: { campaignId },
+      }),
+      transformResponse: (raw) =>
+        (contractPayload(raw) as Record<string, unknown>) ?? {},
     }),
     archiveEcommerceProduct: builder.mutation<
       Record<string, any>,
@@ -5058,6 +5176,7 @@ export const {
   useGetGlobalSearchQuery,
   useGetGoldRateCurrentQuery,
   useGetGoldRatesQuery,
+  useGetGoldRateNotificationsQuery,
   useAddGoldRateMutation,
   useGetMessagesQuery,
   useResendMessageMutation,
@@ -5141,6 +5260,12 @@ export const {
   useCreateEcommerceProductMutation,
   usePatchEcommerceProductMutation,
   usePublishEcommerceProductMutation,
+  usePreviewEcommerceProductPromotionMutation,
+  useSendEcommerceProductPromotionMutation,
+  usePreviewEcommerceCategoryPromotionMutation,
+  useSendEcommerceCategoryPromotionMutation,
+  useGetEcommercePromotionCampaignsQuery,
+  useGetEcommercePromotionCampaignQuery,
   useArchiveEcommerceProductMutation,
   usePreviewEcommerceProductPriceQuery,
   useLazyPreviewEcommerceProductPriceQuery,

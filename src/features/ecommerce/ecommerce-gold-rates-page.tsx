@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Plus, Scale } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -31,17 +31,50 @@ import {
   EcommerceCatalogNav,
   EcommerceSettingsHint,
 } from "@/src/features/ecommerce/ecommerce-settings-ui";
+import { Switch } from "@/components/ui/switch";
+import { useAppSelector } from "@/src/store/hooks";
+import { hasPermission } from "@/src/lib/permissions";
+import {
+  DATETIME_LOCAL_TIMEZONE_LABEL,
+  datetimeLocalValueToUtcIso,
+  utcIsoToDatetimeLocalValue,
+} from "@/src/lib/datetime-local";
+import { ecommerceGoldRateNotificationPreview } from "@/src/lib/gold-rate-notification-ui";
+
 export function EcommerceGoldRatesPage() {
   const current = useGetEcommerceGoldRatesCurrentQuery();
   const history = useGetEcommerceGoldRatesHistoryQuery({ limit: 20 });
   const [setRate] = useSetEcommerceGoldRateMutation();
   const { entitled, disabledMessage } = useEcommerceCatalogWrite();
   const [open, setOpen] = useState(false);
+  const [effectiveMode, setEffectiveMode] = useState<"NOW" | "SCHEDULED">("NOW");
   const [purity, setPurity] = useState("22K");
   const [rateRupee, setRateRupee] = useState("");
-  const [effectiveAt, setEffectiveAt] = useState(
-    () => new Date().toISOString().slice(0, 16),
+  const [effectiveAt, setEffectiveAt] = useState(() =>
+    utcIsoToDatetimeLocalValue(new Date().toISOString()),
   );
+  const [notifyCustomers, setNotifyCustomers] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const user = useAppSelector((s) => s.session.session?.user);
+  const canNotify = hasPermission(user, "message.send");
+
+  const notifyPreview = useMemo(() => {
+    if (!notifyCustomers || !canNotify) return null;
+    const rupees = Number(rateRupee);
+    if (!Number.isFinite(rupees) || rupees <= 0) return null;
+    const iso =
+      effectiveMode === "NOW" ? new Date().toISOString() : datetimeLocalValueToUtcIso(effectiveAt);
+    const scheduled = effectiveMode === "SCHEDULED" && iso
+      ? new Date(iso).getTime() > Date.now() + 60_000
+      : false;
+    return ecommerceGoldRateNotificationPreview({
+      purity,
+      ratePerGramRupee: rupees,
+      effectiveAtLocal: iso ?? effectiveAt,
+      timezoneLabel: DATETIME_LOCAL_TIMEZONE_LABEL,
+      scheduled,
+    });
+  }, [notifyCustomers, canNotify, rateRupee, purity, effectiveAt]);
 
   if (current.isLoading || history.isLoading) return <PageSkeleton cards={3} />;
   if (current.isError || history.isError) {
@@ -57,8 +90,8 @@ export function EcommerceGoldRatesPage() {
   }
 
   async function submitRate() {
-    if (!entitled) {
-      toast.error(disabledMessage ?? "Not entitled");
+    if (!entitled || submitting) {
+      if (!entitled) toast.error(disabledMessage ?? "Not entitled");
       return;
     }
     const rupees = Number(rateRupee);
@@ -66,19 +99,46 @@ export function EcommerceGoldRatesPage() {
       toast.error("Enter a valid rate per gram in rupees.");
       return;
     }
+    if (effectiveMode === "SCHEDULED") {
+      const effectiveIso = datetimeLocalValueToUtcIso(effectiveAt);
+      if (!effectiveIso) {
+        toast.error("Enter a valid effective date and time.");
+        return;
+      }
+    }
+    setSubmitting(true);
     try {
-      await setRate({
+      const result = await setRate({
         purity,
         ratePerGramPaise: Math.round(rupees * 100),
-        effectiveAt: new Date(effectiveAt).toISOString(),
+        ...(effectiveMode === "NOW"
+          ? { effectiveTiming: "NOW" as const }
+          : {
+              effectiveTiming: "SCHEDULED" as const,
+              effectiveAt: datetimeLocalValueToUtcIso(effectiveAt)!,
+            }),
+        ...(notifyCustomers && canNotify ? { notification: { enabled: true } } : {}),
       }).unwrap();
       toast.success("Gold rate published");
+      const promo = result.notification as Record<string, unknown> | undefined;
+      if (promo?.enqueued || promo?.queued) {
+        toast.success("Customer notification queued");
+      } else if (promo?.intentPersisted && promo?.enqueueError) {
+        toast.message("Notification saved — delivery pending");
+      } else if (promo?.scheduled) {
+        toast.message("Notification scheduled for effective time");
+      } else if (promo?.skipped && promo?.reason) {
+        toast.message("Notification skipped", { description: String(promo.reason) });
+      }
       setOpen(false);
+      setNotifyCustomers(false);
       current.refetch();
       history.refetch();
     } catch (err) {
       toastApiError(err);
       throw err;
+    } finally {
+      setSubmitting(false);
     }
   }
 
@@ -91,7 +151,15 @@ export function EcommerceGoldRatesPage() {
         title="Store gold rates"
         description="Set an independent price per purity. Published prices update the online catalog automatically."
         actions={
-          <Button type="button" disabled={!entitled} onClick={() => setOpen(true)}>
+          <Button
+            type="button"
+            disabled={!entitled}
+            onClick={() => {
+              setEffectiveMode("NOW");
+              setNotifyCustomers(false);
+              setOpen(true);
+            }}
+          >
             <Plus className="mr-2 size-4" /> Publish rate
           </Button>
         }
@@ -170,7 +238,7 @@ export function EcommerceGoldRatesPage() {
         onOpenChange={setOpen}
         title="Publish ecommerce gold rate"
         actionLabel="Save rate"
-        submitDisabled={!entitled}
+        submitDisabled={!entitled || submitting}
         onSubmit={submitRate}
       >
         <div className="grid gap-4">
@@ -199,13 +267,57 @@ export function EcommerceGoldRatesPage() {
             />
           </div>
           <div>
-            <FieldLabel>Effective at</FieldLabel>
-            <Input
-              type="datetime-local"
-              value={effectiveAt}
-              onChange={(e) => setEffectiveAt(e.target.value)}
-            />
+            <FieldLabel>Effective time</FieldLabel>
+            <Select
+              value={effectiveMode}
+              onValueChange={(v) => setEffectiveMode(v as "NOW" | "SCHEDULED")}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="NOW">Now (server time at publish)</SelectItem>
+                <SelectItem value="SCHEDULED">Schedule specific time</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
+          {effectiveMode === "SCHEDULED" ? (
+            <div>
+              <FieldLabel>Effective at</FieldLabel>
+              <Input
+                type="datetime-local"
+                value={effectiveAt}
+                onChange={(e) => setEffectiveAt(e.target.value)}
+              />
+              <p className="mt-1 text-xs text-muted-foreground">
+                Times use {DATETIME_LOCAL_TIMEZONE_LABEL}. Past times will not send a current-rate
+                notification.
+              </p>
+            </div>
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              Effective time is resolved on the server when you publish (not when this dialog opened).
+            </p>
+          )}
+          {canNotify ? (
+            <div className="flex items-center justify-between rounded-xl border p-4">
+              <div>
+                <p className="font-medium text-[#28161a]">Notify customers</p>
+                <p className="text-xs text-muted-foreground">
+                  Optional push when this shop rate becomes effective.
+                </p>
+              </div>
+              <Switch checked={notifyCustomers} onCheckedChange={setNotifyCustomers} />
+            </div>
+          ) : null}
+          {notifyPreview ? (
+            <div className="rounded-xl border border-[#eaded9] bg-[#faf6f1] p-4 text-sm">
+              <p className="font-semibold text-[#4c2631]">{notifyPreview.purpose}</p>
+              <p className="mt-2 font-medium">{notifyPreview.title}</p>
+              <p className="mt-1 text-muted-foreground">{notifyPreview.body}</p>
+              <p className="mt-2 text-xs text-muted-foreground">{notifyPreview.scheduleNote}</p>
+            </div>
+          ) : null}
         </div>
       </ActionDialog>
     </>

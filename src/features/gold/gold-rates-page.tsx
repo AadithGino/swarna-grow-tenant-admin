@@ -1,6 +1,10 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { Switch } from "@/components/ui/switch";
+import { useAppSelector } from "@/src/store/hooks";
+import { hasPermission } from "@/src/lib/permissions";
+import { schemeGoldRateNotificationPreview } from "@/src/lib/gold-rate-notification-ui";
 import { useExternalValueSync } from "@/src/hooks/use-external-value-sync";
 import {
   ArrowDownRight,
@@ -58,8 +62,11 @@ import {
   useAddGoldRateMutation,
   useGetBranchesQuery,
   useGetGoldRateCurrentQuery,
+  useGetGoldRateNotificationsQuery,
   useGetGoldRatesQuery,
 } from "@/src/store/api/admin-api";
+import { StatusBadge } from "@/src/components/common/status-badge";
+import { CursorPagination } from "@/src/components/common/cursor-pagination";
 
 function trendLabel(row: {
   effectiveDate?: string | null;
@@ -79,7 +86,14 @@ function trendLabel(row: {
 export function GoldRatesPage() {
   const actingBranchId = useActingBranchId();
   const branchKey = useActingBranchKey();
+  const user = useAppSelector((s) => s.session.session?.user);
+  const canNotify = hasPermission(user, "message.send");
   const pager = useCursorPagination(8, `gold-history|${branchKey}`);
+  const notifyPager = useCursorPagination(10, `gold-notify|${branchKey}`);
+  const notifyQuery = useGetGoldRateNotificationsQuery(
+    canNotify ? { ...notifyPager.queryParams } : undefined,
+    { skip: !canNotify },
+  );
   const query = useGetGoldRatesQuery({
     branchId: actingBranchId,
     ...pager.queryParams,
@@ -94,7 +108,23 @@ export function GoldRatesPage() {
   const [branch, setBranch] = useExternalValueSync(actingBranchId ?? "ALL");
   const [rateTouched, setRateTouched] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [notifyCustomers, setNotifyCustomers] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const notifyItems = notifyQuery.data?.items ?? [];
+  const notifyPage = {
+    ...emptyPageMeta(),
+    ...(notifyQuery.data?.meta as Partial<ReturnType<typeof emptyPageMeta>> | undefined),
+    limit: notifyPager.limit,
+  };
   const effectiveDate = businessTodayYmd();
+  const notifyPreview = useMemo(() => {
+    if (!notifyCustomers || !canNotify || !rate) return null;
+    return schemeGoldRateNotificationPreview({
+      ratePerGram: rate,
+      effectiveDateYmd: effectiveDate,
+      scheduled: effectiveDate > businessTodayYmd(),
+    });
+  }, [notifyCustomers, canNotify, rate, effectiveDate]);
   const rateError =
     rateTouched || rate > 0 ? liveGoldRatePerGramError(rate) : undefined;
 
@@ -156,7 +186,10 @@ export function GoldRatesPage() {
             open={dialogOpen}
             onOpenChange={(open) => {
               setDialogOpen(open);
-              if (!open) setRateTouched(false);
+              if (!open) {
+                setRateTouched(false);
+                setNotifyCustomers(false);
+              }
             }}
             trigger={
               <Button onClick={() => setDialogOpen(true)}>
@@ -167,8 +200,9 @@ export function GoldRatesPage() {
             title="Set gold rate"
             description="The new rate is immutable and becomes effective on the business date below (IST)."
             actionLabel="Publish rate"
-            submitDisabled={!goldRateFormReady(rate, effectiveDate)}
+            submitDisabled={!goldRateFormReady(rate, effectiveDate) || submitting}
             onSubmit={async () => {
+              if (submitting) return false;
               setRateTouched(true);
               const rateErr = validateGoldRatePerGram(rate);
               const dateErr = validateGoldEffectiveDate(effectiveDate);
@@ -176,17 +210,35 @@ export function GoldRatesPage() {
                 toast.error(rateErr ?? dateErr);
                 return false;
               }
+              setSubmitting(true);
               try {
-                await addRate({
+                const result = await addRate({
                   ratePerGram: rate,
                   branch,
+                  effectiveDate,
                   idempotencyKey: idempotencyKey(),
+                  ...(notifyCustomers && canNotify
+                    ? { notification: { enabled: true } }
+                    : {}),
                 }).unwrap();
                 toast.success("Gold rate published");
+                const promo = (result as { notification?: Record<string, unknown> }).notification;
+                if (promo?.enqueued || promo?.queued) {
+                  toast.success("Customer notification queued");
+                } else if (promo?.intentPersisted && promo?.enqueueError) {
+                  toast.message("Notification saved — delivery pending");
+                } else if (promo?.scheduled) {
+                  toast.message("Notification scheduled for effective date");
+                } else if (promo?.skipped && promo?.reason) {
+                  toast.message("Notification skipped", { description: String(promo.reason) });
+                }
                 setDialogOpen(false);
+                setNotifyCustomers(false);
               } catch (err) {
                 toastApiError(err, "Could not publish gold rate");
                 return false;
+              } finally {
+                setSubmitting(false);
               }
             }}
           >
@@ -242,6 +294,25 @@ export function GoldRatesPage() {
                 the customer&apos;s branch (branch-specific rate, else
                 tenant-wide rate).
               </div>
+              {canNotify ? (
+                <div className="flex items-center justify-between rounded-xl border p-4">
+                  <div>
+                    <p className="font-medium text-[#28161a]">Notify customers</p>
+                    <p className="text-xs text-muted-foreground">
+                      Optional push when this 22K scheme rate becomes effective (IST business date).
+                    </p>
+                  </div>
+                  <Switch checked={notifyCustomers} onCheckedChange={setNotifyCustomers} />
+                </div>
+              ) : null}
+              {notifyPreview ? (
+                <div className="rounded-xl border border-[#eaded9] bg-[#faf6f1] p-4 text-sm">
+                  <p className="font-semibold text-[#4c2631]">{notifyPreview.purpose}</p>
+                  <p className="mt-2 font-medium">{notifyPreview.title}</p>
+                  <p className="mt-1 text-muted-foreground">{notifyPreview.body}</p>
+                  <p className="mt-2 text-xs text-muted-foreground">{notifyPreview.scheduleNote}</p>
+                </div>
+              ) : null}
             </div>
           </ActionDialog>
         }
@@ -313,6 +384,76 @@ export function GoldRatesPage() {
           )}
         </div>
       </Surface>
+      {canNotify ? (
+        <Surface
+          title="Rate push notifications"
+          description="Scheme gold-rate FCM campaigns (does not require ecommerce)."
+          className="mt-6"
+        >
+          {notifyQuery.isLoading ? (
+            <p className="p-4 text-sm text-muted-foreground">Loading…</p>
+          ) : notifyQuery.isError ? (
+            <QueryError error={notifyQuery.error} onRetry={notifyQuery.refetch} />
+          ) : (
+            <>
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[640px] text-left text-sm">
+                  <thead>
+                    <tr className="border-b text-muted-foreground">
+                      <th className="p-3 font-medium">Title</th>
+                      <th className="p-3 font-medium">Rate</th>
+                      <th className="p-3 font-medium">Effective</th>
+                      <th className="p-3 font-medium">Status</th>
+                      <th className="p-3 font-medium">Delivered</th>
+                      <th className="p-3 font-medium">Failed</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {notifyItems.length === 0 ? (
+                      <tr>
+                        <td colSpan={6} className="p-4 text-muted-foreground">
+                          No rate notifications yet.
+                        </td>
+                      </tr>
+                    ) : (
+                      notifyItems.map((row: Record<string, unknown>) => (
+                        <tr key={String(row.id)} className="border-b border-[#f0e8e4]">
+                          <td className="p-3 font-medium">{String(row.title ?? "—")}</td>
+                          <td className="p-3">
+                            {row.ratePerGramPaise != null
+                              ? money(Number(row.ratePerGramPaise) / 100)
+                              : "—"}
+                          </td>
+                          <td className="p-3 text-muted-foreground">
+                            {String(row.schemeEffectiveDate ?? row.effectiveAt ?? "—")}
+                          </td>
+                          <td className="p-3">
+                            <StatusBadge status={String(row.status ?? "UNKNOWN")} />
+                          </td>
+                          <td className="p-3">
+                            {Number((row.stats as { delivered?: number })?.delivered ?? 0)}
+                          </td>
+                          <td className="p-3">
+                            {Number((row.stats as { failed?: number })?.failed ?? 0)}
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+              <CursorPagination
+                page={notifyPage}
+                pageIndex={notifyPager.pageIndex}
+                rowCount={notifyItems.length}
+                onNext={() => notifyPager.goNext(notifyPage.nextCursor ?? null)}
+                onPrevious={notifyPager.goPrevious}
+                canPrevious={notifyPager.canPrevious}
+              />
+            </>
+          )}
+        </Surface>
+      ) : null}
       <Surface title="Rate history" description="Immutable audit trail">
         <PaginatedDataTable
           rows={history}

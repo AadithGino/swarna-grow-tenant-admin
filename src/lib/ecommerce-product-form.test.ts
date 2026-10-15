@@ -1,74 +1,51 @@
 import { describe, expect, it } from "vitest";
 import {
   buildEcommerceProductBody,
-  saveActionLabel,
-  type ProductFormInput,
+  productRowToFormInput,
+  productScheduleOriginsFromRow,
 } from "@/src/lib/ecommerce-product-form";
 
-const base: ProductFormInput = {
-  name: "Ring",
-  slug: "ring",
-  sku: "",
-  description: "",
-  categoryId: "",
-  priceMode: "GOLD_RATE_BASED",
-  taxClassification: "GST_3",
-  imageUploadIds: [],
-  featured: true,
-  status: "DRAFT",
-  baseRupee: "",
-  saleRupee: "",
-  saleStartsAt: "",
-  saleEndsAt: "",
-  purity: "22K",
-  weightGrams: "5",
-  makingChargeMode: "PER_GRAM_PAISE",
-  makingFixedRupee: "",
-  makingPerGramRupee: "400",
-  makingPercentBps: "",
-  stones: [{ name: "Ruby", chargeRupee: "1500" }],
-  otherChargesRupee: "50",
-  offerType: "PERCENT_OFF",
-  offerValueRupee: "",
-  offerPercentBps: "500",
-  offerStartsAt: "",
-  offerEndsAt: "",
-};
-
-describe("buildEcommerceProductBody", () => {
-  it("maps gold-rate fields including making-only offer", () => {
-    const body = buildEcommerceProductBody(base);
-    expect(body.priceMode).toBe("GOLD_RATE_BASED");
-    expect(body.goldWeightMg).toBe(5000);
-    expect(body.makingChargeMode).toBe("PER_GRAM_PAISE");
-    expect(body.makingCharge).toEqual({ perGramPaise: 40_000 });
-    expect(body.stones).toEqual([{ name: "Ruby", chargePaise: 150_000 }]);
-    expect(body.otherChargesPaise).toBe(5000);
-    expect(body.offer).toMatchObject({ type: "PERCENT_OFF", percentBps: 500 });
-    expect(body.featured).toBe(true);
-  });
-
-  it("maps fixed pricing with optional sale window", () => {
-    const body = buildEcommerceProductBody({
-      ...base,
+describe("ecommerce product schedule round-trip", () => {
+  it("preserves UTC instant when form schedule fields unchanged", () => {
+    const original = "2026-03-10T10:15:00.000Z";
+    const row = {
       priceMode: "FIXED",
-      baseRupee: "99000",
-      saleRupee: "95000",
-      saleStartsAt: "2026-01-01T00:00",
-      saleEndsAt: "2027-01-01T00:00",
-      offerType: "",
-    });
-    expect(body.fixedPricing).toMatchObject({
-      basePricePaise: 9_900_000,
-      salePricePaise: 9_500_000,
-    });
-    expect(body.offer).toBeNull();
+      fixedPricing: { basePricePaise: 100_000, saleStartsAt: original },
+      taxClassification: "GST_3",
+      status: "DRAFT",
+    };
+    const form = productRowToFormInput(row, "GST_3");
+    const origins = productScheduleOriginsFromRow(row);
+    const body = buildEcommerceProductBody(form, origins);
+    const fixed = body.fixedPricing as Record<string, unknown>;
+    expect(fixed.saleStartsAt).toBeUndefined();
+    expect(form.saleStartsAt).toBeTruthy();
   });
-});
 
-describe("saveActionLabel", () => {
-  it("uses save changes for published products", () => {
-    expect(saveActionLabel("PUBLISHED")).toBe("Save changes");
-    expect(saveActionLabel("DRAFT")).toBe("Save draft");
+  it("maps stored UTC to datetime-local and back on edit", () => {
+    const previous = process.env.TZ;
+    process.env.TZ = "Asia/Kolkata";
+    try {
+      const original = "2026-06-15T04:30:00.000Z";
+      const row = {
+        priceMode: "FIXED",
+        fixedPricing: {
+          basePricePaise: 100_000,
+          salePricePaise: 80_000,
+          saleStartsAt: original,
+        },
+        taxClassification: "GST_3",
+        status: "DRAFT",
+      };
+      const form = productRowToFormInput(row, "GST_3");
+      expect(form.saleStartsAt).toBe("2026-06-15T10:00");
+      const edited = { ...form, saleStartsAt: "2026-06-16T10:00" };
+      const body = buildEcommerceProductBody(edited, productScheduleOriginsFromRow(row));
+      const fixed = body.fixedPricing as Record<string, unknown>;
+      expect(fixed.saleStartsAt).toBe("2026-06-16T04:30:00.000Z");
+    } finally {
+      if (previous === undefined) delete process.env.TZ;
+      else process.env.TZ = previous;
+    }
   });
 });

@@ -1,3 +1,9 @@
+import {
+  datetimeLocalValueToUtcIso,
+  resolveScheduleFieldForSave,
+  utcIsoToDatetimeLocalValue,
+} from "@/src/lib/datetime-local";
+
 export type StoneLineInput = { name: string; chargeRupee: string };
 
 export type ProductFormInput = {
@@ -38,7 +44,17 @@ export function rupeesToPaise(input: string): number | null {
   return Math.round(n * 100);
 }
 
-export function buildEcommerceProductBody(form: ProductFormInput): Record<string, unknown> {
+export type ProductFormScheduleOrigins = {
+  saleStartsAtIso?: string | null;
+  saleEndsAtIso?: string | null;
+  offerStartsAtIso?: string | null;
+  offerEndsAtIso?: string | null;
+};
+
+export function buildEcommerceProductBody(
+  form: ProductFormInput,
+  scheduleOrigins: ProductFormScheduleOrigins = {},
+): Record<string, unknown> {
   const body: Record<string, unknown> = {
     name: form.name.trim(),
     slug: form.slug.trim() || undefined,
@@ -60,12 +76,16 @@ export function buildEcommerceProductBody(form: ProductFormInput): Record<string
     const fixedPricing: Record<string, unknown> = { basePricePaise };
     const salePricePaise = rupeesToPaise(form.saleRupee);
     if (salePricePaise != null) fixedPricing.salePricePaise = salePricePaise;
-    if (form.saleStartsAt) {
-      fixedPricing.saleStartsAt = new Date(form.saleStartsAt).toISOString();
-    }
-    if (form.saleEndsAt) {
-      fixedPricing.saleEndsAt = new Date(form.saleEndsAt).toISOString();
-    }
+    const saleStartsResolved = resolveScheduleFieldForSave(
+      form.saleStartsAt,
+      scheduleOrigins.saleStartsAtIso,
+    );
+    if (saleStartsResolved !== undefined) fixedPricing.saleStartsAt = saleStartsResolved;
+    const saleEndsResolved = resolveScheduleFieldForSave(
+      form.saleEndsAt,
+      scheduleOrigins.saleEndsAtIso,
+    );
+    if (saleEndsResolved !== undefined) fixedPricing.saleEndsAt = saleEndsResolved;
     body.fixedPricing = fixedPricing;
     body.offer = null;
   } else {
@@ -109,8 +129,16 @@ export function buildEcommerceProductBody(form: ProductFormInput): Record<string
         if (!Number.isFinite(bps) || bps < 0) throw new Error("Enter offer percent (bps).");
         offer.percentBps = Math.round(bps);
       }
-      if (form.offerStartsAt) offer.startsAt = new Date(form.offerStartsAt).toISOString();
-      if (form.offerEndsAt) offer.endsAt = new Date(form.offerEndsAt).toISOString();
+      const offerStartsResolved = resolveScheduleFieldForSave(
+        form.offerStartsAt,
+        scheduleOrigins.offerStartsAtIso,
+      );
+      if (offerStartsResolved !== undefined) offer.startsAt = offerStartsResolved;
+      const offerEndsResolved = resolveScheduleFieldForSave(
+        form.offerEndsAt,
+        scheduleOrigins.offerEndsAtIso,
+      );
+      if (offerEndsResolved !== undefined) offer.endsAt = offerEndsResolved;
       body.offer = offer;
     } else {
       body.offer = null;
@@ -127,6 +155,19 @@ export function saveActionLabel(status: ProductFormInput["status"]): string {
 function paiseToRupeeString(paise?: number | null): string {
   if (paise == null) return "";
   return String(paise / 100);
+}
+
+export function productScheduleOriginsFromRow(
+  product: Record<string, unknown> | null | undefined,
+): ProductFormScheduleOrigins {
+  const fixed = (product?.fixedPricing ?? {}) as Record<string, unknown>;
+  const offer = (product?.offer ?? null) as Record<string, unknown> | null;
+  return {
+    saleStartsAtIso: (fixed.saleStartsAt as string) ?? null,
+    saleEndsAtIso: (fixed.saleEndsAt as string) ?? null,
+    offerStartsAtIso: (offer?.startsAt as string) ?? null,
+    offerEndsAtIso: (offer?.endsAt as string) ?? null,
+  };
 }
 
 export function productRowToFormInput(
@@ -155,10 +196,8 @@ export function productRowToFormInput(
     status: (product?.status as ProductFormInput["status"]) ?? "DRAFT",
     baseRupee: paiseToRupeeString(fixed.basePricePaise as number),
     saleRupee: paiseToRupeeString(fixed.salePricePaise as number),
-    saleStartsAt: fixed.saleStartsAt
-      ? String(fixed.saleStartsAt).slice(0, 16)
-      : "",
-    saleEndsAt: fixed.saleEndsAt ? String(fixed.saleEndsAt).slice(0, 16) : "",
+    saleStartsAt: utcIsoToDatetimeLocalValue(fixed.saleStartsAt as string | undefined),
+    saleEndsAt: utcIsoToDatetimeLocalValue(fixed.saleEndsAt as string | undefined),
     purity: String(product?.purity ?? "22K"),
     weightGrams:
       product?.goldWeightMg != null ? String(Number(product.goldWeightMg) / 1000) : "",
@@ -173,7 +212,7 @@ export function productRowToFormInput(
     offerType: (offer?.type as ProductFormInput["offerType"]) ?? "",
     offerValueRupee: paiseToRupeeString(offer?.valuePaise as number),
     offerPercentBps: offer?.percentBps != null ? String(offer.percentBps) : "",
-    offerStartsAt: offer?.startsAt ? String(offer.startsAt).slice(0, 16) : "",
-    offerEndsAt: offer?.endsAt ? String(offer.endsAt).slice(0, 16) : "",
+    offerStartsAt: utcIsoToDatetimeLocalValue(offer?.startsAt as string | undefined),
+    offerEndsAt: utcIsoToDatetimeLocalValue(offer?.endsAt as string | undefined),
   };
 }

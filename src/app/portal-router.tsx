@@ -155,6 +155,13 @@ const EcommerceCategoriesPage = dynamic(
     ),
   options,
 );
+const EcommerceCampaignsPage = dynamic(
+  () =>
+    import("@/src/features/ecommerce/ecommerce-campaigns-page").then(
+      (m) => m.EcommerceCampaignsPage,
+    ),
+  options,
+);
 const EcommerceBannersPage = dynamic(
   () =>
     import("@/src/features/ecommerce/ecommerce-banners-page").then(
@@ -350,6 +357,7 @@ export function PortalRouter({ slug }: { slug: string[] }) {
       break;
     case "ecommerce":
       if (id === "categories") page = <EcommerceCategoriesPage />;
+      else if (id === "campaigns") page = <EcommerceCampaignsPage />;
       else if (id === "banners") page = <EcommerceBannersPage />;
       else if (id === "gold-rates") page = <EcommerceGoldRatesPage />;
       else if (id === "tax") page = <EcommerceTaxSettingsPage />;

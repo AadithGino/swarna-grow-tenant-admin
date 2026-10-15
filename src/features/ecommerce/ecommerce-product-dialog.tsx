@@ -2,6 +2,16 @@
 
 import { useState } from "react";
 import { toast } from "sonner";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -35,16 +45,24 @@ import {
   usePublishEcommerceProductMutation,
   useArchiveEcommerceProductMutation,
   useLazyPreviewEcommerceProductPriceQuery,
+  useLazyGetEcommerceProductQuery,
 } from "@/src/store/api/admin-api";
 import { PricingPreviewPanel } from "@/src/features/ecommerce/ecommerce-shared";
 import { useEcommerceCatalogWrite } from "@/src/features/ecommerce/ecommerce-admin-shared";
+import { Switch } from "@/components/ui/switch";
+import { useAppSelector } from "@/src/store/hooks";
+import { hasPermission } from "@/src/lib/permissions";
+import { newIdempotencyKey } from "@/src/lib/idempotency";
 import { EcommerceCatalogImage } from "@/src/features/ecommerce/ecommerce-catalog-image";
 import {
   buildEcommerceProductBody,
   productRowToFormInput,
+  productScheduleOriginsFromRow,
   saveActionLabel,
   type ProductFormInput,
+  type ProductFormScheduleOrigins,
 } from "@/src/lib/ecommerce-product-form";
+import { DATETIME_LOCAL_TIMEZONE_LABEL } from "@/src/lib/datetime-local";
 
 type ProductRow = Record<string, any>;
 
@@ -76,6 +94,35 @@ function EcommerceProductDialogBody({
   const [preview, setPreview] = useState<Record<string, unknown> | null>(
     product?.pricing ?? null,
   );
+  const user = useAppSelector((s) => s.session.session?.user);
+  const canSendMessage = hasPermission(user, "message.send");
+  const [notifyNewArrival, setNotifyNewArrival] = useState(false);
+  const [notifyOffer, setNotifyOffer] = useState(false);
+  const [scheduleOrigins, setScheduleOrigins] = useState<ProductFormScheduleOrigins>(() =>
+    productScheduleOriginsFromRow(product),
+  );
+  const [conflictOpen, setConflictOpen] = useState(false);
+  const [conflictDraft, setConflictDraft] = useState<ProductFormInput | null>(null);
+  const [fetchProduct] = useLazyGetEcommerceProductQuery();
+
+  function describePromotion(promo: Record<string, unknown> | undefined) {
+    if (!promo) return;
+    if (promo.enqueued === true || promo.queued === true) {
+      toast.success("Notification queued for delivery");
+    } else if (promo.intentPersisted === true && promo.enqueueError) {
+      toast.message("Notification saved — delivery pending", {
+        description: "The server will retry sending in the background.",
+      });
+    } else if (promo.scheduled === true) {
+      toast.message("Notification scheduled", {
+        description: "It will send when the offer or sale starts.",
+      });
+    } else if (promo.reason) {
+      toast.message("Notification not sent", { description: String(promo.reason) });
+    } else if (promo.duplicate) {
+      toast.message("Notification already queued");
+    }
+  }
 
   const patchForm = (patch: Partial<ProductFormInput>) =>
     setForm((prev) => ({ ...prev, ...patch }));
@@ -117,7 +164,7 @@ function EcommerceProductDialogBody({
     setFieldError(undefined);
     let body: Record<string, unknown>;
     try {
-      body = buildEcommerceProductBody(form);
+      body = buildEcommerceProductBody(form, scheduleOrigins);
     } catch (err) {
       setFieldError(err instanceof Error ? err.message : "Invalid form");
       return;
@@ -125,10 +172,16 @@ function EcommerceProductDialogBody({
     try {
       let row = product;
       if (row?.id) {
+        const patchBody: Record<string, unknown> = { ...body, expectedVersion: recordVersion };
+        if (notifyOffer && canSendMessage && form.status === "PUBLISHED") {
+          patchBody.notification = { enabled: true, kind: "OFFER" };
+        }
         row = await patchProduct({
           productId: row.id,
-          body: { ...body, expectedVersion: recordVersion },
+          body: patchBody,
         }).unwrap();
+        describePromotion(row.promotion as Record<string, unknown> | undefined);
+        setScheduleOrigins(productScheduleOriginsFromRow(row));
       } else {
         row = await createProduct(body).unwrap();
       }
@@ -138,10 +191,18 @@ function EcommerceProductDialogBody({
         row = await publishProduct({
           productId: row.id,
           expectedVersion: row.version,
+          ...(notifyNewArrival && canSendMessage
+            ? {
+                notification: { enabled: true },
+                idempotencyKey: newIdempotencyKey(),
+              }
+            : {}),
         }).unwrap();
         setRecordVersion(row.version);
         setPreview(row.pricing ?? preview);
         toast.success("Published");
+        describePromotion(row.promotion as Record<string, unknown> | undefined);
+        setScheduleOrigins(productScheduleOriginsFromRow(row));
         onSaved?.();
         onOpenChange(false);
         return;
@@ -152,10 +213,51 @@ function EcommerceProductDialogBody({
     } catch (err) {
       const parsed = parseApiError(err);
       if (parsed.code === "VERSION_CONFLICT") {
-        setFieldError("This product was updated elsewhere. Close and reopen to refresh.");
+        setConflictDraft({ ...form });
+        setConflictOpen(true);
+        setFieldError(
+          "This product was updated elsewhere. Reload the latest version, review your edits, then save again.",
+        );
       }
       toastApiError(err);
     }
+  }
+
+  async function reloadProductAfterConflict(discardDraft = false) {
+    if (!product?.id) {
+      setConflictOpen(false);
+      return;
+    }
+    try {
+      const savedDraft = discardDraft ? null : conflictDraft;
+      const latest = await fetchProduct({ productId: product.id }).unwrap();
+      const latestForm = productRowToFormInput(latest, defaultTax);
+      setForm(latestForm);
+      setScheduleOrigins(productScheduleOriginsFromRow(latest));
+      setRecordVersion(latest.version ?? recordVersion);
+      setPreview(latest.pricing ?? preview);
+      setFieldError(undefined);
+      setConflictOpen(false);
+      if (savedDraft && !discardDraft) {
+        toast.message("Latest version loaded", {
+          description: "Your previous edits were kept in memory — reapply fields manually before saving.",
+        });
+        setConflictDraft(savedDraft);
+      } else {
+        setConflictDraft(null);
+        toast.message("Loaded latest product version");
+      }
+    } catch (err) {
+      toastApiError(err);
+    }
+  }
+
+  function reapplyConflictDraft() {
+    if (!conflictDraft) return;
+    setForm(conflictDraft);
+    toast.message("Restored your draft edits", {
+      description: "Compare with the loaded server version, then save using the current version number.",
+    });
   }
 
   async function archive() {
@@ -319,6 +421,9 @@ function EcommerceProductDialogBody({
                       inputMode="decimal"
                     />
                   </div>
+                  <p className="col-span-2 text-xs text-muted-foreground">
+                    Schedule times use {DATETIME_LOCAL_TIMEZONE_LABEL}.
+                  </p>
                   <div>
                     <FieldLabel>Sale starts</FieldLabel>
                     <Input
@@ -575,6 +680,28 @@ function EcommerceProductDialogBody({
               </div>
             </div>
             <FormFieldError message={fieldError} />
+            {canSendMessage && form.status !== "PUBLISHED" && !isArchived ? (
+              <div className="mt-4 flex items-start justify-between gap-4 rounded-xl border border-[#eaded9] bg-[#faf7f5] px-4 py-3">
+                <div>
+                  <p className="font-semibold text-[#28161a]">New-arrival push (optional)</p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Send one FCM when this product is published for the first time. Default off.
+                  </p>
+                </div>
+                <Switch checked={notifyNewArrival} onCheckedChange={setNotifyNewArrival} />
+              </div>
+            ) : null}
+            {canSendMessage && form.status === "PUBLISHED" && !isArchived ? (
+              <div className="mt-4 flex items-start justify-between gap-4 rounded-xl border border-[#eaded9] bg-[#faf7f5] px-4 py-3">
+                <div>
+                  <p className="font-semibold text-[#28161a]">Offer push (optional)</p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    When you save pricing/offer changes, queue an offer notification. Default off.
+                  </p>
+                </div>
+                <Switch checked={notifyOffer} onCheckedChange={setNotifyOffer} />
+              </div>
+            ) : null}
             <div className="mt-6 rounded-2xl bg-[#faf6f1] p-5">
               <p className="mb-2 font-semibold text-[#4c2631]">Server pricing preview</p>
               {previewState.isFetching ? (
@@ -613,6 +740,29 @@ function EcommerceProductDialogBody({
           ) : null}
         </DialogFooter>
       </DialogContent>
+      <AlertDialog open={conflictOpen} onOpenChange={setConflictOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Product updated elsewhere</AlertDialogTitle>
+            <AlertDialogDescription>
+              Your unsaved edits are preserved. Load the latest server version to review, optionally
+              reapply your draft, then save with the updated version number. Times use{" "}
+              {DATETIME_LOCAL_TIMEZONE_LABEL}.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep editing</AlertDialogCancel>
+            {conflictDraft ? (
+              <Button type="button" variant="secondary" onClick={reapplyConflictDraft}>
+                Reapply my draft
+              </Button>
+            ) : null}
+            <AlertDialogAction onClick={() => void reloadProductAfterConflict(false)}>
+              Load latest version
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }
