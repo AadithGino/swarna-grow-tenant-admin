@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
   AlertDialog,
@@ -79,10 +79,28 @@ function EcommerceProductDialogBody({
   const categories = useGetEcommerceCategoriesQuery(undefined);
   const tax = useGetEcommerceTaxSettingsQuery();
   const defaultTax = tax.data?.defaultClassification ?? "";
+  const [editorProduct, setEditorProduct] = useState<ProductRow | null>(() => product ?? null);
   const [form, setForm] = useState<ProductFormInput>(() =>
     productRowToFormInput(product, defaultTax),
   );
   const [recordVersion, setRecordVersion] = useState(product?.version ?? 1);
+  const persistInFlight = useRef(false);
+  const [saving, setSaving] = useState(false);
+  const serverStatus =
+    (editorProduct?.status as ProductFormInput["status"] | undefined) ??
+    (product?.status as ProductFormInput["status"] | undefined) ??
+    "DRAFT";
+  const editingProductId = editorProduct?.id ?? product?.id ?? null;
+
+  useEffect(() => {
+    setEditorProduct(product ?? null);
+    setForm(productRowToFormInput(product, defaultTax));
+    setScheduleOrigins(productScheduleOriginsFromRow(product));
+    setRecordVersion(product?.version ?? 1);
+    setConflictDraft(null);
+    setConflictOpen(false);
+    setFieldError(undefined);
+  }, [product?.id]);
   const [createProduct] = useCreateEcommerceProductMutation();
   const [patchProduct] = usePatchEcommerceProductMutation();
   const [publishProduct] = usePublishEcommerceProductMutation();
@@ -103,6 +121,7 @@ function EcommerceProductDialogBody({
   );
   const [conflictOpen, setConflictOpen] = useState(false);
   const [conflictDraft, setConflictDraft] = useState<ProductFormInput | null>(null);
+  const [discardDraftOpen, setDiscardDraftOpen] = useState(false);
   const [fetchProduct] = useLazyGetEcommerceProductQuery();
 
   function describePromotion(promo: Record<string, unknown> | undefined) {
@@ -161,54 +180,82 @@ function EcommerceProductDialogBody({
       toast.error(disabledMessage ?? "Not entitled");
       return;
     }
+    if (persistInFlight.current) return;
+    persistInFlight.current = true;
+    setSaving(true);
     setFieldError(undefined);
     let body: Record<string, unknown>;
     try {
       body = buildEcommerceProductBody(form, scheduleOrigins);
     } catch (err) {
       setFieldError(err instanceof Error ? err.message : "Invalid form");
+      persistInFlight.current = false;
+      setSaving(false);
       return;
     }
     try {
-      let row = product;
-      if (row?.id) {
+      let row: ProductRow;
+      if (editingProductId) {
         const patchBody: Record<string, unknown> = { ...body, expectedVersion: recordVersion };
-        if (notifyOffer && canSendMessage && form.status === "PUBLISHED") {
+        if (notifyOffer && canSendMessage && serverStatus === "PUBLISHED") {
           patchBody.notification = { enabled: true, kind: "OFFER" };
         }
         row = await patchProduct({
-          productId: row.id,
+          productId: editingProductId,
           body: patchBody,
         }).unwrap();
         describePromotion(row.promotion as Record<string, unknown> | undefined);
-        setScheduleOrigins(productScheduleOriginsFromRow(row));
       } else {
         row = await createProduct(body).unwrap();
       }
+      setEditorProduct(row);
       setRecordVersion(row.version);
+      setForm((prev) => ({
+        ...prev,
+        status: (row.status as ProductFormInput["status"]) ?? prev.status,
+      }));
+      setScheduleOrigins(productScheduleOriginsFromRow(row));
       setPreview(row.pricing ?? preview);
       if (opts?.publishAfter) {
-        row = await publishProduct({
-          productId: row.id,
-          expectedVersion: row.version,
-          ...(notifyNewArrival && canSendMessage
-            ? {
-                notification: { enabled: true },
-                idempotencyKey: newIdempotencyKey(),
-              }
-            : {}),
-        }).unwrap();
-        setRecordVersion(row.version);
-        setPreview(row.pricing ?? preview);
-        toast.success("Published");
-        describePromotion(row.promotion as Record<string, unknown> | undefined);
-        setScheduleOrigins(productScheduleOriginsFromRow(row));
-        onSaved?.();
-        onOpenChange(false);
-        return;
+        try {
+          row = await publishProduct({
+            productId: row.id,
+            expectedVersion: row.version,
+            ...(notifyNewArrival && canSendMessage
+              ? {
+                  notification: { enabled: true },
+                  idempotencyKey: newIdempotencyKey(),
+                }
+              : {}),
+          }).unwrap();
+          setEditorProduct(row);
+          setRecordVersion(row.version);
+          setForm((prev) => ({
+            ...prev,
+            status: (row.status as ProductFormInput["status"]) ?? "PUBLISHED",
+          }));
+          setPreview(row.pricing ?? preview);
+          toast.success("Published");
+          describePromotion(row.promotion as Record<string, unknown> | undefined);
+          setScheduleOrigins(productScheduleOriginsFromRow(row));
+          onSaved?.();
+          onOpenChange(false);
+          return;
+        } catch (publishErr) {
+          const parsed = parseApiError(publishErr);
+          if (parsed.code === "VERSION_CONFLICT") {
+            setConflictDraft({ ...form });
+            setConflictOpen(true);
+            setFieldError(
+              "Publish conflict — your draft is saved. Load the latest version, review, then publish again.",
+            );
+          }
+          toastApiError(publishErr);
+          return;
+        }
       }
       await refreshPreview(row.id);
-      toast.success(form.status === "PUBLISHED" ? "Changes saved" : "Draft saved");
+      toast.success(serverStatus === "PUBLISHED" ? "Changes saved" : "Draft saved");
       onSaved?.();
     } catch (err) {
       const parsed = parseApiError(err);
@@ -220,20 +267,24 @@ function EcommerceProductDialogBody({
         );
       }
       toastApiError(err);
+    } finally {
+      persistInFlight.current = false;
+      setSaving(false);
     }
   }
 
   async function reloadProductAfterConflict(discardDraft = false) {
-    if (!product?.id) {
+    if (!editingProductId) {
       setConflictOpen(false);
       return;
     }
     try {
       const savedDraft = discardDraft ? null : conflictDraft;
-      const latest = await fetchProduct({ productId: product.id }).unwrap();
+      const latest = await fetchProduct({ productId: editingProductId }).unwrap();
       const latestForm = productRowToFormInput(latest, defaultTax);
       setForm(latestForm);
       setScheduleOrigins(productScheduleOriginsFromRow(latest));
+      setEditorProduct(latest);
       setRecordVersion(latest.version ?? recordVersion);
       setPreview(latest.pricing ?? preview);
       setFieldError(undefined);
@@ -261,10 +312,10 @@ function EcommerceProductDialogBody({
   }
 
   async function archive() {
-    if (!product?.id) return;
+    if (!editingProductId) return;
     try {
       await archiveProduct({
-        productId: product.id,
+        productId: editingProductId,
         expectedVersion: recordVersion,
       }).unwrap();
       toast.success("Archived");
@@ -282,7 +333,9 @@ function EcommerceProductDialogBody({
       <DialogContent className={`${dialogScrollShellClass} sm:max-w-4xl`}>
         <DialogBody className="overflow-y-auto pb-2">
           <DialogHeader className="text-left">
-            <DialogTitle className="font-serif text-2xl">{product?.id ? "Edit jewellery" : "Add jewellery"}</DialogTitle>
+            <DialogTitle className="font-serif text-2xl">
+              {editingProductId ? "Edit jewellery" : "Add jewellery"}
+            </DialogTitle>
             <DialogDescription>
               Fill in the essentials, set the price, then upload images. The server verifies the price before publication.
             </DialogDescription>
@@ -335,8 +388,8 @@ function EcommerceProductDialogBody({
               <div>
                 <FieldLabel>Status</FieldLabel>
                 <Select
-                  value={form.status === "ARCHIVED" ? "DRAFT" : form.status}
-                  disabled={isArchived}
+                  value={serverStatus === "ARCHIVED" ? "DRAFT" : serverStatus}
+                  disabled={isArchived || serverStatus === "PUBLISHED"}
                   onValueChange={(v) =>
                     patchForm({ status: v as ProductFormInput["status"] })
                   }
@@ -346,7 +399,9 @@ function EcommerceProductDialogBody({
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="DRAFT">Draft</SelectItem>
-                    <SelectItem value="PUBLISHED">Published</SelectItem>
+                    {serverStatus === "PUBLISHED" ? (
+                      <SelectItem value="PUBLISHED">Published</SelectItem>
+                    ) : null}
                   </SelectContent>
                 </Select>
               </div>
@@ -680,7 +735,32 @@ function EcommerceProductDialogBody({
               </div>
             </div>
             <FormFieldError message={fieldError} />
-            {canSendMessage && form.status !== "PUBLISHED" && !isArchived ? (
+            {conflictDraft && !conflictOpen ? (
+              <div
+                className="mt-4 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950"
+                data-testid="product-conflict-recovery-panel"
+              >
+                <p className="font-semibold">Unsaved draft preserved</p>
+                <p className="mt-1 text-xs">
+                  The editor shows the latest server version. Your previous edits are kept separately —
+                  reapply them after reviewing, then save with the current version ({recordVersion}).
+                </p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <Button type="button" size="sm" variant="secondary" onClick={reapplyConflictDraft}>
+                    Reapply my draft
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setDiscardDraftOpen(true)}
+                  >
+                    Discard draft
+                  </Button>
+                </div>
+              </div>
+            ) : null}
+            {canSendMessage && serverStatus !== "PUBLISHED" && !isArchived ? (
               <div className="mt-4 flex items-start justify-between gap-4 rounded-xl border border-[#eaded9] bg-[#faf7f5] px-4 py-3">
                 <div>
                   <p className="font-semibold text-[#28161a]">New-arrival push (optional)</p>
@@ -691,7 +771,7 @@ function EcommerceProductDialogBody({
                 <Switch checked={notifyNewArrival} onCheckedChange={setNotifyNewArrival} />
               </div>
             ) : null}
-            {canSendMessage && form.status === "PUBLISHED" && !isArchived ? (
+            {canSendMessage && serverStatus === "PUBLISHED" && !isArchived ? (
               <div className="mt-4 flex items-start justify-between gap-4 rounded-xl border border-[#eaded9] bg-[#faf7f5] px-4 py-3">
                 <div>
                   <p className="font-semibold text-[#28161a]">Offer push (optional)</p>
@@ -716,7 +796,7 @@ function EcommerceProductDialogBody({
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
             Close
           </Button>
-          {form.status === "PUBLISHED" && !isArchived ? (
+          {serverStatus === "PUBLISHED" && !isArchived ? (
             <Button type="button" variant="secondary" disabled={!entitled} onClick={archive}>
               Archive
             </Button>
@@ -726,13 +806,17 @@ function EcommerceProductDialogBody({
               <Button
                 type="button"
                 variant="secondary"
-                disabled={!entitled}
+                disabled={!entitled || saving}
                 onClick={() => persistProduct()}
               >
-                {saveActionLabel(form.status)}
+                {saveActionLabel(serverStatus)}
               </Button>
-              {form.status !== "PUBLISHED" ? (
-                <Button type="button" disabled={!entitled} onClick={() => persistProduct({ publishAfter: true })}>
+              {serverStatus !== "PUBLISHED" ? (
+                <Button
+                  type="button"
+                  disabled={!entitled || saving}
+                  onClick={() => persistProduct({ publishAfter: true })}
+                >
                   Publish
                 </Button>
               ) : null}
@@ -741,7 +825,7 @@ function EcommerceProductDialogBody({
         </DialogFooter>
       </DialogContent>
       <AlertDialog open={conflictOpen} onOpenChange={setConflictOpen}>
-        <AlertDialogContent>
+        <AlertDialogContent data-testid="product-version-conflict-alert">
           <AlertDialogHeader>
             <AlertDialogTitle>Product updated elsewhere</AlertDialogTitle>
             <AlertDialogDescription>
@@ -759,6 +843,29 @@ function EcommerceProductDialogBody({
             ) : null}
             <AlertDialogAction onClick={() => void reloadProductAfterConflict(false)}>
               Load latest version
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      <AlertDialog open={discardDraftOpen} onOpenChange={setDiscardDraftOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Discard preserved draft?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This removes your unsaved edits from memory. The loaded server version stays in the
+              editor.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep draft</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                setConflictDraft(null);
+                setDiscardDraftOpen(false);
+                toast.message("Draft discarded");
+              }}
+            >
+              Discard draft
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -784,7 +891,7 @@ export function EcommerceProductDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       {open ? (
         <EcommerceProductDialogBody
-          key={`${product?.id ?? "new"}|${product?.version ?? 0}|${defaultTax}`}
+          key={`${product?.id ?? "new"}|${defaultTax}`}
           product={product}
           onOpenChange={onOpenChange}
           onSaved={onSaved}

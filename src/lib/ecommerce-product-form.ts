@@ -49,6 +49,8 @@ export type ProductFormScheduleOrigins = {
   saleEndsAtIso?: string | null;
   offerStartsAtIso?: string | null;
   offerEndsAtIso?: string | null;
+  /** Stored sale price when editing; used to send explicit null when cleared. */
+  salePricePaiseOrigin?: number | null;
 };
 
 export function buildEcommerceProductBody(
@@ -75,7 +77,11 @@ export function buildEcommerceProductBody(
     }
     const fixedPricing: Record<string, unknown> = { basePricePaise };
     const salePricePaise = rupeesToPaise(form.saleRupee);
-    if (salePricePaise != null) fixedPricing.salePricePaise = salePricePaise;
+    if (salePricePaise != null) {
+      fixedPricing.salePricePaise = salePricePaise;
+    } else if (scheduleOrigins.salePricePaiseOrigin != null) {
+      fixedPricing.salePricePaise = null;
+    }
     const saleStartsResolved = resolveScheduleFieldForSave(
       form.saleStartsAt,
       scheduleOrigins.saleStartsAtIso,
@@ -167,6 +173,7 @@ export function productScheduleOriginsFromRow(
     saleEndsAtIso: (fixed.saleEndsAt as string) ?? null,
     offerStartsAtIso: (offer?.startsAt as string) ?? null,
     offerEndsAtIso: (offer?.endsAt as string) ?? null,
+    salePricePaiseOrigin: (fixed.salePricePaise as number) ?? null,
   };
 }
 

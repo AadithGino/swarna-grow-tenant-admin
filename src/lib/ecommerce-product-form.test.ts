@@ -6,7 +6,7 @@ import {
 } from "@/src/lib/ecommerce-product-form";
 
 describe("ecommerce product schedule round-trip", () => {
-  it("preserves UTC instant when form schedule fields unchanged", () => {
+  it("omits unchanged schedule keys in PATCH payload (server merge preserves DB values)", () => {
     const original = "2026-03-10T10:15:00.000Z";
     const row = {
       priceMode: "FIXED",
@@ -20,6 +20,41 @@ describe("ecommerce product schedule round-trip", () => {
     const fixed = body.fixedPricing as Record<string, unknown>;
     expect(fixed.saleStartsAt).toBeUndefined();
     expect(form.saleStartsAt).toBeTruthy();
+  });
+
+  it("sends null when a stored schedule field is cleared in the form", () => {
+    const row = {
+      priceMode: "FIXED",
+      fixedPricing: {
+        basePricePaise: 100_000,
+        saleStartsAt: "2026-03-10T10:15:00.000Z",
+      },
+      taxClassification: "GST_3",
+      status: "DRAFT",
+    };
+    const form = productRowToFormInput(row, "GST_3");
+    const body = buildEcommerceProductBody(
+      { ...form, saleStartsAt: "" },
+      productScheduleOriginsFromRow(row),
+    );
+    const fixed = body.fixedPricing as Record<string, unknown>;
+    expect(fixed.saleStartsAt).toBeNull();
+  });
+
+  it("sends null to clear an removed sale price when one existed", () => {
+    const row = {
+      priceMode: "FIXED",
+      fixedPricing: { basePricePaise: 100_000, salePricePaise: 80_000 },
+      taxClassification: "GST_3",
+      status: "DRAFT",
+    };
+    const form = productRowToFormInput(row, "GST_3");
+    const body = buildEcommerceProductBody(
+      { ...form, saleRupee: "" },
+      productScheduleOriginsFromRow(row),
+    );
+    const fixed = body.fixedPricing as Record<string, unknown>;
+    expect(fixed.salePricePaise).toBeNull();
   });
 
   it("maps stored UTC to datetime-local and back on edit", () => {
