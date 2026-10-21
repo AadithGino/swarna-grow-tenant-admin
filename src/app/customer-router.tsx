@@ -32,6 +32,30 @@ const CustomerShopCartPage = dynamic(() => import("@/src/features/customer/custo
 const CustomerShopQuotePage = dynamic(() => import("@/src/features/customer/customer-shop-quote-page").then((m) => m.CustomerShopQuotePage), options);
 const CustomerShopOrderPage = dynamic(() => import("@/src/features/customer/customer-shop-order-page").then((m) => m.CustomerShopOrderPage), options);
 const CustomerShopOrdersPage = dynamic(() => import("@/src/features/customer/customer-shop-orders-page").then((m) => m.CustomerShopOrdersPage), options);
+const CustomerDigitalMetalsPage = dynamic(() => import("@/src/features/customer/customer-digital-metals-page").then((m) => m.CustomerDigitalMetalsPage), options);
+const CustomerDigitalMetalsBuyPage = dynamic(() => import("@/src/features/customer/customer-digital-metals-buy-pages").then((m) => m.CustomerDigitalMetalsBuyPage), options);
+const CustomerDigitalMetalsBuyReviewPage = dynamic(() => import("@/src/features/customer/customer-digital-metals-buy-pages").then((m) => m.CustomerDigitalMetalsBuyReviewPage), options);
+const CustomerDigitalMetalsBuyOrderPage = dynamic(() => import("@/src/features/customer/customer-digital-metals-buy-pages").then((m) => m.CustomerDigitalMetalsBuyOrderPage), options);
+const CustomerDigitalMetalsSellPage = dynamic(() => import("@/src/features/customer/customer-digital-metals-sell-pages").then((m) => m.CustomerDigitalMetalsSellPage), options);
+const CustomerDigitalMetalsSellReviewPage = dynamic(() => import("@/src/features/customer/customer-digital-metals-sell-pages").then((m) => m.CustomerDigitalMetalsSellReviewPage), options);
+const CustomerDigitalMetalsSellOrderPage = dynamic(() => import("@/src/features/customer/customer-digital-metals-sell-pages").then((m) => m.CustomerDigitalMetalsSellOrderPage), options);
+const CustomerDigitalMetalsBankPage = dynamic(() => import("@/src/features/customer/customer-digital-metals-bank-pages").then((m) => m.CustomerDigitalMetalsBankPage), options);
+const CustomerDigitalMetalsBankEditPage = dynamic(() => import("@/src/features/customer/customer-digital-metals-bank-pages").then((m) => m.CustomerDigitalMetalsBankEditPage), options);
+const CustomerDigitalMetalsRedeemCatalogPage = dynamic(() => import("@/src/features/customer/customer-digital-metals-redeem-pages").then((m) => m.CustomerDigitalMetalsRedeemCatalogPage), options);
+const CustomerDigitalMetalsRedeemSetupPage = dynamic(() => import("@/src/features/customer/customer-digital-metals-redeem-pages").then((m) => m.CustomerDigitalMetalsRedeemSetupPage), options);
+const CustomerDigitalMetalsRedeemReviewPage = dynamic(() => import("@/src/features/customer/customer-digital-metals-redeem-pages").then((m) => m.CustomerDigitalMetalsRedeemReviewPage), options);
+const CustomerDigitalMetalsRedeemOrderPage = dynamic(() => import("@/src/features/customer/customer-digital-metals-redeem-pages").then((m) => m.CustomerDigitalMetalsRedeemOrderPage), options);
+const CustomerDigitalMetalsDocumentPage = dynamic(
+  () => import("@/src/features/customer/customer-digital-metals-document-page").then((m) => m.CustomerDigitalMetalsDocumentPage),
+  options,
+);
+const CustomerDigitalMetalsOrdersPage = dynamic(
+  () =>
+    import("@/src/features/customer/customer-digital-metals-orders-page").then(
+      (m) => m.CustomerDigitalMetalsOrdersPage,
+    ),
+  options,
+);
 
 function CustomerRoutes({ slug }: { slug: string[] }) {
   const { section, id, extra } = parseCustomerSlug(slug);
@@ -57,6 +81,23 @@ function CustomerRoutes({ slug }: { slug: string[] }) {
   if (section === "support") return id ? <CustomerGrievanceDetailPage id={id} /> : <CustomerSupportPage />;
   if (section === "gold-rate") return <CustomerGoldRatePage />;
   if (section === "branches") return <CustomerBranchesPage />;
+  if (section === "digital-metals") {
+    if (id === "buy") return <CustomerDigitalMetalsBuyPage />;
+    if (id === "review" && extra) return <CustomerDigitalMetalsBuyReviewPage quoteId={extra} />;
+    if (id === "order" && extra) return <CustomerDigitalMetalsBuyOrderPage orderId={extra} />;
+    if (id === "sell") return <CustomerDigitalMetalsSellPage />;
+    if (id === "sell-review" && extra) return <CustomerDigitalMetalsSellReviewPage quoteId={extra} />;
+    if (id === "sell-order" && extra) return <CustomerDigitalMetalsSellOrderPage orderId={extra} />;
+    if (id === "bank") return <CustomerDigitalMetalsBankPage />;
+    if (id === "bank-edit" && extra) return <CustomerDigitalMetalsBankEditPage destinationId={extra} />;
+    if (id === "redeem") return <CustomerDigitalMetalsRedeemCatalogPage />;
+    if (id === "redeem-setup" && extra) return <CustomerDigitalMetalsRedeemSetupPage catalogueItemId={extra} />;
+    if (id === "redeem-review" && extra) return <CustomerDigitalMetalsRedeemReviewPage quoteId={extra} />;
+    if (id === "redeem-order" && extra) return <CustomerDigitalMetalsRedeemOrderPage orderId={extra} />;
+    if (id === "document" && extra) return <CustomerDigitalMetalsDocumentPage artifactId={extra} />;
+    if (id === "orders") return <CustomerDigitalMetalsOrdersPage />;
+    return <CustomerDigitalMetalsPage />;
+  }
   if (section === "shop") {
     if (id === "cart") return <CustomerShopCartPage />;
     if (id === "orders") return <CustomerShopOrdersPage />;

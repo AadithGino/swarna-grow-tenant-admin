@@ -9,6 +9,7 @@ import {
   LogOut,
   MapPin,
   MessageCircle,
+  Coins,
   Package,
   Shield,
   ShieldCheck,
@@ -32,7 +33,9 @@ import { Switch } from "@/components/ui/switch";
 import { PageSkeleton, QueryError } from "@/src/components/common/query-state";
 import { useCustomerTenant } from "@/src/components/customer/customer-tenant-context";
 import { customerPath } from "@/src/lib/customer-tenant";
+import { customerDigitalMetalsOrdersHubHref } from "@/src/lib/customer-digital-metals-order-links";
 import { useCustomerKycEnabled } from "@/src/lib/customer-kyc-enabled";
+import { useCustomerDigitalMetalsVisible } from "@/src/lib/customer-digital-metals-visible";
 import {
   useGetCustomerDevicesQuery,
   useGetCustomerProfileQuery,
@@ -55,6 +58,7 @@ import { toast } from "sonner";
 export function CustomerProfilePage() {
   const { tenantSlug } = useCustomerTenant();
   const kycEnabled = useCustomerKycEnabled();
+  const { visible: digitalMetalsVisible } = useCustomerDigitalMetalsVisible();
   const { data, isLoading, isError, refetch } = useGetCustomerProfileQuery();
   const [whatsappOpen, setWhatsappOpen] = useState(false);
   const [logoutOpen, setLogoutOpen] = useState(false);
@@ -144,6 +148,20 @@ export function CustomerProfilePage() {
           label="Nominee"
           href={customerPath(tenantSlug, "profile", "nominee")}
         />
+        {digitalMetalsVisible ? (
+          <>
+            <ProfileMenuRow
+              icon={Coins}
+              label="Digital gold — wallet"
+              href={customerPath(tenantSlug, "digital-metals")}
+            />
+            <ProfileMenuRow
+              icon={ClipboardList}
+              label="Orders & tracking"
+              href={customerDigitalMetalsOrdersHubHref(tenantSlug)}
+            />
+          </>
+        ) : null}
         <ProfileMenuRow
           icon={Package}
           label="Shop order history"

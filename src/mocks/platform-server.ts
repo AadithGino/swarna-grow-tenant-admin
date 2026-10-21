@@ -40,6 +40,33 @@ export async function platformMockRequest({ mockKey, params = {}, body = {} }: P
     case "usage": return tenant?.usageDetail;
     case "flags": return { flags: tenant?.flags ?? {}, effectiveFlags: tenant?.effectiveFlags ?? {} };
     case "saveFlags": { if (!tenant) throw new Error("Tenant not found"); tenant.flags = { ...tenant.flags, ...body.flags }; tenant.effectiveFlags = { ...tenant.effectiveFlags, ...body.flags }; return { flags: tenant.flags, effectiveFlags: tenant.effectiveFlags, version: ++tenant.audit.version }; }
+    case "digitalMetalsStatus":
+      return {
+        tenantId: params.tenantId,
+        operations: {
+          digitalMetalsEnabled: false,
+          digitalMetalsPaused: false,
+          digitalMetalsPlatformPaused: false,
+          digitalMetalsTermsVersion: "",
+        },
+        entitlement: { planEntitled: false, featureKey: "digitalMetals" },
+        capability: {
+          canViewHoldings: false,
+          canPlaceNewBuy: false,
+          blockers: [{ code: "PLAN_NOT_ENTITLED", message: "Not entitled" }],
+        },
+      };
+    case "digitalMetalsTaxApprove":
+      return { tenantId: params.tenantId, approved: Boolean(body.approve) };
+    case "digitalMetalsTermsPublish":
+      return { tenantId: params.tenantId, termsVersion: body.termsVersion };
+    case "pauseDigitalMetals": {
+      if (!tenant) throw new Error("Tenant not found");
+      return {
+        digitalMetalsPlatformPaused: Boolean(body.pause),
+        digitalMetalsPlatformPauseReason: body.pause ? String(body.reason ?? "Paused by platform") : "",
+      };
+    }
     case "saveWhatsapp": { if (!tenant) throw new Error("Tenant not found"); tenant.integrations.whatsapp = { configured: true, provider: "META_CLOUD", phoneNumberDisplay: "+91 98465 43210", accessTokenMasked: "EAA••••xyz", verificationStatus: "PENDING", version: 4 }; return tenant.integrations.whatsapp; }
     case "verifyWhatsapp": { if (!tenant) throw new Error("Tenant not found"); tenant.integrations.whatsapp.verificationStatus = "VERIFIED"; tenant.provisioning.whatsappConfigured = true; return { verificationStatus: "VERIFIED", messageId: "wamid.test", deliveryStatus: "DELIVERED", verifiedAt: new Date().toISOString(), testMobile: body.testMobile }; }
     case "saveGateway": { if (!tenant) throw new Error("Tenant not found"); tenant.integrations.paymentGateway = { configured: true, clientCredentialsConfigured: Boolean(body.clientId && body.clientSecret), provider: "PHONEPE", clientIdMasked: body.clientId ? `${String(body.clientId).slice(0, 4)}••••SDK` : null, environment: body.environment || "SANDBOX", verificationStatus: "PENDING", lastVerifiedAt: null }; tenant.provisioning.paymentGatewayConfigured = true; return tenant.integrations.paymentGateway; }

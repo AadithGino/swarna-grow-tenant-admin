@@ -57,6 +57,11 @@ import {
 import { hasPermission } from "@/src/lib/permissions";
 import { useAppSelector } from "@/src/store/hooks";
 import { CustomerEcommerceOrdersTab } from "@/src/features/customers/customer-ecommerce-orders-tab";
+import { CustomerDigitalMetalsTab } from "@/src/features/customers/customer-digital-metals-tab";
+import {
+  canViewDigitalMetalsWorkspace,
+  resolveDigitalMetalsServerAccess,
+} from "@/src/lib/digital-metals-entitlement";
 import { paymentHasGoldAccrual } from "@/src/lib/gold-payment-display";
 import { emptyPageMeta } from "@/src/lib/cursor-pagination";
 import { useCursorPagination } from "@/src/hooks/use-cursor-pagination";
@@ -69,6 +74,7 @@ import {
   useGetCustomerSchemesQuery,
   useGetSubscriptionQuery,
   useGetSettingsOperationsQuery,
+  useGetDigitalMetalsCapabilityQuery,
   useLazyGetCustomerStatementQuery,
   useLazyGetPaymentReceiptQuery,
   useSetCustomerPasswordMutation,
@@ -106,6 +112,15 @@ export function CustomerDetailPage({ id }: { id: string }) {
     canEcommerceRead
     && (canViewEcommerceHistoricalWorkspace(ecommerceAccess)
       || ecommerceOrdersMetaQuery.data?.hasOrderHistory === true);
+  const dmCapability = useGetDigitalMetalsCapabilityQuery(undefined, {
+    skip: !hasPermission(sessionUser, "digital-metals.read"),
+  });
+  const dmAccess =
+    (dmCapability.data as import("@/src/lib/digital-metals-entitlement").DigitalMetalsServerAccessState | undefined)
+    ?? resolveDigitalMetalsServerAccess(subscriptionQuery.data, operationsQuery.data);
+  const showDigitalMetalsTab =
+    hasPermission(sessionUser, "digital-metals.read")
+    && canViewDigitalMetalsWorkspace(dmAccess);
   const schemesOverviewQuery = useGetCustomerSchemesQuery({
     customerId: id,
     limit: 100,
@@ -461,6 +476,9 @@ export function CustomerDetailPage({ id }: { id: string }) {
           {showEcommerceOrdersTab ? (
             <PageTab value="ecommerce-orders">Orders</PageTab>
           ) : null}
+          {showDigitalMetalsTab ? (
+            <PageTab value="digital-metals">Digital metals</PageTab>
+          ) : null}
           <PageTab value="messages">Messages</PageTab>
           <PageTab value="profile">Customer</PageTab>
           <PageTab value="audit">Activity & audit</PageTab>
@@ -570,6 +588,11 @@ export function CustomerDetailPage({ id }: { id: string }) {
         {showEcommerceOrdersTab ? (
           <PageTabsPanel value="ecommerce-orders">
             <CustomerEcommerceOrdersTab customerId={id} />
+          </PageTabsPanel>
+        ) : null}
+        {showDigitalMetalsTab ? (
+          <PageTabsPanel value="digital-metals">
+            <CustomerDigitalMetalsTab customerId={id} />
           </PageTabsPanel>
         ) : null}
         <PageTabsPanel value="payments">

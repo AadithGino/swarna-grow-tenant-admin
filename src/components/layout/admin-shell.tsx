@@ -29,6 +29,7 @@ import {
   PanelLeftOpen,
   Percent,
   Scale,
+  Coins,
   Search,
   Settings,
   ShoppingBag,
@@ -73,6 +74,7 @@ import { PaymentSuccessHost } from "@/src/components/common/payment-success-host
 import { SecuritySessionsDialog } from "@/src/features/auth/security-sessions-dialog";
 import { canAccessRoute } from "@/src/lib/permissions";
 import { useEcommerceWorkspaceNavVisible } from "@/src/features/ecommerce/ecommerce-admin-shared";
+import { useDigitalMetalsWorkspaceNavVisible } from "@/src/features/digital-metals/digital-metals-admin-shared";
 import { useAppDispatch, useAppSelector } from "@/src/store/hooks";
 import { clearSession } from "@/src/store/slices/session-slice";
 import {
@@ -118,6 +120,10 @@ const groups: { label: string; items: NavItem[] }[] = [
         icon: AlertTriangle,
       },
     ],
+  },
+  {
+    label: "Digital metals",
+    items: [{ label: "Workspace", href: "/digital-metals", icon: Coins }],
   },
   {
     label: "Online store",
@@ -197,9 +203,13 @@ function Navigation({
   const user = useAppSelector((s) => s.session.session?.user);
   const badges = useNavBadges();
   const ecommerceNav = useEcommerceWorkspaceNavVisible();
+  const digitalMetalsNav = useDigitalMetalsWorkspaceNavVisible();
   return (
     <nav className="flex-1 overflow-y-auto px-3 py-5 scrollbar-thin">
       {groups.map((group) => {
+        if (group.label === "Digital metals" && !digitalMetalsNav.showDigitalMetalsNav) {
+          return null;
+        }
         if (
           (group.label === "Online store" || group.label === "Store operations")
           && !ecommerceNav.showEcommerceNav
@@ -221,7 +231,7 @@ function Navigation({
             {items.map(({ label, href, icon: Icon, badgeKey }) => {
               const count = badgeKey ? badges[badgeKey] : undefined;
               const active =
-                href === "/" || href === "/ecommerce"
+                href === "/" || href === "/ecommerce" || href === "/digital-metals"
                   ? pathname === href
                   : pathname === href || pathname.startsWith(`${href}/`);
               const link = (

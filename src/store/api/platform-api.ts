@@ -282,7 +282,7 @@ const baseQuery: BaseQueryFn<
 };
 
 export const platformApi = createApi({
-  reducerPath: "platformApi", baseQuery, tagTypes: ["PlatformDashboard", "PlatformTenant", "PlatformTenantList", "PlatformPlan", "PlatformTemplate", "PlatformInvoice", "PlatformOps"],
+  reducerPath: "platformApi", baseQuery, tagTypes: ["PlatformDashboard", "PlatformTenant", "PlatformTenantList", "PlatformPlan", "PlatformTemplate", "PlatformInvoice", "PlatformOps", "PlatformDigitalMetals"],
   endpoints: (builder) => ({
     platformLogin: builder.mutation<any, { email: string; password: string }>({ query: (body) => ({ url: "/platform/auth/login", method: "POST", body, mockKey: "login" }) }),
     refreshPlatformToken: builder.mutation<any, { refreshToken: string }>({ query: (body) => ({ url: "/platform/auth/refresh", method: "POST", body, mockKey: "refresh" }) }),
@@ -330,6 +330,53 @@ export const platformApi = createApi({
     getPlatformUsage: builder.query<Record<string, any>, string>({ query: (tenantId) => ({ url: `/platform/tenants/${tenantId}/usage`, mockKey: "usage", mockParams: { tenantId } }), providesTags: (_r, _e, id) => [{ type: "PlatformTenant", id }] }),
     getPlatformFlags: builder.query<any, string>({ query: (tenantId) => ({ url: `/platform/tenants/${tenantId}/flags`, mockKey: "flags", mockParams: { tenantId } }), providesTags: (_r, _e, id) => [{ type: "PlatformTenant", id }] }),
     savePlatformFlags: builder.mutation<any, { tenantId: string; body: Record<string, unknown> }>({ query: ({ tenantId, body }) => ({ url: `/platform/tenants/${tenantId}/flags`, method: "PUT", body, mockKey: "saveFlags", mockParams: { tenantId } }), invalidatesTags: (_r, _e, a) => [{ type: "PlatformTenant", id: a.tenantId }] }),
+    pausePlatformDigitalMetals: builder.mutation<
+      Record<string, unknown>,
+      { tenantId: string; pause: boolean; reason?: string }
+    >({
+      query: ({ tenantId, pause, reason }) => ({
+        url: `/platform/tenants/${tenantId}/digital-metals/pause`,
+        method: "POST",
+        body: { pause, ...(reason ? { reason } : {}) },
+        mockKey: "pauseDigitalMetals",
+        mockParams: { tenantId },
+      }),
+      invalidatesTags: (_r, _e, a) => [{ type: "PlatformTenant", id: a.tenantId }, "PlatformDigitalMetals"],
+    }),
+    getPlatformDigitalMetalsStatus: builder.query<Record<string, unknown>, string>({
+      query: (tenantId) => ({
+        url: `/platform/tenants/${tenantId}/digital-metals`,
+        mockKey: "digitalMetalsStatus",
+        mockParams: { tenantId },
+      }),
+      providesTags: (_r, _e, id) => [{ type: "PlatformDigitalMetals", id }],
+    }),
+    approvePlatformDigitalMetalsTax: builder.mutation<
+      Record<string, unknown>,
+      { tenantId: string; approve: boolean }
+    >({
+      query: ({ tenantId, approve }) => ({
+        url: `/platform/tenants/${tenantId}/digital-metals/tax-profile/approve`,
+        method: "POST",
+        body: { approve },
+        mockKey: "digitalMetalsTaxApprove",
+        mockParams: { tenantId },
+      }),
+      invalidatesTags: (_r, _e, a) => [{ type: "PlatformDigitalMetals", id: a.tenantId }],
+    }),
+    publishPlatformDigitalMetalsTerms: builder.mutation<
+      Record<string, unknown>,
+      { tenantId: string; termsVersion: string; contentSnapshot: string; contentRef?: string }
+    >({
+      query: ({ tenantId, termsVersion, contentSnapshot, contentRef }) => ({
+        url: `/platform/tenants/${tenantId}/digital-metals/terms/publish`,
+        method: "POST",
+        body: { termsVersion, contentSnapshot, ...(contentRef ? { contentRef } : {}) },
+        mockKey: "digitalMetalsTermsPublish",
+        mockParams: { tenantId },
+      }),
+      invalidatesTags: (_r, _e, a) => [{ type: "PlatformDigitalMetals", id: a.tenantId }],
+    }),
     saveWhatsappIntegration: builder.mutation<any, { tenantId: string; body: Record<string, unknown> }>({ query: ({ tenantId, body }) => ({ url: `/platform/tenants/${tenantId}/integrations/whatsapp`, method: "PUT", body, mockKey: "saveWhatsapp", mockParams: { tenantId } }), invalidatesTags: (_r, _e, a) => [{ type: "PlatformTenant", id: a.tenantId }] }),
     verifyWhatsappIntegration: builder.mutation<any, { tenantId: string; testMobile: string }>({ query: ({ tenantId, testMobile }) => ({ url: `/platform/tenants/${tenantId}/integrations/whatsapp/verify`, method: "POST", body: { testMobile }, mockKey: "verifyWhatsapp", mockParams: { tenantId } }), invalidatesTags: (_r, _e, a) => [{ type: "PlatformTenant", id: a.tenantId }] }),
     savePaymentIntegration: builder.mutation<any, { tenantId: string; body: Record<string, unknown> }>({ query: ({ tenantId, body }) => ({ url: `/platform/tenants/${tenantId}/integrations/payment-gateway`, method: "PUT", body, mockKey: "saveGateway", mockParams: { tenantId } }), invalidatesTags: (_r, _e, a) => [{ type: "PlatformTenant", id: a.tenantId }] }),
@@ -459,4 +506,4 @@ export const platformApi = createApi({
   }),
 });
 
-export const { usePlatformLoginMutation, usePlatformLogoutMutation, useGetPlatformDashboardQuery, useGetPlatformChartQuery, useGetPlatformPlansQuery, useGetPlatformPlanQuery, useSavePlatformPlanMutation, useDeprecatePlatformPlanMutation, useGetPlatformTenantsQuery, useGetPlatformTenantQuery, useCreatePlatformTenantMutation, useUpdatePlatformTenantMutation, useSuspendPlatformTenantMutation, useReactivatePlatformTenantMutation, useGoLivePlatformTenantMutation, useResetOwnerCredentialsMutation, useGetPlatformUsageQuery, useGetPlatformFlagsQuery, useSavePlatformFlagsMutation, useSaveWhatsappIntegrationMutation, useVerifyWhatsappIntegrationMutation, useSavePaymentIntegrationMutation, useVerifyPaymentIntegrationMutation, useGetTemplateDefinitionsQuery, useGetTenantTemplatesQuery, useSaveTenantTemplateMutation, useDeleteTenantTemplateMutation, useTestTenantTemplateMutation, useChangeTenantPlanMutation, useUpdateTenantLimitsMutation, useExtendTenantSubscriptionMutation, useCancelTenantSubscriptionMutation, useGetTenantInvoicesQuery, useCreateTenantInvoiceMutation, useMarkPlatformInvoicePaidMutation, useGetPlatformAuditLogsQuery, useGetWebhookFailuresQuery, useLazyGetWebhookFailuresQuery, useRetryWebhookFailureMutation, useGetPlatformErrorLogsQuery, useGetPlatformLivenessHealthQuery, useGetPlatformReadinessHealthQuery } = platformApi;
+export const { usePlatformLoginMutation, usePlatformLogoutMutation, useGetPlatformDashboardQuery, useGetPlatformChartQuery, useGetPlatformPlansQuery, useGetPlatformPlanQuery, useSavePlatformPlanMutation, useDeprecatePlatformPlanMutation, useGetPlatformTenantsQuery, useGetPlatformTenantQuery, useCreatePlatformTenantMutation, useUpdatePlatformTenantMutation, useSuspendPlatformTenantMutation, useReactivatePlatformTenantMutation, useGoLivePlatformTenantMutation, useResetOwnerCredentialsMutation, useGetPlatformUsageQuery, useGetPlatformFlagsQuery, useSavePlatformFlagsMutation, usePausePlatformDigitalMetalsMutation, useGetPlatformDigitalMetalsStatusQuery, useApprovePlatformDigitalMetalsTaxMutation, usePublishPlatformDigitalMetalsTermsMutation, useSaveWhatsappIntegrationMutation, useVerifyWhatsappIntegrationMutation, useSavePaymentIntegrationMutation, useVerifyPaymentIntegrationMutation, useGetTemplateDefinitionsQuery, useGetTenantTemplatesQuery, useSaveTenantTemplateMutation, useDeleteTenantTemplateMutation, useTestTenantTemplateMutation, useChangeTenantPlanMutation, useUpdateTenantLimitsMutation, useExtendTenantSubscriptionMutation, useCancelTenantSubscriptionMutation, useGetTenantInvoicesQuery, useCreateTenantInvoiceMutation, useMarkPlatformInvoicePaidMutation, useGetPlatformAuditLogsQuery, useGetWebhookFailuresQuery, useLazyGetWebhookFailuresQuery, useRetryWebhookFailureMutation, useGetPlatformErrorLogsQuery, useGetPlatformLivenessHealthQuery, useGetPlatformReadinessHealthQuery } = platformApi;

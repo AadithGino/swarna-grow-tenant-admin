@@ -73,6 +73,7 @@ export const DEFAULT_PLAN_FEATURES: Record<string, boolean> = {
   customerSelfEnrol: true,
   advancedReports: false,
   ecommerce: false,
+  digitalMetals: false,
 };
 
 export const DEFAULT_PLAN_LIMITS: Record<string, number> = {

@@ -16,6 +16,7 @@ export const PORTAL_SECTIONS = new Set([
   "audit",
   "settings",
   "ecommerce",
+  "digital-metals",
   "alerts",
   "login",
   "shop",

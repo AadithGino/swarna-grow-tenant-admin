@@ -67,6 +67,20 @@ Only users with role `COLLECTION_AGENT` and an assigned `branchId` can use this 
 
 ---
 
+## Digital gold & silver (KAIRALI)
+
+After `npm run seed:demo`, enable trading on the **same MongoDB as your API**:
+
+```bash
+cd swarnagrow-backend
+npm run seed:kairali-digital-metals          # first-time setup
+npm run patch:kairali-digital-metals         # refresh rates + tax approval (stale rate / tax mismatch)
+```
+
+Customer path: `/customer/kairali/digital-metals`. If you see tax or stale-rate blockers, run the patch again.
+
+---
+
 ## Customer portal
 
 | Field | Value |

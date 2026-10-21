@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect } from "react";
 import { usePathname } from "next/navigation";
 import { recordPortalNavigation } from "@/src/lib/portal-nav";
-import { Bell, CircleHelp, CreditCard, Home, IndianRupee, Layers3, LogOut, ShoppingBag, Sparkles, UserRound, WalletCards } from "lucide-react";
+import { Bell, CircleHelp, Coins, CreditCard, Home, IndianRupee, Layers3, LogOut, ShoppingBag, Sparkles, UserRound, WalletCards } from "lucide-react";
 import { useGetCustomerHomeQuery, useGetShopAvailabilityQuery } from "@/src/store/api/customer-api";
 import { useCustomerSignOut } from "@/src/lib/use-customer-sign-out";
 import { cn } from "@/lib/utils";
@@ -14,6 +14,7 @@ import { CustomerRegistrationGuard } from "@/src/components/customer/customer-re
 import { useCustomerPortalCapabilities } from "@/src/lib/customer-portal-capabilities";
 import { CustomerBrand } from "@/src/components/customer/customer-ui";
 import { CustomerFcmRegistrar } from "@/src/components/customer/customer-fcm-registrar";
+import { useCustomerDigitalMetalsVisible } from "@/src/lib/customer-digital-metals-visible";
 
 const coreNavigation = [
   { segment: "", label: "Home", icon: Home, exact: true },
@@ -41,11 +42,15 @@ export function CustomerShell({ children }: { children: React.ReactNode }) {
   const { data: home } = useGetCustomerHomeQuery();
   const { data: shopAvailability } = useGetShopAvailabilityQuery();
   const storeAvailable = shopAvailability?.available === true;
+  const { visible: digitalMetalsVisible } = useCustomerDigitalMetalsVisible();
   const { customerSelfEnrol, customerAppWriteEnabled, customerAppPaymentsEnabled } = useCustomerPortalCapabilities();
   const unread = home?.unreadNotificationCount ?? 0;
   const homeHref = customerPath(tenantSlug);
   const navigation = [
     ...coreNavigation.slice(0, 2),
+    ...(digitalMetalsVisible
+      ? [{ segment: "digital-metals", label: "Digital gold", icon: Coins, exact: false }]
+      : []),
     ...(storeAvailable ? [{ segment: "shop", label: "Shop", icon: ShoppingBag, exact: false }] : []),
     ...coreNavigation.slice(2),
   ].map((item) => ({ ...item, href: item.segment ? customerPath(tenantSlug, item.segment) : homeHref }));
@@ -58,11 +63,16 @@ export function CustomerShell({ children }: { children: React.ReactNode }) {
       ? customerPath(tenantSlug, "schemes", payScheme.id)
       : customerPath(tenantSlug, "schemes");
 
-  const mobileItems = storeAvailable
-    ? mobileNavigation.map((item) => item.segment === "notifications"
-        ? { ...item, segment: "shop", label: "Shop", icon: ShoppingBag }
-        : item)
-    : mobileNavigation;
+  const mobileItems = mobileNavigation.map((item) => {
+    if (item.segment !== "notifications") return item;
+    if (storeAvailable) {
+      return { ...item, segment: "shop", label: "Shop", icon: ShoppingBag };
+    }
+    if (digitalMetalsVisible) {
+      return { ...item, segment: "digital-metals", label: "Digital gold", icon: Coins };
+    }
+    return item;
+  });
   const mobileNav = mobileItems.map((item) => {
     if (item.segment === "__pay__") return { ...item, href: payHref };
     return { ...item, href: item.segment ? customerPath(tenantSlug, item.segment) : homeHref };

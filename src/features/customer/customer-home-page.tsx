@@ -11,6 +11,7 @@ import {
   BarChart3,
   Check,
   ChevronRight,
+  Coins,
   Eye,
   EyeOff,
   FileText,
@@ -37,6 +38,7 @@ import { customerPath } from "@/src/lib/customer-tenant";
 import { useCustomerGoldMetricsVisible } from "@/src/lib/customer-gold-ui";
 import { useCustomerPortalCapabilities } from "@/src/lib/customer-portal-capabilities";
 import { useCustomerKycEnabled } from "@/src/lib/customer-kyc-enabled";
+import { useCustomerDigitalMetalsVisible } from "@/src/lib/customer-digital-metals-visible";
 import { customerBrandStyle } from "@/src/lib/customer-brand-styles";
 import type { CustomerHome, CustomerProfile, SchemeCard } from "@/src/types/customer";
 
@@ -88,6 +90,7 @@ export function CustomerHomePage() {
   const kycEnabled = useCustomerKycEnabled();
   const { data: profile } = useGetCustomerProfileQuery();
   const { data: shopAvailability } = useGetShopAvailabilityQuery();
+  const { visible: digitalMetalsVisible } = useCustomerDigitalMetalsVisible();
   const homeBannersQuery = useGetHomeBannersQuery(undefined, {
     ...customerBannerQueryOptions([], null),
     pollingInterval: 60_000,
@@ -147,6 +150,9 @@ export function CustomerHomePage() {
     { key: "PASSBOOK", label: "Passbook", icon: WalletCards, href: customerPath(tenantSlug, "payments") },
     ...(showGoldMetrics
       ? [{ key: "GOLD", label: "Gold rate", icon: BarChart3, href: customerPath(tenantSlug, "gold-rate") }]
+      : []),
+    ...(digitalMetalsVisible
+      ? [{ key: "DM", label: "Digital gold", icon: Coins, href: customerPath(tenantSlug, "digital-metals") }]
       : []),
   ];
 
@@ -277,6 +283,24 @@ export function CustomerHomePage() {
           </Link>
         ))}
       </section>
+
+      {digitalMetalsVisible ? (
+        <Link
+          href={customerPath(tenantSlug, "digital-metals")}
+          className="mt-5 flex items-center gap-4 rounded-[1.5rem] border border-[#eaded9] bg-white p-5 shadow-[0_6px_20px_rgba(var(--customer-primary-rgb,115,3,33),0.06)] transition hover:border-[rgba(var(--customer-primary-rgb,115,3,33),0.22)] sm:p-6"
+        >
+          <span className="grid size-12 shrink-0 place-items-center rounded-2xl bg-[#f6edf0] text-[var(--customer-primary,#730321)]">
+            <Coins className="size-6" strokeWidth={2.1} />
+          </span>
+          <span className="min-w-0 flex-1">
+            <strong className="block font-serif text-xl text-[#171722]">Digital Gold & Silver</strong>
+            <small className="mt-1 block text-xs text-[#706b77]">
+              Buy, sell, and redeem digital metal from your portfolio.
+            </small>
+          </span>
+          <ChevronRight className="size-5 shrink-0 text-[var(--customer-primary,#730321)]" />
+        </Link>
+      ) : null}
 
       {shopAvailability?.available === true ? (
         <Link

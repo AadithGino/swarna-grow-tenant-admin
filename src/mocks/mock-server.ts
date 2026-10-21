@@ -2705,6 +2705,472 @@ export async function mockRequest<T>({
           version: 1,
         },
       } as T;
+    case "digitalMetalsCapability":
+      return {
+        __contract: true,
+        payload: {
+          planEntitled: false,
+          tenantEnabled: false,
+          enabled: false,
+          paused: false,
+          hasLegacyActivity: false,
+          canViewHoldings: false,
+          canViewHistory: false,
+          canAccessSettlement: false,
+          canAccessFulfilment: false,
+          canPlaceNewBuy: false,
+          canPlaceNewSell: false,
+          canPlaceRedemption: false,
+          blockers: [
+            {
+              code: "PLAN_NOT_ENTITLED",
+              message: "Digital Gold & Silver is not included in your subscription plan.",
+            },
+          ],
+          termsVersion: null,
+          taxProfileApproved: false,
+          assets: [
+            {
+              metal: "GOLD",
+              finenessPpm: 999000,
+              quoteReady: false,
+              rateTiming: "MISSING",
+              issues: [{ code: "SETTINGS_MISSING", message: "Asset settings are not configured." }],
+            },
+          ],
+          pause: {
+            tenantPaused: false,
+            tenantPauseReason: "",
+            platformPaused: false,
+            platformPauseReason: "",
+          },
+          implementationPhase: 3,
+          workspaceLive: true,
+        },
+      } as T;
+    case "digitalMetalsTenantPause":
+      return {
+        __contract: true,
+        payload: { digitalMetalsPaused: true, reason: "Maintenance window" },
+      } as T;
+    case "digitalMetalsOperationsWorkQueue":
+      return {
+        __contract: true,
+        payload: {
+          generatedAt: new Date().toISOString(),
+          summary: {
+            outboxPending: 1,
+            outboxFailed: 0,
+            outboxLeaseStale: 0,
+            documentsRetryable: 1,
+          },
+          items: [
+            {
+              id: "dmobx_mock",
+              kind: "OUTBOX",
+              topic: "DIGITAL_METAL_DOCUMENT_READY",
+              status: "PENDING",
+              ageMs: 120_000,
+              lastError: null,
+              safeActions: [],
+            },
+            {
+              id: "dmdoc_mock",
+              kind: "DOCUMENT",
+              docType: "METAL_STATEMENT",
+              status: "FAILED",
+              ageMs: 300_000,
+              lastError: "STORAGE_UNAVAILABLE",
+              safeActions: ["RETRY_DOCUMENT"],
+            },
+          ],
+          notes: ["Mock queue — operational retries never repeat financial settlement."],
+        },
+      } as T;
+    case "retryDigitalMetalsOutboxEvent":
+      return {
+        __contract: true,
+        payload: { eventId: "dmobx_mock", topic: "DIGITAL_METAL_DOCUMENT_READY" },
+      } as T;
+    case "retryDigitalMetalsDocumentFromOps":
+      return {
+        __contract: true,
+        payload: { artifact: { id: "dmdoc_mock", status: "PENDING" } },
+      } as T;
+    case "digitalMetalsSettings":
+      return {
+        __contract: true,
+        payload: {
+          current: {
+            version: 1,
+            metal: "GOLD",
+            finenessPpm: 999000,
+            buyFee: { type: "NONE" },
+            sellFee: { type: "NONE" },
+            taxLines: [],
+          },
+          liveReadiness: { taxProfileApproved: false, termsPublished: false },
+        },
+      } as T;
+    case "digitalMetalsRatesCurrent":
+      return {
+        __contract: true,
+        payload: { rate: null, stale: true, settingsVersion: 1 },
+      } as T;
+    case "digitalMetalsRatesHistory":
+      return { __contract: true, payload: { items: [] } } as T;
+    case "patchDigitalMetalsSettings":
+      return {
+        __contract: true,
+        payload: { version: 2, metal: "GOLD", finenessPpm: 999000 },
+      } as T;
+    case "publishDigitalMetalsRate":
+      return {
+        __contract: true,
+        payload: {
+          rateVersionId: "dmrv_mock",
+          sequence: 1,
+          customerBuyRatePerGramPaise: 600000,
+          customerSellRatePerGramPaise: 600000,
+        },
+      } as T;
+    case "previewDigitalMetalsQuote":
+      return {
+        __contract: true,
+        payload: {
+          quoteId: "dmq_mock",
+          metalQuantityUg: "1000000",
+          totalPayablePaise: 600000,
+          budgetRemainderPaise: 0,
+        },
+      } as T;
+    case "digitalMetalsWorkspace":
+      return {
+        __contract: true,
+        payload: {
+          phase: 3,
+          workspaceLive: true,
+          title: "Digital Gold & Silver",
+          message:
+            "Enable Digital Gold & Silver in Settings → Operations after your plan includes this module.",
+          capability: {
+            planEntitled: false,
+            enabled: false,
+            canViewHoldings: false,
+            implementationPhase: 1,
+          },
+        },
+      } as T;
+    case "digitalMetalsBuyOrders":
+      return {
+        __contract: true,
+        payload: {
+          items: [
+            {
+              id: "dmbo_mock_1",
+              status: "CREDITED",
+              metal: "GOLD",
+              finenessPpm: 999000,
+              quantityUg: "1000000",
+              totalPayablePaise: 606000,
+              invoiceStatus: "READY",
+              customerId: "cus_mock",
+              createdAt: new Date().toISOString(),
+            },
+          ],
+          meta: { hasMore: false, nextCursor: null, limit: 20 },
+        },
+      } as T;
+    case "digitalMetalsBankVerificationQueue":
+      return {
+        __contract: true,
+        payload: {
+          items: [
+            {
+              id: "dmbd_mock_pending",
+              status: "PENDING_VERIFICATION",
+              accountHolderName: "Demo Customer",
+              accountLast4: "9012",
+              ifsc: "HDFC0001234",
+              bankName: "HDFC",
+              customer: { id: "cus_mock", name: "Demo Customer", customerNumber: "1001" },
+            },
+          ],
+          meta: { hasMore: false, nextCursor: null, limit: 25 },
+        },
+      } as T;
+    case "digitalMetalsCustomerBankDestinations":
+      return {
+        __contract: true,
+        payload: {
+          items: [
+            {
+              id: "dmbd_mock_pending",
+              status: "PENDING_VERIFICATION",
+              accountHolderName: "Demo Customer",
+              accountLast4: "9012",
+              ifsc: "HDFC0001234",
+              bankName: "HDFC",
+              manualVerificationNote: "",
+              verifiedAt: null,
+              verifiedByName: null,
+            },
+          ],
+        },
+      } as T;
+    case "verifyDigitalMetalsBankDestination":
+    case "disableDigitalMetalsBankDestination":
+      return {
+        __contract: true,
+        payload: {
+          id: String(params.destinationId ?? "dmbd_mock_pending"),
+          status: mockKey === "verifyDigitalMetalsBankDestination" ? "ACTIVE" : "DISABLED",
+          accountLast4: "9012",
+        },
+      } as T;
+    case "customerDigitalMetalsDocument":
+      return {
+        __contract: true,
+        payload: {
+          id: String(params.artifactId ?? "dmdoc_mock_1"),
+          status: "READY",
+          docType: "METAL_STATEMENT",
+          documentNumber: "STMT-2026-0001",
+          subjectKey: "statement:2026-10-01:2026-10-19",
+        },
+      } as T;
+    case "digitalMetalsBuyOrderDetail":
+      return {
+        __contract: true,
+        payload: {
+          id: String(params.orderId ?? "dmbo_mock_1"),
+          status: "CREDITED",
+          metal: "GOLD",
+          finenessPpm: 999000,
+          quantityUg: "1000000",
+          totalPayablePaise: 606000,
+          invoiceStatus: "READY",
+          paymentExceptionStatus: null,
+          paymentAttempts: [],
+        },
+      } as T;
+    case "digitalMetalsSellOrders":
+      return {
+        __contract: true,
+        payload: {
+          items: [
+            {
+              id: "dmso_mock",
+              status: "PENDING_APPROVAL",
+              metal: "GOLD",
+              quantityUg: "1000000",
+              settlementPaise: 600000,
+            },
+          ],
+        },
+      } as T;
+    case "digitalMetalsSellOrderDetail":
+      return {
+        __contract: true,
+        payload: {
+          id: String(params.orderId ?? "dmso_mock"),
+          status: "PENDING_APPROVAL",
+          metal: "GOLD",
+          finenessPpm: 999000,
+          quantityUg: "1000000",
+          settlementPaise: 600000,
+          version: 1,
+          customer: {
+            id: "cus_mock",
+            name: "Demo Customer",
+            mobile: "9876543210",
+            customerNumber: "C-1001",
+          },
+          bankDestination: {
+            accountHolderName: "Demo Customer",
+            accountLast4: "4321",
+            ifsc: "HDFC0001234",
+            bankName: "HDFC Bank",
+            status: "ACTIVE",
+          },
+          sellSummary: {
+            orderId: String(params.orderId ?? "dmso_mock"),
+            metal: "GOLD",
+            finenessPpm: 999000,
+            quantityUg: "1000000",
+            settlementPaise: 600000,
+            sellRatePerGramPaise: 600000,
+            bankDestination: {
+              accountHolderName: "Demo Customer",
+              accountLast4: "4321",
+              ifsc: "HDFC0001234",
+              bankName: "HDFC Bank",
+            },
+          },
+        },
+      } as T;
+    case "digitalMetalsPayables":
+      return {
+        __contract: true,
+        payload: {
+          items: [{ id: "dmpaybl_mock", sellOrderId: "dmso_mock", outstandingPaise: 600000, status: "OPEN" }],
+        },
+      } as T;
+    case "digitalMetalsPayouts":
+      return {
+        __contract: true,
+        payload: {
+          items: [{ id: "dmpos_mock", status: "PENDING_APPROVAL", amountPaise: 600000, sellOrderId: "dmso_mock" }],
+        },
+      } as T;
+    case "digitalMetalsPayoutDetail":
+      return {
+        __contract: true,
+        payload: {
+          payout: {
+            id: String(params.payoutId ?? "dmpos_mock"),
+            status: "APPROVED",
+            amountPaise: 600000,
+            sellOrderId: "dmso_mock",
+            permittedActions: ["SUBMIT"],
+            destinationSnapshot: { accountHolderName: "Mock", accountLast4: "9012", ifsc: "HDFC0001234" },
+            statusHistory: [{ status: "PENDING_APPROVAL", at: new Date().toISOString(), note: "Created" }],
+          },
+          payable: { id: "dmpaybl_mock", outstandingPaise: 600000, status: "OPEN" },
+        },
+      } as T;
+    case "submitDigitalMetalsPayout":
+    case "recordDigitalMetalsPayoutSettlement":
+    case "recordDigitalMetalsPayoutFailure":
+    case "markDigitalMetalsPayoutUnknown":
+    case "resolveDigitalMetalsPayoutUnknown":
+      return {
+        __contract: true,
+        payload: { payout: { id: String(params.payoutId ?? "dmpos_mock"), status: "SUBMITTED" } },
+      } as T;
+    case "digitalMetalsRedemptionCatalogue":
+      return {
+        __contract: true,
+        payload: {
+          items: [
+            {
+              id: "dmrci_mock",
+              sku: "GOLD-2G",
+              label: "2g Coin",
+              metal: "GOLD",
+              finenessPpm: 999000,
+              unitQuantityUg: "2000000",
+              active: true,
+            },
+          ],
+        },
+      } as T;
+    case "digitalMetalsRedemptionOrders":
+      return {
+        __contract: true,
+        payload: {
+          items: [{ id: "dmro_mock", status: "CHARGE_PAID", chargeTotalPaise: 50000, customerId: "cus_mock" }],
+        },
+      } as T;
+    case "digitalMetalsRedemptionOrderDetail":
+      return {
+        __contract: true,
+        payload: {
+          id: String(params.orderId ?? "dmro_mock"),
+          status: "CHARGE_PAID",
+          quantityUg: "2000000",
+          chargeTotalPaise: 50000,
+          version: 1,
+          permittedActions: ["ACCEPT_FULFILMENT", "CANCEL_PRE_DISPATCH"],
+          fulfilmentMode: "PICKUP",
+        },
+      } as T;
+    case "digitalMetalsRedemptionFulfilmentQueue":
+      return {
+        __contract: true,
+        payload: {
+          items: [
+            {
+              id: "dmro_mock",
+              status: "CHARGE_PAID",
+              quantityUg: "2000000",
+              chargeTotalPaise: 50000,
+              permittedActions: ["ACCEPT_FULFILMENT"],
+            },
+          ],
+        },
+      } as T;
+    case "digitalMetalsHedgeLive":
+      return {
+        __contract: true,
+        payload: {
+          reportType: "LIVE",
+          businessDate: "2026-10-17",
+          lines: [
+            {
+              metal: "GOLD",
+              finenessPpm: 999000,
+              coverageIncomplete: false,
+              closingObligationUg: "2000000",
+              closingHedgePositionUg: "2000000",
+              uncoveredUg: "0",
+            },
+          ],
+        },
+      } as T;
+    case "digitalMetalsProcurementEntries":
+      return { __contract: true, payload: { items: [] } } as T;
+    case "postDigitalMetalsRedemptionFulfilmentAction":
+      return {
+        __contract: true,
+        payload: {
+          id: String(params.orderId ?? "dmro_mock"),
+          status: "FULFILMENT_ACCEPTED",
+          version: 2,
+          permittedActions: ["RECORD_PACKING", "CANCEL_PRE_DISPATCH"],
+        },
+      } as T;
+    case "digitalMetalsCustomerRiskHolds":
+      return {
+        __contract: true,
+        payload: {
+          items: [
+            {
+              id: "dmrh_mock",
+              status: "ACTIVE",
+              reasonCode: "REFUND_EXPOSURE",
+              exposurePaise: 606000,
+              note: "Late success refund review",
+            },
+          ],
+        },
+      } as T;
+    case "resolveDigitalMetalsRiskHold":
+      return {
+        __contract: true,
+        payload: { id: "dmrh_mock", status: "RESOLVED", resolutionNote: "Cleared after refund" },
+      } as T;
+    case "digitalMetalsPaymentExceptions":
+      return {
+        __contract: true,
+        payload: {
+          items: [
+            {
+              refund: {
+                id: "dmref_mock",
+                status: "ASSIGNED",
+                exceptionType: "LATE_SUCCESS",
+                amountPaise: 606000,
+              },
+              order: {
+                id: "dmbo_mock_late",
+                status: "REFUND_REVIEW",
+                paymentExceptionStatus: "LATE_SUCCESS",
+              },
+            },
+          ],
+        },
+      } as T;
     case "ecommerceWorkspaceSummary":
       return {
         __contract: true,

@@ -9,6 +9,10 @@ describe("portal-nav", () => {
     expect(isPortalInternalPath("/marketing-landing")).toBe(false);
   });
 
+  it("includes digital metals admin paths", () => {
+    expect(isPortalInternalPath("/digital-metals")).toBe(true);
+  });
+
   it("includes ecommerce admin paths", () => {
     expect(isPortalInternalPath("/ecommerce/orders")).toBe(true);
     expect(isPortalInternalPath("/reports")).toBe(true);

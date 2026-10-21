@@ -92,6 +92,9 @@ function withIdempotencyHeader(args: string | FetchArgs): string | FetchArgs {
   return ensureMutationJsonBody({ ...args, headers });
 }
 
+/** In-memory mock state for digital-metals buy demo payments (RTK mocks only). */
+const digitalMetalsMockCreditedBuyOrders = new Set<string>();
+
 const mockBaseQuery: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQueryError> = async (args) => {
   await sleep();
   const url = routeOf(args);
@@ -399,6 +402,295 @@ const mockBaseQuery: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQueryErro
     return ok({ loggedOut: true });
   }
   if (url === "/app/auth/devices") return ok([{ deviceId: "dev_iphone", platform: "iOS", deviceModel: "iPhone 16", lastUsedAt: "Now", current: true }, { deviceId: "dev_chrome", platform: "Web", deviceModel: "Chrome on macOS", lastUsedAt: "2 days ago", current: false }]);
+  if (url === "/app/digital-metals/capability") {
+    return ok({
+      enabled: true,
+      planEntitled: true,
+      tenantEnabled: true,
+      paused: false,
+      active: true,
+      canViewHoldings: true,
+      canViewHistory: true,
+      canPlaceNewBuy: true,
+      canPlaceNewSell: true,
+      canPlaceRedemption: true,
+      blockers: [],
+      termsVersion: "mock-v1",
+      implementationPhase: 9,
+    });
+  }
+  if (url === "/app/digital-metals/portfolio") {
+    return ok({
+      items: [
+        {
+          id: "dmw_mock",
+          metal: "GOLD",
+          finenessPpm: 999000,
+          heldUg: "1000000",
+          reservedUg: "0",
+          availableUg: "1000000",
+          pendingBuyUg: "0",
+          branchId: null,
+        },
+      ],
+      pendingBuyUg: "0",
+    });
+  }
+  if (url === "/app/digital-metals/passbook") {
+    const now = new Date().toISOString();
+    return ok({
+      items: [
+        {
+          id: "dmj_mock",
+          entryType: "CREDIT",
+          quantityUgDelta: "1000000",
+          reservedUgDelta: "0",
+          sequence: 1,
+          referenceType: "PURCHASE",
+          referenceId: "dmbo_mock_demo",
+          createdAt: now,
+          purchaseSummary: {
+            orderId: "dmbo_mock_demo",
+            metal: "GOLD",
+            finenessPpm: 999000,
+            quantityUg: "1000000",
+            totalPayablePaise: 606_000,
+            buyRatePerGramPaise: 610_000,
+            bookedAt: now,
+            creditedAt: now,
+            payment: {
+              amountPaise: 606_000,
+              provider: "PHONEPE",
+              merchantOrderId: "dmpay_mock_demo",
+              paidAt: now,
+            },
+          },
+        },
+      ],
+      meta: { nextCursor: null, hasMore: false, limit: 25 },
+    });
+  }
+  if (url === "/app/digital-metals/quotes/buy" && method === "POST") {
+    return ok({
+      quoteId: `dmq_mock_${Date.now()}`,
+      expiresAt: new Date(Date.now() + 900_000).toISOString(),
+      metal: "GOLD",
+      finenessPpm: 999000,
+      metalQuantityUg: "1000000",
+      totalPayablePaise: body?.budgetPaise ?? 600_000,
+      termsVersion: "2026-10-01",
+      termsContentHash: "a".repeat(64),
+      rateSnapshot: { buyRatePerGramPaise: 610000, rateVersionId: "dmr_mock" },
+    });
+  }
+  const dmBuyOrderMatch = url.match(/^\/app\/digital-metals\/buy-orders\/([^/]+)$/);
+  if (dmBuyOrderMatch && method === "GET") {
+    const id = dmBuyOrderMatch[1];
+    const credited = digitalMetalsMockCreditedBuyOrders.has(id);
+    return ok({
+      id,
+      status: credited ? "CREDITED" : "PAYMENT_PENDING",
+      metal: "GOLD",
+      finenessPpm: 999000,
+      quantityUg: "1000000",
+      totalPayablePaise: 606_000,
+      paymentAttempts: credited ? [{ id: "dmpay_mock_done", status: "COMPLETED" }] : [],
+      invoiceStatus: credited ? "READY" : "PENDING",
+    });
+  }
+  if (url === "/app/digital-metals/buy-orders" && method === "POST") {
+    return ok({
+      id: `dmbo_mock_${Date.now()}`,
+      status: "PAYMENT_PENDING",
+      metal: "GOLD",
+      finenessPpm: 999000,
+      quantityUg: "1000000",
+      totalPayablePaise: 606_000,
+      paymentAttempts: [],
+      invoiceStatus: "PENDING",
+    });
+  }
+  if (url === "/app/digital-metals/quotes/sell" && method === "POST") {
+    return ok({
+      quoteId: `dmq_sell_mock_${Date.now()}`,
+      expiresAt: new Date(Date.now() + 900_000).toISOString(),
+      metal: "GOLD",
+      finenessPpm: 999000,
+      quantityUg: body?.quantityUg ?? 1_000_000,
+      settlementPaise: 580_000,
+      termsVersion: "2026-10-01",
+      termsContentHash: "b".repeat(64),
+    });
+  }
+  if (url === "/app/digital-metals/bank-destinations" && method === "GET") {
+    return ok({
+      items: [
+        {
+          id: "dmbd_mock",
+          accountHolderName: "Mock User",
+          accountLast4: "9012",
+          ifsc: "HDFC0001234",
+          bankName: "HDFC",
+          status: "ACTIVE",
+          verifiedAt: new Date().toISOString(),
+        },
+      ],
+    });
+  }
+  if (url === "/app/digital-metals/bank-destinations" && method === "POST") {
+    return ok({
+      id: `dmbd_mock_${Date.now()}`,
+      accountHolderName: body?.accountHolderName ?? "User",
+      accountLast4: "1234",
+      ifsc: body?.ifsc ?? "HDFC0001234",
+      status: "ACTIVE",
+      verifiedAt: new Date().toISOString(),
+    });
+  }
+  const dmBankPatch = url.match(/^\/app\/digital-metals\/bank-destinations\/([^/]+)$/);
+  if (dmBankPatch && method === "PATCH") {
+    return ok({
+      id: dmBankPatch[1],
+      accountHolderName: "Mock User",
+      accountLast4: "9012",
+      ifsc: "HDFC0001234",
+      status: "PENDING_VERIFICATION",
+    });
+  }
+  if (url === "/app/digital-metals/sell-orders" && method === "POST") {
+    return ok({
+      id: `dmso_mock_${Date.now()}`,
+      status: "RESERVED",
+      metal: "GOLD",
+      finenessPpm: 999000,
+      quantityUg: "1000000",
+      settlementPaise: 580_000,
+      quoteExpiresAt: new Date(Date.now() + 900_000).toISOString(),
+    });
+  }
+  const dmSellOrderMatch = url.match(/^\/app\/digital-metals\/sell-orders\/([^/]+)$/);
+  if (dmSellOrderMatch && method === "GET") {
+    return ok({
+      id: dmSellOrderMatch[1],
+      status: "PENDING_APPROVAL",
+      quantityUg: "1000000",
+      settlementPaise: 580_000,
+      approvalExpiresAt: new Date(Date.now() + 1_800_000).toISOString(),
+    });
+  }
+  const dmSellConfirm = url.match(/^\/app\/digital-metals\/sell-orders\/([^/]+)\/confirm$/);
+  if (dmSellConfirm && method === "POST") {
+    return ok({
+      id: dmSellConfirm[1],
+      status: "PENDING_APPROVAL",
+      approvalExpiresAt: new Date(Date.now() + 1_800_000).toISOString(),
+    });
+  }
+  const dmSellPayout = url.match(/^\/app\/digital-metals\/sell-orders\/([^/]+)\/payout-status$/);
+  if (dmSellPayout && method === "GET") {
+    return ok({
+      orderId: dmSellPayout[1],
+      saleExecuted: false,
+      bankPayoutSettled: false,
+      payoutDestinationMasked: { accountLast4: "9012", ifsc: "HDFC0001234", accountHolderName: "Mock User" },
+      payable: null,
+      payouts: [],
+    });
+  }
+  if (url === "/app/digital-metals/redemption/catalogue" && method === "GET") {
+    return ok({
+      items: [
+        {
+          id: "dmrci_mock",
+          sku: "GOLD-2G",
+          label: "2g Gold Coin",
+          metal: "GOLD",
+          finenessPpm: 999000,
+          unitQuantityUg: "2000000",
+          mintingChargePaise: 50000,
+          chargeTotalPaise: 50000,
+          pickupEnabled: true,
+          deliveryEnabled: false,
+          active: true,
+        },
+      ],
+    });
+  }
+  if (url === "/app/digital-metals/quotes/redemption" && method === "POST") {
+    return ok({
+      quoteId: `dmq_red_mock_${Date.now()}`,
+      expiresAt: new Date(Date.now() + 900_000).toISOString(),
+      catalogueItemId: body?.catalogueItemId ?? "dmrci_mock",
+      metal: "GOLD",
+      finenessPpm: 999000,
+      quantityUg: "2000000",
+      quantityReservedUg: "2000000",
+      remainingAvailableUg: "3000000",
+      chargeTotalPaise: 50000,
+      chargeLines: [{ code: "MINTING", label: "Minting", amountPaise: 50000 }],
+      termsVersion: "2026-10-01",
+      termsContentHash: "c".repeat(64),
+    });
+  }
+  if (url === "/app/digital-metals/redemption/orders" && method === "POST") {
+    const quoteId = typeof (body as { quoteId?: string })?.quoteId === "string" ? (body as { quoteId: string }).quoteId : "";
+    return ok({
+      id: `dmro_mock_${Date.now()}`,
+      status: quoteId.includes("zero") ? "CHARGE_PAID" : "CHARGE_PENDING",
+      quantityUg: "2000000",
+      chargeTotalPaise: quoteId.includes("zero") ? 0 : 50000,
+      chargePaymentExpiresAt: new Date(Date.now() + 900_000).toISOString(),
+    });
+  }
+  const dmRedOrderMatch = url.match(/^\/app\/digital-metals\/redemption\/orders\/([^/]+)$/);
+  if (dmRedOrderMatch && method === "GET") {
+    return ok({
+      id: dmRedOrderMatch[1],
+      status: "CHARGE_PENDING",
+      quantityUg: "2000000",
+      chargeTotalPaise: 50000,
+      chargeLines: [{ code: "MINTING", amountPaise: 50000 }],
+      chargePaymentExpiresAt: new Date(Date.now() + 900_000).toISOString(),
+    });
+  }
+  const dmPayIntentMatch = url.match(/^\/app\/digital-metals\/buy-orders\/([^/]+)\/payment-intents$/);
+  if (dmPayIntentMatch && method === "POST") {
+    const attemptId = `dmpay_mock_${Date.now()}`;
+    return ok({
+      id: attemptId,
+      orderId: dmPayIntentMatch[1],
+      status: "INITIATED",
+      amountPaise: 606_000,
+      currency: "INR",
+      token: `mock-token-${attemptId}`,
+      redirectUrl: body?.redirectUrl ?? "https://example.com/return",
+      paymentIntent: {
+        id: attemptId,
+        status: "INITIATED",
+        token: `mock-token-${attemptId}`,
+        redirectUrl: body?.redirectUrl ?? "https://example.com/return",
+      },
+    });
+  }
+  const dmPayPollMatch = url.match(
+    /^\/app\/digital-metals\/buy-orders\/([^/]+)\/payment-intents\/([^/]+)$/,
+  );
+  if (dmPayPollMatch && method === "GET") {
+    const [, mockOrderId, mockAttemptId] = dmPayPollMatch;
+    digitalMetalsMockCreditedBuyOrders.add(mockOrderId);
+    return ok({
+      paymentIntent: { id: mockAttemptId, status: "COMPLETED", orderId: mockOrderId },
+      order: {
+        id: mockOrderId,
+        status: "CREDITED",
+        metal: "GOLD",
+        finenessPpm: 999000,
+        quantityUg: "1000000",
+        totalPayablePaise: 606_000,
+        paymentAttempts: [{ id: mockAttemptId, status: "COMPLETED" }],
+      },
+    });
+  }
   if (url === "/app/gold-rate/current") return ok(customerHome.goldRate);
   if (url === "/app/gold-rate/history") return ok([{ ...customerHome.goldRate, effectiveDate: "2026-09-16" }, { ...customerHome.goldRate, ratePerGramPaise: 721000, ratePerGramDisplay: "₹7,210 / g", effectiveDate: "2026-09-15", movement: -0.18 }, { ...customerHome.goldRate, ratePerGramPaise: 722500, ratePerGramDisplay: "₹7,225 / g", effectiveDate: "2026-09-14", movement: 0.31 }]);
   if (url === "/app/branches") return ok([customerProfile.branch, { id: "br_thrissur", code: "TSR", name: "Thrissur", address: "Round South, Thrissur", mobile: "+91 487 2211900" }]);
@@ -494,7 +786,7 @@ const dynamicBaseQuery: BaseQueryFn<
 export const customerApi = createApi({
   reducerPath: "customerApi",
   baseQuery: dynamicBaseQuery,
-  tagTypes: ["CustomerHome", "CustomerScheme", "CustomerPayment", "CustomerProfile", "CustomerNotification", "CustomerGrievance", "CustomerDevice", "ShopCart", "ShopAddresses"],
+  tagTypes: ["CustomerHome", "CustomerScheme", "CustomerPayment", "CustomerProfile", "CustomerNotification", "CustomerGrievance", "CustomerDevice", "ShopCart", "ShopAddresses", "DigitalMetalsBuy", "DigitalMetalsSell", "DigitalMetalsRedemption", "DigitalMetalsDeliveryAddresses", "DigitalMetalsPortfolio", "DigitalMetalsPassbook"],
   endpoints: (builder) => ({
     resolveTenant: builder.query<
       { tenants: TenantBranding[]; resolvedBy?: string; tenantCode?: string | null },
@@ -1219,6 +1511,616 @@ export const customerApi = createApi({
         { type: "ShopCart", id: `order-${orderId}` },
       ],
     }),
+    getCustomerDigitalMetalsCapability: builder.query<
+      import("@/src/lib/digital-metals-entitlement").DigitalMetalsServerAccessState,
+      void
+    >({
+      query: () => "/app/digital-metals/capability",
+    }),
+    getCustomerDigitalMetalsPortfolio: builder.query<
+      {
+        items: {
+          id: string;
+          metal: string;
+          finenessPpm: number;
+          heldUg: string;
+          reservedUg: string;
+          availableUg: string;
+          pendingBuyUg: string;
+          branchId: string | null;
+          valuationStatus?: "OK" | "STALE_RATE" | "RATE_UNAVAILABLE";
+          estimatedSaleValue?: {
+            amountPaise: number;
+            currency: string;
+            ratePerGramPaise: number;
+            feeAssumption: string;
+          } | null;
+        }[];
+        pendingBuyUg: string;
+      },
+      void
+    >({
+      query: () => "/app/digital-metals/portfolio",
+      providesTags: ["DigitalMetalsPortfolio"],
+    }),
+    getCustomerDigitalMetalsPassbook: builder.query<
+      {
+        items: Record<string, unknown>[];
+        meta: { nextCursor: string | null; hasMore: boolean; limit: number };
+      },
+      { cursor?: string; limit?: number } | void
+    >({
+      query: (params) => ({
+        url: "/app/digital-metals/passbook",
+        params: params ?? {},
+      }),
+      providesTags: ["DigitalMetalsPassbook"],
+    }),
+    getCustomerDigitalMetalsStatement: builder.query<
+      Record<string, unknown>,
+      { fromBusinessDate: string; toBusinessDate: string }
+    >({
+      query: (params) => ({
+        url: "/app/digital-metals/statements/metal",
+        params,
+      }),
+    }),
+    getCustomerDigitalMetalsDocument: builder.query<
+      { id: string; status: string; docType: string; subjectKey?: string; documentNumber?: string | null; lastError?: string | null },
+      string
+    >({
+      query: (artifactId) => ({
+        url: `/app/digital-metals/documents/${encodeURIComponent(artifactId)}`,
+        mockKey: "customerDigitalMetalsDocument",
+      }),
+      transformResponse: (raw) => {
+        const data = (raw as { data?: Record<string, unknown> })?.data ?? raw;
+        return (data as {
+          id: string;
+          status: string;
+          docType: string;
+          subjectKey?: string;
+          documentNumber?: string | null;
+          lastError?: string | null;
+        }) ?? { id: "", status: "PENDING", docType: "METAL_STATEMENT" };
+      },
+    }),
+    findCustomerDigitalMetalsDocumentBySubject: builder.query<
+      { artifact: { id: string; status: string; documentNumber?: string | null; lastError?: string | null } | null },
+      Record<string, string>
+    >({
+      query: (params) => ({
+        url: "/app/digital-metals/documents/by-subject",
+        params,
+      }),
+    }),
+    requestCustomerDigitalMetalsDocument: builder.mutation<
+      Record<string, unknown>,
+      { idempotencyKey: string; body: Record<string, unknown> }
+    >({
+      query: ({ idempotencyKey, body }) => ({
+        url: "/app/digital-metals/documents/request",
+        method: "POST",
+        body,
+        headers: { "X-Idempotency-Key": idempotencyKey },
+      }),
+    }),
+    retryCustomerDigitalMetalsDocument: builder.mutation<
+      Record<string, unknown>,
+      { artifactId: string; idempotencyKey: string }
+    >({
+      query: ({ artifactId, idempotencyKey }) => ({
+        url: `/app/digital-metals/documents/${encodeURIComponent(artifactId)}/retry`,
+        method: "POST",
+        headers: { "X-Idempotency-Key": idempotencyKey },
+      }),
+    }),
+    getCustomerDigitalMetalsDocumentDownloadUrl: builder.mutation<
+      { downloadUrl: string },
+      string
+    >({
+      query: (artifactId) => ({
+        url: `/app/digital-metals/documents/${encodeURIComponent(artifactId)}/download-url`,
+      }),
+    }),
+    createDigitalMetalsBuyQuote: builder.mutation<
+      Record<string, unknown>,
+      {
+        metal: string;
+        finenessPpm: number;
+        inputMode: "BUDGET_INR" | "QUANTITY_UG";
+        budgetPaise?: number;
+        quantityUg?: number;
+        idempotencyKey: string;
+      }
+    >({
+      query: ({ idempotencyKey, ...body }) => ({
+        url: "/app/digital-metals/quotes/buy",
+        method: "POST",
+        body,
+        headers: { "X-Idempotency-Key": idempotencyKey },
+        mockKey: "createDigitalMetalsBuyQuote",
+      }),
+      transformResponse: (raw: unknown) => {
+        if (raw && typeof raw === "object" && "data" in raw) {
+          return (raw as { data: Record<string, unknown> }).data;
+        }
+        return raw as Record<string, unknown>;
+      },
+    }),
+    createDigitalMetalsBuyOrder: builder.mutation<
+      Record<string, unknown>,
+      {
+        quoteId: string;
+        termsVersionAccepted: string;
+        termsContentHashAccepted: string;
+        idempotencyKey: string;
+      }
+    >({
+      query: ({ idempotencyKey, ...body }) => ({
+        url: "/app/digital-metals/buy-orders",
+        method: "POST",
+        body,
+        headers: { "X-Idempotency-Key": idempotencyKey },
+        mockKey: "createDigitalMetalsBuyOrder",
+      }),
+      transformResponse: (raw: unknown) => {
+        if (raw && typeof raw === "object" && "data" in raw) {
+          return (raw as { data: Record<string, unknown> }).data;
+        }
+        return raw as Record<string, unknown>;
+      },
+      invalidatesTags: ["DigitalMetalsBuy"],
+    }),
+    getCustomerDigitalMetalsBuyOrder: builder.query<Record<string, unknown>, string>({
+      query: (orderId) => `/app/digital-metals/buy-orders/${encodeURIComponent(orderId)}`,
+      providesTags: (_r, _e, id) => [{ type: "DigitalMetalsBuy", id }],
+    }),
+    getCustomerDigitalMetalsBuyOrders: builder.query<
+      { items: Record<string, unknown>[]; meta?: { nextCursor: string | null; hasMore: boolean; limit: number } },
+      { status?: string; limit?: number; cursor?: string } | void
+    >({
+      query: (params) => ({
+        url: "/app/digital-metals/buy-orders",
+        params: params ?? {},
+      }),
+      transformResponse: (raw: unknown) => {
+        if (raw && typeof raw === "object" && "data" in raw) {
+          return (raw as { data: { items: Record<string, unknown>[]; meta?: Record<string, unknown> } }).data;
+        }
+        return (raw as { items: Record<string, unknown>[] }) ?? { items: [] };
+      },
+      providesTags: ["DigitalMetalsBuy"],
+    }),
+    getCustomerDigitalMetalsSellOrders: builder.query<
+      { items: Record<string, unknown>[]; meta?: { nextCursor: string | null; hasMore: boolean; limit: number } },
+      { status?: string; limit?: number; cursor?: string } | void
+    >({
+      query: (params) => ({
+        url: "/app/digital-metals/sell-orders",
+        params: params ?? {},
+      }),
+      transformResponse: (raw: unknown) => {
+        if (raw && typeof raw === "object" && "data" in raw) {
+          return (raw as { data: { items: Record<string, unknown>[]; meta?: Record<string, unknown> } }).data;
+        }
+        return (raw as { items: Record<string, unknown>[] }) ?? { items: [] };
+      },
+      providesTags: ["DigitalMetalsSell"],
+    }),
+    getCustomerDigitalMetalsRedemptionOrders: builder.query<
+      { items: Record<string, unknown>[]; meta?: { nextCursor: string | null; hasMore: boolean; limit: number } },
+      { status?: string; limit?: number; cursor?: string } | void
+    >({
+      query: (params) => ({
+        url: "/app/digital-metals/redemption/orders",
+        params: params ?? {},
+      }),
+      transformResponse: (raw: unknown) => {
+        if (raw && typeof raw === "object" && "data" in raw) {
+          return (raw as { data: { items: Record<string, unknown>[]; meta?: Record<string, unknown> } }).data;
+        }
+        return (raw as { items: Record<string, unknown>[] }) ?? { items: [] };
+      },
+      providesTags: ["DigitalMetalsRedemption"],
+    }),
+    getCustomerDigitalMetalsOpenOrdersSummary: builder.query<
+      { openBuyCount: number; openSellCount: number; openRedemptionCount: number; totalOpen: number },
+      void
+    >({
+      query: () => "/app/digital-metals/orders/open-summary",
+      transformResponse: (raw: unknown) => {
+        if (raw && typeof raw === "object" && "data" in raw) {
+          return (raw as { data: Record<string, number> }).data as {
+            openBuyCount: number;
+            openSellCount: number;
+            openRedemptionCount: number;
+            totalOpen: number;
+          };
+        }
+        return raw as { openBuyCount: number; openSellCount: number; openRedemptionCount: number; totalOpen: number };
+      },
+      providesTags: ["DigitalMetalsBuy", "DigitalMetalsSell", "DigitalMetalsRedemption"],
+    }),
+    createDigitalMetalsBuyPaymentIntent: builder.mutation<
+      Record<string, unknown>,
+      { orderId: string; redirectUrl: string; idempotencyKey: string }
+    >({
+      query: ({ orderId, redirectUrl, idempotencyKey }) => ({
+        url: `/app/digital-metals/buy-orders/${encodeURIComponent(orderId)}/payment-intents`,
+        method: "POST",
+        body: { redirectUrl },
+        headers: { "X-Idempotency-Key": idempotencyKey },
+        mockKey: "createDigitalMetalsBuyPaymentIntent",
+      }),
+      transformResponse: (raw: unknown) => {
+        if (raw && typeof raw === "object" && "data" in raw) {
+          const data = (raw as { data: Record<string, unknown> }).data;
+          const nested = data.paymentIntent as Record<string, unknown> | undefined;
+          return nested ? { ...data, ...nested } : data;
+        }
+        return raw as Record<string, unknown>;
+      },
+      invalidatesTags: (_r, _e, { orderId }) => [
+        { type: "DigitalMetalsBuy", id: orderId },
+        "DigitalMetalsPortfolio",
+        "DigitalMetalsPassbook",
+      ],
+    }),
+    pollDigitalMetalsBuyPaymentIntent: builder.query<
+      { paymentIntent: Record<string, unknown>; order?: Record<string, unknown> },
+      { orderId: string; paymentAttemptId: string }
+    >({
+      query: ({ orderId, paymentAttemptId }) =>
+        `/app/digital-metals/buy-orders/${encodeURIComponent(orderId)}/payment-intents/${encodeURIComponent(paymentAttemptId)}`,
+      transformResponse: (raw: unknown) => {
+        if (raw && typeof raw === "object" && "data" in raw) {
+          return (raw as { data: { paymentIntent: Record<string, unknown>; order?: Record<string, unknown> } }).data;
+        }
+        return raw as { paymentIntent: Record<string, unknown>; order?: Record<string, unknown> };
+      },
+    }),
+    createCustomerDigitalMetalsSellQuote: builder.mutation<
+      Record<string, unknown>,
+      { metal: string; finenessPpm: number; quantityUg: number; idempotencyKey: string }
+    >({
+      query: ({ idempotencyKey, ...body }) => ({
+        url: "/app/digital-metals/quotes/sell",
+        method: "POST",
+        body,
+        headers: { "X-Idempotency-Key": idempotencyKey },
+      }),
+      transformResponse: (raw: unknown) => {
+        if (raw && typeof raw === "object" && "data" in raw) {
+          return (raw as { data: Record<string, unknown> }).data;
+        }
+        return raw as Record<string, unknown>;
+      },
+    }),
+    createCustomerDigitalMetalsSellOrder: builder.mutation<
+      Record<string, unknown>,
+      {
+        quoteId: string;
+        termsVersionAccepted: string;
+        termsContentHashAccepted: string;
+        idempotencyKey: string;
+      }
+    >({
+      query: ({ idempotencyKey, ...body }) => ({
+        url: "/app/digital-metals/sell-orders",
+        method: "POST",
+        body,
+        headers: { "X-Idempotency-Key": idempotencyKey },
+      }),
+      transformResponse: (raw: unknown) => {
+        if (raw && typeof raw === "object" && "data" in raw) {
+          return (raw as { data: Record<string, unknown> }).data;
+        }
+        return raw as Record<string, unknown>;
+      },
+      invalidatesTags: ["DigitalMetalsSell"],
+    }),
+    confirmCustomerDigitalMetalsSellOrder: builder.mutation<
+      Record<string, unknown>,
+      { orderId: string; bankDestinationId: string; idempotencyKey: string }
+    >({
+      query: ({ orderId, idempotencyKey, ...body }) => ({
+        url: `/app/digital-metals/sell-orders/${encodeURIComponent(orderId)}/confirm`,
+        method: "POST",
+        body,
+        headers: { "X-Idempotency-Key": idempotencyKey },
+      }),
+      transformResponse: (raw: unknown) => {
+        if (raw && typeof raw === "object" && "data" in raw) {
+          return (raw as { data: Record<string, unknown> }).data;
+        }
+        return raw as Record<string, unknown>;
+      },
+      invalidatesTags: (_r, _e, { orderId }) => [{ type: "DigitalMetalsSell", id: orderId }],
+    }),
+    cancelCustomerDigitalMetalsSellOrder: builder.mutation<
+      Record<string, unknown>,
+      { orderId: string; idempotencyKey: string }
+    >({
+      query: ({ orderId, idempotencyKey }) => ({
+        url: `/app/digital-metals/sell-orders/${encodeURIComponent(orderId)}/cancel`,
+        method: "POST",
+        headers: { "X-Idempotency-Key": idempotencyKey },
+      }),
+      transformResponse: (raw: unknown) => {
+        if (raw && typeof raw === "object" && "data" in raw) {
+          return (raw as { data: Record<string, unknown> }).data;
+        }
+        return raw as Record<string, unknown>;
+      },
+      invalidatesTags: (_r, _e, { orderId }) => [{ type: "DigitalMetalsSell", id: orderId }],
+    }),
+    getCustomerDigitalMetalsSellOrder: builder.query<Record<string, unknown>, string>({
+      query: (orderId) => `/app/digital-metals/sell-orders/${encodeURIComponent(orderId)}`,
+      providesTags: (_r, _e, id) => [{ type: "DigitalMetalsSell", id }],
+    }),
+    getCustomerDigitalMetalsSellOrderPayoutStatus: builder.query<Record<string, unknown>, string>({
+      query: (orderId) =>
+        `/app/digital-metals/sell-orders/${encodeURIComponent(orderId)}/payout-status`,
+      providesTags: (_r, _e, id) => [{ type: "DigitalMetalsSell", id: `payout-${id}` }],
+    }),
+    getCustomerDigitalMetalsBankDestinations: builder.query<
+      {
+        items: {
+          id: string;
+          accountHolderName: string;
+          accountLast4: string;
+          ifsc: string;
+          bankName: string;
+          status: string;
+          verifiedAt: string | null;
+        }[];
+      },
+      void
+    >({
+      query: () => "/app/digital-metals/bank-destinations",
+      providesTags: ["DigitalMetalsSell"],
+    }),
+    createCustomerDigitalMetalsBankDestination: builder.mutation<
+      Record<string, unknown>,
+      {
+        accountHolderName: string;
+        accountNumber: string;
+        ifsc: string;
+        bankName?: string;
+        idempotencyKey: string;
+      }
+    >({
+      query: ({ idempotencyKey, ...body }) => ({
+        url: "/app/digital-metals/bank-destinations",
+        method: "POST",
+        body,
+        headers: { "X-Idempotency-Key": idempotencyKey },
+      }),
+      transformResponse: (raw: unknown) => {
+        if (raw && typeof raw === "object" && "data" in raw) {
+          return (raw as { data: Record<string, unknown> }).data;
+        }
+        return raw as Record<string, unknown>;
+      },
+      invalidatesTags: ["DigitalMetalsSell"],
+    }),
+    patchCustomerDigitalMetalsBankDestination: builder.mutation<
+      Record<string, unknown>,
+      { destinationId: string; confirmAccountNumber?: string; accountHolderName?: string; ifsc?: string }
+    >({
+      query: ({ destinationId, ...body }) => ({
+        url: `/app/digital-metals/bank-destinations/${encodeURIComponent(destinationId)}`,
+        method: "PATCH",
+        body,
+      }),
+      transformResponse: (raw: unknown) => {
+        if (raw && typeof raw === "object" && "data" in raw) {
+          return (raw as { data: Record<string, unknown> }).data;
+        }
+        return raw as Record<string, unknown>;
+      },
+      invalidatesTags: ["DigitalMetalsSell"],
+    }),
+    completeDigitalMetalsTestHarnessPayment: builder.mutation<
+      Record<string, unknown>,
+      {
+        orderId: string;
+        idempotencyKey: string;
+        outcome?: "COMPLETED" | "FAILED";
+        paymentAttemptId?: string;
+      }
+    >({
+      query: ({ orderId, idempotencyKey, outcome, paymentAttemptId }) => ({
+        url: `/app/digital-metals/buy-orders/${encodeURIComponent(orderId)}/test-harness/complete-payment`,
+        method: "POST",
+        body: {
+          ...(outcome ? { outcome } : {}),
+          ...(paymentAttemptId ? { paymentAttemptId } : {}),
+        },
+        headers: { "X-Idempotency-Key": idempotencyKey },
+        mockKey: "completeDigitalMetalsTestHarnessPayment",
+      }),
+      transformResponse: (raw: unknown) => {
+        if (raw && typeof raw === "object" && "data" in raw) {
+          return (raw as { data: Record<string, unknown> }).data;
+        }
+        return raw as Record<string, unknown>;
+      },
+      invalidatesTags: (_r, _e, { orderId }) => [{ type: "DigitalMetalsBuy", id: orderId }],
+    }),
+    getCustomerDigitalMetalsDeliveryAddresses: builder.query<{ items: Record<string, unknown>[] }, void>({
+      query: () => "/app/digital-metals/delivery-addresses",
+      transformResponse: (raw: unknown) => {
+        if (raw && typeof raw === "object" && "data" in raw) {
+          return (raw as { data: { items: Record<string, unknown>[] } }).data;
+        }
+        return (raw as { items: Record<string, unknown>[] }) ?? { items: [] };
+      },
+      providesTags: ["DigitalMetalsDeliveryAddresses"],
+    }),
+    createCustomerDigitalMetalsDeliveryAddress: builder.mutation<
+      Record<string, unknown>,
+      {
+        line1: string;
+        city: string;
+        state: string;
+        pincode: string;
+        line2?: string;
+        label?: string;
+        recipientName?: string;
+        mobile?: string;
+        isDefault?: boolean;
+        idempotencyKey: string;
+      }
+    >({
+      query: ({ idempotencyKey, ...body }) => ({
+        url: "/app/digital-metals/delivery-addresses",
+        method: "POST",
+        body,
+        headers: { "X-Idempotency-Key": idempotencyKey },
+      }),
+      transformResponse: (raw: unknown) => {
+        if (raw && typeof raw === "object" && "data" in raw) {
+          return (raw as { data: Record<string, unknown> }).data;
+        }
+        return raw as Record<string, unknown>;
+      },
+      invalidatesTags: ["DigitalMetalsDeliveryAddresses"],
+    }),
+    getCustomerDigitalMetalsRedemptionCatalogue: builder.query<{ items: Record<string, unknown>[] }, void>({
+      query: () => "/app/digital-metals/redemption/catalogue",
+      providesTags: ["DigitalMetalsRedemption"],
+    }),
+    createCustomerDigitalMetalsRedemptionQuote: builder.mutation<
+      Record<string, unknown>,
+      {
+        catalogueItemId: string;
+        metal: string;
+        finenessPpm: number;
+        unitCount: number;
+        fulfilmentMode: "PICKUP" | "DELIVERY";
+        pickupBranchId?: string;
+        deliveryAddressId?: string;
+        idempotencyKey: string;
+      }
+    >({
+      query: ({ idempotencyKey, ...body }) => ({
+        url: "/app/digital-metals/quotes/redemption",
+        method: "POST",
+        body,
+        headers: { "X-Idempotency-Key": idempotencyKey },
+      }),
+      transformResponse: (raw: unknown) => {
+        if (raw && typeof raw === "object" && "data" in raw) {
+          return (raw as { data: Record<string, unknown> }).data;
+        }
+        return raw as Record<string, unknown>;
+      },
+    }),
+    createCustomerDigitalMetalsRedemptionOrder: builder.mutation<
+      Record<string, unknown>,
+      {
+        quoteId: string;
+        termsVersionAccepted: string;
+        termsContentHashAccepted: string;
+        idempotencyKey: string;
+      }
+    >({
+      query: ({ idempotencyKey, ...body }) => ({
+        url: "/app/digital-metals/redemption/orders",
+        method: "POST",
+        body,
+        headers: { "X-Idempotency-Key": idempotencyKey },
+      }),
+      transformResponse: (raw: unknown) => {
+        if (raw && typeof raw === "object" && "data" in raw) {
+          return (raw as { data: Record<string, unknown> }).data;
+        }
+        return raw as Record<string, unknown>;
+      },
+      invalidatesTags: ["DigitalMetalsRedemption", "DigitalMetalsBuy"],
+    }),
+    getCustomerDigitalMetalsRedemptionOrder: builder.query<Record<string, unknown>, string>({
+      query: (orderId) => `/app/digital-metals/redemption/orders/${encodeURIComponent(orderId)}`,
+      providesTags: (_r, _e, id) => [{ type: "DigitalMetalsRedemption", id }],
+    }),
+    getCustomerDigitalMetalsRedemptionFulfilment: builder.query<Record<string, unknown>, string>({
+      query: (orderId) =>
+        `/app/digital-metals/redemption/orders/${encodeURIComponent(orderId)}/fulfilment`,
+      providesTags: (_r, _e, id) => [{ type: "DigitalMetalsRedemption", id: `${id}-fulfilment` }],
+    }),
+    getCustomerDigitalMetalsRedemptionPickupInstructions: builder.query<Record<string, unknown>, string>({
+      query: (orderId) =>
+        `/app/digital-metals/redemption/orders/${encodeURIComponent(orderId)}/pickup-instructions`,
+      providesTags: (_r, _e, id) => [{ type: "DigitalMetalsRedemption", id: `${id}-pickup` }],
+    }),
+    createCustomerDigitalMetalsRedemptionPaymentIntent: builder.mutation<
+      Record<string, unknown>,
+      { orderId: string; redirectUrl?: string; idempotencyKey: string }
+    >({
+      query: ({ orderId, idempotencyKey, ...body }) => ({
+        url: `/app/digital-metals/redemption/orders/${encodeURIComponent(orderId)}/payment-intents`,
+        method: "POST",
+        body,
+        headers: { "X-Idempotency-Key": idempotencyKey },
+      }),
+      transformResponse: (raw: unknown) => {
+        if (raw && typeof raw === "object" && "data" in raw) {
+          return (raw as { data: Record<string, unknown> }).data;
+        }
+        return raw as Record<string, unknown>;
+      },
+      invalidatesTags: (_r, _e, { orderId }) => [{ type: "DigitalMetalsRedemption", id: orderId }],
+    }),
+    pollDigitalMetalsRedemptionPaymentIntent: builder.query<
+      { paymentIntent: Record<string, unknown>; order?: Record<string, unknown> },
+      { orderId: string; paymentAttemptId: string }
+    >({
+      query: ({ orderId, paymentAttemptId }) =>
+        `/app/digital-metals/redemption/orders/${encodeURIComponent(orderId)}/payment-intents/${encodeURIComponent(paymentAttemptId)}`,
+      transformResponse: (raw: unknown) => {
+        if (raw && typeof raw === "object" && "data" in raw) {
+          return (raw as { data: { paymentIntent: Record<string, unknown>; order?: Record<string, unknown> } }).data;
+        }
+        return raw as { paymentIntent: Record<string, unknown>; order?: Record<string, unknown> };
+      },
+    }),
+    completeCustomerDigitalMetalsRedemptionTestHarnessPayment: builder.mutation<
+      Record<string, unknown>,
+      { orderId: string; idempotencyKey: string; outcome?: "COMPLETED" | "FAILED" }
+    >({
+      query: ({ orderId, idempotencyKey, outcome }) => ({
+        url: `/app/digital-metals/redemption/orders/${encodeURIComponent(orderId)}/test-harness/complete-payment`,
+        method: "POST",
+        body: outcome ? { outcome } : {},
+        headers: { "X-Idempotency-Key": idempotencyKey },
+      }),
+      transformResponse: (raw: unknown) => {
+        if (raw && typeof raw === "object" && "data" in raw) {
+          return (raw as { data: Record<string, unknown> }).data;
+        }
+        return raw as Record<string, unknown>;
+      },
+      invalidatesTags: (_r, _e, { orderId }) => [{ type: "DigitalMetalsRedemption", id: orderId }],
+    }),
+    cancelCustomerDigitalMetalsRedemptionOrder: builder.mutation<
+      Record<string, unknown>,
+      { orderId: string; idempotencyKey: string }
+    >({
+      query: ({ orderId, idempotencyKey }) => ({
+        url: `/app/digital-metals/redemption/orders/${encodeURIComponent(orderId)}/cancel`,
+        method: "POST",
+        headers: { "X-Idempotency-Key": idempotencyKey },
+      }),
+      transformResponse: (raw: unknown) => {
+        if (raw && typeof raw === "object" && "data" in raw) {
+          return (raw as { data: Record<string, unknown> }).data;
+        }
+        return raw as Record<string, unknown>;
+      },
+      invalidatesTags: ["DigitalMetalsRedemption", "DigitalMetalsBuy"],
+    }),
     completeShopTestHarnessPayment: builder.mutation<
       Record<string, unknown>,
       { orderId: string; idempotencyKey: string; outcome?: "COMPLETED" | "FAILED"; paymentAttemptId?: string }
@@ -1256,6 +2158,46 @@ export const {
   useGetCustomerGrievancesQuery, useGetCustomerGrievanceQuery, useCreateCustomerGrievanceMutation,
   useReplyCustomerGrievanceMutation, useGetCustomerDevicesQuery, useRevokeCustomerDeviceMutation,
   useCustomerLogoutMutation,
+  useGetCustomerDigitalMetalsCapabilityQuery,
+  useGetCustomerDigitalMetalsPortfolioQuery,
+  useGetCustomerDigitalMetalsPassbookQuery,
+  useGetCustomerDigitalMetalsStatementQuery,
+  useGetCustomerDigitalMetalsDocumentQuery,
+  useFindCustomerDigitalMetalsDocumentBySubjectQuery,
+  useRequestCustomerDigitalMetalsDocumentMutation,
+  useRetryCustomerDigitalMetalsDocumentMutation,
+  useGetCustomerDigitalMetalsDocumentDownloadUrlMutation,
+  useCreateDigitalMetalsBuyQuoteMutation,
+  useCreateDigitalMetalsBuyOrderMutation,
+  useGetCustomerDigitalMetalsBuyOrderQuery,
+  useGetCustomerDigitalMetalsBuyOrdersQuery,
+  useGetCustomerDigitalMetalsSellOrdersQuery,
+  useGetCustomerDigitalMetalsRedemptionOrdersQuery,
+  useGetCustomerDigitalMetalsOpenOrdersSummaryQuery,
+  useCreateDigitalMetalsBuyPaymentIntentMutation,
+  useLazyPollDigitalMetalsBuyPaymentIntentQuery,
+  useCompleteDigitalMetalsTestHarnessPaymentMutation,
+  useCreateCustomerDigitalMetalsSellQuoteMutation,
+  useCreateCustomerDigitalMetalsSellOrderMutation,
+  useConfirmCustomerDigitalMetalsSellOrderMutation,
+  useCancelCustomerDigitalMetalsSellOrderMutation,
+  useGetCustomerDigitalMetalsSellOrderQuery,
+  useGetCustomerDigitalMetalsSellOrderPayoutStatusQuery,
+  useGetCustomerDigitalMetalsBankDestinationsQuery,
+  useCreateCustomerDigitalMetalsBankDestinationMutation,
+  usePatchCustomerDigitalMetalsBankDestinationMutation,
+  useGetCustomerDigitalMetalsRedemptionCatalogueQuery,
+  useGetCustomerDigitalMetalsDeliveryAddressesQuery,
+  useCreateCustomerDigitalMetalsDeliveryAddressMutation,
+  useCreateCustomerDigitalMetalsRedemptionQuoteMutation,
+  useCreateCustomerDigitalMetalsRedemptionOrderMutation,
+  useGetCustomerDigitalMetalsRedemptionOrderQuery,
+  useGetCustomerDigitalMetalsRedemptionFulfilmentQuery,
+  useGetCustomerDigitalMetalsRedemptionPickupInstructionsQuery,
+  useCreateCustomerDigitalMetalsRedemptionPaymentIntentMutation,
+  useLazyPollDigitalMetalsRedemptionPaymentIntentQuery,
+  useCompleteCustomerDigitalMetalsRedemptionTestHarnessPaymentMutation,
+  useCancelCustomerDigitalMetalsRedemptionOrderMutation,
   useGetShopCategoriesQuery,
   useGetCustomerGoldRateQuery, useGetCustomerGoldHistoryQuery, useGetCustomerBranchesQuery,
   useRequestCustomerRedemptionMutation,

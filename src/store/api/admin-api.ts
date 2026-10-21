@@ -429,6 +429,7 @@ export const adminApi = createApi({
     "Export",
     "Report",
     "Ecommerce",
+    "DigitalMetals",
   ],
   endpoints: (builder) => ({
     login: builder.mutation<
@@ -3709,6 +3710,791 @@ export const adminApi = createApi({
         ({} as import("@/src/types/ecommerce-order").EcommerceWorkspaceSummary),
       providesTags: ["Ecommerce"],
     }),
+    getDigitalMetalsCapability: builder.query<
+      import("@/src/lib/digital-metals-entitlement").DigitalMetalsServerAccessState,
+      void
+    >({
+      query: () => ({
+        url: "/admin/digital-metals/capability",
+        mockKey: "digitalMetalsCapability",
+      }),
+      transformResponse: (raw) =>
+        (contractPayload(raw) as import("@/src/lib/digital-metals-entitlement").DigitalMetalsServerAccessState) ??
+        ({} as import("@/src/lib/digital-metals-entitlement").DigitalMetalsServerAccessState),
+      providesTags: ["DigitalMetals", "Settings"],
+    }),
+    getDigitalMetalsWorkspace: builder.query<
+      {
+        phase: number;
+        workspaceLive: boolean;
+        title: string;
+        message: string;
+        capability?: import("@/src/lib/digital-metals-entitlement").DigitalMetalsServerAccessState;
+      },
+      void
+    >({
+      query: () => ({
+        url: "/admin/digital-metals/workspace",
+        mockKey: "digitalMetalsWorkspace",
+      }),
+      transformResponse: (raw) =>
+        (contractPayload(raw) as {
+          phase: number;
+          workspaceLive: boolean;
+          title: string;
+          message: string;
+          capability?: import("@/src/lib/digital-metals-entitlement").DigitalMetalsServerAccessState;
+        }) ?? {
+          phase: 1,
+          workspaceLive: false,
+          title: "Digital Gold & Silver",
+          message: "",
+        },
+      providesTags: ["DigitalMetals"],
+    }),
+    getDigitalMetalsSettings: builder.query<
+      Record<string, unknown>,
+      { metal: string; finenessPpm: number }
+    >({
+      query: ({ metal, finenessPpm }) => ({
+        url: "/admin/digital-metals/settings",
+        params: { metal, finenessPpm },
+        mockKey: "digitalMetalsSettings",
+      }),
+      transformResponse: (raw) => (contractPayload(raw) as Record<string, unknown>) ?? {},
+      providesTags: ["DigitalMetals"],
+    }),
+    patchDigitalMetalsSettings: builder.mutation<
+      Record<string, unknown>,
+      Record<string, unknown> & { idempotencyKey: string }
+    >({
+      query: ({ idempotencyKey, ...body }) => ({
+        url: "/admin/digital-metals/settings",
+        method: "PATCH",
+        body,
+        headers: { "X-Idempotency-Key": idempotencyKey },
+        mockKey: "patchDigitalMetalsSettings",
+      }),
+      transformResponse: (raw) => (contractPayload(raw) as Record<string, unknown>) ?? {},
+      invalidatesTags: ["DigitalMetals"],
+    }),
+    getDigitalMetalsRatesCurrent: builder.query<
+      Record<string, unknown>,
+      { metal: string; finenessPpm: number }
+    >({
+      query: ({ metal, finenessPpm }) => ({
+        url: "/admin/digital-metals/rates/current",
+        params: { metal, finenessPpm },
+        mockKey: "digitalMetalsRatesCurrent",
+      }),
+      transformResponse: (raw) => (contractPayload(raw) as Record<string, unknown>) ?? {},
+      providesTags: ["DigitalMetals"],
+    }),
+    getDigitalMetalsRatesHistory: builder.query<
+      { items: Record<string, unknown>[] },
+      { metal: string; finenessPpm: number; limit?: number }
+    >({
+      query: ({ metal, finenessPpm, limit }) => ({
+        url: "/admin/digital-metals/rates/history",
+        params: { metal, finenessPpm, limit },
+        mockKey: "digitalMetalsRatesHistory",
+      }),
+      transformResponse: (raw) =>
+        (contractPayload(raw) as { items: Record<string, unknown>[] }) ?? { items: [] },
+      providesTags: ["DigitalMetals"],
+    }),
+    publishDigitalMetalsRate: builder.mutation<
+      Record<string, unknown>,
+      Record<string, unknown> & { idempotencyKey: string }
+    >({
+      query: ({ idempotencyKey, ...body }) => ({
+        url: "/admin/digital-metals/rates/publish",
+        method: "POST",
+        body,
+        headers: { "X-Idempotency-Key": idempotencyKey },
+        mockKey: "publishDigitalMetalsRate",
+      }),
+      transformResponse: (raw) => (contractPayload(raw) as Record<string, unknown>) ?? {},
+      invalidatesTags: ["DigitalMetals"],
+    }),
+    previewDigitalMetalsQuote: builder.mutation<
+      Record<string, unknown>,
+      Record<string, unknown> & { idempotencyKey: string }
+    >({
+      query: ({ idempotencyKey, ...body }) => ({
+        url: "/admin/digital-metals/quotes/preview",
+        method: "POST",
+        body,
+        headers: { "X-Idempotency-Key": idempotencyKey },
+        mockKey: "previewDigitalMetalsQuote",
+      }),
+      transformResponse: (raw) => (contractPayload(raw) as Record<string, unknown>) ?? {},
+    }),
+    setDigitalMetalsTenantPause: builder.mutation<
+      { digitalMetalsPaused: boolean; reason: string | null },
+      { pause: boolean; reason?: string; idempotencyKey: string }
+    >({
+      query: ({ idempotencyKey, ...body }) => ({
+        url: "/admin/digital-metals/operations/pause",
+        method: "POST",
+        body,
+        headers: { "X-Idempotency-Key": idempotencyKey },
+        mockKey: "digitalMetalsTenantPause",
+      }),
+      transformResponse: (raw) =>
+        (contractPayload(raw) as { digitalMetalsPaused: boolean; reason: string | null }) ?? {
+          digitalMetalsPaused: false,
+          reason: null,
+        },
+      invalidatesTags: ["DigitalMetals"],
+    }),
+    getDigitalMetalsOperationsWorkQueue: builder.query<
+      {
+        generatedAt: string;
+        summary: {
+          outboxPending: number;
+          outboxFailed: number;
+          outboxLeaseStale: number;
+          documentsRetryable: number;
+        };
+        items: {
+          id: string;
+          kind: string;
+          topic?: string;
+          docType?: string;
+          status: string;
+          ageMs: number | null;
+          lastError: string | null;
+          safeActions: string[];
+        }[];
+        notes: string[];
+      },
+      void
+    >({
+      query: () => ({
+        url: "/admin/digital-metals/operations/work-queue",
+        mockKey: "digitalMetalsOperationsWorkQueue",
+      }),
+      transformResponse: (raw) =>
+        (contractPayload(raw) as {
+          generatedAt: string;
+          summary: {
+            outboxPending: number;
+            outboxFailed: number;
+            outboxLeaseStale: number;
+            documentsRetryable: number;
+          };
+          items: {
+            id: string;
+            kind: string;
+            topic?: string;
+            docType?: string;
+            status: string;
+            ageMs: number | null;
+            lastError: string | null;
+            safeActions: string[];
+          }[];
+          notes: string[];
+        }) ?? {
+          generatedAt: new Date().toISOString(),
+          summary: { outboxPending: 0, outboxFailed: 0, outboxLeaseStale: 0, documentsRetryable: 0 },
+          items: [],
+          notes: [],
+        },
+      providesTags: [{ type: "DigitalMetals", id: "operations-work-queue" }],
+    }),
+    retryDigitalMetalsOutboxEvent: builder.mutation<
+      { eventId: string; topic: string },
+      { eventId: string; idempotencyKey: string }
+    >({
+      query: ({ eventId, idempotencyKey }) => ({
+        url: `/admin/digital-metals/operations/outbox/${encodeURIComponent(eventId)}/retry`,
+        method: "POST",
+        headers: { "X-Idempotency-Key": idempotencyKey },
+        mockKey: "retryDigitalMetalsOutboxEvent",
+      }),
+      transformResponse: (raw) => (contractPayload(raw) as { eventId: string; topic: string }) ?? { eventId: "", topic: "" },
+      invalidatesTags: [{ type: "DigitalMetals", id: "operations-work-queue" }],
+    }),
+    retryDigitalMetalsDocumentFromOps: builder.mutation<
+      { artifact: { id: string; status: string } },
+      { artifactId: string; idempotencyKey: string }
+    >({
+      query: ({ artifactId, idempotencyKey }) => ({
+        url: `/admin/digital-metals/operations/documents/${encodeURIComponent(artifactId)}/retry`,
+        method: "POST",
+        headers: { "X-Idempotency-Key": idempotencyKey },
+        mockKey: "retryDigitalMetalsDocumentFromOps",
+      }),
+      transformResponse: (raw) =>
+        (contractPayload(raw) as { artifact: { id: string; status: string } }) ?? {
+          artifact: { id: "", status: "PENDING" },
+        },
+      invalidatesTags: [{ type: "DigitalMetals", id: "operations-work-queue" }],
+    }),
+    getDigitalMetalsCustomerWallets: builder.query<
+      {
+        items: {
+          id: string;
+          metal: string;
+          finenessPpm: number;
+          heldUg: string;
+          reservedUg: string;
+          availableUg: string;
+          pendingBuyUg: string;
+        }[];
+      },
+      string
+    >({
+      query: (customerId) => ({
+        url: `/admin/digital-metals/customers/${encodeURIComponent(customerId)}/wallets`,
+        mockKey: "digitalMetalsCustomerWallets",
+      }),
+      transformResponse: (raw) =>
+        (contractPayload(raw) as { items: { id: string; metal: string; finenessPpm: number; heldUg: string; reservedUg: string; availableUg: string; pendingBuyUg: string }[] }) ?? {
+          items: [],
+        },
+      providesTags: (_r, _e, customerId) => [{ type: "DigitalMetals", id: `wallets-${customerId}` }],
+    }),
+    getDigitalMetalsCustomerPassbook: builder.query<
+      { items: Record<string, unknown>[]; meta?: { nextCursor: string | null; hasMore: boolean; limit: number } },
+      { customerId: string; cursor?: string; limit?: number }
+    >({
+      query: ({ customerId, ...params }) => ({
+        url: `/admin/digital-metals/customers/${encodeURIComponent(customerId)}/passbook`,
+        params,
+        mockKey: "digitalMetalsCustomerPassbook",
+      }),
+      transformResponse: (raw) =>
+        (contractPayload(raw) as { items: Record<string, unknown>[]; meta?: { nextCursor: string | null; hasMore: boolean; limit: number } }) ?? {
+          items: [],
+        },
+      providesTags: (_r, _e, { customerId }) => [{ type: "DigitalMetals", id: `passbook-${customerId}` }],
+    }),
+    getDigitalMetalsBuyOrders: builder.query<
+      { items: Record<string, unknown>[]; meta?: { nextCursor: string | null; hasMore: boolean; limit: number } },
+      { customerId?: string; status?: string; limit?: number; cursor?: string; q?: string } | void
+    >({
+      query: (params) => ({
+        url: "/admin/digital-metals/buy-orders",
+        params: params ?? {},
+        mockKey: "digitalMetalsBuyOrders",
+      }),
+      transformResponse: (raw) =>
+        (contractPayload(raw) as {
+          items: Record<string, unknown>[];
+          meta?: { nextCursor: string | null; hasMore: boolean; limit: number };
+        }) ?? { items: [] },
+      providesTags: ["DigitalMetals"],
+    }),
+    getDigitalMetalsBuyOrder: builder.query<Record<string, unknown>, string>({
+      query: (orderId) => ({
+        url: `/admin/digital-metals/buy-orders/${encodeURIComponent(orderId)}`,
+        mockKey: "digitalMetalsBuyOrderDetail",
+      }),
+      transformResponse: (raw) => (contractPayload(raw) as Record<string, unknown>) ?? {},
+      providesTags: (_r, _e, id) => [{ type: "DigitalMetals", id: `buy-${id}` }],
+    }),
+    getDigitalMetalsPaymentExceptions: builder.query<{ items: Record<string, unknown>[] }, void>({
+      query: () => ({
+        url: "/admin/digital-metals/payment-exceptions",
+        mockKey: "digitalMetalsPaymentExceptions",
+      }),
+      transformResponse: (raw) =>
+        (contractPayload(raw) as { items: Record<string, unknown>[] }) ?? { items: [] },
+      providesTags: ["DigitalMetals"],
+    }),
+    getDigitalMetalsSellOrders: builder.query<
+      { items: Record<string, unknown>[]; meta?: { nextCursor: string | null; hasMore: boolean; limit: number } },
+      { status?: string; customerId?: string; limit?: number; cursor?: string; q?: string } | void
+    >({
+      query: (params) => ({
+        url: "/admin/digital-metals/sell-orders",
+        params: params ?? {},
+        mockKey: "digitalMetalsSellOrders",
+      }),
+      transformResponse: (raw) =>
+        (contractPayload(raw) as {
+          items: Record<string, unknown>[];
+          meta?: { nextCursor: string | null; hasMore: boolean; limit: number };
+        }) ?? { items: [] },
+      providesTags: ["DigitalMetals"],
+    }),
+    getDigitalMetalsSellOrder: builder.query<Record<string, unknown>, string>({
+      query: (orderId) => ({
+        url: `/admin/digital-metals/sell-orders/${encodeURIComponent(orderId)}`,
+        mockKey: "digitalMetalsSellOrderDetail",
+      }),
+      transformResponse: (raw) => (contractPayload(raw) as Record<string, unknown>) ?? {},
+      providesTags: (_r, _e, id) => [{ type: "DigitalMetals", id: `sell-${id}` }],
+    }),
+    approveDigitalMetalsSellOrder: builder.mutation<
+      Record<string, unknown>,
+      { orderId: string; expectedVersion?: number }
+    >({
+      query: ({ orderId, ...body }) => ({
+        url: `/admin/digital-metals/sell-orders/${encodeURIComponent(orderId)}/approve`,
+        method: "POST",
+        body,
+        mockKey: "approveDigitalMetalsSellOrder",
+      }),
+      invalidatesTags: ["DigitalMetals"],
+    }),
+    getDigitalMetalsPayables: builder.query<
+      { items: Record<string, unknown>[] },
+      { status?: string; customerId?: string } | void
+    >({
+      query: (params) => ({
+        url: "/admin/digital-metals/payables",
+        params: params ?? {},
+        mockKey: "digitalMetalsPayables",
+      }),
+      providesTags: ["DigitalMetals"],
+    }),
+    getDigitalMetalsPayouts: builder.query<
+      { items: Record<string, unknown>[] },
+      { status?: string; payableId?: string } | void
+    >({
+      query: (params) => ({
+        url: "/admin/digital-metals/payouts",
+        params: params ?? {},
+        mockKey: "digitalMetalsPayouts",
+      }),
+      providesTags: ["DigitalMetals"],
+    }),
+    createDigitalMetalsPayout: builder.mutation<
+      Record<string, unknown>,
+      { payableId: string; amountPaise?: number; evidenceUploadIds?: string[] }
+    >({
+      query: (body) => ({
+        url: "/admin/digital-metals/payouts",
+        method: "POST",
+        body,
+        mockKey: "createDigitalMetalsPayout",
+      }),
+      invalidatesTags: ["DigitalMetals"],
+    }),
+    approveDigitalMetalsPayout: builder.mutation<Record<string, unknown>, string>({
+      query: (payoutId) => ({
+        url: `/admin/digital-metals/payouts/${encodeURIComponent(payoutId)}/approve`,
+        method: "POST",
+        body: {},
+        mockKey: "approveDigitalMetalsPayout",
+      }),
+      invalidatesTags: ["DigitalMetals"],
+    }),
+    getDigitalMetalsPayout: builder.query<
+      { payout: Record<string, unknown>; payable: Record<string, unknown> },
+      string
+    >({
+      query: (payoutId) => ({
+        url: `/admin/digital-metals/payouts/${encodeURIComponent(payoutId)}`,
+        mockKey: "digitalMetalsPayoutDetail",
+      }),
+      providesTags: (_r, _e, id) => [{ type: "DigitalMetals", id: `payout-${id}` }],
+    }),
+    submitDigitalMetalsPayout: builder.mutation<
+      Record<string, unknown>,
+      { payoutId: string; bankReference: string; idempotencyKey: string }
+    >({
+      query: ({ payoutId, bankReference, idempotencyKey }) => ({
+        url: `/admin/digital-metals/payouts/${encodeURIComponent(payoutId)}/submit`,
+        method: "POST",
+        body: { bankReference },
+        headers: { "X-Idempotency-Key": idempotencyKey },
+        mockKey: "submitDigitalMetalsPayout",
+      }),
+      invalidatesTags: (_r, _e, { payoutId }) => [
+        "DigitalMetals",
+        { type: "DigitalMetals", id: `payout-${payoutId}` },
+      ],
+    }),
+    recordDigitalMetalsPayoutSettlement: builder.mutation<
+      Record<string, unknown>,
+      {
+        payoutId: string;
+        settlementDate: string;
+        bankReference: string;
+        evidenceUploadIds: string[];
+        approverAttestation: boolean;
+        idempotencyKey: string;
+      }
+    >({
+      query: ({ payoutId, idempotencyKey, ...body }) => ({
+        url: `/admin/digital-metals/payouts/${encodeURIComponent(payoutId)}/record-settlement`,
+        method: "POST",
+        body,
+        headers: { "X-Idempotency-Key": idempotencyKey },
+        mockKey: "recordDigitalMetalsPayoutSettlement",
+      }),
+      invalidatesTags: (_r, _e, { payoutId }) => [
+        "DigitalMetals",
+        { type: "DigitalMetals", id: `payout-${payoutId}` },
+      ],
+    }),
+    recordDigitalMetalsPayoutFailure: builder.mutation<
+      Record<string, unknown>,
+      { payoutId: string; reason: string; evidenceUploadIds: string[]; idempotencyKey: string }
+    >({
+      query: ({ payoutId, idempotencyKey, ...body }) => ({
+        url: `/admin/digital-metals/payouts/${encodeURIComponent(payoutId)}/record-failure`,
+        method: "POST",
+        body,
+        headers: { "X-Idempotency-Key": idempotencyKey },
+        mockKey: "recordDigitalMetalsPayoutFailure",
+      }),
+      invalidatesTags: (_r, _e, { payoutId }) => [
+        "DigitalMetals",
+        { type: "DigitalMetals", id: `payout-${payoutId}` },
+      ],
+    }),
+    markDigitalMetalsPayoutUnknown: builder.mutation<
+      Record<string, unknown>,
+      { payoutId: string; reason?: string; idempotencyKey: string }
+    >({
+      query: ({ payoutId, idempotencyKey, ...body }) => ({
+        url: `/admin/digital-metals/payouts/${encodeURIComponent(payoutId)}/mark-unknown`,
+        method: "POST",
+        body,
+        headers: { "X-Idempotency-Key": idempotencyKey },
+        mockKey: "markDigitalMetalsPayoutUnknown",
+      }),
+      invalidatesTags: (_r, _e, { payoutId }) => [
+        "DigitalMetals",
+        { type: "DigitalMetals", id: `payout-${payoutId}` },
+      ],
+    }),
+    resolveDigitalMetalsPayoutUnknown: builder.mutation<
+      Record<string, unknown>,
+      {
+        payoutId: string;
+        outcome: "FAILED" | "SETTLED";
+        resolutionNote: string;
+        evidenceUploadIds: string[];
+        idempotencyKey: string;
+        settlementDate?: string;
+        bankReference?: string;
+        approverAttestation?: boolean;
+      }
+    >({
+      query: ({ payoutId, idempotencyKey, ...body }) => ({
+        url: `/admin/digital-metals/payouts/${encodeURIComponent(payoutId)}/resolve-unknown`,
+        method: "POST",
+        body,
+        headers: { "X-Idempotency-Key": idempotencyKey },
+        mockKey: "resolveDigitalMetalsPayoutUnknown",
+      }),
+      invalidatesTags: (_r, _e, { payoutId }) => [
+        "DigitalMetals",
+        { type: "DigitalMetals", id: `payout-${payoutId}` },
+      ],
+    }),
+    getDigitalMetalsRedemptionCatalogue: builder.query<{ items: Record<string, unknown>[] }, void>({
+      query: () => ({
+        url: "/admin/digital-metals/redemption/catalogue",
+        mockKey: "digitalMetalsRedemptionCatalogue",
+      }),
+      transformResponse: (raw) =>
+        (contractPayload(raw) as { items: Record<string, unknown>[] }) ?? { items: [] },
+      providesTags: ["DigitalMetals"],
+    }),
+    createDigitalMetalsRedemptionCatalogItem: builder.mutation<
+      Record<string, unknown>,
+      Record<string, unknown>
+    >({
+      query: (body) => ({
+        url: "/admin/digital-metals/redemption/catalogue",
+        method: "POST",
+        body,
+        mockKey: "createDigitalMetalsRedemptionCatalogItem",
+      }),
+      invalidatesTags: ["DigitalMetals"],
+    }),
+    patchDigitalMetalsRedemptionCatalogItem: builder.mutation<
+      Record<string, unknown>,
+      { itemId: string; body: Record<string, unknown> }
+    >({
+      query: ({ itemId, body }) => ({
+        url: `/admin/digital-metals/redemption/catalogue/${encodeURIComponent(itemId)}`,
+        method: "PATCH",
+        body,
+        mockKey: "patchDigitalMetalsRedemptionCatalogItem",
+      }),
+      invalidatesTags: ["DigitalMetals"],
+    }),
+    getDigitalMetalsRedemptionOrders: builder.query<
+      { items: Record<string, unknown>[]; meta?: { nextCursor: string | null; hasMore: boolean; limit: number } },
+      { status?: string; customerId?: string; limit?: number; cursor?: string } | void
+    >({
+      query: (params) => ({
+        url: "/admin/digital-metals/redemption/orders",
+        params: params ?? {},
+        mockKey: "digitalMetalsRedemptionOrders",
+      }),
+      transformResponse: (raw) =>
+        (contractPayload(raw) as {
+          items: Record<string, unknown>[];
+          meta?: { nextCursor: string | null; hasMore: boolean; limit: number };
+        }) ?? { items: [] },
+      providesTags: ["DigitalMetals"],
+    }),
+    getDigitalMetalsCustomerBankDestinations: builder.query<
+      { items: Record<string, unknown>[] },
+      string
+    >({
+      query: (customerId) => ({
+        url: `/admin/digital-metals/customers/${encodeURIComponent(customerId)}/bank-destinations`,
+        mockKey: "digitalMetalsCustomerBankDestinations",
+      }),
+      transformResponse: (raw) =>
+        (contractPayload(raw) as { items: Record<string, unknown>[] }) ?? { items: [] },
+      providesTags: (_r, _e, customerId) => [{ type: "DigitalMetals", id: `banks-${customerId}` }],
+    }),
+    getDigitalMetalsBankVerificationQueue: builder.query<
+      { items: Record<string, unknown>[]; meta?: { nextCursor: string | null; hasMore: boolean; limit: number } },
+      { status?: string; customerId?: string; limit?: number; cursor?: string } | void
+    >({
+      query: (params) => ({
+        url: "/admin/digital-metals/bank-verification/queue",
+        params: params ?? {},
+        mockKey: "digitalMetalsBankVerificationQueue",
+      }),
+      transformResponse: (raw) =>
+        (contractPayload(raw) as {
+          items: Record<string, unknown>[];
+          meta?: { nextCursor: string | null; hasMore: boolean; limit: number };
+        }) ?? { items: [] },
+      providesTags: ["DigitalMetals"],
+    }),
+    verifyDigitalMetalsBankDestination: builder.mutation<
+      Record<string, unknown>,
+      {
+        customerId: string;
+        destinationId: string;
+        note: string;
+        activate?: boolean;
+        evidenceUploadIds?: string[];
+        idempotencyKey: string;
+      }
+    >({
+      query: ({ customerId, destinationId, idempotencyKey, ...body }) => ({
+        url: `/admin/digital-metals/customers/${encodeURIComponent(customerId)}/bank-destinations/${encodeURIComponent(destinationId)}/verify`,
+        method: "POST",
+        body,
+        headers: { "X-Idempotency-Key": idempotencyKey },
+        mockKey: "verifyDigitalMetalsBankDestination",
+      }),
+      transformResponse: (raw) => (contractPayload(raw) as Record<string, unknown>) ?? {},
+      invalidatesTags: ["DigitalMetals"],
+    }),
+    disableDigitalMetalsBankDestination: builder.mutation<
+      Record<string, unknown>,
+      {
+        customerId: string;
+        destinationId: string;
+        note: string;
+        evidenceUploadIds?: string[];
+        idempotencyKey: string;
+      }
+    >({
+      query: ({ customerId, destinationId, idempotencyKey, ...body }) => ({
+        url: `/admin/digital-metals/customers/${encodeURIComponent(customerId)}/bank-destinations/${encodeURIComponent(destinationId)}/disable`,
+        method: "POST",
+        body,
+        headers: { "X-Idempotency-Key": idempotencyKey },
+        mockKey: "disableDigitalMetalsBankDestination",
+      }),
+      transformResponse: (raw) => (contractPayload(raw) as Record<string, unknown>) ?? {},
+      invalidatesTags: ["DigitalMetals"],
+    }),
+    getDigitalMetalsRedemptionOrder: builder.query<Record<string, unknown>, string>({
+      query: (orderId) => ({
+        url: `/admin/digital-metals/redemption/orders/${encodeURIComponent(orderId)}`,
+        mockKey: "digitalMetalsRedemptionOrderDetail",
+      }),
+      transformResponse: (raw) => (contractPayload(raw) as Record<string, unknown>) ?? {},
+      providesTags: (_r, _e, id) => [{ type: "DigitalMetals", id: `redemption-${id}` }],
+    }),
+    getDigitalMetalsProcurementEntries: builder.query<
+      { items: Record<string, unknown>[]; nextCursor?: string | null },
+      { entryType?: string; status?: string; cursor?: string; commitmentEntryId?: string } | void
+    >({
+      query: (params) => ({
+        url: "/admin/digital-metals/procurement/entries",
+        params: params ?? {},
+        mockKey: "digitalMetalsProcurementEntries",
+      }),
+      providesTags: ["DigitalMetals"],
+    }),
+    createDigitalMetalsProcurementEntry: builder.mutation<
+      Record<string, unknown>,
+      { idempotencyKey: string; body: Record<string, unknown> }
+    >({
+      query: ({ idempotencyKey, body }) => ({
+        url: "/admin/digital-metals/procurement/entries",
+        method: "POST",
+        body,
+        headers: { "X-Idempotency-Key": idempotencyKey },
+        mockKey: "createDigitalMetalsProcurementEntry",
+      }),
+      invalidatesTags: ["DigitalMetals"],
+    }),
+    approveDigitalMetalsProcurementEntry: builder.mutation<
+      Record<string, unknown>,
+      {
+        entryId: string;
+        idempotencyKey: string;
+        overReceiptApprove?: boolean;
+        overReceiptApprovalNote?: string;
+      }
+    >({
+      query: ({ entryId, idempotencyKey, ...body }) => ({
+        url: `/admin/digital-metals/procurement/entries/${encodeURIComponent(entryId)}/approve`,
+        method: "POST",
+        body,
+        headers: { "X-Idempotency-Key": idempotencyKey },
+        mockKey: "approveDigitalMetalsProcurementEntry",
+      }),
+      invalidatesTags: ["DigitalMetals"],
+    }),
+    getDigitalMetalsProcurementEntry: builder.query<Record<string, unknown>, string>({
+      query: (entryId) => ({
+        url: `/admin/digital-metals/procurement/entries/${encodeURIComponent(entryId)}`,
+        mockKey: "digitalMetalsProcurementEntryDetail",
+      }),
+      providesTags: (_r, _e, id) => [{ type: "DigitalMetals", id: `proc-${id}` }],
+    }),
+    findDigitalMetalsDocumentBySubject: builder.query<
+      { artifact: Record<string, unknown> | null },
+      Record<string, string>
+    >({
+      query: (params) => ({
+        url: "/admin/digital-metals/documents/by-subject",
+        params,
+        mockKey: "digitalMetalsDocumentBySubject",
+      }),
+    }),
+    requestDigitalMetalsDocument: builder.mutation<
+      Record<string, unknown>,
+      { idempotencyKey: string; body: Record<string, unknown> }
+    >({
+      query: ({ idempotencyKey, body }) => ({
+        url: "/admin/digital-metals/documents/request",
+        method: "POST",
+        body,
+        headers: { "X-Idempotency-Key": idempotencyKey },
+        mockKey: "requestDigitalMetalsDocument",
+      }),
+    }),
+    retryDigitalMetalsDocument: builder.mutation<
+      Record<string, unknown>,
+      { artifactId: string; idempotencyKey: string }
+    >({
+      query: ({ artifactId, idempotencyKey }) => ({
+        url: `/admin/digital-metals/documents/${encodeURIComponent(artifactId)}/retry`,
+        method: "POST",
+        headers: { "X-Idempotency-Key": idempotencyKey },
+        mockKey: "retryDigitalMetalsDocument",
+      }),
+    }),
+    getDigitalMetalsDocumentDownloadUrl: builder.mutation<
+      { downloadUrl: string },
+      string
+    >({
+      query: (artifactId) => ({
+        url: `/admin/digital-metals/documents/${encodeURIComponent(artifactId)}/download-url`,
+        mockKey: "digitalMetalsDocumentDownloadUrl",
+      }),
+    }),
+    getDigitalMetalsHedgeLive: builder.query<Record<string, unknown>, { businessDate?: string } | void>({
+      query: (params) => ({
+        url: "/admin/digital-metals/hedge/live",
+        params: params ?? {},
+        mockKey: "digitalMetalsHedgeLive",
+      }),
+      providesTags: ["DigitalMetals"],
+    }),
+    closeDigitalMetalsHedgeDay: builder.mutation<
+      Record<string, unknown>,
+      { idempotencyKey: string; businessDate?: string; revisionReason?: string }
+    >({
+      query: ({ idempotencyKey, ...body }) => ({
+        url: "/admin/digital-metals/hedge/snapshots/close-day",
+        method: "POST",
+        body,
+        headers: { "X-Idempotency-Key": idempotencyKey },
+        mockKey: "closeDigitalMetalsHedgeDay",
+      }),
+      invalidatesTags: ["DigitalMetals"],
+    }),
+    getDigitalMetalsHedgeInvalidated: builder.query<
+      { items: Record<string, unknown>[] },
+      void
+    >({
+      query: () => ({
+        url: "/admin/digital-metals/hedge/snapshots-invalidated",
+        mockKey: "digitalMetalsHedgeInvalidated",
+      }),
+      providesTags: ["DigitalMetals"],
+    }),
+    getDigitalMetalsRedemptionFulfilmentQueue: builder.query<
+      { items: Record<string, unknown>[] },
+      { status?: string; limit?: number } | void
+    >({
+      query: (params) => ({
+        url: "/admin/digital-metals/redemption/fulfilment/queue",
+        params: params ?? {},
+        mockKey: "digitalMetalsRedemptionFulfilmentQueue",
+      }),
+      transformResponse: (raw) =>
+        (contractPayload(raw) as { items: Record<string, unknown>[] }) ?? { items: [] },
+      providesTags: ["DigitalMetals"],
+    }),
+    postDigitalMetalsRedemptionFulfilmentAction: builder.mutation<
+      Record<string, unknown>,
+      {
+        orderId: string;
+        action: string;
+        idempotencyKey: string;
+        body: Record<string, unknown>;
+      }
+    >({
+      query: ({ orderId, action, idempotencyKey, body }) => ({
+        url: `/admin/digital-metals/redemption/orders/${encodeURIComponent(orderId)}/fulfilment/${action}`,
+        method: "POST",
+        body,
+        headers: { "X-Idempotency-Key": idempotencyKey },
+        mockKey: "postDigitalMetalsRedemptionFulfilmentAction",
+      }),
+      transformResponse: (raw) => (contractPayload(raw) as Record<string, unknown>) ?? {},
+      invalidatesTags: (_r, _e, { orderId }) => [
+        "DigitalMetals",
+        { type: "DigitalMetals", id: `redemption-${orderId}` },
+      ],
+    }),
+    getDigitalMetalsCustomerRiskHolds: builder.query<
+      { items: Record<string, unknown>[] },
+      string
+    >({
+      query: (customerId) => ({
+        url: `/admin/digital-metals/customers/${encodeURIComponent(customerId)}/risk-holds`,
+        mockKey: "digitalMetalsCustomerRiskHolds",
+      }),
+      providesTags: ["DigitalMetals"],
+    }),
+    resolveDigitalMetalsRiskHold: builder.mutation<
+      Record<string, unknown>,
+      { holdId: string; resolutionNote: string; idempotencyKey: string }
+    >({
+      query: ({ holdId, resolutionNote, idempotencyKey }) => ({
+        url: `/admin/digital-metals/risk-holds/${encodeURIComponent(holdId)}/resolve`,
+        method: "POST",
+        body: { resolutionNote },
+        headers: { "X-Idempotency-Key": idempotencyKey },
+        mockKey: "resolveDigitalMetalsRiskHold",
+      }),
+      invalidatesTags: ["DigitalMetals"],
+    }),
     getEcommerceReports: builder.query<
       ReturnType<typeof adaptAdminReport>,
       ListQueryParams &
@@ -5278,6 +6064,60 @@ export const {
   usePutEcommerceFulfilmentSettingsMutation,
   useGetEcommerceOrdersQuery,
   useGetEcommerceWorkspaceSummaryQuery,
+  useGetDigitalMetalsCapabilityQuery,
+  useGetDigitalMetalsWorkspaceQuery,
+  useGetDigitalMetalsSettingsQuery,
+  usePatchDigitalMetalsSettingsMutation,
+  useGetDigitalMetalsRatesCurrentQuery,
+  useGetDigitalMetalsRatesHistoryQuery,
+  usePublishDigitalMetalsRateMutation,
+  usePreviewDigitalMetalsQuoteMutation,
+  useSetDigitalMetalsTenantPauseMutation,
+  useGetDigitalMetalsOperationsWorkQueueQuery,
+  useRetryDigitalMetalsOutboxEventMutation,
+  useRetryDigitalMetalsDocumentFromOpsMutation,
+  useGetDigitalMetalsCustomerWalletsQuery,
+  useGetDigitalMetalsCustomerPassbookQuery,
+  useGetDigitalMetalsBuyOrdersQuery,
+  useGetDigitalMetalsBuyOrderQuery,
+  useGetDigitalMetalsPaymentExceptionsQuery,
+  useGetDigitalMetalsSellOrdersQuery,
+  useGetDigitalMetalsSellOrderQuery,
+  useApproveDigitalMetalsSellOrderMutation,
+  useGetDigitalMetalsCustomerBankDestinationsQuery,
+  useGetDigitalMetalsBankVerificationQueueQuery,
+  useVerifyDigitalMetalsBankDestinationMutation,
+  useDisableDigitalMetalsBankDestinationMutation,
+  useGetDigitalMetalsPayablesQuery,
+  useGetDigitalMetalsPayoutsQuery,
+  useGetDigitalMetalsPayoutQuery,
+  useCreateDigitalMetalsPayoutMutation,
+  useApproveDigitalMetalsPayoutMutation,
+  useSubmitDigitalMetalsPayoutMutation,
+  useRecordDigitalMetalsPayoutSettlementMutation,
+  useRecordDigitalMetalsPayoutFailureMutation,
+  useMarkDigitalMetalsPayoutUnknownMutation,
+  useResolveDigitalMetalsPayoutUnknownMutation,
+  useGetDigitalMetalsRedemptionCatalogueQuery,
+  useCreateDigitalMetalsRedemptionCatalogItemMutation,
+  usePatchDigitalMetalsRedemptionCatalogItemMutation,
+  useGetDigitalMetalsRedemptionOrdersQuery,
+  useGetDigitalMetalsRedemptionOrderQuery,
+  useGetDigitalMetalsProcurementEntriesQuery,
+  useGetDigitalMetalsProcurementEntryQuery,
+  useCreateDigitalMetalsProcurementEntryMutation,
+  useApproveDigitalMetalsProcurementEntryMutation,
+  useFindDigitalMetalsDocumentBySubjectQuery,
+  useRequestDigitalMetalsDocumentMutation,
+  useRetryDigitalMetalsDocumentMutation,
+  useGetDigitalMetalsDocumentDownloadUrlMutation,
+  useGetDigitalMetalsHedgeLiveQuery,
+  useGetDigitalMetalsHedgeInvalidatedQuery,
+  useCloseDigitalMetalsHedgeDayMutation,
+  useGetDigitalMetalsRedemptionFulfilmentQueueQuery,
+  usePostDigitalMetalsRedemptionFulfilmentActionMutation,
+  useGetDigitalMetalsCustomerRiskHoldsQuery,
+  useResolveDigitalMetalsRiskHoldMutation,
   useGetEcommerceReportsQuery,
   useCreateEcommerceReportExportMutation,
   useGetEcommerceOrderQuery,

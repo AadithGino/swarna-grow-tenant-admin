@@ -453,6 +453,15 @@ export function SettingsPage({
     operationsQuery.data?.ecommerceEnabled === true ||
     ecommerceAccess?.enabled === true;
   const ecommerceStoreActive = ecommerceAccess?.active === true;
+  const digitalMetalsAccess = (subscription.digitalMetals ??
+    operationsQuery.data?.digitalMetals) as
+    | { planEntitled?: boolean; enabled?: boolean; active?: boolean }
+    | undefined;
+  const digitalMetalsPlanEntitled = digitalMetalsAccess?.planEntitled === true;
+  const digitalMetalsModuleEnabled =
+    operationsQuery.data?.digitalMetalsEnabled === true ||
+    digitalMetalsAccess?.enabled === true;
+  const digitalMetalsModuleActive = digitalMetalsAccess?.active === true;
   const plans = plansQuery.data ?? [];
   const invoices = invoicesQuery.data ?? [];
   const pendingPlanChange = subscription.pendingUpgradeRequest as
@@ -475,6 +484,22 @@ export function SettingsPage({
     } catch (err) {
       handleFormApiError(err, {
         fallback: "Could not update online store setting",
+      });
+    }
+  };
+
+  const saveDigitalMetalsEnabled = async (enabled: boolean) => {
+    try {
+      await patchOperations({
+        digitalMetalsEnabled: enabled,
+        expectedVersion: operationsQuery.data?.audit?.version,
+      }).unwrap();
+      toast.success(
+        enabled ? "Digital Gold & Silver enabled" : "Digital Gold & Silver disabled",
+      );
+    } catch (err) {
+      handleFormApiError(err, {
+        fallback: "Could not update digital metals setting",
       });
     }
   };
@@ -1380,6 +1405,7 @@ export function SettingsPage({
                   label="Advanced reports"
                 />
                 <FeaturePill on={!!features.ecommerce} label="Ecommerce" />
+                <FeaturePill on={!!features.digitalMetals} label="Digital metals" />
               </div>
             </Surface>
 
@@ -1445,6 +1471,58 @@ export function SettingsPage({
                       />
                     </p>
                   </>
+                ) : null}
+              </div>
+            </Surface>
+
+            <Surface
+              title="Digital Gold & Silver"
+              description="Independent from the online store. Disabling new trading does not remove access to existing holdings or open settlement obligations."
+            >
+              <div className="space-y-5 p-6">
+                <div className="flex flex-wrap items-start justify-between gap-4">
+                  <div>
+                    <p className="font-semibold text-[#49121f]">Plan includes digital metals</p>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      {digitalMetalsPlanEntitled
+                        ? "Your subscription entitles this jeweller to offer digital gold and silver."
+                        : "Upgrade to a plan with digital metals before you can enable the module."}
+                    </p>
+                  </div>
+                  <StatusBadge status={digitalMetalsPlanEntitled ? "ACTIVE" : "INACTIVE"} />
+                </div>
+                <PermissionGate permission={ACTION.tenantSettingsWrite}>
+                  <SettingsToggleRow
+                    id="digital-metals-enabled"
+                    title="Enable Digital Gold & Silver"
+                    description={
+                      digitalMetalsPlanEntitled
+                        ? "When on, staff with permission can open the workspace. Live buy/sell still requires tax profile and published customer terms."
+                        : "Not available on your current plan — request an upgrade below."
+                    }
+                    checked={digitalMetalsModuleEnabled}
+                    disabled={!digitalMetalsPlanEntitled}
+                    onCheckedChange={(checked) => void saveDigitalMetalsEnabled(checked)}
+                  />
+                </PermissionGate>
+                <div className="flex flex-wrap items-center gap-2 text-sm">
+                  <span className="text-muted-foreground">Live trading:</span>
+                  <StatusBadge
+                    status={digitalMetalsModuleActive ? "ACTIVE" : "PENDING"}
+                    label={digitalMetalsModuleActive ? "Active" : "Not live"}
+                  />
+                  {digitalMetalsModuleEnabled && !digitalMetalsModuleActive ? (
+                    <span className="text-muted-foreground">
+                      Enabled here but blocked by tax/terms readiness or an operational pause
+                    </span>
+                  ) : null}
+                </div>
+                {digitalMetalsPlanEntitled ? (
+                  <p className="text-sm text-muted-foreground">
+                    Open the{" "}
+                    <EcommerceRelatedLink href="/digital-metals" label="Digital metals workspace" />{" "}
+                    after enablement (Phase 1 shell — no balances yet).
+                  </p>
                 ) : null}
               </div>
             </Surface>

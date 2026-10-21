@@ -1,6 +1,6 @@
 # Ritu Gold and Diamonds — client demo (Palakkad)
 
-Demo tenant for **Ritu Gold and Diamonds**, Palakkad. Configured for **jewellery admin portal only** (no customer app / staff app in this demo).
+Demo tenant for **Ritu Gold and Diamonds**, Palakkad. **Admin portal + customer app** (OTP login for seeded customers). Staff app remains off.
 
 ## Seed (local / demo API)
 
@@ -21,6 +21,23 @@ Re-running replaces all data for tenant `RITUGOLD`. The script is **slow on purp
 | **Password** | `2026` |
 
 Portal: sign in at your tenant admin URL (organization **RITUGOLD** on login).
+
+### Customer app
+
+| Field | Value |
+|--------|--------|
+| **URL** | `/customer/ritugold` |
+| **Login** | OTP to any demo customer mobile below (e.g. `9847654401` — Anjali Menon) |
+| **Schemes** | `RITU18FIX`, `RITU18FLEX` visible for self-enrol |
+
+**Vercel / production:** the customer portal calls the **deployed API database**, not your laptop. Enable access there:
+
+1. **Platform** (production) → **Jewellers** → **RITUGOLD** → **Platform feature flags** → turn on **Customer app enabled** → Save (with reason).
+2. **Tenant admin** (RITUGOLD) → **Settings** → **Operations** → turn off **Customer app maintenance**; enable **Customer app write** and **payments** if needed.
+3. Or run against the **same `MONGODB_URI` as the Vercel/Railway API**:  
+   `MONGODB_URI='…' node scripts/patch-ritu-gold-customer-app.js` (from `swarnagrow-backend`).
+
+Local-only patch: `npm run patch:ritu-gold-customer-app`
 
 ## Branch
 
@@ -75,6 +92,6 @@ Gold rate in seed: **₹7,200/g** (22K).
 
 1. Dashboard, **Dues**, **Enrollments**, **Collections**, **Maturity / Redemptions**.
 2. Open a few rows from the table above; show fixed vs flex schedule and settlement preview.
-3. Admin-only operation (customer app flags off).
+3. Optional: same customer on **customer app** (`/customer/ritugold`) — passbook, pay instalment (mock gateway when `PROVIDER_MODE=mock`).
 
 Adjust amounts, rates, and branding under **Settings / Schemes** after seed.

@@ -141,6 +141,123 @@ const SettingsPage = dynamic(
     import("@/src/features/settings/settings-page").then((m) => m.SettingsPage),
   options,
 );
+const DigitalMetalsWorkspacePage = dynamic(
+  () =>
+    import("@/src/features/digital-metals/digital-metals-workspace-page").then(
+      (m) => m.DigitalMetalsWorkspacePage,
+    ),
+  options,
+);
+const DigitalMetalsConfigPage = dynamic(
+  () =>
+    import("@/src/features/digital-metals/digital-metals-config-page").then(
+      (m) => m.DigitalMetalsConfigPage,
+    ),
+  options,
+);
+const DigitalMetalsPurchasesPage = dynamic(
+  () =>
+    import("@/src/features/digital-metals/digital-metals-purchases-page").then(
+      (m) => m.DigitalMetalsPurchasesPage,
+    ),
+  options,
+);
+const DigitalMetalsPurchaseDetailPage = dynamic(
+  () =>
+    import("@/src/features/digital-metals/digital-metals-purchases-page").then(
+      (m) => m.DigitalMetalsPurchaseDetailPage,
+    ),
+  options,
+);
+const DigitalMetalsPaymentExceptionsPage = dynamic(
+  () =>
+    import("@/src/features/digital-metals/digital-metals-payment-exceptions-page").then(
+      (m) => m.DigitalMetalsPaymentExceptionsPage,
+    ),
+  options,
+);
+const DigitalMetalsSellsPage = dynamic(
+  () =>
+    import("@/src/features/digital-metals/digital-metals-sells-page").then(
+      (m) => m.DigitalMetalsSellsPage,
+    ),
+  options,
+);
+const DigitalMetalsSellDetailPage = dynamic(
+  () =>
+    import("@/src/features/digital-metals/digital-metals-sells-page").then(
+      (m) => m.DigitalMetalsSellDetailPage,
+    ),
+  options,
+);
+const DigitalMetalsPayoutsPage = dynamic(
+  () =>
+    import("@/src/features/digital-metals/digital-metals-payouts-page").then(
+      (m) => m.DigitalMetalsPayoutsPage,
+    ),
+  options,
+);
+const DigitalMetalsPayoutDetailPage = dynamic(
+  () =>
+    import("@/src/features/digital-metals/digital-metals-payout-detail-page").then(
+      (m) => m.DigitalMetalsPayoutDetailPage,
+    ),
+  options,
+);
+const DigitalMetalsRedemptionCatalogPage = dynamic(
+  () =>
+    import("@/src/features/digital-metals/digital-metals-redemption-pages").then(
+      (m) => m.DigitalMetalsRedemptionCatalogPage,
+    ),
+  options,
+);
+const DigitalMetalsRedemptionOrdersPage = dynamic(
+  () =>
+    import("@/src/features/digital-metals/digital-metals-redemption-pages").then(
+      (m) => m.DigitalMetalsRedemptionOrdersPage,
+    ),
+  options,
+);
+const DigitalMetalsRedemptionOrderDetailPage = dynamic(
+  () =>
+    import("@/src/features/digital-metals/digital-metals-redemption-pages").then(
+      (m) => m.DigitalMetalsRedemptionOrderDetailPage,
+    ),
+  options,
+);
+const DigitalMetalsRedemptionFulfilmentQueuePage = dynamic(
+  () =>
+    import("@/src/features/digital-metals/digital-metals-redemption-pages").then(
+      (m) => m.DigitalMetalsRedemptionFulfilmentQueuePage,
+    ),
+  options,
+);
+const DigitalMetalsProcurementPage = dynamic(
+  () =>
+    import("@/src/features/digital-metals/digital-metals-procurement-page").then(
+      (m) => m.DigitalMetalsProcurementPage,
+    ),
+  options,
+);
+const DigitalMetalsHedgePage = dynamic(
+  () =>
+    import("@/src/features/digital-metals/digital-metals-hedge-page").then((m) => m.DigitalMetalsHedgePage),
+  options,
+);
+const DigitalMetalsBankVerificationPage = dynamic(
+  () =>
+    import("@/src/features/digital-metals/digital-metals-bank-verification-page").then(
+      (m) => m.DigitalMetalsBankVerificationPage,
+    ),
+  options,
+);
+const DigitalMetalsAdminLayout = dynamic(
+  () =>
+    import("@/src/features/digital-metals/digital-metals-admin-nav").then(
+      (m) => m.DigitalMetalsAdminLayout,
+    ),
+  options,
+);
 const EcommerceCatalogPage = dynamic(
   () =>
     import("@/src/features/ecommerce/ecommerce-catalog-page").then(
@@ -355,6 +472,35 @@ export function PortalRouter({ slug }: { slug: string[] }) {
     case "audit":
       page = <AuditPage />;
       break;
+    case "digital-metals": {
+      let dmInner: React.ReactNode;
+      if (id === "settings") dmInner = <DigitalMetalsConfigPage section="settings" />;
+      else if (id === "rates") dmInner = <DigitalMetalsConfigPage section="rates" />;
+      else if (id === "quote") dmInner = <DigitalMetalsConfigPage section="quote" />;
+      else if (id === "purchases" && action)
+        dmInner = <DigitalMetalsPurchaseDetailPage orderId={action} />;
+      else if (id === "purchases") dmInner = <DigitalMetalsPurchasesPage />;
+      else if (id === "payment-exceptions") dmInner = <DigitalMetalsPaymentExceptionsPage />;
+      else if (id === "sells" && action) dmInner = <DigitalMetalsSellDetailPage orderId={action} />;
+      else if (id === "sells") dmInner = <DigitalMetalsSellsPage />;
+      else if (id === "payouts" && action)
+        dmInner = <DigitalMetalsPayoutDetailPage payoutId={action} />;
+      else if (id === "payouts") dmInner = <DigitalMetalsPayoutsPage />;
+      else if (id === "redemption" && action === "orders" && slug[3])
+        dmInner = <DigitalMetalsRedemptionOrderDetailPage orderId={slug[3]} />;
+      else if (id === "redemption" && action === "orders")
+        dmInner = <DigitalMetalsRedemptionOrdersPage />;
+      else if (id === "redemption" && action === "fulfilment")
+        dmInner = <DigitalMetalsRedemptionFulfilmentQueuePage />;
+      else if (id === "redemption" && action === "catalogue")
+        dmInner = <DigitalMetalsRedemptionCatalogPage />;
+      else if (id === "hedge") dmInner = <DigitalMetalsHedgePage />;
+      else if (id === "procurement") dmInner = <DigitalMetalsProcurementPage />;
+      else if (id === "bank-verification") dmInner = <DigitalMetalsBankVerificationPage />;
+      else dmInner = <DigitalMetalsWorkspacePage />;
+      page = <DigitalMetalsAdminLayout>{dmInner}</DigitalMetalsAdminLayout>;
+      break;
+    }
     case "ecommerce":
       if (id === "categories") page = <EcommerceCategoriesPage />;
       else if (id === "campaigns") page = <EcommerceCampaignsPage />;
