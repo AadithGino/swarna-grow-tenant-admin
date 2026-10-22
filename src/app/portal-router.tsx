@@ -241,7 +241,9 @@ const DigitalMetalsProcurementPage = dynamic(
 );
 const DigitalMetalsHedgePage = dynamic(
   () =>
-    import("@/src/features/digital-metals/digital-metals-hedge-page").then((m) => m.DigitalMetalsHedgePage),
+    import("@/src/features/digital-metals/digital-metals-hedge-page").then(
+      (m) => m.DigitalMetalsHedgePage,
+    ),
   options,
 );
 const DigitalMetalsBankVerificationPage = dynamic(
@@ -316,7 +318,9 @@ const EcommerceFulfilmentPage = dynamic(
 );
 const EcommerceOrdersPage = dynamic(
   () =>
-    import("@/src/features/ecommerce/ecommerce-orders-page").then((m) => m.EcommerceOrdersPage),
+    import("@/src/features/ecommerce/ecommerce-orders-page").then(
+      (m) => m.EcommerceOrdersPage,
+    ),
   options,
 );
 const EcommerceOrderDetailPage = dynamic(
@@ -352,43 +356,73 @@ const PortalNotFoundPage = dynamic(
   options,
 );
 const PlatformLoginPage = dynamic(
-  () => import("@/src/features/platform/platform-login-page").then((m) => m.PlatformLoginPage),
+  () =>
+    import("@/src/features/platform/platform-login-page").then(
+      (m) => m.PlatformLoginPage,
+    ),
   options,
 );
 const PlatformDashboardPage = dynamic(
-  () => import("@/src/features/platform/platform-dashboard-page").then((m) => m.PlatformDashboardPage),
+  () =>
+    import("@/src/features/platform/platform-dashboard-page").then(
+      (m) => m.PlatformDashboardPage,
+    ),
   options,
 );
 const PlatformTenantsPage = dynamic(
-  () => import("@/src/features/platform/platform-tenants-page").then((m) => m.PlatformTenantsPage),
+  () =>
+    import("@/src/features/platform/platform-tenants-page").then(
+      (m) => m.PlatformTenantsPage,
+    ),
   options,
 );
 const PlatformTenantCreatePage = dynamic(
-  () => import("@/src/features/platform/platform-tenant-create-page").then((m) => m.PlatformTenantCreatePage),
+  () =>
+    import("@/src/features/platform/platform-tenant-create-page").then(
+      (m) => m.PlatformTenantCreatePage,
+    ),
   options,
 );
 const PlatformTenantDetailPage = dynamic(
-  () => import("@/src/features/platform/platform-tenant-detail-page").then((m) => m.PlatformTenantDetailPage),
+  () =>
+    import("@/src/features/platform/platform-tenant-detail-page").then(
+      (m) => m.PlatformTenantDetailPage,
+    ),
   options,
 );
 const PlatformPlansPage = dynamic(
-  () => import("@/src/features/platform/platform-plans-page").then((m) => m.PlatformPlansPage),
+  () =>
+    import("@/src/features/platform/platform-plans-page").then(
+      (m) => m.PlatformPlansPage,
+    ),
   options,
 );
 const PlatformTemplateRegistryPage = dynamic(
-  () => import("@/src/features/platform/platform-template-registry-page").then((m) => m.PlatformTemplateRegistryPage),
+  () =>
+    import("@/src/features/platform/platform-template-registry-page").then(
+      (m) => m.PlatformTemplateRegistryPage,
+    ),
   options,
 );
 const PlatformMonitoringPage = dynamic(
-  () => import("@/src/features/platform/platform-monitoring-page").then((m) => m.PlatformMonitoringPage),
+  () =>
+    import("@/src/features/platform/platform-monitoring-page").then(
+      (m) => m.PlatformMonitoringPage,
+    ),
   options,
 );
 const PlatformAuditPage = dynamic(
-  () => import("@/src/features/platform/platform-audit-page").then((m) => m.PlatformAuditPage),
+  () =>
+    import("@/src/features/platform/platform-audit-page").then(
+      (m) => m.PlatformAuditPage,
+    ),
   options,
 );
 const PlatformSettingsPage = dynamic(
-  () => import("@/src/features/platform/platform-settings-page").then((m) => m.PlatformSettingsPage),
+  () =>
+    import("@/src/features/platform/platform-settings-page").then(
+      (m) => m.PlatformSettingsPage,
+    ),
   options,
 );
 
@@ -398,7 +432,13 @@ function PlatformRouter({ slug }: { slug: string[] }) {
   if (!section) return <PlatformDashboardPage />;
   if (section === "tenants") {
     if (id === "new") return <PlatformTenantCreatePage />;
-    if (id) return <PlatformTenantDetailPage tenantId={id} initialTab={detail ?? "overview"} />;
+    if (id)
+      return (
+        <PlatformTenantDetailPage
+          tenantId={id}
+          initialTab={detail ?? "overview"}
+        />
+      );
     return <PlatformTenantsPage />;
   }
   if (section === "plans") return <PlatformPlansPage />;
@@ -413,7 +453,8 @@ export function PortalRouter({ slug }: { slug: string[] }) {
   if (slug[0] === "customer") return <CustomerRouter slug={slug} />;
   if (slug[0] === "agent") return <AgentRouter slug={slug} />;
   if (slug[0] === "platform") return <PlatformRouter slug={slug} />;
-  if (slug[0] === "pay" && slug[1]) return <CustomerLegacyPayRedirect linkToken={slug[1]} />;
+  if (slug[0] === "pay" && slug[1])
+    return <CustomerLegacyPayRedirect linkToken={slug[1]} />;
   const [section = "dashboard", id, action] = slug;
   if (section === "login") return <LoginPage />;
   if (!isKnownPortalSection(section)) {
@@ -455,13 +496,13 @@ export function PortalRouter({ slug }: { slug: string[] }) {
       if (id === "new") page = <PlanBuilderWizard />;
       else if (id && action === "duplicate")
         page = <PlanBuilderWizard duplicateFromPlanId={id} />;
-      else if (id && action === "edit") page = <PlanBuilderWizard planId={id} />;
+      else if (id && action === "edit")
+        page = <PlanBuilderWizard planId={id} />;
       else if (id) page = <PlanDetailPage planId={id} />;
       else page = <SchemesPage />;
       break;
     case "staff-branches":
-      if (id === "staff" && action)
-        page = <StaffDetailPage staffId={action} />;
+      if (id === "staff" && action) page = <StaffDetailPage staffId={action} />;
       else if (id === "branches" && action)
         page = <BranchDetailPage branchId={action} />;
       else page = <StaffBranchesPage />;
@@ -474,14 +515,19 @@ export function PortalRouter({ slug }: { slug: string[] }) {
       break;
     case "digital-metals": {
       let dmInner: React.ReactNode;
-      if (id === "settings") dmInner = <DigitalMetalsConfigPage section="settings" />;
-      else if (id === "rates") dmInner = <DigitalMetalsConfigPage section="rates" />;
-      else if (id === "quote") dmInner = <DigitalMetalsConfigPage section="quote" />;
+      if (id === "settings")
+        dmInner = <DigitalMetalsConfigPage section="settings" />;
+      else if (id === "rates")
+        dmInner = <DigitalMetalsConfigPage section="rates" />;
+      else if (id === "quote")
+        dmInner = <DigitalMetalsConfigPage section="quote" />;
       else if (id === "purchases" && action)
         dmInner = <DigitalMetalsPurchaseDetailPage orderId={action} />;
       else if (id === "purchases") dmInner = <DigitalMetalsPurchasesPage />;
-      else if (id === "payment-exceptions") dmInner = <DigitalMetalsPaymentExceptionsPage />;
-      else if (id === "sells" && action) dmInner = <DigitalMetalsSellDetailPage orderId={action} />;
+      else if (id === "payment-exceptions")
+        dmInner = <DigitalMetalsPaymentExceptionsPage />;
+      else if (id === "sells" && action)
+        dmInner = <DigitalMetalsSellDetailPage orderId={action} />;
       else if (id === "sells") dmInner = <DigitalMetalsSellsPage />;
       else if (id === "payouts" && action)
         dmInner = <DigitalMetalsPayoutDetailPage payoutId={action} />;
@@ -496,7 +542,8 @@ export function PortalRouter({ slug }: { slug: string[] }) {
         dmInner = <DigitalMetalsRedemptionCatalogPage />;
       else if (id === "hedge") dmInner = <DigitalMetalsHedgePage />;
       else if (id === "procurement") dmInner = <DigitalMetalsProcurementPage />;
-      else if (id === "bank-verification") dmInner = <DigitalMetalsBankVerificationPage />;
+      else if (id === "bank-verification")
+        dmInner = <DigitalMetalsBankVerificationPage />;
       else dmInner = <DigitalMetalsWorkspacePage />;
       page = <DigitalMetalsAdminLayout>{dmInner}</DigitalMetalsAdminLayout>;
       break;
@@ -509,21 +556,22 @@ export function PortalRouter({ slug }: { slug: string[] }) {
       else if (id === "tax") page = <EcommerceTaxSettingsPage />;
       else if (id === "inventory") page = <EcommerceInventoryPage />;
       else if (id === "fulfilment") page = <EcommerceFulfilmentPage />;
-      else if (id === "orders" && action) page = <EcommerceOrderDetailPage orderId={action} />;
+      else if (id === "orders" && action)
+        page = <EcommerceOrderDetailPage orderId={action} />;
       else if (id === "orders") page = <EcommerceOrdersPage />;
-      else if (id === "courier-cod") page = <EcommerceCourierCodWorkspacePage />;
-      else if (id === "payment-exceptions") page = <EcommercePaymentExceptionsPage />;
+      else if (id === "courier-cod")
+        page = <EcommerceCourierCodWorkspacePage />;
+      else if (id === "payment-exceptions")
+        page = <EcommercePaymentExceptionsPage />;
       else page = <EcommerceCatalogPage />;
       break;
     case "settings":
       if (id === "subscription")
         page = <SettingsPage initialTab="subscription" />;
-      else if (id === "branding")
-        page = <SettingsPage initialTab="branding" />;
+      else if (id === "branding") page = <SettingsPage initialTab="branding" />;
       else if (id === "operations")
         page = <SettingsPage initialTab="operations" />;
-      else if (id === "profile")
-        page = <SettingsPage initialTab="profile" />;
+      else if (id === "profile") page = <SettingsPage initialTab="profile" />;
       else page = <SettingsPage />;
       break;
     case "alerts":

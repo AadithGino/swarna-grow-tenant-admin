@@ -128,12 +128,16 @@ export function DashboardPage() {
     () => ecommerceInsightsQueryFromDashboard(dashboardArg),
     [dashboardArg],
   );
-  const ecommerceSummary = useGetEcommerceWorkspaceSummaryQuery(ecommercePeriodQuery, {
-    skip: skipDashboard || !mounted || !ecommerceNav.showEcommerceDashboard,
-  });
+  const ecommerceSummary = useGetEcommerceWorkspaceSummaryQuery(
+    ecommercePeriodQuery,
+    {
+      skip: skipDashboard || !mounted || !ecommerceNav.showEcommerceDashboard,
+    },
+  );
   const fulfilmentFrom =
     ecommercePeriodQuery.from ?? ecommerceSummary.data?.period.from;
-  const fulfilmentTo = ecommercePeriodQuery.to ?? ecommerceSummary.data?.period.to;
+  const fulfilmentTo =
+    ecommercePeriodQuery.to ?? ecommerceSummary.data?.period.to;
   const ecommerceFulfilmentReport = useGetEcommerceReportsQuery(
     {
       reportKey: "ECOMMERCE_ORDERS_FULFILMENT",
@@ -144,11 +148,11 @@ export function DashboardPage() {
     },
     {
       skip:
-        skipDashboard
-        || !mounted
-        || !ecommerceNav.showEcommerceDashboard
-        || !fulfilmentFrom
-        || !fulfilmentTo,
+        skipDashboard ||
+        !mounted ||
+        !ecommerceNav.showEcommerceDashboard ||
+        !fulfilmentFrom ||
+        !fulfilmentTo,
     },
   );
   const alertsQuery = useGetAlertsQuery(branchId ? { branchId } : undefined);
@@ -367,10 +371,14 @@ export function DashboardPage() {
       {ecommerceNav.showEcommerceDashboard ? (
         <EcommerceDashboardSection
           periodQuery={ecommercePeriodQuery}
-          periodLabel={data.period?.label ?? period.replaceAll("_", " ").toLowerCase()}
+          periodLabel={
+            data.period?.label ?? period.replaceAll("_", " ").toLowerCase()
+          }
           summary={ecommerceSummary.data}
           summaryLoading={ecommerceSummary.isFetching}
-          summaryError={ecommerceSummary.isError ? ecommerceSummary.error : undefined}
+          summaryError={
+            ecommerceSummary.isError ? ecommerceSummary.error : undefined
+          }
           onRetrySummary={() => void ecommerceSummary.refetch()}
           fulfilmentRows={ecommerceFulfilmentReport.data?.rows}
           fulfilmentLoading={ecommerceFulfilmentReport.isFetching}

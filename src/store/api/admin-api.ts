@@ -430,6 +430,7 @@ export const adminApi = createApi({
     "Report",
     "Ecommerce",
     "DigitalMetals",
+    "Assistant",
   ],
   endpoints: (builder) => ({
     login: builder.mutation<
@@ -833,7 +834,9 @@ export const adminApi = createApi({
       }),
       transformResponse: (raw: unknown) => {
         if (raw && typeof raw === "object" && "data" in raw) {
-          return (raw as { data: { customerId: string; hasOrderHistory: boolean } }).data;
+          return (
+            raw as { data: { customerId: string; hasOrderHistory: boolean } }
+          ).data;
         }
         return raw as { customerId: string; hasOrderHistory: boolean };
       },
@@ -872,7 +875,7 @@ export const adminApi = createApi({
         const adapted = adaptCustomerResourceList(raw, (value) => {
           const list = Array.isArray(value?.data)
             ? value.data
-            : value?.items ?? (Array.isArray(value) ? value : []);
+            : (value?.items ?? (Array.isArray(value) ? value : []));
           return Array.isArray(list) ? list : [];
         });
         const summary = raw?.meta?.ecommerceSummary;
@@ -933,11 +936,17 @@ export const adminApi = createApi({
         url: `/admin/customers/${id}/set-password`,
         method: "POST",
         params: { id },
-        body: { password, mustChangeOnNextLogin: mustChangeOnNextLogin === true },
+        body: {
+          password,
+          mustChangeOnNextLogin: mustChangeOnNextLogin === true,
+        },
         mockKey: "setCustomerPassword",
       }),
       transformResponse: (raw) => contractPayload(raw) as any,
-      invalidatesTags: (_r, _e, { id }) => [{ type: "Customer", id }, "Customer"],
+      invalidatesTags: (_r, _e, { id }) => [
+        { type: "Customer", id },
+        "Customer",
+      ],
     }),
     verifyCustomerKyc: builder.mutation<
       Customer,
@@ -1156,14 +1165,13 @@ export const adminApi = createApi({
     }),
     getEnrollmentAnalytics: builder.query<
       ReturnType<typeof adaptEnrollmentAnalytics>,
-      | {
-          branchId?: string;
-          period?: string;
-          from?: string;
-          to?: string;
-          groupBy?: string;
-        }
-      | void
+      {
+        branchId?: string;
+        period?: string;
+        from?: string;
+        to?: string;
+        groupBy?: string;
+      } | void
     >({
       query: (params) => ({
         url: "/admin/schemes/analytics",
@@ -1475,7 +1483,13 @@ export const adminApi = createApi({
         const item = contractPayload<any>(raw) ?? raw;
         return adaptPaymentList(Array.isArray(item) ? item : [item])[0];
       },
-      invalidatesTags: ["Payment", "Enrollment", "Customer", "Dashboard", "Report"],
+      invalidatesTags: [
+        "Payment",
+        "Enrollment",
+        "Customer",
+        "Dashboard",
+        "Report",
+      ],
     }),
     getDues: builder.query<
       ReturnType<typeof adaptDueList>,
@@ -1601,7 +1615,12 @@ export const adminApi = createApi({
     }),
     initiatePaymentRefund: builder.mutation<
       Record<string, any>,
-      { paymentId: string; amountPaise: number; reason: string; idempotencyKey: string }
+      {
+        paymentId: string;
+        amountPaise: number;
+        reason: string;
+        idempotencyKey: string;
+      }
     >({
       query: ({ paymentId, idempotencyKey, ...body }) => ({
         url: `/admin/payments/${paymentId}/refunds`,
@@ -1614,7 +1633,10 @@ export const adminApi = createApi({
       invalidatesTags: ["Payment", "Enrollment", "Dashboard", "Report"],
     }),
     getPostSettlementRefundCases: builder.query<
-      { data: Record<string, unknown>[]; meta: { total: number; pendingCount: number } },
+      {
+        data: Record<string, unknown>[];
+        meta: { total: number; pendingCount: number };
+      },
       { status?: string } | void
     >({
       query: (params) => ({
@@ -1624,8 +1646,10 @@ export const adminApi = createApi({
       }),
       transformResponse: (raw) => {
         const value = contractPayload<any>(raw);
-        const data = Array.isArray(value) ? value : value?.data ?? [];
-        const meta = (raw as { meta?: { total?: number; pendingCount?: number } })?.meta ?? {};
+        const data = Array.isArray(value) ? value : (value?.data ?? []);
+        const meta =
+          (raw as { meta?: { total?: number; pendingCount?: number } })?.meta ??
+          {};
         return {
           data,
           meta: {
@@ -1636,22 +1660,27 @@ export const adminApi = createApi({
       },
       providesTags: ["Payment"],
     }),
-    getPostSettlementRefundCase: builder.query<
-      Record<string, unknown>,
-      string
-    >({
-      query: (caseId) => ({
-        url: `/admin/post-settlement-refund-cases/${caseId}`,
-        mockKey: "postSettlementRefundCase",
-      }),
-      transformResponse: (raw) => contractPayload(raw) as Record<string, unknown>,
-      providesTags: (_result, _err, caseId) => [
-        { type: "Payment", id: `post-settlement-${caseId}` },
-      ],
-    }),
+    getPostSettlementRefundCase: builder.query<Record<string, unknown>, string>(
+      {
+        query: (caseId) => ({
+          url: `/admin/post-settlement-refund-cases/${caseId}`,
+          mockKey: "postSettlementRefundCase",
+        }),
+        transformResponse: (raw) =>
+          contractPayload(raw) as Record<string, unknown>,
+        providesTags: (_result, _err, caseId) => [
+          { type: "Payment", id: `post-settlement-${caseId}` },
+        ],
+      },
+    ),
     resolvePostSettlementRefundCase: builder.mutation<
       Record<string, unknown>,
-      { caseId: string; disposition: string; reason: string; expectedVersion: number }
+      {
+        caseId: string;
+        disposition: string;
+        reason: string;
+        expectedVersion: number;
+      }
     >({
       query: ({ caseId, ...body }) => ({
         url: `/admin/post-settlement-refund-cases/${caseId}/resolve`,
@@ -1668,7 +1697,7 @@ export const adminApi = createApi({
       }),
       transformResponse: (raw) => {
         const value = contractPayload<any>(raw) ?? [];
-        return Array.isArray(value) ? value : value.items ?? value.data ?? [];
+        return Array.isArray(value) ? value : (value.items ?? value.data ?? []);
       },
       providesTags: ["Payment"],
     }),
@@ -2197,7 +2226,10 @@ export const adminApi = createApi({
         headers: { "X-Idempotency-Key": body.idempotencyKey },
         mockKey: "addGoldRate",
       }),
-      transformResponse: (raw) => contractPayload(raw) as GoldRate & { notification?: Record<string, unknown> },
+      transformResponse: (raw) =>
+        contractPayload(raw) as GoldRate & {
+          notification?: Record<string, unknown>;
+        },
       invalidatesTags: ["GoldRate", "Dashboard"],
     }),
     getGoldRateNotifications: builder.query<
@@ -2216,7 +2248,9 @@ export const adminApi = createApi({
     }),
     getMessages: builder.query<
       ReturnType<typeof adaptMessages>,
-      (ListQueryParams & DateRangeQueryParams & { broadcastId?: string; channel?: string }) | void
+      | (ListQueryParams &
+          DateRangeQueryParams & { broadcastId?: string; channel?: string })
+      | void
     >({
       query: (params) => ({
         url: "/admin/messaging/messages",
@@ -2254,6 +2288,101 @@ export const adminApi = createApi({
       }),
       transformResponse: adaptAdminReport,
       providesTags: ["Report"],
+    }),
+    assistantChat: builder.mutation<
+      import("@/src/types/assistant").AssistantBundle,
+      {
+        message: string;
+        conversationId?: string;
+      }
+    >({
+      query: (body) => ({
+        url: "/admin/assistant/chat",
+        method: "POST",
+        body,
+        mockKey: "assistantChat",
+      }),
+      transformResponse: (response: unknown) =>
+        contractPayload(
+          response,
+        ) as import("@/src/types/assistant").AssistantBundle,
+      invalidatesTags: ["Assistant"],
+    }),
+    listAssistantConversations: builder.query<
+      {
+        items: import("@/src/types/assistant").AssistantConversationSummary[];
+        meta: import("@/src/types/assistant").AssistantCursorPageMeta;
+      },
+      { cursor?: string; limit?: number }
+    >({
+      query: (params) => ({
+        url: "/admin/assistant/conversations",
+        params,
+        mockKey: "listAssistantConversations",
+      }),
+      transformResponse: (raw) => {
+        const meta = contractMeta(
+          raw,
+        ) as import("@/src/types/assistant").AssistantCursorPageMeta;
+        const payload = contractPayload(raw);
+        const items = (
+          Array.isArray(payload) ? payload : []
+        ) as import("@/src/types/assistant").AssistantConversationSummary[];
+        return {
+          items,
+          meta: {
+            nextCursor: meta?.nextCursor ?? null,
+            hasMore: Boolean(meta?.hasMore),
+            limit: meta?.limit,
+          },
+        };
+      },
+      providesTags: ["Assistant"],
+    }),
+    listAssistantMessages: builder.query<
+      {
+        items: import("@/src/types/assistant").AssistantChatMessage[];
+        meta: import("@/src/types/assistant").AssistantCursorPageMeta;
+      },
+      { conversationId: string; cursor?: string; limit?: number }
+    >({
+      query: ({ conversationId, ...params }) => ({
+        url: `/admin/assistant/conversations/${conversationId}/messages`,
+        params,
+        mockKey: "listAssistantMessages",
+      }),
+      transformResponse: (raw) => {
+        const meta = contractMeta(
+          raw,
+        ) as import("@/src/types/assistant").AssistantCursorPageMeta;
+        const payload = contractPayload(
+          raw,
+        ) as import("@/src/types/assistant").AssistantChatMessage[];
+        const items = Array.isArray(payload) ? payload : [];
+        return {
+          items,
+          meta: {
+            nextCursor: meta?.nextCursor ?? null,
+            hasMore: Boolean(meta?.hasMore),
+            limit: meta?.limit,
+          },
+        };
+      },
+      providesTags: (_result, _err, arg) => [
+        { type: "Assistant", id: arg.conversationId },
+      ],
+    }),
+    deleteAssistantConversation: builder.mutation<
+      { deleted: boolean },
+      { conversationId: string }
+    >({
+      query: ({ conversationId }) => ({
+        url: `/admin/assistant/conversations/${conversationId}`,
+        method: "DELETE",
+        mockKey: "deleteAssistantConversation",
+      }),
+      transformResponse: (raw) => contractPayload(raw) as { deleted: boolean },
+      invalidatesTags: ["Assistant"],
     }),
     getPlans: builder.query<
       ReturnType<typeof adaptPlans>,
@@ -2990,7 +3119,10 @@ export const adminApi = createApi({
         mockKey: "pushBroadcastAudiencePreview",
       }),
       transformResponse: (raw) =>
-        contractPayload(raw) as { eligibleDevices: number; subscriptionCap: number | null },
+        contractPayload(raw) as {
+          eligibleDevices: number;
+          subscriptionCap: number | null;
+        },
     }),
     presignPushUpload: builder.mutation<
       {
@@ -3025,7 +3157,11 @@ export const adminApi = createApi({
         mockKey: "completePushUpload",
       }),
       transformResponse: (raw) =>
-        contractPayload(raw) as { uploadId: string; status: string; viewUrl?: string },
+        contractPayload(raw) as {
+          uploadId: string;
+          status: string;
+          viewUrl?: string;
+        },
     }),
     createPushBroadcast: builder.mutation<
       Record<string, unknown>,
@@ -3045,7 +3181,8 @@ export const adminApi = createApi({
         body,
         mockKey: "createPushBroadcast",
       }),
-      transformResponse: (raw) => contractPayload(raw) as Record<string, unknown>,
+      transformResponse: (raw) =>
+        contractPayload(raw) as Record<string, unknown>,
       invalidatesTags: ["Message"],
     }),
     getPushBroadcasts: builder.query<any, ListQueryParams | void>({
@@ -3168,7 +3305,12 @@ export const adminApi = createApi({
     }),
     getEcommerceProducts: builder.query<
       { items: Record<string, any>[]; meta?: Record<string, unknown> },
-      { includePricing?: boolean; status?: string; limit?: number; cursor?: string } | void
+      {
+        includePricing?: boolean;
+        status?: string;
+        limit?: number;
+        cursor?: string;
+      } | void
     >({
       query: (params) => ({
         url: "/admin/ecommerce/products",
@@ -3292,7 +3434,12 @@ export const adminApi = createApi({
     }),
     getEcommerceBanners: builder.query<
       { items: Record<string, any>[]; meta?: Record<string, unknown> },
-      { limit?: number; cursor?: string; status?: string; placement?: string } | void
+      {
+        limit?: number;
+        cursor?: string;
+        status?: string;
+        placement?: string;
+      } | void
     >({
       query: (params) => ({
         url: "/admin/ecommerce/banners",
@@ -3326,7 +3473,10 @@ export const adminApi = createApi({
       },
       providesTags: ["Ecommerce"],
     }),
-    getEcommerceCategory: builder.query<Record<string, any>, { categoryId: string }>({
+    getEcommerceCategory: builder.query<
+      Record<string, any>,
+      { categoryId: string }
+    >({
       query: ({ categoryId }) => ({
         url: `/admin/ecommerce/categories/${categoryId}`,
         mockKey: "ecommerceCategory",
@@ -3335,14 +3485,18 @@ export const adminApi = createApi({
       transformResponse: (raw) =>
         (contractPayload(raw) as Record<string, unknown>) ?? {},
     }),
-    createEcommerceBanner: builder.mutation<Record<string, any>, Record<string, unknown>>({
+    createEcommerceBanner: builder.mutation<
+      Record<string, any>,
+      Record<string, unknown>
+    >({
       query: (body) => ({
         url: "/admin/ecommerce/banners",
         method: "POST",
         body,
         mockKey: "createEcommerceBanner",
       }),
-      transformResponse: (raw) => (contractPayload(raw) as Record<string, unknown>) ?? {},
+      transformResponse: (raw) =>
+        (contractPayload(raw) as Record<string, unknown>) ?? {},
       invalidatesTags: ["Ecommerce"],
     }),
     patchEcommerceBanner: builder.mutation<
@@ -3356,7 +3510,8 @@ export const adminApi = createApi({
         mockKey: "patchEcommerceBanner",
         params: { bannerId },
       }),
-      transformResponse: (raw) => (contractPayload(raw) as Record<string, unknown>) ?? {},
+      transformResponse: (raw) =>
+        (contractPayload(raw) as Record<string, unknown>) ?? {},
       invalidatesTags: ["Ecommerce"],
     }),
     publishEcommerceBanner: builder.mutation<
@@ -3370,7 +3525,8 @@ export const adminApi = createApi({
         mockKey: "publishEcommerceBanner",
         params: { bannerId },
       }),
-      transformResponse: (raw) => (contractPayload(raw) as Record<string, unknown>) ?? {},
+      transformResponse: (raw) =>
+        (contractPayload(raw) as Record<string, unknown>) ?? {},
       invalidatesTags: ["Ecommerce"],
     }),
     unpublishEcommerceBanner: builder.mutation<
@@ -3384,7 +3540,8 @@ export const adminApi = createApi({
         mockKey: "unpublishEcommerceBanner",
         params: { bannerId },
       }),
-      transformResponse: (raw) => (contractPayload(raw) as Record<string, unknown>) ?? {},
+      transformResponse: (raw) =>
+        (contractPayload(raw) as Record<string, unknown>) ?? {},
       invalidatesTags: ["Ecommerce"],
     }),
     archiveEcommerceBanner: builder.mutation<
@@ -3398,7 +3555,8 @@ export const adminApi = createApi({
         mockKey: "archiveEcommerceBanner",
         params: { bannerId },
       }),
-      transformResponse: (raw) => (contractPayload(raw) as Record<string, unknown>) ?? {},
+      transformResponse: (raw) =>
+        (contractPayload(raw) as Record<string, unknown>) ?? {},
       invalidatesTags: ["Ecommerce"],
     }),
     createEcommerceProduct: builder.mutation<
@@ -3439,7 +3597,12 @@ export const adminApi = createApi({
         idempotencyKey?: string;
       }
     >({
-      query: ({ productId, expectedVersion, notification, idempotencyKey }) => ({
+      query: ({
+        productId,
+        expectedVersion,
+        notification,
+        idempotencyKey,
+      }) => ({
         url: `/admin/ecommerce/products/${productId}/publish`,
         method: "POST",
         body: {
@@ -3472,7 +3635,11 @@ export const adminApi = createApi({
     }),
     sendEcommerceProductPromotion: builder.mutation<
       Record<string, any>,
-      { productId: string; body: Record<string, unknown>; idempotencyKey: string }
+      {
+        productId: string;
+        body: Record<string, unknown>;
+        idempotencyKey: string;
+      }
     >({
       query: ({ productId, body, idempotencyKey }) => ({
         url: `/admin/ecommerce/products/${productId}/notifications`,
@@ -3502,7 +3669,11 @@ export const adminApi = createApi({
     }),
     sendEcommerceCategoryPromotion: builder.mutation<
       Record<string, any>,
-      { categoryId: string; body: Record<string, unknown>; idempotencyKey: string }
+      {
+        categoryId: string;
+        body: Record<string, unknown>;
+        idempotencyKey: string;
+      }
     >({
       query: ({ categoryId, body, idempotencyKey }) => ({
         url: `/admin/ecommerce/categories/${categoryId}/notifications`,
@@ -3518,7 +3689,12 @@ export const adminApi = createApi({
     }),
     getEcommercePromotionCampaigns: builder.query<
       Record<string, any>,
-      { productId?: string; categoryId?: string; cursor?: string; limit?: number }
+      {
+        productId?: string;
+        categoryId?: string;
+        cursor?: string;
+        limit?: number;
+      }
     >({
       query: (params) => ({
         url: "/admin/ecommerce/notifications",
@@ -3606,7 +3782,9 @@ export const adminApi = createApi({
         mockKey: "ecommerceInventory",
       }),
       transformResponse: (raw) => {
-        const payload = contractPayload(raw) as { items?: Record<string, unknown>[] };
+        const payload = contractPayload(raw) as {
+          items?: Record<string, unknown>[];
+        };
         return { items: payload?.items ?? [] };
       },
       providesTags: ["Ecommerce"],
@@ -3669,7 +3847,8 @@ export const adminApi = createApi({
         items: import("@/src/types/ecommerce-order").EcommerceOrderListItem[];
         meta: import("@/src/types/ecommerce-order").EcommerceOrdersListMeta;
       },
-      import("@/src/lib/ecommerce-orders-list-filters.types").EcommerceOrdersListQueryParams | void
+      | import("@/src/lib/ecommerce-orders-list-filters.types").EcommerceOrdersListQueryParams
+      | void
     >({
       query: (params) => ({
         url: "/admin/ecommerce/orders",
@@ -3678,12 +3857,15 @@ export const adminApi = createApi({
       }),
       transformResponse: (raw) => {
         const payload = contractPayload(raw);
-        const meta = contractMeta(raw) as import("@/src/types/ecommerce-order").EcommerceOrdersListMeta;
+        const meta = contractMeta(
+          raw,
+        ) as import("@/src/types/ecommerce-order").EcommerceOrdersListMeta;
         const items = Array.isArray(payload)
           ? payload
           : ((payload as { items?: unknown[] })?.items ?? []);
         return {
-          items: items as import("@/src/types/ecommerce-order").EcommerceOrderListItem[],
+          items:
+            items as import("@/src/types/ecommerce-order").EcommerceOrderListItem[],
           meta: {
             nextCursor: meta?.nextCursor ?? null,
             hasMore: Boolean(meta?.hasMore),
@@ -3706,7 +3888,9 @@ export const adminApi = createApi({
         mockKey: "ecommerceWorkspaceSummary",
       }),
       transformResponse: (raw) =>
-        (contractPayload(raw) as import("@/src/types/ecommerce-order").EcommerceWorkspaceSummary) ??
+        (contractPayload(
+          raw,
+        ) as import("@/src/types/ecommerce-order").EcommerceWorkspaceSummary) ??
         ({} as import("@/src/types/ecommerce-order").EcommerceWorkspaceSummary),
       providesTags: ["Ecommerce"],
     }),
@@ -3719,7 +3903,9 @@ export const adminApi = createApi({
         mockKey: "digitalMetalsCapability",
       }),
       transformResponse: (raw) =>
-        (contractPayload(raw) as import("@/src/lib/digital-metals-entitlement").DigitalMetalsServerAccessState) ??
+        (contractPayload(
+          raw,
+        ) as import("@/src/lib/digital-metals-entitlement").DigitalMetalsServerAccessState) ??
         ({} as import("@/src/lib/digital-metals-entitlement").DigitalMetalsServerAccessState),
       providesTags: ["DigitalMetals", "Settings"],
     }),
@@ -3761,7 +3947,8 @@ export const adminApi = createApi({
         params: { metal, finenessPpm },
         mockKey: "digitalMetalsSettings",
       }),
-      transformResponse: (raw) => (contractPayload(raw) as Record<string, unknown>) ?? {},
+      transformResponse: (raw) =>
+        (contractPayload(raw) as Record<string, unknown>) ?? {},
       providesTags: ["DigitalMetals"],
     }),
     patchDigitalMetalsSettings: builder.mutation<
@@ -3775,7 +3962,8 @@ export const adminApi = createApi({
         headers: { "X-Idempotency-Key": idempotencyKey },
         mockKey: "patchDigitalMetalsSettings",
       }),
-      transformResponse: (raw) => (contractPayload(raw) as Record<string, unknown>) ?? {},
+      transformResponse: (raw) =>
+        (contractPayload(raw) as Record<string, unknown>) ?? {},
       invalidatesTags: ["DigitalMetals"],
     }),
     getDigitalMetalsRatesCurrent: builder.query<
@@ -3787,7 +3975,8 @@ export const adminApi = createApi({
         params: { metal, finenessPpm },
         mockKey: "digitalMetalsRatesCurrent",
       }),
-      transformResponse: (raw) => (contractPayload(raw) as Record<string, unknown>) ?? {},
+      transformResponse: (raw) =>
+        (contractPayload(raw) as Record<string, unknown>) ?? {},
       providesTags: ["DigitalMetals"],
     }),
     getDigitalMetalsRatesHistory: builder.query<
@@ -3800,7 +3989,9 @@ export const adminApi = createApi({
         mockKey: "digitalMetalsRatesHistory",
       }),
       transformResponse: (raw) =>
-        (contractPayload(raw) as { items: Record<string, unknown>[] }) ?? { items: [] },
+        (contractPayload(raw) as { items: Record<string, unknown>[] }) ?? {
+          items: [],
+        },
       providesTags: ["DigitalMetals"],
     }),
     publishDigitalMetalsRate: builder.mutation<
@@ -3814,7 +4005,8 @@ export const adminApi = createApi({
         headers: { "X-Idempotency-Key": idempotencyKey },
         mockKey: "publishDigitalMetalsRate",
       }),
-      transformResponse: (raw) => (contractPayload(raw) as Record<string, unknown>) ?? {},
+      transformResponse: (raw) =>
+        (contractPayload(raw) as Record<string, unknown>) ?? {},
       invalidatesTags: ["DigitalMetals"],
     }),
     previewDigitalMetalsQuote: builder.mutation<
@@ -3828,7 +4020,8 @@ export const adminApi = createApi({
         headers: { "X-Idempotency-Key": idempotencyKey },
         mockKey: "previewDigitalMetalsQuote",
       }),
-      transformResponse: (raw) => (contractPayload(raw) as Record<string, unknown>) ?? {},
+      transformResponse: (raw) =>
+        (contractPayload(raw) as Record<string, unknown>) ?? {},
     }),
     setDigitalMetalsTenantPause: builder.mutation<
       { digitalMetalsPaused: boolean; reason: string | null },
@@ -3842,7 +4035,10 @@ export const adminApi = createApi({
         mockKey: "digitalMetalsTenantPause",
       }),
       transformResponse: (raw) =>
-        (contractPayload(raw) as { digitalMetalsPaused: boolean; reason: string | null }) ?? {
+        (contractPayload(raw) as {
+          digitalMetalsPaused: boolean;
+          reason: string | null;
+        }) ?? {
           digitalMetalsPaused: false,
           reason: null,
         },
@@ -3897,7 +4093,12 @@ export const adminApi = createApi({
           notes: string[];
         }) ?? {
           generatedAt: new Date().toISOString(),
-          summary: { outboxPending: 0, outboxFailed: 0, outboxLeaseStale: 0, documentsRetryable: 0 },
+          summary: {
+            outboxPending: 0,
+            outboxFailed: 0,
+            outboxLeaseStale: 0,
+            documentsRetryable: 0,
+          },
           items: [],
           notes: [],
         },
@@ -3913,7 +4114,11 @@ export const adminApi = createApi({
         headers: { "X-Idempotency-Key": idempotencyKey },
         mockKey: "retryDigitalMetalsOutboxEvent",
       }),
-      transformResponse: (raw) => (contractPayload(raw) as { eventId: string; topic: string }) ?? { eventId: "", topic: "" },
+      transformResponse: (raw) =>
+        (contractPayload(raw) as { eventId: string; topic: string }) ?? {
+          eventId: "",
+          topic: "",
+        },
       invalidatesTags: [{ type: "DigitalMetals", id: "operations-work-queue" }],
     }),
     retryDigitalMetalsDocumentFromOps: builder.mutation<
@@ -3927,7 +4132,9 @@ export const adminApi = createApi({
         mockKey: "retryDigitalMetalsDocumentFromOps",
       }),
       transformResponse: (raw) =>
-        (contractPayload(raw) as { artifact: { id: string; status: string } }) ?? {
+        (contractPayload(raw) as {
+          artifact: { id: string; status: string };
+        }) ?? {
           artifact: { id: "", status: "PENDING" },
         },
       invalidatesTags: [{ type: "DigitalMetals", id: "operations-work-queue" }],
@@ -3951,13 +4158,28 @@ export const adminApi = createApi({
         mockKey: "digitalMetalsCustomerWallets",
       }),
       transformResponse: (raw) =>
-        (contractPayload(raw) as { items: { id: string; metal: string; finenessPpm: number; heldUg: string; reservedUg: string; availableUg: string; pendingBuyUg: string }[] }) ?? {
+        (contractPayload(raw) as {
+          items: {
+            id: string;
+            metal: string;
+            finenessPpm: number;
+            heldUg: string;
+            reservedUg: string;
+            availableUg: string;
+            pendingBuyUg: string;
+          }[];
+        }) ?? {
           items: [],
         },
-      providesTags: (_r, _e, customerId) => [{ type: "DigitalMetals", id: `wallets-${customerId}` }],
+      providesTags: (_r, _e, customerId) => [
+        { type: "DigitalMetals", id: `wallets-${customerId}` },
+      ],
     }),
     getDigitalMetalsCustomerPassbook: builder.query<
-      { items: Record<string, unknown>[]; meta?: { nextCursor: string | null; hasMore: boolean; limit: number } },
+      {
+        items: Record<string, unknown>[];
+        meta?: { nextCursor: string | null; hasMore: boolean; limit: number };
+      },
       { customerId: string; cursor?: string; limit?: number }
     >({
       query: ({ customerId, ...params }) => ({
@@ -3966,14 +4188,28 @@ export const adminApi = createApi({
         mockKey: "digitalMetalsCustomerPassbook",
       }),
       transformResponse: (raw) =>
-        (contractPayload(raw) as { items: Record<string, unknown>[]; meta?: { nextCursor: string | null; hasMore: boolean; limit: number } }) ?? {
+        (contractPayload(raw) as {
+          items: Record<string, unknown>[];
+          meta?: { nextCursor: string | null; hasMore: boolean; limit: number };
+        }) ?? {
           items: [],
         },
-      providesTags: (_r, _e, { customerId }) => [{ type: "DigitalMetals", id: `passbook-${customerId}` }],
+      providesTags: (_r, _e, { customerId }) => [
+        { type: "DigitalMetals", id: `passbook-${customerId}` },
+      ],
     }),
     getDigitalMetalsBuyOrders: builder.query<
-      { items: Record<string, unknown>[]; meta?: { nextCursor: string | null; hasMore: boolean; limit: number } },
-      { customerId?: string; status?: string; limit?: number; cursor?: string; q?: string } | void
+      {
+        items: Record<string, unknown>[];
+        meta?: { nextCursor: string | null; hasMore: boolean; limit: number };
+      },
+      {
+        customerId?: string;
+        status?: string;
+        limit?: number;
+        cursor?: string;
+        q?: string;
+      } | void
     >({
       query: (params) => ({
         url: "/admin/digital-metals/buy-orders",
@@ -3992,21 +4228,38 @@ export const adminApi = createApi({
         url: `/admin/digital-metals/buy-orders/${encodeURIComponent(orderId)}`,
         mockKey: "digitalMetalsBuyOrderDetail",
       }),
-      transformResponse: (raw) => (contractPayload(raw) as Record<string, unknown>) ?? {},
-      providesTags: (_r, _e, id) => [{ type: "DigitalMetals", id: `buy-${id}` }],
+      transformResponse: (raw) =>
+        (contractPayload(raw) as Record<string, unknown>) ?? {},
+      providesTags: (_r, _e, id) => [
+        { type: "DigitalMetals", id: `buy-${id}` },
+      ],
     }),
-    getDigitalMetalsPaymentExceptions: builder.query<{ items: Record<string, unknown>[] }, void>({
+    getDigitalMetalsPaymentExceptions: builder.query<
+      { items: Record<string, unknown>[] },
+      void
+    >({
       query: () => ({
         url: "/admin/digital-metals/payment-exceptions",
         mockKey: "digitalMetalsPaymentExceptions",
       }),
       transformResponse: (raw) =>
-        (contractPayload(raw) as { items: Record<string, unknown>[] }) ?? { items: [] },
+        (contractPayload(raw) as { items: Record<string, unknown>[] }) ?? {
+          items: [],
+        },
       providesTags: ["DigitalMetals"],
     }),
     getDigitalMetalsSellOrders: builder.query<
-      { items: Record<string, unknown>[]; meta?: { nextCursor: string | null; hasMore: boolean; limit: number } },
-      { status?: string; customerId?: string; limit?: number; cursor?: string; q?: string } | void
+      {
+        items: Record<string, unknown>[];
+        meta?: { nextCursor: string | null; hasMore: boolean; limit: number };
+      },
+      {
+        status?: string;
+        customerId?: string;
+        limit?: number;
+        cursor?: string;
+        q?: string;
+      } | void
     >({
       query: (params) => ({
         url: "/admin/digital-metals/sell-orders",
@@ -4025,8 +4278,11 @@ export const adminApi = createApi({
         url: `/admin/digital-metals/sell-orders/${encodeURIComponent(orderId)}`,
         mockKey: "digitalMetalsSellOrderDetail",
       }),
-      transformResponse: (raw) => (contractPayload(raw) as Record<string, unknown>) ?? {},
-      providesTags: (_r, _e, id) => [{ type: "DigitalMetals", id: `sell-${id}` }],
+      transformResponse: (raw) =>
+        (contractPayload(raw) as Record<string, unknown>) ?? {},
+      providesTags: (_r, _e, id) => [
+        { type: "DigitalMetals", id: `sell-${id}` },
+      ],
     }),
     approveDigitalMetalsSellOrder: builder.mutation<
       Record<string, unknown>,
@@ -4074,7 +4330,10 @@ export const adminApi = createApi({
       }),
       invalidatesTags: ["DigitalMetals"],
     }),
-    approveDigitalMetalsPayout: builder.mutation<Record<string, unknown>, string>({
+    approveDigitalMetalsPayout: builder.mutation<
+      Record<string, unknown>,
+      string
+    >({
       query: (payoutId) => ({
         url: `/admin/digital-metals/payouts/${encodeURIComponent(payoutId)}/approve`,
         method: "POST",
@@ -4091,7 +4350,9 @@ export const adminApi = createApi({
         url: `/admin/digital-metals/payouts/${encodeURIComponent(payoutId)}`,
         mockKey: "digitalMetalsPayoutDetail",
       }),
-      providesTags: (_r, _e, id) => [{ type: "DigitalMetals", id: `payout-${id}` }],
+      providesTags: (_r, _e, id) => [
+        { type: "DigitalMetals", id: `payout-${id}` },
+      ],
     }),
     submitDigitalMetalsPayout: builder.mutation<
       Record<string, unknown>,
@@ -4134,7 +4395,12 @@ export const adminApi = createApi({
     }),
     recordDigitalMetalsPayoutFailure: builder.mutation<
       Record<string, unknown>,
-      { payoutId: string; reason: string; evidenceUploadIds: string[]; idempotencyKey: string }
+      {
+        payoutId: string;
+        reason: string;
+        evidenceUploadIds: string[];
+        idempotencyKey: string;
+      }
     >({
       query: ({ payoutId, idempotencyKey, ...body }) => ({
         url: `/admin/digital-metals/payouts/${encodeURIComponent(payoutId)}/record-failure`,
@@ -4189,13 +4455,18 @@ export const adminApi = createApi({
         { type: "DigitalMetals", id: `payout-${payoutId}` },
       ],
     }),
-    getDigitalMetalsRedemptionCatalogue: builder.query<{ items: Record<string, unknown>[] }, void>({
+    getDigitalMetalsRedemptionCatalogue: builder.query<
+      { items: Record<string, unknown>[] },
+      void
+    >({
       query: () => ({
         url: "/admin/digital-metals/redemption/catalogue",
         mockKey: "digitalMetalsRedemptionCatalogue",
       }),
       transformResponse: (raw) =>
-        (contractPayload(raw) as { items: Record<string, unknown>[] }) ?? { items: [] },
+        (contractPayload(raw) as { items: Record<string, unknown>[] }) ?? {
+          items: [],
+        },
       providesTags: ["DigitalMetals"],
     }),
     createDigitalMetalsRedemptionCatalogItem: builder.mutation<
@@ -4223,8 +4494,16 @@ export const adminApi = createApi({
       invalidatesTags: ["DigitalMetals"],
     }),
     getDigitalMetalsRedemptionOrders: builder.query<
-      { items: Record<string, unknown>[]; meta?: { nextCursor: string | null; hasMore: boolean; limit: number } },
-      { status?: string; customerId?: string; limit?: number; cursor?: string } | void
+      {
+        items: Record<string, unknown>[];
+        meta?: { nextCursor: string | null; hasMore: boolean; limit: number };
+      },
+      {
+        status?: string;
+        customerId?: string;
+        limit?: number;
+        cursor?: string;
+      } | void
     >({
       query: (params) => ({
         url: "/admin/digital-metals/redemption/orders",
@@ -4247,12 +4526,24 @@ export const adminApi = createApi({
         mockKey: "digitalMetalsCustomerBankDestinations",
       }),
       transformResponse: (raw) =>
-        (contractPayload(raw) as { items: Record<string, unknown>[] }) ?? { items: [] },
-      providesTags: (_r, _e, customerId) => [{ type: "DigitalMetals", id: `banks-${customerId}` }],
+        (contractPayload(raw) as { items: Record<string, unknown>[] }) ?? {
+          items: [],
+        },
+      providesTags: (_r, _e, customerId) => [
+        { type: "DigitalMetals", id: `banks-${customerId}` },
+      ],
     }),
     getDigitalMetalsBankVerificationQueue: builder.query<
-      { items: Record<string, unknown>[]; meta?: { nextCursor: string | null; hasMore: boolean; limit: number } },
-      { status?: string; customerId?: string; limit?: number; cursor?: string } | void
+      {
+        items: Record<string, unknown>[];
+        meta?: { nextCursor: string | null; hasMore: boolean; limit: number };
+      },
+      {
+        status?: string;
+        customerId?: string;
+        limit?: number;
+        cursor?: string;
+      } | void
     >({
       query: (params) => ({
         url: "/admin/digital-metals/bank-verification/queue",
@@ -4284,7 +4575,8 @@ export const adminApi = createApi({
         headers: { "X-Idempotency-Key": idempotencyKey },
         mockKey: "verifyDigitalMetalsBankDestination",
       }),
-      transformResponse: (raw) => (contractPayload(raw) as Record<string, unknown>) ?? {},
+      transformResponse: (raw) =>
+        (contractPayload(raw) as Record<string, unknown>) ?? {},
       invalidatesTags: ["DigitalMetals"],
     }),
     disableDigitalMetalsBankDestination: builder.mutation<
@@ -4304,20 +4596,32 @@ export const adminApi = createApi({
         headers: { "X-Idempotency-Key": idempotencyKey },
         mockKey: "disableDigitalMetalsBankDestination",
       }),
-      transformResponse: (raw) => (contractPayload(raw) as Record<string, unknown>) ?? {},
+      transformResponse: (raw) =>
+        (contractPayload(raw) as Record<string, unknown>) ?? {},
       invalidatesTags: ["DigitalMetals"],
     }),
-    getDigitalMetalsRedemptionOrder: builder.query<Record<string, unknown>, string>({
+    getDigitalMetalsRedemptionOrder: builder.query<
+      Record<string, unknown>,
+      string
+    >({
       query: (orderId) => ({
         url: `/admin/digital-metals/redemption/orders/${encodeURIComponent(orderId)}`,
         mockKey: "digitalMetalsRedemptionOrderDetail",
       }),
-      transformResponse: (raw) => (contractPayload(raw) as Record<string, unknown>) ?? {},
-      providesTags: (_r, _e, id) => [{ type: "DigitalMetals", id: `redemption-${id}` }],
+      transformResponse: (raw) =>
+        (contractPayload(raw) as Record<string, unknown>) ?? {},
+      providesTags: (_r, _e, id) => [
+        { type: "DigitalMetals", id: `redemption-${id}` },
+      ],
     }),
     getDigitalMetalsProcurementEntries: builder.query<
       { items: Record<string, unknown>[]; nextCursor?: string | null },
-      { entryType?: string; status?: string; cursor?: string; commitmentEntryId?: string } | void
+      {
+        entryType?: string;
+        status?: string;
+        cursor?: string;
+        commitmentEntryId?: string;
+      } | void
     >({
       query: (params) => ({
         url: "/admin/digital-metals/procurement/entries",
@@ -4357,12 +4661,17 @@ export const adminApi = createApi({
       }),
       invalidatesTags: ["DigitalMetals"],
     }),
-    getDigitalMetalsProcurementEntry: builder.query<Record<string, unknown>, string>({
+    getDigitalMetalsProcurementEntry: builder.query<
+      Record<string, unknown>,
+      string
+    >({
       query: (entryId) => ({
         url: `/admin/digital-metals/procurement/entries/${encodeURIComponent(entryId)}`,
         mockKey: "digitalMetalsProcurementEntryDetail",
       }),
-      providesTags: (_r, _e, id) => [{ type: "DigitalMetals", id: `proc-${id}` }],
+      providesTags: (_r, _e, id) => [
+        { type: "DigitalMetals", id: `proc-${id}` },
+      ],
     }),
     findDigitalMetalsDocumentBySubject: builder.query<
       { artifact: Record<string, unknown> | null },
@@ -4406,7 +4715,10 @@ export const adminApi = createApi({
         mockKey: "digitalMetalsDocumentDownloadUrl",
       }),
     }),
-    getDigitalMetalsHedgeLive: builder.query<Record<string, unknown>, { businessDate?: string } | void>({
+    getDigitalMetalsHedgeLive: builder.query<
+      Record<string, unknown>,
+      { businessDate?: string } | void
+    >({
       query: (params) => ({
         url: "/admin/digital-metals/hedge/live",
         params: params ?? {},
@@ -4447,7 +4759,9 @@ export const adminApi = createApi({
         mockKey: "digitalMetalsRedemptionFulfilmentQueue",
       }),
       transformResponse: (raw) =>
-        (contractPayload(raw) as { items: Record<string, unknown>[] }) ?? { items: [] },
+        (contractPayload(raw) as { items: Record<string, unknown>[] }) ?? {
+          items: [],
+        },
       providesTags: ["DigitalMetals"],
     }),
     postDigitalMetalsRedemptionFulfilmentAction: builder.mutation<
@@ -4466,7 +4780,8 @@ export const adminApi = createApi({
         headers: { "X-Idempotency-Key": idempotencyKey },
         mockKey: "postDigitalMetalsRedemptionFulfilmentAction",
       }),
-      transformResponse: (raw) => (contractPayload(raw) as Record<string, unknown>) ?? {},
+      transformResponse: (raw) =>
+        (contractPayload(raw) as Record<string, unknown>) ?? {},
       invalidatesTags: (_r, _e, { orderId }) => [
         "DigitalMetals",
         { type: "DigitalMetals", id: `redemption-${orderId}` },
@@ -4526,13 +4841,18 @@ export const adminApi = createApi({
       transformResponse: (raw) => normalizeExportJob(raw),
       invalidatesTags: [{ type: "Export", id: "LIST" }],
     }),
-    getEcommerceOrder: builder.query<import("@/src/types/ecommerce-order").EcommerceOrderDetail, string>({
+    getEcommerceOrder: builder.query<
+      import("@/src/types/ecommerce-order").EcommerceOrderDetail,
+      string
+    >({
       query: (orderId) => ({
         url: `/admin/ecommerce/orders/${encodeURIComponent(orderId)}`,
         mockKey: "ecommerceOrder",
       }),
       transformResponse: (raw) =>
-        (contractPayload(raw) as import("@/src/types/ecommerce-order").EcommerceOrderDetail) ??
+        (contractPayload(
+          raw,
+        ) as import("@/src/types/ecommerce-order").EcommerceOrderDetail) ??
         ({} as import("@/src/types/ecommerce-order").EcommerceOrderDetail),
       providesTags: ["Ecommerce"],
     }),
@@ -4545,7 +4865,9 @@ export const adminApi = createApi({
         mockKey: "ecommerceOrderReturns",
       }),
       transformResponse: (raw) =>
-        (contractPayload(raw) as import("@/src/types/ecommerce-order").EcommerceOrderReturnView) ?? {
+        (contractPayload(
+          raw,
+        ) as import("@/src/types/ecommerce-order").EcommerceOrderReturnView) ?? {
           orderId: "",
           activeRequest: null,
           items: [],
@@ -4568,7 +4890,8 @@ export const adminApi = createApi({
         body,
         mockKey: "decideEcommerceOrderCancellation",
       }),
-      transformResponse: (raw) => (contractPayload(raw) as Record<string, unknown>) ?? {},
+      transformResponse: (raw) =>
+        (contractPayload(raw) as Record<string, unknown>) ?? {},
       invalidatesTags: ["Ecommerce"],
     }),
     initiateEcommerceOrderCancellation: builder.mutation<
@@ -4588,7 +4911,8 @@ export const adminApi = createApi({
         headers: { "X-Idempotency-Key": idempotencyKey },
         mockKey: "initiateEcommerceOrderCancellation",
       }),
-      transformResponse: (raw) => (contractPayload(raw) as Record<string, unknown>) ?? {},
+      transformResponse: (raw) =>
+        (contractPayload(raw) as Record<string, unknown>) ?? {},
       invalidatesTags: ["Ecommerce"],
     }),
     recordEcommerceCodCancellationManualRefund: builder.mutation<
@@ -4610,7 +4934,8 @@ export const adminApi = createApi({
         headers: { "X-Idempotency-Key": idempotencyKey },
         mockKey: "recordEcommerceCodCancellationManualRefund",
       }),
-      transformResponse: (raw) => (contractPayload(raw) as Record<string, unknown>) ?? {},
+      transformResponse: (raw) =>
+        (contractPayload(raw) as Record<string, unknown>) ?? {},
       invalidatesTags: ["Ecommerce"],
     }),
     getEcommerceOrderCancellation: builder.query<
@@ -4622,7 +4947,9 @@ export const adminApi = createApi({
         mockKey: "ecommerceOrderCancellation",
       }),
       transformResponse: (raw) =>
-        (contractPayload(raw) as import("@/src/types/ecommerce-cancellation").EcommerceOrderCancellationView) ??
+        (contractPayload(
+          raw,
+        ) as import("@/src/types/ecommerce-cancellation").EcommerceOrderCancellationView) ??
         {},
       providesTags: ["Ecommerce"],
     }),
@@ -4631,8 +4958,13 @@ export const adminApi = createApi({
       { orderId: string; orderNumber?: string }
     >({
       async queryFn({ orderId, orderNumber }) {
-        const safeName = (orderNumber ?? `order-${orderId}`).replace(/[^\w.-]+/g, "_");
-        const filename = safeName.endsWith(".pdf") ? safeName : `${safeName}.pdf`;
+        const safeName = (orderNumber ?? `order-${orderId}`).replace(
+          /[^\w.-]+/g,
+          "_",
+        );
+        const filename = safeName.endsWith(".pdf")
+          ? safeName
+          : `${safeName}.pdf`;
         if (env.useMocks) {
           const blob = new Blob(["%PDF-1.4 mock ecommerce invoice"], {
             type: "application/pdf",
@@ -4662,7 +4994,9 @@ export const adminApi = createApi({
         mockKey: "ecommerceOrderPaymentAttempts",
       }),
       transformResponse: (raw) =>
-        (contractPayload(raw) as { items: Record<string, unknown>[] }) ?? { items: [] },
+        (contractPayload(raw) as { items: Record<string, unknown>[] }) ?? {
+          items: [],
+        },
       providesTags: ["Ecommerce"],
     }),
     getEcommerceOrderPaymentAttemptEvents: builder.query<
@@ -4675,7 +5009,9 @@ export const adminApi = createApi({
         mockKey: "ecommerceOrderPaymentAttemptEvents",
       }),
       transformResponse: (raw) =>
-        (contractPayload(raw) as { items: Record<string, unknown>[] }) ?? { items: [] },
+        (contractPayload(raw) as { items: Record<string, unknown>[] }) ?? {
+          items: [],
+        },
       providesTags: ["Ecommerce"],
     }),
     getEcommercePaymentExceptions: builder.query<
@@ -4688,16 +5024,23 @@ export const adminApi = createApi({
         mockKey: "ecommercePaymentExceptions",
       }),
       transformResponse: (raw) =>
-        (contractPayload(raw) as { items: Record<string, unknown>[] }) ?? { items: [] },
+        (contractPayload(raw) as { items: Record<string, unknown>[] }) ?? {
+          items: [],
+        },
       providesTags: ["Ecommerce"],
     }),
-    getEcommerceOrderEvents: builder.query<{ items: Record<string, unknown>[] }, string>({
+    getEcommerceOrderEvents: builder.query<
+      { items: Record<string, unknown>[] },
+      string
+    >({
       query: (orderId) => ({
         url: `/admin/ecommerce/orders/${encodeURIComponent(orderId)}/events`,
         mockKey: "ecommerceOrderEvents",
       }),
       transformResponse: (raw) =>
-        (contractPayload(raw) as { items: Record<string, unknown>[] }) ?? { items: [] },
+        (contractPayload(raw) as { items: Record<string, unknown>[] }) ?? {
+          items: [],
+        },
       providesTags: ["Ecommerce"],
     }),
     getEcommerceOrderPaymentExceptionRefund: builder.query<
@@ -4708,7 +5051,8 @@ export const adminApi = createApi({
         url: `/admin/ecommerce/orders/${encodeURIComponent(orderId)}/payment-exception-refund`,
         mockKey: "ecommerceOrderPaymentExceptionRefund",
       }),
-      transformResponse: (raw) => (contractPayload(raw) as Record<string, unknown>) ?? {},
+      transformResponse: (raw) =>
+        (contractPayload(raw) as Record<string, unknown>) ?? {},
       providesTags: ["Ecommerce"],
     }),
     initiateEcommerceOrderPaymentExceptionRefund: builder.mutation<
@@ -4724,7 +5068,12 @@ export const adminApi = createApi({
     }),
     recordEcommerceOrderPaymentExceptionRefundManual: builder.mutation<
       Record<string, unknown>,
-      { orderId: string; providerRefundReference: string; reason: string; evidenceNote: string }
+      {
+        orderId: string;
+        providerRefundReference: string;
+        reason: string;
+        evidenceNote: string;
+      }
     >({
       query: ({ orderId, ...body }) => ({
         url: `/admin/ecommerce/orders/${encodeURIComponent(orderId)}/payment-exception-refund/record-manual`,
@@ -4764,16 +5113,22 @@ export const adminApi = createApi({
         body,
         mockKey: "patchEcommerceOrderDeliveryTracking",
       }),
-      transformResponse: (raw) => (contractPayload(raw) as Record<string, unknown>) ?? {},
+      transformResponse: (raw) =>
+        (contractPayload(raw) as Record<string, unknown>) ?? {},
       invalidatesTags: ["Ecommerce"],
     }),
-    getEcommerceReturnRequests: builder.query<{ items: Record<string, unknown>[] }, void>({
+    getEcommerceReturnRequests: builder.query<
+      { items: Record<string, unknown>[] },
+      void
+    >({
       query: () => ({
         url: "/admin/ecommerce/return-requests",
         mockKey: "ecommerceReturnRequests",
       }),
       transformResponse: (raw) =>
-        (contractPayload(raw) as { items: Record<string, unknown>[] }) ?? { items: [] },
+        (contractPayload(raw) as { items: Record<string, unknown>[] }) ?? {
+          items: [],
+        },
       providesTags: ["Ecommerce"],
     }),
     decideEcommerceReturnRequest: builder.mutation<
@@ -4791,7 +5146,8 @@ export const adminApi = createApi({
         body,
         mockKey: "decideEcommerceReturnRequest",
       }),
-      transformResponse: (raw) => (contractPayload(raw) as Record<string, unknown>) ?? {},
+      transformResponse: (raw) =>
+        (contractPayload(raw) as Record<string, unknown>) ?? {},
       invalidatesTags: ["Ecommerce"],
     }),
     recordEcommerceReturnReceived: builder.mutation<
@@ -4808,7 +5164,8 @@ export const adminApi = createApi({
         body,
         mockKey: "recordEcommerceReturnReceived",
       }),
-      transformResponse: (raw) => (contractPayload(raw) as Record<string, unknown>) ?? {},
+      transformResponse: (raw) =>
+        (contractPayload(raw) as Record<string, unknown>) ?? {},
       invalidatesTags: ["Ecommerce"],
     }),
     recordEcommerceReturnInspection: builder.mutation<
@@ -4827,7 +5184,8 @@ export const adminApi = createApi({
         body,
         mockKey: "recordEcommerceReturnInspection",
       }),
-      transformResponse: (raw) => (contractPayload(raw) as Record<string, unknown>) ?? {},
+      transformResponse: (raw) =>
+        (contractPayload(raw) as Record<string, unknown>) ?? {},
       invalidatesTags: ["Ecommerce"],
     }),
     createEcommerceReturnRefundCase: builder.mutation<
@@ -4840,7 +5198,8 @@ export const adminApi = createApi({
         body,
         mockKey: "createEcommerceReturnRefundCase",
       }),
-      transformResponse: (raw) => (contractPayload(raw) as Record<string, unknown>) ?? {},
+      transformResponse: (raw) =>
+        (contractPayload(raw) as Record<string, unknown>) ?? {},
       invalidatesTags: ["Ecommerce"],
     }),
     recordEcommerceReturnManualRefund: builder.mutation<
@@ -4861,7 +5220,8 @@ export const adminApi = createApi({
         body,
         mockKey: "recordEcommerceReturnManualRefund",
       }),
-      transformResponse: (raw) => (contractPayload(raw) as Record<string, unknown>) ?? {},
+      transformResponse: (raw) =>
+        (contractPayload(raw) as Record<string, unknown>) ?? {},
       invalidatesTags: ["Ecommerce"],
     }),
     resolveEcommerceReturnRequest: builder.mutation<
@@ -4880,7 +5240,8 @@ export const adminApi = createApi({
         body,
         mockKey: "resolveEcommerceReturnRequest",
       }),
-      transformResponse: (raw) => (contractPayload(raw) as Record<string, unknown>) ?? {},
+      transformResponse: (raw) =>
+        (contractPayload(raw) as Record<string, unknown>) ?? {},
       invalidatesTags: ["Ecommerce"],
     }),
     acceptEcommerceCodOrder: builder.mutation<
@@ -4950,12 +5311,18 @@ export const adminApi = createApi({
         mockKey: "listCourierCodOrders",
       }),
       transformResponse: (raw) => {
-        const meta = contractMeta(raw) as { nextCursor?: string | null; hasMore?: boolean };
+        const meta = contractMeta(raw) as {
+          nextCursor?: string | null;
+          hasMore?: boolean;
+        };
         const payload = contractPayload(raw);
         const items = Array.isArray(payload) ? payload : [];
         return {
           items,
-          meta: { nextCursor: meta?.nextCursor ?? null, hasMore: Boolean(meta?.hasMore) },
+          meta: {
+            nextCursor: meta?.nextCursor ?? null,
+            hasMore: Boolean(meta?.hasMore),
+          },
         };
       },
       providesTags: ["Ecommerce"],
@@ -4969,7 +5336,9 @@ export const adminApi = createApi({
         mockKey: "getEcommerceCourierCodSummary",
       }),
       transformResponse: (raw) =>
-        contractPayload(raw) as import("@/src/types/ecommerce-order").EcommerceCourierCodWorkspaceSummary,
+        contractPayload(
+          raw,
+        ) as import("@/src/types/ecommerce-order").EcommerceCourierCodWorkspaceSummary,
       providesTags: ["Ecommerce"],
     }),
     listEcommerceCodRemittanceBatches: builder.query<
@@ -4985,19 +5354,31 @@ export const adminApi = createApi({
         mockKey: "listEcommerceCodRemittanceBatches",
       }),
       transformResponse: (raw) => {
-        const meta = contractMeta(raw) as { nextCursor?: string | null; hasMore?: boolean };
+        const meta = contractMeta(raw) as {
+          nextCursor?: string | null;
+          hasMore?: boolean;
+        };
         const payload = contractPayload(raw);
-        const items = (Array.isArray(payload) ? payload : []) as import("@/src/types/ecommerce-order").EcommerceCodRemittanceBatch[];
+        const items = (
+          Array.isArray(payload) ? payload : []
+        ) as import("@/src/types/ecommerce-order").EcommerceCodRemittanceBatch[];
         return {
           items,
-          meta: { nextCursor: meta?.nextCursor ?? null, hasMore: Boolean(meta?.hasMore) },
+          meta: {
+            nextCursor: meta?.nextCursor ?? null,
+            hasMore: Boolean(meta?.hasMore),
+          },
         };
       },
       providesTags: ["Ecommerce"],
     }),
     createEcommerceCodRemittanceBatch: builder.mutation<
       import("@/src/types/ecommerce-order").EcommerceCodRemittanceBatch,
-      { statementReference: string; providerId?: string; idempotencyKey: string }
+      {
+        statementReference: string;
+        providerId?: string;
+        idempotencyKey: string;
+      }
     >({
       query: ({ idempotencyKey, ...body }) => ({
         url: "/admin/ecommerce/courier-cod/remittance-batches",
@@ -5007,7 +5388,9 @@ export const adminApi = createApi({
         mockKey: "createEcommerceCodRemittanceBatch",
       }),
       transformResponse: (raw) =>
-        contractPayload(raw) as import("@/src/types/ecommerce-order").EcommerceCodRemittanceBatch,
+        contractPayload(
+          raw,
+        ) as import("@/src/types/ecommerce-order").EcommerceCodRemittanceBatch,
       invalidatesTags: ["Ecommerce"],
     }),
     getEcommerceCodRemittanceBatch: builder.query<
@@ -5046,7 +5429,13 @@ export const adminApi = createApi({
     }),
     addEcommerceCodRemittanceBatchLine: builder.mutation<
       Record<string, unknown>,
-      { batchId: string; orderId: string; grossPaise: number; feePaise?: number; idempotencyKey: string }
+      {
+        batchId: string;
+        orderId: string;
+        grossPaise: number;
+        feePaise?: number;
+        idempotencyKey: string;
+      }
     >({
       query: ({ batchId, orderId, idempotencyKey, ...body }) => ({
         url: `/admin/ecommerce/courier-cod/remittance-batches/${encodeURIComponent(batchId)}/orders/${encodeURIComponent(orderId)}/lines`,
@@ -5075,7 +5464,9 @@ export const adminApi = createApi({
         mockKey: "reconcileEcommerceCodRemittanceBatch",
       }),
       transformResponse: (raw) =>
-        contractPayload(raw) as import("@/src/types/ecommerce-order").EcommerceCodRemittanceBatch,
+        contractPayload(
+          raw,
+        ) as import("@/src/types/ecommerce-order").EcommerceCodRemittanceBatch,
       invalidatesTags: ["Ecommerce"],
     }),
     retryEcommerceOrderPaymentAttemptReconcile: builder.mutation<
@@ -5237,14 +5628,13 @@ export const adminApi = createApi({
     }),
     getCustomerAnalytics: builder.query<
       ReturnType<typeof adaptCustomerAnalytics>,
-      | {
-          branchId?: string;
-          period?: string;
-          from?: string;
-          to?: string;
-          groupBy?: string;
-        }
-      | void
+      {
+        branchId?: string;
+        period?: string;
+        from?: string;
+        to?: string;
+        groupBy?: string;
+      } | void
     >({
       query: (params) => ({
         url: "/admin/customers/analytics",
@@ -5535,7 +5925,7 @@ export const adminApi = createApi({
       }),
       transformResponse: (raw) => {
         const value = contractPayload<any>(raw) ?? [];
-        return Array.isArray(value) ? value : value.data ?? value.items ?? [];
+        return Array.isArray(value) ? value : (value.data ?? value.items ?? []);
       },
       providesTags: ["Payment"],
     }),
@@ -5550,7 +5940,7 @@ export const adminApi = createApi({
       }),
       transformResponse: (raw) => {
         const value = contractPayload<any>(raw) ?? [];
-        return Array.isArray(value) ? value : value.data ?? value.items ?? [];
+        return Array.isArray(value) ? value : (value.data ?? value.items ?? []);
       },
       providesTags: ["Payment"],
     }),
@@ -5838,7 +6228,13 @@ export const adminApi = createApi({
         },
     }),
     getEcommerceUploadDownload: builder.query<
-      { uploadId: string; status: string; fileName?: string | null; contentType?: string | null; downloadUrl: string },
+      {
+        uploadId: string;
+        status: string;
+        fileName?: string | null;
+        contentType?: string | null;
+        downloadUrl: string;
+      },
       string
     >({
       query: (uploadId) => ({
@@ -5856,7 +6252,13 @@ export const adminApi = createApi({
         },
     }),
     getUploadDownload: builder.query<
-      { uploadId: string; status: string; fileName?: string | null; contentType?: string | null; downloadUrl: string },
+      {
+        uploadId: string;
+        status: string;
+        fileName?: string | null;
+        contentType?: string | null;
+        downloadUrl: string;
+      },
       string
     >({
       query: (uploadId) => ({
@@ -6216,4 +6618,9 @@ export const {
   useGetEcommerceUploadDownloadQuery,
   useLazyGetEcommerceUploadDownloadQuery,
   useLazyGetUploadDownloadQuery,
+  useAssistantChatMutation,
+  useListAssistantConversationsQuery,
+  useLazyListAssistantConversationsQuery,
+  useLazyListAssistantMessagesQuery,
+  useDeleteAssistantConversationMutation,
 } = adminApi;

@@ -71,6 +71,8 @@ import {
 } from "@/components/ui/tooltip";
 import { BrandMark } from "@/src/components/brand/brand-mark";
 import { PaymentSuccessHost } from "@/src/components/common/payment-success-host";
+import { AssistantPanel } from "@/src/components/assistant/AssistantPanel";
+import { hasPermission } from "@/src/lib/permissions";
 import { SecuritySessionsDialog } from "@/src/features/auth/security-sessions-dialog";
 import { canAccessRoute } from "@/src/lib/permissions";
 import { useEcommerceWorkspaceNavVisible } from "@/src/features/ecommerce/ecommerce-admin-shared";
@@ -92,10 +94,7 @@ import {
   GlobalSearchDialog,
   useGlobalSearchHotkey,
 } from "@/src/components/layout/global-search-dialog";
-import {
-  useNavBadges,
-  type NavBadgeKey,
-} from "@/src/hooks/use-nav-badges";
+import { useNavBadges, type NavBadgeKey } from "@/src/hooks/use-nav-badges";
 
 type NavItem = {
   label: string;
@@ -138,7 +137,11 @@ const groups: { label: string; items: NavItem[] }[] = [
         icon: Scale,
       },
       { label: "Tax settings", href: "/ecommerce/tax", icon: Percent },
-      { label: "Fulfilment", href: "/ecommerce/fulfilment", icon: PackageCheck },
+      {
+        label: "Fulfilment",
+        href: "/ecommerce/fulfilment",
+        icon: PackageCheck,
+      },
     ],
   },
   {
@@ -207,12 +210,16 @@ function Navigation({
   return (
     <nav className="flex-1 overflow-y-auto px-3 py-5 scrollbar-thin">
       {groups.map((group) => {
-        if (group.label === "Digital metals" && !digitalMetalsNav.showDigitalMetalsNav) {
+        if (
+          group.label === "Digital metals" &&
+          !digitalMetalsNav.showDigitalMetalsNav
+        ) {
           return null;
         }
         if (
-          (group.label === "Online store" || group.label === "Store operations")
-          && !ecommerceNav.showEcommerceNav
+          (group.label === "Online store" ||
+            group.label === "Store operations") &&
+          !ecommerceNav.showEcommerceNav
         ) {
           return null;
         }
@@ -221,61 +228,63 @@ function Navigation({
         );
         if (!items.length) return null;
         return (
-        <div key={group.label} className="mb-5">
-          {!compact && (
-            <div className="mb-2 px-3 text-[0.68rem] font-bold uppercase tracking-[0.17em] text-[#c59a9f]">
-              {group.label}
+          <div key={group.label} className="mb-5">
+            {!compact && (
+              <div className="mb-2 px-3 text-[0.68rem] font-bold uppercase tracking-[0.17em] text-[#c59a9f]">
+                {group.label}
+              </div>
+            )}
+            <div className="space-y-1">
+              {items.map(({ label, href, icon: Icon, badgeKey }) => {
+                const count = badgeKey ? badges[badgeKey] : undefined;
+                const active =
+                  href === "/" ||
+                  href === "/ecommerce" ||
+                  href === "/digital-metals"
+                    ? pathname === href
+                    : pathname === href || pathname.startsWith(`${href}/`);
+                const link = (
+                  <Link
+                    href={href}
+                    className={cn(
+                      "flex min-h-11 items-center rounded-xl text-[0.92rem] transition-colors",
+                      compact ? "justify-center px-2" : "gap-3 px-3",
+                      active
+                        ? "bg-[#f7e9c9] font-semibold text-[#49121f]"
+                        : "text-[#f6e8e9] hover:bg-white/10 hover:text-white",
+                    )}
+                  >
+                    <Icon className="size-[1.15rem] shrink-0" />
+                    {!compact && (
+                      <>
+                        <span className="min-w-0 flex-1 truncate">{label}</span>
+                        {count ? (
+                          <span
+                            className={cn(
+                              "grid min-w-6 place-items-center rounded-full px-1.5 py-0.5 text-xs",
+                              active
+                                ? "bg-[#730321] text-white"
+                                : "bg-[#81283d] text-[#ffe9b5]",
+                            )}
+                          >
+                            {count}
+                          </span>
+                        ) : null}
+                      </>
+                    )}
+                  </Link>
+                );
+                return compact && !mobile ? (
+                  <Tooltip key={href}>
+                    <TooltipTrigger asChild>{link}</TooltipTrigger>
+                    <TooltipContent side="right">{label}</TooltipContent>
+                  </Tooltip>
+                ) : (
+                  <div key={href}>{link}</div>
+                );
+              })}
             </div>
-          )}
-          <div className="space-y-1">
-            {items.map(({ label, href, icon: Icon, badgeKey }) => {
-              const count = badgeKey ? badges[badgeKey] : undefined;
-              const active =
-                href === "/" || href === "/ecommerce" || href === "/digital-metals"
-                  ? pathname === href
-                  : pathname === href || pathname.startsWith(`${href}/`);
-              const link = (
-                <Link
-                  href={href}
-                  className={cn(
-                    "flex min-h-11 items-center rounded-xl text-[0.92rem] transition-colors",
-                    compact ? "justify-center px-2" : "gap-3 px-3",
-                    active
-                      ? "bg-[#f7e9c9] font-semibold text-[#49121f]"
-                      : "text-[#f6e8e9] hover:bg-white/10 hover:text-white",
-                  )}
-                >
-                  <Icon className="size-[1.15rem] shrink-0" />
-                  {!compact && (
-                    <>
-                      <span className="min-w-0 flex-1 truncate">{label}</span>
-                      {count ? (
-                        <span
-                          className={cn(
-                            "grid min-w-6 place-items-center rounded-full px-1.5 py-0.5 text-xs",
-                            active
-                              ? "bg-[#730321] text-white"
-                              : "bg-[#81283d] text-[#ffe9b5]",
-                          )}
-                        >
-                          {count}
-                        </span>
-                      ) : null}
-                    </>
-                  )}
-                </Link>
-              );
-              return compact && !mobile ? (
-                <Tooltip key={href}>
-                  <TooltipTrigger asChild>{link}</TooltipTrigger>
-                  <TooltipContent side="right">{label}</TooltipContent>
-                </Tooltip>
-              ) : (
-                <div key={href}>{link}</div>
-              );
-            })}
           </div>
-        </div>
         );
       })}
     </nav>
@@ -372,7 +381,7 @@ function Topbar() {
   async function handleSignOut() {
     const refreshToken =
       typeof window !== "undefined"
-        ? localStorage.getItem("swarnagrow.refreshToken") ?? undefined
+        ? (localStorage.getItem("swarnagrow.refreshToken") ?? undefined)
         : undefined;
     try {
       await logout({ refreshToken }).unwrap();
@@ -394,124 +403,124 @@ function Topbar() {
         }
       />
       <header className="sticky top-0 z-30 flex h-[5.125rem] items-center gap-3 border-b border-[#e8dcd8] bg-white/95 px-4 backdrop-blur md:px-6">
-      <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
-        <SheetTrigger asChild>
-          <Button variant="outline" size="icon" className="lg:hidden">
-            <Menu />
-          </Button>
-        </SheetTrigger>
-        <SheetContent
-          side="left"
-          className="w-[17.8125rem] border-none bg-[#490b17] p-0"
-        >
-          <SheetHeader className="sr-only">
-            <SheetTitle>Navigation</SheetTitle>
-            <SheetDescription>
-              Open a section of the tenant admin portal
-            </SheetDescription>
-          </SheetHeader>
-          <MemoSidebar mobile />
-        </SheetContent>
-      </Sheet>
-      <div className="relative max-w-[39.375rem] flex-1">
-        <Search className="absolute left-4 top-1/2 size-5 -translate-y-1/2 text-[#7f7375]" />
-        <Input
-          value={search}
-          onChange={(e) =>
-            dispatch(
-              setGlobalSearch(sanitizeListSearchQueryInput(e.target.value)),
-            )
-          }
-          onFocus={() => setSearchOpen(true)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") setSearchOpen(true);
-            if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
-              e.preventDefault();
-              setSearchOpen(true);
-            }
-          }}
-          placeholder="Search customers, phone, enrollment…"
-          className="h-12 cursor-text rounded-xl border-[#e3d5d0] bg-[#faf7f5] pl-12 pr-14 text-base shadow-sm"
-        />
-        <button
-          type="button"
-          className="absolute right-3 top-1/2 hidden -translate-y-1/2 rounded border bg-white px-2 py-1 text-xs text-muted-foreground sm:block"
-          onClick={() => setSearchOpen(true)}
-        >
-          ⌘ K
-        </button>
-      </div>
-      <div className="ml-auto hidden items-center gap-2 md:flex">
-        <Select defaultValue="admin">
-          <SelectTrigger className="h-12 w-[11.875rem] rounded-xl bg-[#faf7f5]">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="admin">Jewellery admin</SelectItem>
-          </SelectContent>
-        </Select>
-        {canPickActingBranch ? (
-          <Select
-            value={branch}
-            onValueChange={(value) => dispatch(setBranch(value))}
+        <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
+          <SheetTrigger asChild>
+            <Button variant="outline" size="icon" className="lg:hidden">
+              <Menu />
+            </Button>
+          </SheetTrigger>
+          <SheetContent
+            side="left"
+            className="w-[17.8125rem] border-none bg-[#490b17] p-0"
           >
-            <SelectTrigger className="h-12 w-[10.625rem] rounded-xl bg-[#faf7f5]">
+            <SheetHeader className="sr-only">
+              <SheetTitle>Navigation</SheetTitle>
+              <SheetDescription>
+                Open a section of the tenant admin portal
+              </SheetDescription>
+            </SheetHeader>
+            <MemoSidebar mobile />
+          </SheetContent>
+        </Sheet>
+        <div className="relative max-w-[39.375rem] flex-1">
+          <Search className="absolute left-4 top-1/2 size-5 -translate-y-1/2 text-[#7f7375]" />
+          <Input
+            value={search}
+            onChange={(e) =>
+              dispatch(
+                setGlobalSearch(sanitizeListSearchQueryInput(e.target.value)),
+              )
+            }
+            onFocus={() => setSearchOpen(true)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") setSearchOpen(true);
+              if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+                e.preventDefault();
+                setSearchOpen(true);
+              }
+            }}
+            placeholder="Search customers, phone, enrollment…"
+            className="h-12 cursor-text rounded-xl border-[#e3d5d0] bg-[#faf7f5] pl-12 pr-14 text-base shadow-sm"
+          />
+          <button
+            type="button"
+            className="absolute right-3 top-1/2 hidden -translate-y-1/2 rounded border bg-white px-2 py-1 text-xs text-muted-foreground sm:block"
+            onClick={() => setSearchOpen(true)}
+          >
+            ⌘ K
+          </button>
+        </div>
+        <div className="ml-auto hidden items-center gap-2 md:flex">
+          <Select defaultValue="admin">
+            <SelectTrigger className="h-12 w-[11.875rem] rounded-xl bg-[#faf7f5]">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="ALL">All branches</SelectItem>
-              {branchOptions.map((b) => (
-                <SelectItem key={b.id} value={b.id}>
-                  {b.name}
-                </SelectItem>
-              ))}
+              <SelectItem value="admin">Jewellery admin</SelectItem>
             </SelectContent>
           </Select>
-        ) : null}
-      </div>
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button variant="ghost" className="h-12 gap-3 px-2">
-            <span className="grid size-10 place-items-center rounded-full bg-[#730321] font-bold text-white">
-              {initials}
-            </span>
-            <span className="hidden text-left xl:block">
-              <span className="block font-bold leading-4">{userName}</span>
-              <span className="mt-1 block text-xs text-muted-foreground">
-                {tenantName || "Tenant admin"}
+          {canPickActingBranch ? (
+            <Select
+              value={branch}
+              onValueChange={(value) => dispatch(setBranch(value))}
+            >
+              <SelectTrigger className="h-12 w-[10.625rem] rounded-xl bg-[#faf7f5]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">All branches</SelectItem>
+                {branchOptions.map((b) => (
+                  <SelectItem key={b.id} value={b.id}>
+                    {b.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : null}
+        </div>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" className="h-12 gap-3 px-2">
+              <span className="grid size-10 place-items-center rounded-full bg-[#730321] font-bold text-white">
+                {initials}
               </span>
-            </span>
-            <ChevronDown className="hidden size-4 xl:block" />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-56">
-          <DropdownMenuLabel>
-            {userName}
-            <br />
-            <span className="font-normal text-muted-foreground">
-              {roleLabel}
-            </span>
-          </DropdownMenuLabel>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={() => router.push("/settings")}>
-            <UserRound />
-            Profile & settings
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => setSecurityOpen(true)}>
-            <ShieldCheck />
-            Security & sessions
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={() => void handleSignOut()}>
-            Sign out
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
-      <SecuritySessionsDialog
-        open={securityOpen}
-        onOpenChange={setSecurityOpen}
-      />
-    </header>
+              <span className="hidden text-left xl:block">
+                <span className="block font-bold leading-4">{userName}</span>
+                <span className="mt-1 block text-xs text-muted-foreground">
+                  {tenantName || "Tenant admin"}
+                </span>
+              </span>
+              <ChevronDown className="hidden size-4 xl:block" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-56">
+            <DropdownMenuLabel>
+              {userName}
+              <br />
+              <span className="font-normal text-muted-foreground">
+                {roleLabel}
+              </span>
+            </DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={() => router.push("/settings")}>
+              <UserRound />
+              Profile & settings
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setSecurityOpen(true)}>
+              <ShieldCheck />
+              Security & sessions
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={() => void handleSignOut()}>
+              Sign out
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+        <SecuritySessionsDialog
+          open={securityOpen}
+          onOpenChange={setSecurityOpen}
+        />
+      </header>
     </>
   );
 }
@@ -571,10 +580,13 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
     );
   }
 
+  const showAssistant = hasPermission(session ?? undefined, "report.read");
+
   return (
     <>
       <AdminShellGrid>{children}</AdminShellGrid>
       <PaymentSuccessHost />
+      {showAssistant ? <AssistantPanel /> : null}
     </>
   );
 }

@@ -43,7 +43,12 @@ export const NAV_PERMISSIONS: Record<string, string[]> = {
   "/reports": ["report.read"],
   "/support": ["grievance.read"],
   "/schemes": ["plan.read", "plan.write"],
-  "/staff-branches": ["staff.read", "staff.write", "branch.read", "branch.write"],
+  "/staff-branches": [
+    "staff.read",
+    "staff.write",
+    "branch.read",
+    "branch.write",
+  ],
   "/audit": ["audit.read"],
   "/settings": ["settings.read", "settings.write"],
   "/ecommerce": ["ecommerce.read"],

@@ -2250,7 +2250,11 @@ export async function mockRequest<T>({
     case "completePushUpload":
       return {
         __contract: true,
-        payload: { uploadId: params.uploadId ?? "upl_push_mock", status: "UPLOADED", viewUrl: "/uploads/upl_push_mock" },
+        payload: {
+          uploadId: params.uploadId ?? "upl_push_mock",
+          status: "UPLOADED",
+          viewUrl: "/uploads/upl_push_mock",
+        },
       } as T;
     case "createPushBroadcast":
       return {
@@ -2260,7 +2264,13 @@ export async function mockRequest<T>({
           title: body?.title ?? "Mock push",
           body: body?.body ?? "",
           status: "QUEUED",
-          stats: { audienceCount: 1284, messagesQueued: 0, delivered: 0, failed: 0, pending: 0 },
+          stats: {
+            audienceCount: 1284,
+            messagesQueued: 0,
+            delivered: 0,
+            failed: 0,
+            pending: 0,
+          },
           createdAt: new Date().toISOString(),
         },
       } as T;
@@ -2273,7 +2283,13 @@ export async function mockRequest<T>({
             title: "Festival preview",
             body: "Visit our showroom for exclusive offers.",
             status: "COMPLETED",
-            stats: { audienceCount: 420, messagesQueued: 420, delivered: 401, failed: 3, pending: 16 },
+            stats: {
+              audienceCount: 420,
+              messagesQueued: 420,
+              delivered: 401,
+              failed: 3,
+              pending: 16,
+            },
             createdAt: "2026-09-10T10:00:00+05:30",
           },
         ],
@@ -2480,11 +2496,20 @@ export async function mockRequest<T>({
     case "subscription":
       return { __contract: true, payload: { ...mockSubscription } } as T;
     case "ecommerceProducts":
-      return { __contract: true, payload: { items: [], meta: { hasMore: false } } } as T;
+      return {
+        __contract: true,
+        payload: { items: [], meta: { hasMore: false } },
+      } as T;
     case "ecommerceCategories":
-      return { __contract: true, payload: { items: [], meta: { hasMore: false } } } as T;
+      return {
+        __contract: true,
+        payload: { items: [], meta: { hasMore: false } },
+      } as T;
     case "ecommerceBanners":
-      return { __contract: true, payload: { items: [], meta: { hasMore: false } } } as T;
+      return {
+        __contract: true,
+        payload: { items: [], meta: { hasMore: false } },
+      } as T;
     case "homeBanners":
     case "shopBanners":
       return { __contract: true, payload: { items: [] } } as T;
@@ -2501,7 +2526,10 @@ export async function mockRequest<T>({
         },
       } as T;
     case "ecommerceGoldRatesHistory":
-      return { __contract: true, payload: { items: [], meta: { hasMore: false } } } as T;
+      return {
+        __contract: true,
+        payload: { items: [], meta: { hasMore: false } },
+      } as T;
     case "ecommerceTaxSettings":
       return {
         __contract: true,
@@ -2521,7 +2549,11 @@ export async function mockRequest<T>({
     case "archiveEcommerceCategory":
       return {
         __contract: true,
-        payload: { id: String(params.categoryId ?? ""), active: false, version: 2 },
+        payload: {
+          id: String(params.categoryId ?? ""),
+          active: false,
+          version: 2,
+        },
       } as T;
     case "createEcommerceBanner":
     case "patchEcommerceBanner":
@@ -2537,17 +2569,29 @@ export async function mockRequest<T>({
     case "publishEcommerceBanner":
       return {
         __contract: true,
-        payload: { id: String(params.bannerId ?? ""), status: "PUBLISHED", version: 3 },
+        payload: {
+          id: String(params.bannerId ?? ""),
+          status: "PUBLISHED",
+          version: 3,
+        },
       } as T;
     case "unpublishEcommerceBanner":
       return {
         __contract: true,
-        payload: { id: String(params.bannerId ?? ""), status: "DRAFT", version: 3 },
+        payload: {
+          id: String(params.bannerId ?? ""),
+          status: "DRAFT",
+          version: 3,
+        },
       } as T;
     case "archiveEcommerceBanner":
       return {
         __contract: true,
-        payload: { id: String(params.bannerId ?? ""), status: "ARCHIVED", version: 3 },
+        payload: {
+          id: String(params.bannerId ?? ""),
+          status: "ARCHIVED",
+          version: 3,
+        },
       } as T;
     case "createEcommerceProduct":
     case "patchEcommerceProduct":
@@ -2615,14 +2659,19 @@ export async function mockRequest<T>({
       } as T;
     case "putEcommerceFulfilmentSettings": {
       const pincodes = Array.isArray(body.serviceablePincodes)
-        ? (body.serviceablePincodes as string[]).filter((p) => /^\d{6}$/.test(String(p)))
+        ? (body.serviceablePincodes as string[]).filter((p) =>
+            /^\d{6}$/.test(String(p)),
+          )
         : [];
       const charge =
-        body.deliveryChargePaise != null && Number.isInteger(Number(body.deliveryChargePaise))
+        body.deliveryChargePaise != null &&
+        Number.isInteger(Number(body.deliveryChargePaise))
           ? Number(body.deliveryChargePaise)
           : null;
-      const deliveryConfigured = pincodes.length > 0 && charge != null && charge >= 0;
-      const deliveryEnabled = body.deliveryEnabled === true && deliveryConfigured;
+      const deliveryConfigured =
+        pincodes.length > 0 && charge != null && charge >= 0;
+      const deliveryEnabled =
+        body.deliveryEnabled === true && deliveryConfigured;
       return {
         __contract: true,
         payload: {
@@ -2648,9 +2697,8 @@ export async function mockRequest<T>({
         payload: { computable: false, blockers: [], displayTotal: null },
       } as T;
     case "shopAvailability": {
-      const { resolveShopAvailability } = await import(
-        "@/src/lib/ecommerce-store-availability"
-      );
+      const { resolveShopAvailability } =
+        await import("@/src/lib/ecommerce-store-availability");
       const resolved = resolveShopAvailability({
         planEntitled: mockSubscription.features?.ecommerce === true,
         ecommerceEnabled: mockSettingsOperations.ecommerceEnabled === true,
@@ -2663,7 +2711,10 @@ export async function mockRequest<T>({
     case "shopCategories":
       return { __contract: true, payload: { items: [] } } as T;
     case "shopProducts":
-      return { __contract: true, payload: { items: [], meta: { hasMore: false } } } as T;
+      return {
+        __contract: true,
+        payload: { items: [], meta: { hasMore: false } },
+      } as T;
     case "shopProduct":
       return { __contract: true, payload: null } as T;
     case "cancelShopOrder":
@@ -2724,7 +2775,8 @@ export async function mockRequest<T>({
           blockers: [
             {
               code: "PLAN_NOT_ENTITLED",
-              message: "Digital Gold & Silver is not included in your subscription plan.",
+              message:
+                "Digital Gold & Silver is not included in your subscription plan.",
             },
           ],
           termsVersion: null,
@@ -2735,7 +2787,12 @@ export async function mockRequest<T>({
               finenessPpm: 999000,
               quoteReady: false,
               rateTiming: "MISSING",
-              issues: [{ code: "SETTINGS_MISSING", message: "Asset settings are not configured." }],
+              issues: [
+                {
+                  code: "SETTINGS_MISSING",
+                  message: "Asset settings are not configured.",
+                },
+              ],
             },
           ],
           pause: {
@@ -2784,13 +2841,18 @@ export async function mockRequest<T>({
               safeActions: ["RETRY_DOCUMENT"],
             },
           ],
-          notes: ["Mock queue — operational retries never repeat financial settlement."],
+          notes: [
+            "Mock queue — operational retries never repeat financial settlement.",
+          ],
         },
       } as T;
     case "retryDigitalMetalsOutboxEvent":
       return {
         __contract: true,
-        payload: { eventId: "dmobx_mock", topic: "DIGITAL_METAL_DOCUMENT_READY" },
+        payload: {
+          eventId: "dmobx_mock",
+          topic: "DIGITAL_METAL_DOCUMENT_READY",
+        },
       } as T;
     case "retryDigitalMetalsDocumentFromOps":
       return {
@@ -2893,7 +2955,11 @@ export async function mockRequest<T>({
               accountLast4: "9012",
               ifsc: "HDFC0001234",
               bankName: "HDFC",
-              customer: { id: "cus_mock", name: "Demo Customer", customerNumber: "1001" },
+              customer: {
+                id: "cus_mock",
+                name: "Demo Customer",
+                customerNumber: "1001",
+              },
             },
           ],
           meta: { hasMore: false, nextCursor: null, limit: 25 },
@@ -2924,7 +2990,10 @@ export async function mockRequest<T>({
         __contract: true,
         payload: {
           id: String(params.destinationId ?? "dmbd_mock_pending"),
-          status: mockKey === "verifyDigitalMetalsBankDestination" ? "ACTIVE" : "DISABLED",
+          status:
+            mockKey === "verifyDigitalMetalsBankDestination"
+              ? "ACTIVE"
+              : "DISABLED",
           accountLast4: "9012",
         },
       } as T;
@@ -3013,14 +3082,28 @@ export async function mockRequest<T>({
       return {
         __contract: true,
         payload: {
-          items: [{ id: "dmpaybl_mock", sellOrderId: "dmso_mock", outstandingPaise: 600000, status: "OPEN" }],
+          items: [
+            {
+              id: "dmpaybl_mock",
+              sellOrderId: "dmso_mock",
+              outstandingPaise: 600000,
+              status: "OPEN",
+            },
+          ],
         },
       } as T;
     case "digitalMetalsPayouts":
       return {
         __contract: true,
         payload: {
-          items: [{ id: "dmpos_mock", status: "PENDING_APPROVAL", amountPaise: 600000, sellOrderId: "dmso_mock" }],
+          items: [
+            {
+              id: "dmpos_mock",
+              status: "PENDING_APPROVAL",
+              amountPaise: 600000,
+              sellOrderId: "dmso_mock",
+            },
+          ],
         },
       } as T;
     case "digitalMetalsPayoutDetail":
@@ -3033,10 +3116,24 @@ export async function mockRequest<T>({
             amountPaise: 600000,
             sellOrderId: "dmso_mock",
             permittedActions: ["SUBMIT"],
-            destinationSnapshot: { accountHolderName: "Mock", accountLast4: "9012", ifsc: "HDFC0001234" },
-            statusHistory: [{ status: "PENDING_APPROVAL", at: new Date().toISOString(), note: "Created" }],
+            destinationSnapshot: {
+              accountHolderName: "Mock",
+              accountLast4: "9012",
+              ifsc: "HDFC0001234",
+            },
+            statusHistory: [
+              {
+                status: "PENDING_APPROVAL",
+                at: new Date().toISOString(),
+                note: "Created",
+              },
+            ],
           },
-          payable: { id: "dmpaybl_mock", outstandingPaise: 600000, status: "OPEN" },
+          payable: {
+            id: "dmpaybl_mock",
+            outstandingPaise: 600000,
+            status: "OPEN",
+          },
         },
       } as T;
     case "submitDigitalMetalsPayout":
@@ -3046,7 +3143,12 @@ export async function mockRequest<T>({
     case "resolveDigitalMetalsPayoutUnknown":
       return {
         __contract: true,
-        payload: { payout: { id: String(params.payoutId ?? "dmpos_mock"), status: "SUBMITTED" } },
+        payload: {
+          payout: {
+            id: String(params.payoutId ?? "dmpos_mock"),
+            status: "SUBMITTED",
+          },
+        },
       } as T;
     case "digitalMetalsRedemptionCatalogue":
       return {
@@ -3069,7 +3171,14 @@ export async function mockRequest<T>({
       return {
         __contract: true,
         payload: {
-          items: [{ id: "dmro_mock", status: "CHARGE_PAID", chargeTotalPaise: 50000, customerId: "cus_mock" }],
+          items: [
+            {
+              id: "dmro_mock",
+              status: "CHARGE_PAID",
+              chargeTotalPaise: 50000,
+              customerId: "cus_mock",
+            },
+          ],
         },
       } as T;
     case "digitalMetalsRedemptionOrderDetail":
@@ -3148,7 +3257,11 @@ export async function mockRequest<T>({
     case "resolveDigitalMetalsRiskHold":
       return {
         __contract: true,
-        payload: { id: "dmrh_mock", status: "RESOLVED", resolutionNote: "Cleared after refund" },
+        payload: {
+          id: "dmrh_mock",
+          status: "RESOLVED",
+          resolutionNote: "Cleared after refund",
+        },
       } as T;
     case "digitalMetalsPaymentExceptions":
       return {
@@ -3175,7 +3288,11 @@ export async function mockRequest<T>({
       return {
         __contract: true,
         payload: {
-          period: { from: "2026-10-01", to: "2026-10-31", timezone: "Asia/Kolkata" },
+          period: {
+            from: "2026-10-01",
+            to: "2026-10-31",
+            timezone: "Asia/Kolkata",
+          },
           generatedAt: new Date().toISOString(),
           placement: {
             ordersPlaced: 2,
@@ -3194,8 +3311,14 @@ export async function mockRequest<T>({
           collections: {
             onlineCollected: { amountPaise: 50000, amountDisplay: "₹500.00" },
             codCollected: { amountPaise: 25000, amountDisplay: "₹250.00" },
-            codCourierCollectionConfirmed: { amountPaise: 25000, amountDisplay: "₹250.00" },
-            codBankRemittanceReconciled: { amountPaise: 20000, amountDisplay: "₹200.00" },
+            codCourierCollectionConfirmed: {
+              amountPaise: 25000,
+              amountDisplay: "₹250.00",
+            },
+            codBankRemittanceReconciled: {
+              amountPaise: 20000,
+              amountDisplay: "₹200.00",
+            },
             grossCollected: { amountPaise: 70000, amountDisplay: "₹700.00" },
             refundOutflow: { amountPaise: 5000, amountDisplay: "₹50.00" },
             netCollected: { amountPaise: 70000, amountDisplay: "₹700.00" },
@@ -3208,7 +3331,8 @@ export async function mockRequest<T>({
         __contract: true,
         payload: {
           courierIntegrationConfigured: false,
-          courierIntegrationLabel: "Manual courier confirmation and statement reconciliation",
+          courierIntegrationLabel:
+            "Manual courier confirmation and statement reconciliation",
           collectionPendingCount: 2,
           collectionConfirmedCount: 5,
           remittanceOwedCount: 3,
@@ -3220,24 +3344,44 @@ export async function mockRequest<T>({
     case "listEcommerceCodRemittanceBatches":
       return {
         __contract: true,
-        payload: [{ _id: "ecrb_mock_1", status: "DRAFT", statementReference: "STMT-MOCK-1" }],
+        payload: [
+          {
+            _id: "ecrb_mock_1",
+            status: "DRAFT",
+            statementReference: "STMT-MOCK-1",
+          },
+        ],
         meta: { nextCursor: null, hasMore: false, limit: 20 },
       } as T;
     case "createEcommerceCodRemittanceBatch":
       return {
         __contract: true,
-        payload: { _id: "ecrb_mock_new", status: "DRAFT", statementReference: "STMT-NEW" },
+        payload: {
+          _id: "ecrb_mock_new",
+          status: "DRAFT",
+          statementReference: "STMT-NEW",
+        },
       } as T;
     case "getEcommerceCodRemittanceBatch":
       return {
         __contract: true,
         payload: {
-          batch: { _id: String(params.batchId ?? "ecrb_mock_1"), status: "DRAFT", grossTotalPaise: 100_000 },
+          batch: {
+            _id: String(params.batchId ?? "ecrb_mock_1"),
+            status: "DRAFT",
+            grossTotalPaise: 100_000,
+          },
           lines: [],
         },
       } as T;
     case "confirmEcommerceCourierCodCollection":
-      return { __contract: true, payload: { id: String(params.orderId ?? ""), courierCod: { collectionStatus: "CONFIRMED" } } } as T;
+      return {
+        __contract: true,
+        payload: {
+          id: String(params.orderId ?? ""),
+          courierCod: { collectionStatus: "CONFIRMED" },
+        },
+      } as T;
     case "ecommerceReports": {
       const reportKey = String(params.reportKey ?? "ECOMMERCE_SALES");
       return mockAdminReport(reportKey, params) as T;
@@ -3277,7 +3421,10 @@ export async function mockRequest<T>({
         payload: {
           decision: body.decision ?? "APPROVE",
           refundInitiationAttempted: body.decision === "APPROVE",
-          request: { status: body.decision === "REJECT" ? "REJECTED" : "APPROVED_PROCESSING" },
+          request: {
+            status:
+              body.decision === "REJECT" ? "REJECTED" : "APPROVED_PROCESSING",
+          },
         },
       } as T;
     case "initiateEcommerceOrderCancellation":
@@ -3570,16 +3717,56 @@ export async function mockRequest<T>({
             from,
             to,
             label: `${from} – ${to}`,
-            comparedTo: { from: "2026-08-25", to: "2026-08-31", label: "25–31 Aug 2026" },
+            comparedTo: {
+              from: "2026-08-25",
+              to: "2026-08-31",
+              label: "25–31 Aug 2026",
+            },
             groupBy: "DAY",
           },
           summary: [
-            { key: "TOTAL_CUSTOMERS", label: "Total customers", value: 846, valueType: "count", note: "Current snapshot" },
-            { key: "ACTIVE_CUSTOMERS", label: "Active customers", value: 812, valueType: "count", note: "Current snapshot" },
-            { key: "NEW_CUSTOMERS", label: "New customers", value: 10, valueType: "count", change: { percent: 11.1, direction: "up", isGood: true } },
-            { key: "CUSTOMERS_WITH_ACTIVE_SCHEME", label: "With active scheme", value: 655, valueType: "count", note: "Current snapshot" },
-            { key: "KYC_PENDING", label: "KYC pending", value: 82, valueType: "count", note: "Current snapshot" },
-            { key: "WHATSAPP_OPTED_IN", label: "WhatsApp opted in", value: 780, valueType: "count", note: "Current snapshot" },
+            {
+              key: "TOTAL_CUSTOMERS",
+              label: "Total customers",
+              value: 846,
+              valueType: "count",
+              note: "Current snapshot",
+            },
+            {
+              key: "ACTIVE_CUSTOMERS",
+              label: "Active customers",
+              value: 812,
+              valueType: "count",
+              note: "Current snapshot",
+            },
+            {
+              key: "NEW_CUSTOMERS",
+              label: "New customers",
+              value: 10,
+              valueType: "count",
+              change: { percent: 11.1, direction: "up", isGood: true },
+            },
+            {
+              key: "CUSTOMERS_WITH_ACTIVE_SCHEME",
+              label: "With active scheme",
+              value: 655,
+              valueType: "count",
+              note: "Current snapshot",
+            },
+            {
+              key: "KYC_PENDING",
+              label: "KYC pending",
+              value: 82,
+              valueType: "count",
+              note: "Current snapshot",
+            },
+            {
+              key: "WHATSAPP_OPTED_IN",
+              label: "WhatsApp opted in",
+              value: 780,
+              valueType: "count",
+              note: "Current snapshot",
+            },
           ],
           charts: {
             registrationTrend: {
@@ -3587,36 +3774,46 @@ export async function mockRequest<T>({
               title: "New customers",
               subtitle: "Customers registered during the selected period",
               yAxis: { type: "count", label: "Customers" },
-              series: [{ key: "NEW_CUSTOMERS", name: "New customers", data: trendDays }],
+              series: [
+                {
+                  key: "NEW_CUSTOMERS",
+                  name: "New customers",
+                  data: trendDays,
+                },
+              ],
             },
             customerStatusDistribution: {
               chartType: "donut",
               title: "Customer status",
               yAxis: { type: "count", label: "Customers" },
-              series: [{
-                key: "STATUS",
-                name: "Customers",
-                data: [
-                  { x: "Active", y: 812, yDisplay: "812" },
-                  { x: "Inactive", y: 28, yDisplay: "28" },
-                  { x: "Blocked", y: 6, yDisplay: "6" },
-                ],
-              }],
+              series: [
+                {
+                  key: "STATUS",
+                  name: "Customers",
+                  data: [
+                    { x: "Active", y: 812, yDisplay: "812" },
+                    { x: "Inactive", y: 28, yDisplay: "28" },
+                    { x: "Blocked", y: 6, yDisplay: "6" },
+                  ],
+                },
+              ],
             },
             kycDistribution: {
               chartType: "donut",
               title: "KYC status",
               yAxis: { type: "count", label: "Customers" },
-              series: [{
-                key: "KYC",
-                name: "Customers",
-                data: [
-                  { x: "Verified", y: 720, yDisplay: "720" },
-                  { x: "Submitted", y: 20, yDisplay: "20" },
-                  { x: "Not submitted", y: 62, yDisplay: "62" },
-                  { x: "Rejected", y: 44, yDisplay: "44" },
-                ],
-              }],
+              series: [
+                {
+                  key: "KYC",
+                  name: "Customers",
+                  data: [
+                    { x: "Verified", y: 720, yDisplay: "720" },
+                    { x: "Submitted", y: 20, yDisplay: "20" },
+                    { x: "Not submitted", y: 62, yDisplay: "62" },
+                    { x: "Rejected", y: 44, yDisplay: "44" },
+                  ],
+                },
+              ],
             },
           },
         },
@@ -3642,16 +3839,56 @@ export async function mockRequest<T>({
             from,
             to,
             label: `${from} – ${to}`,
-            comparedTo: { from: "2026-08-25", to: "2026-08-31", label: "25–31 Aug 2026" },
+            comparedTo: {
+              from: "2026-08-25",
+              to: "2026-08-31",
+              label: "25–31 Aug 2026",
+            },
             groupBy: "DAY",
           },
           summary: [
-            { key: "TOTAL_ENROLLMENTS", label: "Total enrollments", value: 412, valueType: "count", note: "Current snapshot" },
-            { key: "ACTIVE_ENROLLMENTS", label: "Active enrollments", value: 318, valueType: "count", note: "Current snapshot" },
-            { key: "NEW_ENROLLMENTS", label: "New enrollments", value: 9, valueType: "count", change: { percent: 12.5, direction: "up", isGood: true } },
-            { key: "DEFAULTED", label: "Defaulted", value: 14, valueType: "count", note: "Current snapshot" },
-            { key: "MATURED", label: "Matured", value: 52, valueType: "count", note: "Current snapshot" },
-            { key: "TOTAL_COMMITTED", label: "Total committed", value: { amountPaise: 248500000, amountDisplay: "₹24,85,000" }, valueType: "currency", note: "Current snapshot" },
+            {
+              key: "TOTAL_ENROLLMENTS",
+              label: "Total enrollments",
+              value: 412,
+              valueType: "count",
+              note: "Current snapshot",
+            },
+            {
+              key: "ACTIVE_ENROLLMENTS",
+              label: "Active enrollments",
+              value: 318,
+              valueType: "count",
+              note: "Current snapshot",
+            },
+            {
+              key: "NEW_ENROLLMENTS",
+              label: "New enrollments",
+              value: 9,
+              valueType: "count",
+              change: { percent: 12.5, direction: "up", isGood: true },
+            },
+            {
+              key: "DEFAULTED",
+              label: "Defaulted",
+              value: 14,
+              valueType: "count",
+              note: "Current snapshot",
+            },
+            {
+              key: "MATURED",
+              label: "Matured",
+              value: 52,
+              valueType: "count",
+              note: "Current snapshot",
+            },
+            {
+              key: "TOTAL_COMMITTED",
+              label: "Total committed",
+              value: { amountPaise: 248500000, amountDisplay: "₹24,85,000" },
+              valueType: "currency",
+              note: "Current snapshot",
+            },
           ],
           charts: {
             enrollmentTrend: {
@@ -3659,49 +3896,61 @@ export async function mockRequest<T>({
               title: "New enrollments",
               subtitle: "Enrollments created during the selected period",
               yAxis: { type: "count", label: "Enrollments" },
-              series: [{ key: "NEW_ENROLLMENTS", name: "New enrollments", data: trendDays }],
+              series: [
+                {
+                  key: "NEW_ENROLLMENTS",
+                  name: "New enrollments",
+                  data: trendDays,
+                },
+              ],
             },
             schemeStatusDistribution: {
               chartType: "donut",
               title: "Enrollment status",
               yAxis: { type: "count", label: "Enrollments" },
-              series: [{
-                key: "STATUS",
-                name: "Enrollments",
-                data: [
-                  { x: "Active", y: 280, yDisplay: "280" },
-                  { x: "Locked / capped", y: 38, yDisplay: "38" },
-                  { x: "Matured", y: 52, yDisplay: "52" },
-                  { x: "Defaulted", y: 14, yDisplay: "14" },
-                ],
-              }],
+              series: [
+                {
+                  key: "STATUS",
+                  name: "Enrollments",
+                  data: [
+                    { x: "Active", y: 280, yDisplay: "280" },
+                    { x: "Locked / capped", y: 38, yDisplay: "38" },
+                    { x: "Matured", y: 52, yDisplay: "52" },
+                    { x: "Defaulted", y: 14, yDisplay: "14" },
+                  ],
+                },
+              ],
             },
             paymentPatternDistribution: {
               chartType: "donut",
               title: "Payment pattern",
               yAxis: { type: "count", label: "Enrollments" },
-              series: [{
-                key: "PATTERN",
-                name: "Enrollments",
-                data: [
-                  { x: "Fixed", y: 340, yDisplay: "340" },
-                  { x: "Flexible", y: 72, yDisplay: "72" },
-                ],
-              }],
+              series: [
+                {
+                  key: "PATTERN",
+                  name: "Enrollments",
+                  data: [
+                    { x: "Fixed", y: 340, yDisplay: "340" },
+                    { x: "Flexible", y: 72, yDisplay: "72" },
+                  ],
+                },
+              ],
             },
             enrollmentsByPlan: {
               chartType: "horizontalBar",
               title: "Enrollments by plan",
               yAxis: { type: "count", label: "Enrollments" },
-              series: [{
-                key: "PLAN",
-                name: "Enrollments",
-                data: [
-                  { x: "Akshaya 12 Month", y: 120, yDisplay: "120" },
-                  { x: "11+1 Gold weight", y: 86, yDisplay: "86" },
-                  { x: "Sampoorna Flex 11", y: 64, yDisplay: "64" },
-                ],
-              }],
+              series: [
+                {
+                  key: "PLAN",
+                  name: "Enrollments",
+                  data: [
+                    { x: "Akshaya 12 Month", y: 120, yDisplay: "120" },
+                    { x: "11+1 Gold weight", y: 86, yDisplay: "86" },
+                    { x: "Sampoorna Flex 11", y: 64, yDisplay: "64" },
+                  ],
+                },
+              ],
             },
           },
         },
@@ -4369,7 +4618,8 @@ export async function mockRequest<T>({
           status: "UPLOADED",
           fileName: "document.jpg",
           contentType: "image/jpeg",
-          downloadUrl: "https://picsum.photos/seed/swarnagrow-admin-upload/1200/800",
+          downloadUrl:
+            "https://picsum.photos/seed/swarnagrow-admin-upload/1200/800",
         },
       } as T;
     case "globalSearch": {
@@ -4432,6 +4682,56 @@ export async function mockRequest<T>({
       ].filter(Boolean);
       return { query: needle, groups } as T;
     }
+    case "assistantChat":
+      return {
+        summaryText: "Mock Sidekick response (enable API for live analytics).",
+        statCards: [
+          { label: "Net collected", value: 0, valueType: "currency" },
+        ],
+        chart: null,
+        table: null,
+        vizHint: "unsupported",
+        action: { kind: "unsupported", reason: "Mock mode" },
+        conversationId: "acv_mock",
+        messageId: "amg_mock",
+      } as T;
+    case "listAssistantConversations":
+      return {
+        data: [
+          {
+            _id: "acv_mock",
+            title: "Mock chat",
+            lastMessageAt: new Date().toISOString(),
+            messageCount: 2,
+          },
+        ],
+        meta: { nextCursor: null, hasMore: false, limit: 20 },
+      } as T;
+    case "listAssistantMessages":
+      return {
+        data: [
+          {
+            id: "amg_u1",
+            role: "user",
+            text: "Hello",
+            createdAt: new Date().toISOString(),
+          },
+          {
+            id: "amg_a1",
+            role: "assistant",
+            bundle: {
+              summaryText: "Mock reply",
+              statCards: [],
+              chart: null,
+              table: null,
+            },
+            createdAt: new Date().toISOString(),
+          },
+        ],
+        meta: { nextCursor: null, hasMore: false, limit: 25 },
+      } as T;
+    case "deleteAssistantConversation":
+      return { deleted: true } as T;
     default:
       throw {
         status: 404,

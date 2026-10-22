@@ -214,7 +214,14 @@ function trendAxisTickLabel(value: unknown, rows: Record<string, string | number
   return compactCategoryLabel(fullTrendAxisLabel(value, rows));
 }
 
-export function ChartSeriesView({ chart }: { chart: ChartSeriesBlock }) {
+export function ChartSeriesView({
+  chart,
+  compact = false,
+}: {
+  chart: ChartSeriesBlock;
+  /** Narrow surfaces (e.g. chat): prefer horizontal bars and external legend. */
+  compact?: boolean;
+}) {
   const type = (chart.chartType ?? "bar").toLowerCase();
   const yAxis = chart.yAxis;
   const rows = seriesToRows(chart);
@@ -410,7 +417,7 @@ export function ChartSeriesView({ chart }: { chart: ChartSeriesBlock }) {
     type === "horizontalbar" || type === "horizontal_bar";
   const grouped = type === "groupedbar" || type === "grouped_bar";
   const hideBarLegend =
-    (horizontalExplicit || grouped) && series.length <= 1;
+    (horizontalExplicit || grouped || compact) && series.length <= 1;
   const stacked = type === "stackedbar" || type === "stacked_bar";
   const barRows = rowsForBarChart(chart, rows);
   const seriesKeys = series.map((s) => s.key);
@@ -422,6 +429,7 @@ export function ChartSeriesView({ chart }: { chart: ChartSeriesBlock }) {
   const verticalLayout =
     horizontalExplicit ||
     grouped ||
+    (compact && categoryCount >= 2 && !stacked) ||
     (stacked && categoryCount >= 4) ||
     (stacked && longestCategory > 18);
   const barCategoryLabels = barRows.map((r) => compactCategoryLabel(String(r.x)));
@@ -657,13 +665,50 @@ export function ChartSeriesView({ chart }: { chart: ChartSeriesBlock }) {
     return <div className="w-full" style={{ height: barHeight }}>{barChart}</div>;
   }
 
+  const compactLegendItems: ChartLegendItem[] | null =
+    compact && hideBarLegend && series.length === 1
+      ? rows.map((row, i) => {
+          const key = seriesKeys[0];
+          const raw = Number(row[key] ?? 0);
+          const display = row[`${key}Display`];
+          return {
+            name: String(row.x),
+            value: yToPlotValue(yAxis, raw),
+            display:
+              typeof display === "string" && display.trim()
+                ? display
+                : yFormat(yAxis, raw),
+            color: palette[i % palette.length],
+          };
+        })
+      : null;
+
   if (autoVerticalHeight) {
+    const body = (
+      <div style={{ height: autoVerticalHeight }}>{barChart}</div>
+    );
     return (
-      <div className="max-h-[480px] w-full overflow-y-auto">
-        <div style={{ height: autoVerticalHeight }}>{barChart}</div>
+      <div className="w-full">
+        <div className={compact ? "max-h-[320px] overflow-y-auto" : "max-h-[480px] overflow-y-auto"}>
+          {body}
+        </div>
+        {compactLegendItems?.length ? (
+          <ChartSliceLegend items={compactLegendItems} className="mt-2" />
+        ) : null}
       </div>
     );
   }
 
-  return <div className="h-[280px] w-full">{barChart}</div>;
+  const defaultHeight = compact ? Math.min(320, Math.max(200, categoryCount * 44 + 72)) : 280;
+
+  return (
+    <div className="w-full">
+      <div className="w-full" style={{ height: defaultHeight }}>
+        {barChart}
+      </div>
+      {compactLegendItems?.length ? (
+        <ChartSliceLegend items={compactLegendItems} className="mt-2" />
+      ) : null}
+    </div>
+  );
 }

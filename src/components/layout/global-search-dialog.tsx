@@ -56,9 +56,7 @@ export function GlobalSearchDialog({
     },
     {
       skip:
-        !open ||
-        debouncedQ.length < 2 ||
-        shouldSkipListSearchQuery(debouncedQ),
+        !open || debouncedQ.length < 2 || shouldSkipListSearchQuery(debouncedQ),
     },
   );
 
