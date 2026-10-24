@@ -4297,25 +4297,52 @@ export const adminApi = createApi({
       invalidatesTags: ["DigitalMetals"],
     }),
     getDigitalMetalsPayables: builder.query<
-      { items: Record<string, unknown>[] },
-      { status?: string; customerId?: string } | void
+      {
+        items: Record<string, unknown>[];
+        meta?: { nextCursor: string | null; hasMore: boolean; limit: number };
+      },
+      {
+        status?: string;
+        customerId?: string;
+        limit?: number;
+        cursor?: string;
+      } | void
     >({
       query: (params) => ({
         url: "/admin/digital-metals/payables",
         params: params ?? {},
         mockKey: "digitalMetalsPayables",
       }),
+      transformResponse: (raw) =>
+        (contractPayload(raw) as {
+          items: Record<string, unknown>[];
+          meta?: { nextCursor: string | null; hasMore: boolean; limit: number };
+        }) ?? { items: [] },
       providesTags: ["DigitalMetals"],
     }),
     getDigitalMetalsPayouts: builder.query<
-      { items: Record<string, unknown>[] },
-      { status?: string; payableId?: string } | void
+      {
+        items: Record<string, unknown>[];
+        meta?: { nextCursor: string | null; hasMore: boolean; limit: number };
+      },
+      {
+        status?: string;
+        payableId?: string;
+        customerId?: string;
+        limit?: number;
+        cursor?: string;
+      } | void
     >({
       query: (params) => ({
         url: "/admin/digital-metals/payouts",
         params: params ?? {},
         mockKey: "digitalMetalsPayouts",
       }),
+      transformResponse: (raw) =>
+        (contractPayload(raw) as {
+          items: Record<string, unknown>[];
+          meta?: { nextCursor: string | null; hasMore: boolean; limit: number };
+        }) ?? { items: [] },
       providesTags: ["DigitalMetals"],
     }),
     createDigitalMetalsPayout: builder.mutation<
@@ -4750,8 +4777,16 @@ export const adminApi = createApi({
       providesTags: ["DigitalMetals"],
     }),
     getDigitalMetalsRedemptionFulfilmentQueue: builder.query<
-      { items: Record<string, unknown>[] },
-      { status?: string; limit?: number } | void
+      {
+        items: Record<string, unknown>[];
+        meta?: { nextCursor: string | null; hasMore: boolean; limit: number };
+      },
+      {
+        status?: string;
+        customerId?: string;
+        limit?: number;
+        cursor?: string;
+      } | void
     >({
       query: (params) => ({
         url: "/admin/digital-metals/redemption/fulfilment/queue",
@@ -4759,9 +4794,34 @@ export const adminApi = createApi({
         mockKey: "digitalMetalsRedemptionFulfilmentQueue",
       }),
       transformResponse: (raw) =>
-        (contractPayload(raw) as { items: Record<string, unknown>[] }) ?? {
-          items: [],
-        },
+        (contractPayload(raw) as {
+          items: Record<string, unknown>[];
+          meta?: { nextCursor: string | null; hasMore: boolean; limit: number };
+        }) ?? { items: [] },
+      providesTags: ["DigitalMetals"],
+    }),
+    getDigitalMetalsRedemptionChargeRefunds: builder.query<
+      {
+        items: Record<string, unknown>[];
+        meta?: { nextCursor: string | null; hasMore: boolean; limit: number };
+      },
+      {
+        status?: string;
+        customerId?: string;
+        limit?: number;
+        cursor?: string;
+      } | void
+    >({
+      query: (params) => ({
+        url: "/admin/digital-metals/redemption/charge-refunds",
+        params: params ?? {},
+        mockKey: "digitalMetalsRedemptionChargeRefunds",
+      }),
+      transformResponse: (raw) =>
+        (contractPayload(raw) as {
+          items: Record<string, unknown>[];
+          meta?: { nextCursor: string | null; hasMore: boolean; limit: number };
+        }) ?? { items: [] },
       providesTags: ["DigitalMetals"],
     }),
     postDigitalMetalsRedemptionFulfilmentAction: builder.mutation<
@@ -6517,6 +6577,7 @@ export const {
   useGetDigitalMetalsHedgeInvalidatedQuery,
   useCloseDigitalMetalsHedgeDayMutation,
   useGetDigitalMetalsRedemptionFulfilmentQueueQuery,
+  useGetDigitalMetalsRedemptionChargeRefundsQuery,
   usePostDigitalMetalsRedemptionFulfilmentActionMutation,
   useGetDigitalMetalsCustomerRiskHoldsQuery,
   useResolveDigitalMetalsRiskHoldMutation,

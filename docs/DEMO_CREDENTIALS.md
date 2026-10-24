@@ -106,6 +106,32 @@ Customers do **not** use the staff password `2026`. Registration is OTP-only unl
 
 ---
 
+## Noble Jewellery (fixed gold schemes demo)
+
+Full client-demo dataset (48 customers, all scheme states, today’s collections):
+
+```bash
+cd swarnagrow-backend
+npm run seed:noble-jewellery   # replaces tenant NOBLE if it exists
+```
+
+| Field | Value |
+|--------|--------|
+| **URL** | `/login` |
+| **Tenant code** | `NOBLE` |
+| **Password (all staff below)** | `2026` |
+
+| Role | Name | Mobile | Branch |
+|------|------|--------|--------|
+| Tenant owner | Rajesh Noble | `9847020100` | All branches |
+| Branch manager | Anu Noble | `9847020101` | Thrissur Main (`MAIN`) |
+| Branch staff | Priya Noble | `9847020102` | Thrissur Main (`MAIN`) |
+| Branch staff | Sanjay K | `9847020103` | Kochi (`KOC`) |
+
+**Plans:** Swarna (3m), Akshaya (6m), Tritiya (12m) — fixed gold weight only (STARTER tier; no flex / ecommerce / digital metals).
+
+---
+
 ## Quick reference
 
 | Portal | Login URL | Identifier | Secret |

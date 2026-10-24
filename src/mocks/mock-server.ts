@@ -3090,6 +3090,7 @@ export async function mockRequest<T>({
               status: "OPEN",
             },
           ],
+          meta: { nextCursor: null, hasMore: false, limit: 25 },
         },
       } as T;
     case "digitalMetalsPayouts":
@@ -3104,6 +3105,7 @@ export async function mockRequest<T>({
               sellOrderId: "dmso_mock",
             },
           ],
+          meta: { nextCursor: null, hasMore: false, limit: 25 },
         },
       } as T;
     case "digitalMetalsPayoutDetail":
@@ -3207,6 +3209,22 @@ export async function mockRequest<T>({
               permittedActions: ["ACCEPT_FULFILMENT"],
             },
           ],
+          meta: { nextCursor: null, hasMore: false, limit: 25 },
+        },
+      } as T;
+    case "digitalMetalsRedemptionChargeRefunds":
+      return {
+        __contract: true,
+        payload: {
+          items: [
+            {
+              id: "dmrcrf_mock",
+              status: "ASSIGNED",
+              orderId: "dmro_mock",
+              amountPaise: 50000,
+            },
+          ],
+          meta: { nextCursor: null, hasMore: false, limit: 25 },
         },
       } as T;
     case "digitalMetalsHedgeLive":

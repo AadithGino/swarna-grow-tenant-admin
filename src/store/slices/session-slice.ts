@@ -1,6 +1,6 @@
 import { createSlice, type PayloadAction } from "@reduxjs/toolkit";
 import { MOCK_OWNER_SESSION } from "@/src/config/mock-session";
-import { clearAssistantConversationId } from "@/src/lib/assistant-conversation-storage";
+import { clearAssistantConversationStorage } from "@/src/lib/assistant-conversation-storage";
 import { clearAuthTokens } from "@/src/lib/auth-session";
 import type { StoredTokens } from "@/src/lib/auth-token-storage";
 import type { PortalSession } from "@/src/types/session";
@@ -59,7 +59,7 @@ const sessionSlice = createSlice({
       if (typeof window !== "undefined") {
         localStorage.removeItem(SESSION_STORAGE_KEY);
         clearAuthTokens();
-        clearAssistantConversationId();
+        clearAssistantConversationStorage();
       }
     },
     markSetupTaskComplete(

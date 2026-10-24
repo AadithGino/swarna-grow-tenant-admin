@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -475,7 +475,25 @@ export function DigitalMetalsRedemptionCatalogPage() {
 
 export function DigitalMetalsRedemptionFulfilmentQueuePage() {
   const ent = useDigitalMetalsServerEntitlement();
-  const queue = useGetDigitalMetalsRedemptionFulfilmentQueueQuery(undefined, { skip: !ent.workspaceVisible });
+  const pageSize = 25;
+  const [cursor, setCursor] = useState<string | undefined>();
+  const [stack, setStack] = useState<RedemptionAdminRow[]>([]);
+  const queue = useGetDigitalMetalsRedemptionFulfilmentQueueQuery(
+    { limit: pageSize, cursor },
+    { skip: !ent.workspaceVisible },
+  );
+
+  useEffect(() => {
+    setCursor(undefined);
+    setStack([]);
+  }, []);
+
+  const rows = useMemo(() => {
+    const batch = (queue.data?.items ?? []) as RedemptionAdminRow[];
+    if (!cursor) return batch;
+    const ids = new Set(stack.map((r) => r.id));
+    return [...stack, ...batch.filter((r) => !ids.has(r.id))];
+  }, [queue.data?.items, cursor, stack]);
 
   if (ent.loading || queue.isLoading) return <PageSkeleton cards={2} />;
   if (!ent.workspaceVisible) {
@@ -487,7 +505,7 @@ export function DigitalMetalsRedemptionFulfilmentQueuePage() {
   }
   if (queue.isError) return <QueryError error={queue.error} onRetry={queue.refetch} />;
 
-  const rows = (queue.data?.items ?? []) as RedemptionAdminRow[];
+  const meta = queue.data?.meta;
 
   return (
     <div className="space-y-6 p-6" data-testid="digital-metals-redemption-fulfilment-queue">
@@ -495,7 +513,7 @@ export function DigitalMetalsRedemptionFulfilmentQueuePage() {
         title="Redemption fulfilment queue"
         description="Charge-paid through investigation. Open a row for customer context and staff actions."
       />
-      <Surface title={`Open fulfilment (${rows.length})`}>
+      <Surface title={`Open fulfilment (${rows.length}${meta?.hasMore ? "+" : ""})`}>
         {rows.length === 0 ? (
           <p className="p-4 text-sm text-muted-foreground">No orders awaiting fulfilment.</p>
         ) : (
@@ -516,6 +534,21 @@ export function DigitalMetalsRedemptionFulfilmentQueuePage() {
             ))}
           </div>
         )}
+        {meta?.hasMore ? (
+          <div className="border-t px-4 py-3">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setStack(rows);
+                setCursor(meta.nextCursor ?? undefined);
+              }}
+            >
+              Load more
+            </Button>
+          </div>
+        ) : null}
       </Surface>
       <Link href="/digital-metals/redemption/orders" className="text-sm underline">
         All redemption orders
@@ -526,7 +559,25 @@ export function DigitalMetalsRedemptionFulfilmentQueuePage() {
 
 export function DigitalMetalsRedemptionOrdersPage() {
   const ent = useDigitalMetalsServerEntitlement();
-  const orders = useGetDigitalMetalsRedemptionOrdersQuery(undefined, { skip: !ent.workspaceVisible });
+  const pageSize = 25;
+  const [cursor, setCursor] = useState<string | undefined>();
+  const [stack, setStack] = useState<RedemptionAdminRow[]>([]);
+  const orders = useGetDigitalMetalsRedemptionOrdersQuery(
+    { limit: pageSize, cursor },
+    { skip: !ent.workspaceVisible },
+  );
+
+  useEffect(() => {
+    setCursor(undefined);
+    setStack([]);
+  }, []);
+
+  const rows = useMemo(() => {
+    const batch = (orders.data?.items ?? []) as RedemptionAdminRow[];
+    if (!cursor) return batch;
+    const ids = new Set(stack.map((r) => r.id));
+    return [...stack, ...batch.filter((r) => !ids.has(r.id))];
+  }, [orders.data?.items, cursor, stack]);
 
   if (ent.loading || orders.isLoading) return <PageSkeleton cards={2} />;
   if (!ent.workspaceVisible) {
@@ -538,7 +589,7 @@ export function DigitalMetalsRedemptionOrdersPage() {
   }
   if (orders.isError) return <QueryError error={orders.error} onRetry={orders.refetch} />;
 
-  const rows = (orders.data?.items ?? []) as RedemptionAdminRow[];
+  const meta = orders.data?.meta;
 
   return (
     <div className="space-y-6 p-6" data-testid="digital-metals-redemption-orders">
@@ -548,7 +599,7 @@ export function DigitalMetalsRedemptionOrdersPage() {
           <Link href="/digital-metals/redemption/fulfilment">Fulfilment queue</Link>
         </Button>
       </div>
-      <Surface title={`Orders (${rows.length})`}>
+      <Surface title={`Orders (${rows.length}${meta?.hasMore ? "+" : ""})`}>
         {rows.length === 0 ? (
           <p className="p-4 text-sm text-muted-foreground">No redemption orders yet.</p>
         ) : (
@@ -568,6 +619,21 @@ export function DigitalMetalsRedemptionOrdersPage() {
             ))}
           </div>
         )}
+        {meta?.hasMore ? (
+          <div className="border-t px-4 py-3">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setStack(rows);
+                setCursor(meta.nextCursor ?? undefined);
+              }}
+            >
+              Load more
+            </Button>
+          </div>
+        ) : null}
       </Surface>
     </div>
   );

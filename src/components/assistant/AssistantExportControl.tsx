@@ -27,12 +27,16 @@ function exportFieldForTableKey(key: string, allowed: Set<string>): string | nul
   return null;
 }
 
+function exportFields(bundle: AssistantBundle): string[] {
+  const options = bundle.exportable;
+  if (options && "fields" in options) return options.fields;
+  if (options && "columns" in options) return options.columns;
+  return (bundle.table?.columns ?? []).map((column) => column.key);
+}
+
 function defaultSelectedFields(bundle: AssistantBundle): string[] {
   const tableKeys = (bundle.table?.columns ?? []).map((c) => c.key);
-  const allowedList =
-    bundle.exportable?.fields ??
-    bundle.exportable?.columns ??
-    tableKeys;
+  const allowedList = exportFields(bundle);
   const allowed = new Set(allowedList);
   if (!tableKeys.length) return [...allowedList].slice(0, 8);
   const picked = tableKeys
@@ -61,11 +65,8 @@ export function AssistantExportControl({ bundle }: { bundle: AssistantBundle }) 
   const [error, setError] = useState<string | null>(null);
 
   const fieldOptions = useMemo(() => {
-    if (bundle.exportable?.fields?.length) {
-      return bundle.exportable.fields.map((key) => ({ key, label: key }));
-    }
-    if (bundle.exportable?.columns?.length) {
-      return bundle.exportable.columns.map((key) => ({ key, label: key }));
+    if (bundle.exportable) {
+      return exportFields(bundle).map((key) => ({ key, label: key }));
     }
     return (bundle.table?.columns ?? []).map((c) => ({
       key: c.key,

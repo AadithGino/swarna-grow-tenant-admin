@@ -33,6 +33,7 @@ import {
   Search,
   Settings,
   ShoppingBag,
+  Sparkles,
   ShieldCheck,
   Truck,
   UserRound,
@@ -354,7 +355,7 @@ function formatRoleLabel(role?: string) {
     .replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-function Topbar() {
+function Topbar({ onOpenAssistant }: { onOpenAssistant?: () => void }) {
   const dispatch = useAppDispatch();
   const router = useRouter();
   const session = useAppSelector((state) => state.session.session);
@@ -450,6 +451,13 @@ function Topbar() {
             ⌘ K
           </button>
         </div>
+        {onOpenAssistant ? (
+          <Button type="button" variant="outline" onClick={onOpenAssistant}
+            className="shrink-0 gap-2 rounded-xl border-[#d9b6c0] bg-[#fff6f8] text-[#730321] hover:bg-[#f9e9ee]"
+            aria-label="Open Sidekick analytics assistant">
+            <Sparkles className="size-4" /><span className="hidden sm:inline">Ask Sidekick</span>
+          </Button>
+        ) : null}
         <div className="ml-auto hidden items-center gap-2 md:flex">
           <Select defaultValue="admin">
             <SelectTrigger className="h-12 w-[11.875rem] rounded-xl bg-[#faf7f5]">
@@ -527,7 +535,7 @@ function Topbar() {
 
 const MemoTopbar = memo(Topbar);
 
-function AdminShellGrid({ children }: { children: React.ReactNode }) {
+function AdminShellGrid({ children, onOpenAssistant }: { children: React.ReactNode; onOpenAssistant?: () => void }) {
   const collapsed = useAppSelector((state) => state.ui.sidebarCollapsed);
   return (
     <div
@@ -542,7 +550,7 @@ function AdminShellGrid({ children }: { children: React.ReactNode }) {
         <MemoSidebar />
       </div>
       <div className="min-w-0 lg:col-start-2">
-        <MemoTopbar />
+        <MemoTopbar onOpenAssistant={onOpenAssistant} />
         <main className="min-h-[calc(100vh-5.125rem)] bg-[linear-gradient(#8f6c5c0a_1px,transparent_1px),linear-gradient(90deg,#8f6c5c0a_1px,transparent_1px)] bg-[size:2.75rem_2.75rem] p-4 md:p-7 lg:p-8">
           <div className="mx-auto max-w-[105rem] space-y-7">{children}</div>
         </main>
@@ -552,6 +560,8 @@ function AdminShellGrid({ children }: { children: React.ReactNode }) {
 }
 
 export function AdminShell({ children }: { children: React.ReactNode }) {
+  const [assistantOpen, setAssistantOpen] = useState(false);
+  const openAssistant = useCallback(() => setAssistantOpen(true), []);
   const router = useRouter();
   const pathname = usePathname();
   const mounted = useClientMounted();
@@ -580,13 +590,13 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
     );
   }
 
-  const showAssistant = hasPermission(session ?? undefined, "report.read");
+  const showAssistant = hasPermission(session?.user, "report.read");
 
   return (
     <>
-      <AdminShellGrid>{children}</AdminShellGrid>
+      <AdminShellGrid onOpenAssistant={showAssistant ? openAssistant : undefined}>{children}</AdminShellGrid>
       <PaymentSuccessHost />
-      {showAssistant ? <AssistantPanel /> : null}
+      {showAssistant ? <AssistantPanel open={assistantOpen} onOpenChange={setAssistantOpen} /> : null}
     </>
   );
 }

@@ -28,6 +28,7 @@ export function AssistantVirtualMessageList({
   onLoadOlder,
   capturePrependAnchor,
   applyPrependAnchor,
+  onRetryFailed,
 }: {
   messages: AssistantChatMessage[];
   hasMore: boolean;
@@ -40,6 +41,7 @@ export function AssistantVirtualMessageList({
   onLoadOlder: () => void;
   capturePrependAnchor: (scrollHeight: number) => void;
   applyPrependAnchor: (scrollEl: HTMLDivElement | null) => void;
+  onRetryFailed?: (messageId: string) => void;
 }) {
   const parentRef = useRef<HTMLDivElement>(null);
   const stickToBottomRef = useRef(true);
@@ -144,7 +146,7 @@ export function AssistantVirtualMessageList({
   return (
     <div
       ref={parentRef}
-      className="min-h-0 flex-1 overflow-y-auto px-3 py-3"
+      className="min-h-0 flex-1 overflow-y-auto px-4 py-5 md:px-6"
       onScroll={onScroll}
     >
       {(loadingOlder || hasMore) && (
@@ -183,14 +185,30 @@ export function AssistantVirtualMessageList({
               >
                 <div
                   className={cn(
-                    "rounded-2xl px-3 py-2.5",
+                    "rounded-2xl px-4 py-3",
                     msg.role === "user"
-                      ? "max-w-[92%] bg-[#730321] text-sm text-white shadow-sm"
+                      ? "max-w-[85%] whitespace-pre-wrap bg-[#730321] text-sm text-white shadow-sm"
                       : "w-full border border-[#eaded9] bg-white text-[#28161a] shadow-sm",
                   )}
                 >
                   {msg.role === "user" ? (
-                    msg.text
+                    <div className="space-y-2">
+                      <span>{msg.text}</span>
+                      {msg.sendFailed ? (
+                        <div className="flex flex-wrap items-center gap-2 text-xs">
+                          <span className="text-white/85">Not sent</span>
+                          {onRetryFailed ? (
+                            <button
+                              type="button"
+                              className="font-semibold underline underline-offset-2"
+                              onClick={() => onRetryFailed(msg.id)}
+                            >
+                              Retry
+                            </button>
+                          ) : null}
+                        </div>
+                      ) : null}
+                    </div>
                   ) : (
                     <AssistantMessage bundle={msg.bundle} />
                   )}

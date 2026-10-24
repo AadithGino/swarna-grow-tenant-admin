@@ -27,8 +27,32 @@ export type AssistantExportable =
   | { entity: string; fields: string[] }
   | { reportKey: string; columns: string[] };
 
+export type AssistantStorageScope = {
+  tenantId: string;
+  userId: string;
+};
+
+export type AssistantAppliedFilters = {
+  dateRange?: string;
+  timezone?: string;
+  metric?: string;
+  grouping?: string;
+  compareModes?: string[];
+  subject?: string;
+};
+
+export type CollectionAnalyticsPlan = {
+  operation?: "summary" | "trend" | "comparison" | "ranking" | "latest";
+  metric?: "net_collected" | "gross_receipts";
+  timeGrain?: "day" | "week" | "month";
+  dimensions?: Array<"day" | "mode" | "branch" | "customer" | "scheme">;
+  compareModes?: string[] | null;
+  sort?: "chronological" | "measure_desc";
+};
+
 export type AssistantBundle = {
   summaryText: string;
+  appliedFilters?: AssistantAppliedFilters;
   narrative?: string | null;
   statCards: AssistantStatCard[];
   chart: AssistantChart | null;
@@ -41,9 +65,16 @@ export type AssistantBundle = {
   exportable?: AssistantExportable;
   exportRecommended?: boolean;
   cached?: boolean;
+  /** ISO timestamp for underlying report/query data, when provided by the API. */
+  asOf?: string;
+  cacheAgeSeconds?: number;
   conversationId?: string;
   messageId?: string;
 };
+
+export type AssistantSendResult =
+  | { ok: true; conversationId: string | null }
+  | { ok: false; draft: string; message: string };
 
 export type AssistantConversationSummary = {
   _id: string;
@@ -54,7 +85,13 @@ export type AssistantConversationSummary = {
 };
 
 export type AssistantChatMessage =
-  | { id: string; role: "user"; text: string; createdAt?: string }
+  | {
+      id: string;
+      role: "user";
+      text: string;
+      createdAt?: string;
+      sendFailed?: boolean;
+    }
   | {
       id: string;
       role: "assistant";

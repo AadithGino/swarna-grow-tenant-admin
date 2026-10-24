@@ -1,4 +1,5 @@
 "use client";
+import { useState } from "react";
 
 import { ChartSeriesView } from "@/src/components/common/chart-series-view";
 import {
@@ -39,7 +40,7 @@ function toChartBlock(
 function CompactStatCards({ bundle }: { bundle: AssistantBundle }) {
   if (!bundle.statCards.length) return null;
   return (
-    <div className="grid grid-cols-2 gap-2">
+    <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
       {bundle.statCards.map((card) => (
         <div
           key={card.label}
@@ -64,19 +65,18 @@ function CompactStatCards({ bundle }: { bundle: AssistantBundle }) {
 }
 
 function AssistantTable({ bundle }: { bundle: AssistantBundle }) {
+  const [showAll, setShowAll] = useState(false);
   const columns = bundle.table?.columns ?? [];
   const allRows = bundle.table?.rows ?? [];
   if (!columns.length || !allRows.length) return null;
 
-  const visibleCols = columns
-    .filter((c) => c.key !== "drilldownPath")
-    .slice(0, 4);
-  const rows = allRows.slice(0, CHAT_TABLE_ROW_CAP);
+  const visibleCols = columns.filter((c) => c.key !== "drilldownPath");
+  const rows = showAll ? allRows : allRows.slice(0, CHAT_TABLE_ROW_CAP);
   const hidden = allRows.length - rows.length;
 
   return (
     <div className="rounded-xl border border-[#eaded9] bg-[#faf7f5]">
-      <div className="max-h-52 overflow-auto rounded-t-xl">
+      <div className="max-h-80 overflow-auto rounded-t-xl">
         <table className="w-full min-w-[18rem] border-collapse text-left text-sm">
           <thead className="sticky top-0 z-10 bg-[#f3ebe6]">
             <tr>
@@ -118,9 +118,34 @@ function AssistantTable({ bundle }: { bundle: AssistantBundle }) {
             ? " Open Reports for the full export."
             : " Use Export for Excel/CSV of the full list."}
         </p>
+        {allRows.length > CHAT_TABLE_ROW_CAP ? <button type="button" className="text-xs font-semibold text-[#730321] underline underline-offset-4" onClick={() => setShowAll((value) => !value)}>{showAll ? "Show fewer rows" : `Show all ${allRows.length} loaded rows`}</button> : null}
         <AssistantExportControl bundle={bundle} />
       </div>
     </div>
+  );
+}
+
+function formatAssistantAsOf(iso: string) {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return iso;
+  return date.toLocaleString("en-IN", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
+}
+
+function AssistantResponseMeta({ bundle }: { bundle: AssistantBundle }) {
+  if (!bundle.cached && !bundle.asOf && bundle.cacheAgeSeconds == null) {
+    return null;
+  }
+  const parts: string[] = [];
+  if (bundle.cached) parts.push("Cached answer");
+  if (bundle.asOf) parts.push(`Data as of ${formatAssistantAsOf(bundle.asOf)}`);
+  if (bundle.cacheAgeSeconds != null) {
+    parts.push(`Cache age ${bundle.cacheAgeSeconds}s`);
+  }
+  return (
+    <p className="text-[11px] leading-snug text-[#887a7d]">{parts.join(" · ")}</p>
   );
 }
 
@@ -137,6 +162,7 @@ export function AssistantMessage({ bundle }: { bundle: AssistantBundle }) {
         <p className="text-[0.9rem] leading-relaxed text-[#28161a]">
           {bundle.narrative}
         </p>
+        <AssistantResponseMeta bundle={bundle} />
       </div>
     );
   }
@@ -170,6 +196,8 @@ export function AssistantMessage({ bundle }: { bundle: AssistantBundle }) {
       )}
 
       <AssistantTable bundle={bundle} />
+
+      <AssistantResponseMeta bundle={bundle} />
     </div>
   );
 }

@@ -5,7 +5,9 @@ import {
   History,
   Loader2,
   MessageCircle,
+  Maximize2,
   Minimize2,
+  Plus,
   Send,
   Sparkles,
   X,
@@ -18,7 +20,7 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from "react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { AssistantConversationDrawer } from "@/src/components/assistant/AssistantConversationDrawer";
 import { AssistantVirtualMessageList } from "@/src/components/assistant/AssistantVirtualMessageList";
 import {
@@ -33,6 +35,8 @@ import {
   writeAssistantConversationId,
 } from "@/src/lib/assistant-conversation-storage";
 import { useAssistantChat } from "@/src/hooks/useAssistantChat";
+import { useAppSelector } from "@/src/store/hooks";
+import type { AssistantStorageScope } from "@/src/types/assistant";
 
 const SUGGESTED = [
   "Today's collection by branch",
@@ -51,6 +55,8 @@ export function AssistantFloatingWindow({
   onOpenChange: (open: boolean) => void;
 }) {
   const [minimized, setMinimized] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+  const [mobile, setMobile] = useState(false);
   const [geom, setGeom] = useState<AssistantPanelGeometry>(() =>
     readAssistantGeometry(),
   );
@@ -64,8 +70,12 @@ export function AssistantFloatingWindow({
     (kind: DragKind, e: PointerEvent, origin: AssistantPanelGeometry) => void
   >(() => {});
 
+  const session = useAppSelector((s) => s.session.session);
+  const storageScope: AssistantStorageScope | null = session
+    ? { tenantId: session.tenant.id, userId: session.user.id }
+    : null;
   const [conversationId, setConversationId] = useState<string | null>(() =>
-    readAssistantConversationId(),
+    readAssistantConversationId(storageScope),
   );
   const [historyOpen, setHistoryOpen] = useState(false);
   const [scrollEpoch, setScrollEpoch] = useState(0);
@@ -78,29 +88,61 @@ export function AssistantFloatingWindow({
     loadingOlder,
     initialLoading,
     isLoading,
-    error,
+    sendError,
+    retrySend,
     resetLocal,
     capturePrependAnchor,
     applyPrependAnchor,
-  } = useAssistantChat(conversationId);
+  } = useAssistantChat(conversationId, storageScope);
   const [draft, setDraft] = useState("");
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    if (!storageScope) return;
+    setConversationId(readAssistantConversationId(storageScope));
+  }, [storageScope?.tenantId, storageScope?.userId]);
 
   const submit = useCallback(async () => {
+    if (isLoading) return;
     const text = draft;
     if (!text.trim()) return;
-    setDraft("");
-    const nextId = await send(text, conversationId);
-    if (nextId && nextId !== conversationId) {
-      setConversationId(nextId);
+    const result = await send(text, conversationId);
+    if (!result.ok) {
+      setDraft(result.draft);
+      return;
     }
-  }, [conversationId, draft, send]);
+    setDraft("");
+    if (result.conversationId && result.conversationId !== conversationId) {
+      setConversationId(result.conversationId);
+    }
+  }, [conversationId, draft, send, isLoading]);
+
+  useEffect(() => {
+    const media = window.matchMedia("(max-width: 767px)");
+    const update = () => setMobile(media.matches);
+    update();
+    media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    const previousFocus = document.activeElement;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !historyOpen) onOpenChange(false);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      if (previousFocus instanceof HTMLElement) previousFocus.focus();
+    };
+  }, [open, historyOpen, onOpenChange]);
 
   const startNewChat = useCallback(() => {
     setConversationId(null);
-    clearAssistantConversationId();
+    clearAssistantConversationId(storageScope);
     resetLocal();
-  }, [resetLocal]);
+  }, [resetLocal, storageScope]);
 
   useEffect(() => {
     const active = open && !minimized;
@@ -109,7 +151,8 @@ export function AssistantFloatingWindow({
     }
     prevPanelActiveRef.current = active;
     if (active) {
-      window.setTimeout(() => inputRef.current?.focus(), 150);
+      const timer = window.setTimeout(() => inputRef.current?.focus(), 150);
+      return () => window.clearTimeout(timer);
     }
   }, [open, minimized]);
 
@@ -208,7 +251,7 @@ export function AssistantFloatingWindow({
   return (
     <div
       className="fixed z-[60]"
-      style={{
+      style={mobile ? { inset: 0, width: "100%", height: "100dvh" } : expanded ? { inset: 24 } : {
         left: geom.x,
         top: geom.y,
         width: geom.width,
@@ -217,16 +260,16 @@ export function AssistantFloatingWindow({
       role="dialog"
       aria-label="Analytics Sidekick"
     >
-      <div className="relative flex h-full min-h-0 flex-col overflow-hidden rounded-2xl border border-[#e4d7d2] bg-white shadow-2xl">
+      <div className="relative flex h-full min-h-0 flex-col overflow-hidden border border-[#e4d7d2] bg-[#fbf8f5] shadow-2xl md:rounded-2xl">
         <header
-          className="flex shrink-0 cursor-grab items-start gap-2 border-b border-[#eaded9] bg-[#faf7f5] px-3 py-3 active:cursor-grabbing"
+          className="flex shrink-0 items-center gap-3 border-b border-[#eaded9] bg-white px-4 py-4 md:cursor-grab md:px-6 md:active:cursor-grabbing"
           onPointerDown={(e) => {
-            if ((e.target as HTMLElement).closest("[data-no-drag]")) return;
+            if (mobile || expanded || (e.target as HTMLElement).closest("[data-no-drag]")) return;
             startDrag("move", e);
           }}
         >
           <GripHorizontal
-            className="mt-1 size-4 shrink-0 text-[#b8a8ac]"
+            className="hidden size-4 shrink-0 text-[#b8a8ac] md:block"
             aria-hidden
           />
           <div className="min-w-0 flex-1 select-none">
@@ -234,15 +277,18 @@ export function AssistantFloatingWindow({
               <span className="grid size-8 place-items-center rounded-full bg-[#f7ecee] text-[#730321]">
                 <MessageCircle className="size-4" />
               </span>
-              <span className="truncate text-sm font-semibold">
-                Analytics Sidekick
+              <span className="truncate text-base font-semibold">
+                Sidekick <span className="ml-1 text-xs font-normal text-[#9a6f2a]">Analytics</span>
               </span>
             </div>
             <p className="mt-0.5 truncate text-xs text-[#776a6d]">
-              Live tenant data · scoped to your role
+              Collections, customers & store performance
             </p>
           </div>
           <div className="flex shrink-0 gap-0.5" data-no-drag>
+            <Button type="button" variant="ghost" size="icon-sm" aria-label="New chat" disabled={isLoading} onClick={startNewChat}>
+              <Plus className="size-4" />
+            </Button>
             <Button
               type="button"
               variant="ghost"
@@ -253,6 +299,9 @@ export function AssistantFloatingWindow({
             >
               <History className="size-4" />
             </Button>
+            {!mobile ? <Button type="button" variant="ghost" size="icon-sm" aria-label={expanded ? "Restore window" : "Expand workspace"} onClick={() => setExpanded((value) => !value)}>
+              <Maximize2 className="size-4" />
+            </Button> : null}
             <Button
               type="button"
               variant="ghost"
@@ -282,7 +331,7 @@ export function AssistantFloatingWindow({
           onClose={() => setHistoryOpen(false)}
           onSelect={(id) => {
             setConversationId(id);
-            writeAssistantConversationId(id);
+            writeAssistantConversationId(id, storageScope);
           }}
           onNewChat={startNewChat}
         />
@@ -291,21 +340,24 @@ export function AssistantFloatingWindow({
         !isLoading &&
         !initialLoading &&
         !conversationId ? (
-          <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
-            <div className="space-y-3 rounded-2xl border border-dashed border-[#e4d7d2] bg-[#faf7f5] p-4">
-              <p className="text-sm text-[#776a6d]">
-                Try collections, defaulters, branches, or customers.
-              </p>
-              <div className="flex flex-col gap-2">
+          <div className="min-h-0 flex-1 overflow-y-auto px-5 py-8 md:px-12 md:py-12">
+            <div className="mx-auto max-w-2xl space-y-6">
+              <span className="inline-flex items-center gap-2 rounded-full border border-[#e7d6bc] bg-[#fff8eb] px-3 py-1.5 text-xs font-medium text-[#876020]"><Sparkles className="size-3.5" />Your business, in conversation</span>
+              <div><h2 className="text-3xl font-semibold tracking-tight text-[#28161a] md:text-4xl">What would you like<br />to understand today?</h2>
+              <p className="mt-3 max-w-lg text-sm leading-6 text-[#776a6d]">Explore your collections, spot overdue accounts, or compare showrooms. Ask a follow-up to go deeper.</p></div>
+              <div className="grid gap-3 sm:grid-cols-2">
                 {SUGGESTED.map((prompt) => (
                   <button
                     key={prompt}
                     type="button"
-                    className="rounded-xl border border-[#e4d7d2] bg-white px-3 py-2 text-left text-sm font-medium text-[#4f3d41] transition hover:border-[#730321]/30"
+                    disabled={isLoading}
+                    className="min-h-20 rounded-2xl border border-[#e4d7d2] bg-white px-4 py-4 text-left text-sm font-medium text-[#4f3d41] shadow-sm transition hover:border-[#730321]/40 hover:bg-[#fffafb] disabled:opacity-50"
                     onClick={() => {
                       void (async () => {
-                        const nextId = await send(prompt, conversationId);
-                        if (nextId) setConversationId(nextId);
+                        const result = await send(prompt, conversationId);
+                        if (result.ok && result.conversationId) {
+                          setConversationId(result.conversationId);
+                        }
                       })();
                     }}
                   >
@@ -313,6 +365,7 @@ export function AssistantFloatingWindow({
                   </button>
                 ))}
               </div>
+              <p className="text-xs leading-5 text-[#887a7d]">Read-only analytics · Verify figures in the source report before acting.</p>
             </div>
           </div>
         ) : (
@@ -327,36 +380,45 @@ export function AssistantFloatingWindow({
             onLoadOlder={() => void loadOlder()}
             capturePrependAnchor={capturePrependAnchor}
             applyPrependAnchor={applyPrependAnchor}
+            onRetryFailed={(messageId) => void retrySend(messageId)}
           />
         )}
 
-        {error ? (
+        {sendError ? (
           <p className="mx-3 mb-1 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-            Could not reach Sidekick. Check that the API is running and
-            assistant is enabled.
+            {sendError}
           </p>
         ) : null}
 
         <form
-          className="shrink-0 border-t border-[#eaded9] bg-white p-3"
+          className="shrink-0 border-t border-[#eaded9] bg-white px-4 pt-3 pb-[max(12px,env(safe-area-inset-bottom))] md:px-6"
           onSubmit={(e) => {
             e.preventDefault();
             void submit();
           }}
         >
-          <div className="flex gap-2">
-            <Input
+          <div className="flex items-end gap-2 rounded-2xl border border-[#d9c8c1] bg-[#faf7f5] p-2 focus-within:ring-2 focus-within:ring-[#730321]/15">
+            <Textarea
               ref={inputRef}
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
               placeholder="Ask about your store…"
+              aria-label="Message Sidekick"
+              rows={2}
+              maxLength={2000}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
+                  event.preventDefault();
+                  void submit();
+                }
+              }}
               disabled={isLoading}
-              className="border-[#e4d7d2] bg-[#faf7f5]"
+              className="max-h-40 min-h-14 resize-none border-0 bg-transparent shadow-none focus-visible:ring-0"
             />
             <Button
               type="submit"
               disabled={isLoading || !draft.trim()}
-              className="shrink-0 bg-[#730321] hover:bg-[#5a021a]"
+              className="size-11 shrink-0 rounded-xl bg-[#730321] hover:bg-[#5a021a]"
               aria-label="Send"
             >
               {isLoading ? (
@@ -366,9 +428,10 @@ export function AssistantFloatingWindow({
               )}
             </Button>
           </div>
+          <div className="mt-2 flex items-center justify-between gap-3 text-[11px] text-[#887a7d]"><span>Answers may be cached for up to 2 minutes.</span><span className="hidden sm:inline">Enter to send · Shift + Enter for a new line</span></div>
         </form>
 
-        <div
+        {!mobile && !expanded ? <div
           className="absolute bottom-0 right-0 z-10 size-5 cursor-se-resize"
           aria-hidden
           onPointerDown={(e) => startDrag("resize", e)}
@@ -380,7 +443,7 @@ export function AssistantFloatingWindow({
           >
             <path d="M14 14H10V12H12V10H14V14ZM14 10H12V8H14V10ZM10 10H8V8H10V10Z" />
           </svg>
-        </div>
+        </div> : null}
       </div>
     </div>
   );

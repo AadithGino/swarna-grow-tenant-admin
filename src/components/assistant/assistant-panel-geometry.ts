@@ -1,4 +1,4 @@
-const STORAGE_KEY = "swarnagrow-assistant-panel-geometry";
+const STORAGE_KEY = "swarnagrow-assistant-panel-geometry-v2";
 
 export type AssistantPanelGeometry = {
   x: number;
@@ -8,7 +8,7 @@ export type AssistantPanelGeometry = {
 };
 
 export const ASSISTANT_PANEL_MIN = { width: 340, height: 380 };
-export const ASSISTANT_PANEL_DEFAULT = { width: 440, height: 640 };
+export const ASSISTANT_PANEL_DEFAULT = { width: 880, height: 760 };
 
 export function defaultAssistantGeometry(): AssistantPanelGeometry {
   if (typeof window === "undefined") {
@@ -18,13 +18,13 @@ export function defaultAssistantGeometry(): AssistantPanelGeometry {
     ASSISTANT_PANEL_DEFAULT.height,
     Math.max(ASSISTANT_PANEL_MIN.height, window.innerHeight - 48),
   );
-  const width = ASSISTANT_PANEL_DEFAULT.width;
-  return {
+  const width = Math.min(ASSISTANT_PANEL_DEFAULT.width, window.innerWidth - 24);
+  return clampAssistantGeometry({
     width,
     height,
     x: Math.max(12, window.innerWidth - width - 24),
     y: Math.max(12, window.innerHeight - height - 24),
-  };
+  });
 }
 
 export function clampAssistantGeometry(
@@ -53,10 +53,10 @@ export function readAssistantGeometry(): AssistantPanelGeometry {
     if (!raw) return defaultAssistantGeometry();
     const parsed = JSON.parse(raw) as AssistantPanelGeometry;
     if (
-      typeof parsed.x !== "number" ||
-      typeof parsed.y !== "number" ||
-      typeof parsed.width !== "number" ||
-      typeof parsed.height !== "number"
+      !Number.isFinite(parsed.x) ||
+      !Number.isFinite(parsed.y) ||
+      !Number.isFinite(parsed.width) ||
+      !Number.isFinite(parsed.height)
     ) {
       return defaultAssistantGeometry();
     }
