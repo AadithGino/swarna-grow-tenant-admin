@@ -258,3 +258,100 @@ button {
 @media (max-width: 639px) {
   .agent-theme { font-size: 15px; }
 }
+
+/* ───────────────────────── Sidekick (AI assistant) ─────────────────────────
+   Maroon + gold "vault" look shared with the swarnagrow.com landing page.     */
+.sidekick {
+  --sk-maroon: #730321;
+  --sk-maroon-2: #8e1a36;
+  --sk-maroon-deep: #3d0c15;
+  --sk-gold: #c3a264;
+  --sk-gold-2: #e2c88f;
+  --sk-gold-soft: #f8f0de;
+  --sk-cream: #fcf7f1;
+  --sk-cream-2: #f6ede3;
+  --sk-ink: #221219;
+  --sk-ink-2: #57444c;
+  --sk-muted: #8a757e;
+  --sk-line: #ede0d4;
+  --sk-line-2: #dfccbd;
+  --sk-ok: #17694a;
+  --sk-ok-soft: #e4f1ea;
+  --sk-bad: #ae382c;
+  --sk-bad-soft: #fbeae7;
+  --sk-shadow: 0 1px 2px rgba(34, 18, 25, 0.05), 0 26px 50px -26px rgba(62, 12, 21, 0.32);
+  color: var(--sk-ink);
+}
+
+.sk-orb {
+  position: relative;
+  border-radius: 9999px;
+  background: conic-gradient(from 0deg, #730321, #c3a264, #f2dfaf, #8e1a36, #730321);
+  box-shadow: 0 14px 30px -12px rgba(115, 3, 33, 0.6);
+}
+.sk-orb::after {
+  content: "";
+  position: absolute;
+  inset: 12%;
+  border-radius: 9999px;
+  background: radial-gradient(circle at 50% 38%, #fff, #fbf3e6 62%, #f0e1cc);
+}
+.sk-orb > * { position: relative; z-index: 1; }
+.sk-orb-live { animation: sk-spin 5s linear infinite; }
+.sk-orb-live > * { animation: sk-spin 5s linear infinite reverse; }
+.sk-orb-busy { animation-duration: 1.4s; }
+.sk-orb-busy > * { animation-duration: 1.4s; }
+
+.sk-shimmer {
+  background: linear-gradient(90deg, var(--sk-muted) 0%, var(--sk-ink) 40%, var(--sk-muted) 80%);
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: sk-shimmer 1.3s linear infinite;
+}
+.sk-spinner {
+  border: 2px solid var(--sk-gold);
+  border-top-color: transparent;
+  border-radius: 9999px;
+  animation: sk-spin 0.7s linear infinite;
+}
+.sk-pop { animation: sk-pop 0.45s cubic-bezier(0.2, 0.8, 0.25, 1) both; }
+.sk-rise { animation: sk-rise 0.42s cubic-bezier(0.2, 0.8, 0.25, 1) both; }
+.sk-fade { animation: sk-fade 0.5s ease both; }
+.sk-caret::after {
+  content: "";
+  display: inline-block;
+  width: 2px;
+  height: 0.95em;
+  margin-left: 2px;
+  vertical-align: -0.12em;
+  background: var(--sk-maroon);
+  animation: sk-blink 1s infinite;
+}
+.sk-bar { transform-origin: bottom; animation: sk-grow 0.75s cubic-bezier(0.2, 0.8, 0.25, 1) both; }
+.sk-hbar { transform-origin: left; animation: sk-grow-x 0.8s cubic-bezier(0.2, 0.8, 0.25, 1) both; }
+.sk-draw { stroke-dasharray: 1; stroke-dashoffset: 1; animation: sk-draw 1.3s ease forwards; }
+.sk-live-dot { animation: sk-blink 1.6s infinite; }
+.sk-sweep { animation: sk-sweep 1.2s ease-in-out infinite; }
+
+@keyframes sk-spin { to { transform: rotate(360deg); } }
+@keyframes sk-shimmer { from { background-position: 100% 0; } to { background-position: -100% 0; } }
+@keyframes sk-pop { from { opacity: 0; transform: translateY(8px) scale(0.97); } to { opacity: 1; transform: none; } }
+@keyframes sk-rise { from { opacity: 0; transform: translateY(7px); } to { opacity: 1; transform: none; } }
+@keyframes sk-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes sk-blink { 50% { opacity: 0.3; } }
+@keyframes sk-grow { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+@keyframes sk-grow-x { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@keyframes sk-draw { to { stroke-dashoffset: 0; } }
+@keyframes sk-sweep { from { transform: translateX(-100%); } to { transform: translateX(260%); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .sidekick *,
+  .sidekick *::before,
+  .sidekick *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}

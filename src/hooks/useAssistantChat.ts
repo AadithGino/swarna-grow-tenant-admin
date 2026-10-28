@@ -1,7 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { env } from "@/src/config/env";
 import { apiErrorMessage, parseApiError } from "@/src/lib/api-error";
+import { AssistantStreamUnsupported, streamAssistantChat } from "@/src/lib/assistant-stream";
 import { writeAssistantConversationId } from "@/src/lib/assistant-conversation-storage";
 import {
   useAssistantChatMutation,
@@ -11,8 +13,33 @@ import type {
   AssistantBundle,
   AssistantChatMessage,
   AssistantSendResult,
+  AssistantStep,
   AssistantStorageScope as Scope,
 } from "@/src/types/assistant";
+
+const THINK_STEP: AssistantStep = { id: "think", label: "Understanding your question", status: "running" };
+
+/** Mock mode has no live tool events — show plausible steps so the UI can be previewed. */
+function mockStepsFor(text: string): AssistantStep[] {
+  const q = text.toLowerCase();
+  const label = /upi|cash|payment|paid|collect/.test(q)
+    ? "Looking through your payments"
+    : /overdue|due|defaulter/.test(q)
+      ? "Checking overdue instalments"
+      : /customer|who/.test(q)
+        ? "Looking up your customers"
+        : "Querying your data";
+  return [{ id: "s1", label, status: "running", tool: "query_data" }];
+}
+
+function mergeStep(list: AssistantStep[], step: AssistantStep): AssistantStep[] {
+  if (step.id === "compose") return list;
+  const idx = list.findIndex((s) => s.id === step.id);
+  if (idx === -1) return [...list, step];
+  const next = list.slice();
+  next[idx] = { ...next[idx], ...step };
+  return next;
+}
 
 function tempId() {
   return `tmp_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
@@ -59,6 +86,7 @@ export function useAssistantChat(
   const loadGenerationRef = useRef(0);
   const messagesRef = useRef(messages);
   const storageScopeRef = useRef<Scope | null | undefined>(storageScope);
+  const adoptedConversationRef = useRef<string | null>(null);
 
   useEffect(() => {
     messagesRef.current = messages;
@@ -69,8 +97,41 @@ export function useAssistantChat(
   }, [storageScope]);
 
   const [fetchMessages] = useLazyListAssistantMessagesQuery();
-  const [sendChat, { isLoading, error: mutationError }] =
+  const [sendChat, { isLoading: mutationLoading, error: mutationError }] =
     useAssistantChatMutation();
+  const [sending, setSending] = useState(false);
+  const [liveSteps, setLiveSteps] = useState<AssistantStep[]>([]);
+  const isLoading = sending || mutationLoading;
+
+  /** Live streaming in API mode; mock mode (and old APIs) use the plain JSON endpoint. */
+  const requestAnswer = useCallback(
+    async (message: string, conversationId: string | null): Promise<AssistantBundle> => {
+      if (env.useMocks) {
+        const steps = mockStepsFor(message);
+        const timer = window.setTimeout(() => {
+          setLiveSteps((prev) => mergeStep(mergeStep(prev, { ...THINK_STEP, status: "done" }), steps[0]));
+        }, 450);
+        try {
+          return (await sendChat({ message, conversationId: conversationId ?? undefined }).unwrap()) as AssistantBundle;
+        } finally {
+          window.clearTimeout(timer);
+        }
+      }
+      try {
+        return await streamAssistantChat({
+          message,
+          conversationId,
+          onStep: (step) => setLiveSteps((prev) => mergeStep(prev, step)),
+        });
+      } catch (err) {
+        if (err instanceof AssistantStreamUnsupported) {
+          return (await sendChat({ message, conversationId: conversationId ?? undefined }).unwrap()) as AssistantBundle;
+        }
+        throw err;
+      }
+    },
+    [sendChat],
+  );
 
   const resetLocal = useCallback(() => {
     loadGenerationRef.current += 1;
@@ -119,6 +180,11 @@ export function useAssistantChat(
     if (!conversationId) {
       // eslint-disable-next-line react-hooks/set-state-in-effect -- reset when switching to new chat
       resetLocal();
+      return;
+    }
+    // A brand-new chat just got its id from our own send — the messages are already on screen.
+    if (adoptedConversationRef.current === conversationId) {
+      adoptedConversationRef.current = null;
       return;
     }
     void loadInitial(conversationId);
@@ -178,6 +244,8 @@ export function useAssistantChat(
       const ownerConversationId = activeConversationId;
 
       setSendError(null);
+      setSending(true);
+      setLiveSteps([THINK_STEP]);
       const userMsg: AssistantChatMessage = {
         id: tempId(),
         role: "user",
@@ -186,10 +254,7 @@ export function useAssistantChat(
       setMessages((prev) => [...prev, userMsg]);
 
       try {
-        const bundle = await sendChat({
-          message: trimmed,
-          conversationId: activeConversationId ?? undefined,
-        }).unwrap();
+        const bundle = await requestAnswer(trimmed, activeConversationId);
 
         if (generation !== loadGenerationRef.current) {
           return {
@@ -211,6 +276,7 @@ export function useAssistantChat(
         }
 
         if (resolvedConversationId) {
+          if (ownerConversationId == null) adoptedConversationRef.current = resolvedConversationId;
           writeAssistantConversationId(
             resolvedConversationId,
             storageScopeRef.current,
@@ -220,13 +286,14 @@ export function useAssistantChat(
           id: bundle.messageId ?? tempId(),
           role: "assistant",
           bundle: bundle as AssistantBundle,
+          fresh: true,
         };
         setMessages((prev) => [
-          ...prev.map((m) =>
-            m.id === userMsg.id && m.role === "user"
-              ? { ...m, sendFailed: false }
-              : m,
-          ),
+          ...prev.map((m) => {
+            if (m.id === userMsg.id && m.role === "user") return { ...m, sendFailed: false };
+            if (m.role === "assistant" && m.fresh) return { ...m, fresh: false };
+            return m;
+          }),
           assistantMsg,
         ]);
         return { ok: true, conversationId: resolvedConversationId ?? null };
@@ -248,9 +315,12 @@ export function useAssistantChat(
           ),
         );
         return { ok: false, draft: trimmed, message };
+      } finally {
+        setSending(false);
+        setLiveSteps([]);
       }
     },
-    [sendChat],
+    [requestAnswer],
   );
 
   const retrySend = useCallback(
@@ -271,6 +341,7 @@ export function useAssistantChat(
 
   return {
     messages,
+    liveSteps,
     send,
     retrySend,
     loadOlder,

@@ -15,6 +15,7 @@ export function formatAssistantCell(raw: CellValue, col?: AssistantTableColumn):
     if (cell.cell === "staff") return String(cell.name ?? "—");
     if (cell.cell === "currency") return String(cell.display ?? "—");
     if (cell.cell === "weight") return String(cell.display ?? "—");
+    if (cell.cell === "datetime" || cell.cell === "date") return String(cell.display ?? cell.value ?? "—");
     if (typeof cell.name === "string") return cell.name;
     if (typeof cell.label === "string") return cell.label;
     if (typeof cell.amountDisplay === "string") return cell.amountDisplay;
@@ -48,8 +49,12 @@ export function renderAssistantCell(raw: CellValue, col?: AssistantTableColumn) 
       </div>
     );
   }
+  const numeric = col?.type === "currency" || col?.type === "count" || col?.type === "weight";
   return (
-    <span className="block max-w-[11rem] truncate" title={formatAssistantCell(raw, col)}>
+    <span
+      className={numeric ? "ml-auto block max-w-[11rem] truncate text-right" : "block max-w-[14rem] truncate"}
+      title={formatAssistantCell(raw, col)}
+    >
       {formatAssistantCell(raw, col)}
     </span>
   );

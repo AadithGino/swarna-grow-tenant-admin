@@ -1,0 +1,9 @@
+node_modules
+.next
+.vinext
+.sites-runtime
+coverage
+.git
+*.zip
+docs/**/*.md
+!docs/CUSTOMER_PORTAL.md

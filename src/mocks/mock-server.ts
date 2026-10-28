@@ -1,4 +1,5 @@
 import { env } from "@/src/config/env";
+import { mockAgentAnswer } from "@/src/mocks/assistant-agent-mock";
 import { mockDb } from "./mock-db";
 import {
   amountWithinPayableQuote,
@@ -319,6 +320,9 @@ function buildHandoverDetail(row: CashHandover): CashHandoverDetail {
     timeline,
   };
 }
+
+/** In-memory Sidekick thread so the mock chat keeps its history after the first answer. */
+const mockAssistantThread: Array<Record<string, unknown>> = [];
 
 export async function mockRequest<T>({
   mockKey,
@@ -4700,19 +4704,17 @@ export async function mockRequest<T>({
       ].filter(Boolean);
       return { query: needle, groups } as T;
     }
-    case "assistantChat":
-      return {
-        summaryText: "Mock Sidekick response (enable API for live analytics).",
-        statCards: [
-          { label: "Net collected", value: 0, valueType: "currency" },
-        ],
-        chart: null,
-        table: null,
-        vizHint: "unsupported",
-        action: { kind: "unsupported", reason: "Mock mode" },
-        conversationId: "acv_mock",
-        messageId: "amg_mock",
-      } as T;
+    case "assistantChat": {
+      await new Promise((resolve) => setTimeout(resolve, 900));
+      const message = String((body as { message?: string }).message ?? "");
+      const answer = mockAgentAnswer(message);
+      const now = new Date().toISOString();
+      mockAssistantThread.push(
+        { id: `amg_u_${mockAssistantThread.length}`, role: "user", text: message, createdAt: now },
+        { id: answer.messageId ?? `amg_a_${mockAssistantThread.length}`, role: "assistant", bundle: answer, createdAt: now },
+      );
+      return answer as T;
+    }
     case "listAssistantConversations":
       return {
         data: [
@@ -4727,25 +4729,8 @@ export async function mockRequest<T>({
       } as T;
     case "listAssistantMessages":
       return {
-        data: [
-          {
-            id: "amg_u1",
-            role: "user",
-            text: "Hello",
-            createdAt: new Date().toISOString(),
-          },
-          {
-            id: "amg_a1",
-            role: "assistant",
-            bundle: {
-              summaryText: "Mock reply",
-              statCards: [],
-              chart: null,
-              table: null,
-            },
-            createdAt: new Date().toISOString(),
-          },
-        ],
+        __contract: true,
+        payload: [...mockAssistantThread].reverse(),
         meta: { nextCursor: null, hasMore: false, limit: 25 },
       } as T;
     case "deleteAssistantConversation":

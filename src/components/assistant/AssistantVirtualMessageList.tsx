@@ -11,10 +11,31 @@ import {
   type UIEvent,
 } from "react";
 import { AssistantMessage } from "@/src/components/assistant/AssistantMessage";
-import type { AssistantChatMessage } from "@/src/types/assistant";
+import { AssistantThinking } from "@/src/components/assistant/AssistantThinking";
+import type { AssistantChatMessage, AssistantStep } from "@/src/types/assistant";
 import { cn } from "@/lib/utils";
 
 const LOAD_OLDER_THRESHOLD_PX = 72;
+
+/**
+ * Smooth-scroll once the virtual list has measured new rows (its height lags a frame or two
+ * behind the render), so the target isn't clamped to the old scroll height.
+ */
+function scrollWhenReady(el: HTMLDivElement, target: () => number | null) {
+  let tries = 0;
+  const step = () => {
+    tries += 1;
+    const t = target();
+    if (t == null) return;
+    const max = el.scrollHeight - el.clientHeight;
+    if (max >= t - 2 || tries >= 30) {
+      el.scrollTo({ top: Math.min(t, max), behavior: "smooth" });
+      return;
+    }
+    requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+}
 const STICK_BOTTOM_THRESHOLD_PX = 120;
 
 export function AssistantVirtualMessageList({
@@ -29,8 +50,12 @@ export function AssistantVirtualMessageList({
   capturePrependAnchor,
   applyPrependAnchor,
   onRetryFailed,
+  liveSteps = [],
+  onFollowUp,
 }: {
   messages: AssistantChatMessage[];
+  liveSteps?: AssistantStep[];
+  onFollowUp?: (text: string) => void;
   hasMore: boolean;
   loadingOlder: boolean;
   initialLoading: boolean;
@@ -63,6 +88,12 @@ export function AssistantVirtualMessageList({
     (behavior: ScrollBehavior = "auto") => {
       if (messages.length === 0) return;
       requestAnimationFrame(() => {
+        const el = parentRef.current;
+        if (behavior === "smooth" && el) {
+          // TanStack's smooth scroll is unreliable with dynamic row sizes — scroll the container directly.
+          scrollWhenReady(el, () => virtualizer.getTotalSize() - el.clientHeight);
+          return;
+        }
         virtualizer.scrollToIndex(messages.length - 1, {
           align: "end",
           behavior,
@@ -94,7 +125,8 @@ export function AssistantVirtualMessageList({
       pendingInitialScrollRef.current = false;
       scrollToLatest("auto");
     }
-  }, [initialLoading, messages.length, scrollToLatest]);
+    // conversationId: a new chat adopting its id keeps its on-screen messages (no reload), so settle here too.
+  }, [initialLoading, messages.length, scrollToLatest, conversationId]);
 
   useLayoutEffect(() => {
     applyPrependAnchor(parentRef.current);
@@ -105,6 +137,8 @@ export function AssistantVirtualMessageList({
     const prevFirst = prevFirstIdRef.current;
     const appended =
       len > prevLen && (prevFirst === null || firstId === prevFirst);
+    // The owner just asked something — always follow the conversation down.
+    if (appended && messages[len - 1]?.role === "user") stickToBottomRef.current = true;
 
     if (
       appended &&
@@ -112,12 +146,25 @@ export function AssistantVirtualMessageList({
       !loadingOlder &&
       !pendingInitialScrollRef.current
     ) {
-      scrollToLatest("smooth");
+      const last = messages[len - 1];
+      if (last?.role === "assistant" && last.fresh && len >= 2) {
+        // A new answer grows as it reveals — pin the question at the top so the whole answer reads downward.
+        const el = parentRef.current;
+        if (el) {
+          scrollWhenReady(el, () => {
+            const row = el.querySelector<HTMLElement>(`[data-index="${len - 2}"]`);
+            const match = row?.style.transform.match(/translateY\((-?[\d.]+)px\)/);
+            return match ? Math.max(0, Number(match[1]) - 8) : null;
+          });
+        }
+      } else {
+        scrollToLatest("smooth");
+      }
     }
 
     prevLenRef.current = len;
     prevFirstIdRef.current = firstId;
-  }, [messages, applyPrependAnchor, loadingOlder, scrollToLatest]);
+  }, [messages, applyPrependAnchor, loadingOlder, scrollToLatest, virtualizer]);
 
   const onScroll = (e: UIEvent<HTMLDivElement>) => {
     const el = e.currentTarget;
@@ -134,10 +181,17 @@ export function AssistantVirtualMessageList({
     }
   };
 
+  useEffect(() => {
+    if (isLoading && stickToBottomRef.current) {
+      const el = parentRef.current;
+      if (el) requestAnimationFrame(() => el.scrollTo({ top: el.scrollHeight, behavior: "smooth" }));
+    }
+  }, [isLoading, liveSteps.length]);
+
   if (initialLoading) {
     return (
-      <div className="flex flex-1 items-center justify-center text-sm text-[#776a6d]">
-        <Loader2 className="mr-2 size-4 animate-spin text-[#730321]" />
+      <div className="sidekick flex flex-1 items-center justify-center text-sm text-[var(--sk-muted)]">
+        <Loader2 className="mr-2 size-4 animate-spin text-[var(--sk-maroon)]" />
         Loading conversation…
       </div>
     );
@@ -146,11 +200,11 @@ export function AssistantVirtualMessageList({
   return (
     <div
       ref={parentRef}
-      className="min-h-0 flex-1 overflow-y-auto px-4 py-5 md:px-6"
+      className="sidekick min-h-0 flex-1 overflow-y-auto px-4 py-5 md:px-6"
       onScroll={onScroll}
     >
       {(loadingOlder || hasMore) && (
-        <div className="mb-2 flex justify-center py-1 text-xs text-[#807478]">
+        <div className="mb-2 flex justify-center py-1 text-xs text-[var(--sk-muted)]">
           {loadingOlder ? (
             <>
               <Loader2 className="mr-1.5 size-3.5 animate-spin" />
@@ -185,10 +239,12 @@ export function AssistantVirtualMessageList({
               >
                 <div
                   className={cn(
-                    "rounded-2xl px-4 py-3",
                     msg.role === "user"
-                      ? "max-w-[85%] whitespace-pre-wrap bg-[#730321] text-sm text-white shadow-sm"
-                      : "w-full border border-[#eaded9] bg-white text-[#28161a] shadow-sm",
+                      ? "sk-pop max-w-[85%] whitespace-pre-wrap rounded-[16px_16px_4px_16px] bg-gradient-to-br from-[var(--sk-maroon-2)] to-[var(--sk-maroon)] px-4 py-2.5 text-[13.5px] font-medium leading-snug text-white shadow-[0_10px_22px_-14px_rgba(115,3,33,0.9)]"
+                      : cn(
+                          "w-full rounded-[16px_16px_16px_4px] border border-[var(--sk-line)] bg-white px-4 py-3.5 shadow-[var(--sk-shadow)]",
+                          msg.fresh && "sk-pop",
+                        ),
                   )}
                 >
                   {msg.role === "user" ? (
@@ -210,7 +266,12 @@ export function AssistantVirtualMessageList({
                       ) : null}
                     </div>
                   ) : (
-                    <AssistantMessage bundle={msg.bundle} />
+                    <AssistantMessage
+                      bundle={msg.bundle}
+                      fresh={Boolean(msg.fresh)}
+                      onFollowUp={item.index === messages.length - 1 ? onFollowUp : undefined}
+                      disabled={isLoading}
+                    />
                   )}
                 </div>
               </div>
@@ -220,11 +281,8 @@ export function AssistantVirtualMessageList({
       </div>
 
       {isLoading && (
-        <div className="mt-2 flex justify-start">
-          <div className="flex items-center gap-2 rounded-2xl border border-[#eaded9] bg-white px-3 py-2.5 text-sm text-[#776a6d]">
-            <Loader2 className="size-4 animate-spin text-[#730321]" />
-            Pulling your numbers…
-          </div>
+        <div className="mt-2">
+          <AssistantThinking steps={liveSteps} />
         </div>
       )}
     </div>

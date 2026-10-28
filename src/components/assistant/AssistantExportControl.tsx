@@ -1,14 +1,16 @@
 "use client";
 
+import { Download, FileSpreadsheet, Loader2 } from "lucide-react";
 import { useMemo, useState } from "react";
+import { cn } from "@/lib/utils";
 import { useAppSelector } from "@/src/store/hooks";
 import { postAuthorizedDownload } from "@/src/lib/download-api";
 import { hasPermission } from "@/src/lib/permissions";
-import type { AssistantBundle } from "@/src/types/assistant";
+import type { AssistantExportSource } from "@/src/types/assistant";
 
 type ExportFormat = "CSV" | "XLSX";
 
-/** Map chat table column keys to export field names when they differ. */
+/** Map chat table column keys to export field names when they differ (legacy router answers). */
 const TABLE_KEY_TO_EXPORT_FIELD: Record<string, string> = {
   customer: "customerId",
   scheme: "schemeId",
@@ -27,16 +29,16 @@ function exportFieldForTableKey(key: string, allowed: Set<string>): string | nul
   return null;
 }
 
-function exportFields(bundle: AssistantBundle): string[] {
-  const options = bundle.exportable;
+function exportFields(source: AssistantExportSource): string[] {
+  const options = source.exportable;
   if (options && "fields" in options) return options.fields;
   if (options && "columns" in options) return options.columns;
-  return (bundle.table?.columns ?? []).map((column) => column.key);
+  return (source.table?.columns ?? []).map((column) => column.key);
 }
 
-function defaultSelectedFields(bundle: AssistantBundle): string[] {
-  const tableKeys = (bundle.table?.columns ?? []).map((c) => c.key);
-  const allowedList = exportFields(bundle);
+function defaultSelectedFields(source: AssistantExportSource): string[] {
+  const tableKeys = (source.table?.columns ?? []).map((c) => c.key);
+  const allowedList = exportFields(source);
   const allowed = new Set(allowedList);
   if (!tableKeys.length) return [...allowedList].slice(0, 8);
   const picked = tableKeys
@@ -56,7 +58,13 @@ function triggerBrowserDownload(blob: Blob, filename: string) {
   URL.revokeObjectURL(url);
 }
 
-export function AssistantExportControl({ bundle }: { bundle: AssistantBundle }) {
+export function AssistantExportControl({
+  source,
+  vizHint,
+}: {
+  source: AssistantExportSource;
+  vizHint?: string;
+}) {
   const user = useAppSelector((s) => s.session.session?.user);
   const canExport = hasPermission(user, "report.export");
   const [open, setOpen] = useState(false);
@@ -64,43 +72,23 @@ export function AssistantExportControl({ bundle }: { bundle: AssistantBundle }) 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const fieldOptions = useMemo(() => {
-    if (bundle.exportable) {
-      return exportFields(bundle).map((key) => ({ key, label: key }));
-    }
-    return (bundle.table?.columns ?? []).map((c) => ({
-      key: c.key,
-      label: c.label,
-    }));
-  }, [bundle]);
-
-  const [selected, setSelected] = useState<string[]>(() =>
-    defaultSelectedFields(bundle),
+  const labelByKey = useMemo(
+    () => new Map((source.table?.columns ?? []).map((c) => [c.key, c.label])),
+    [source.table],
   );
+  const fieldOptions = useMemo(
+    () => exportFields(source).map((key) => ({ key, label: labelByKey.get(key) ?? key })),
+    [source, labelByKey],
+  );
+  const [selected, setSelected] = useState<string[]>(() => defaultSelectedFields(source));
 
-  if (!canExport) {
-    return (
-      <span className="text-[0.65rem] text-[#807478]">
-        Export needs report.export permission.
-      </span>
-    );
-  }
-  if (!bundle.table?.rows?.length && !bundle.exportable) return null;
-  if (!bundle.action) {
-    return (
-      <span className="text-[0.65rem] text-[#807478]">
-        Re-run this question to enable Export.
-      </span>
-    );
-  }
-  if (bundle.vizHint === "clarify" || bundle.vizHint === "unsupported") {
-    return null;
-  }
+  if (!canExport) return null;
+  if (!source.table?.rows?.length && !source.exportable) return null;
+  if (!source.action) return null;
+  if (vizHint === "clarify" || vizHint === "unsupported") return null;
 
   const toggleField = (key: string) => {
-    setSelected((prev) =>
-      prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key],
-    );
+    setSelected((prev) => (prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]));
   };
 
   const runExport = async () => {
@@ -112,7 +100,7 @@ export function AssistantExportControl({ bundle }: { bundle: AssistantBundle }) 
     setError(null);
     try {
       const result = await postAuthorizedDownload("/admin/assistant/export", {
-        action: bundle.action,
+        action: source.action,
         fields: selected,
         format,
       });
@@ -121,25 +109,23 @@ export function AssistantExportControl({ bundle }: { bundle: AssistantBundle }) 
         return;
       }
       const ext = format === "XLSX" ? "xlsx" : "csv";
-      const name =
-        result.filename ?? `sidekick-export-${Date.now()}.${ext}`;
-      triggerBrowserDownload(result.blob, name);
+      triggerBrowserDownload(result.blob, result.filename ?? `sidekick-export-${Date.now()}.${ext}`);
       setOpen(false);
     } catch (e) {
       const err = e as { data?: { message?: string; error?: { message?: string } } };
-      const msg =
+      setError(
         err?.data?.error?.message ??
-        err?.data?.message ??
-        (typeof err?.data === "string" ? err.data : null) ??
-        "Export failed — check you are signed in and the API is running.";
-      setError(msg);
+          err?.data?.message ??
+          (typeof err?.data === "string" ? err.data : null) ??
+          "Export failed — check you are signed in and the API is running.",
+      );
     } finally {
       setBusy(false);
     }
   };
 
   return (
-    <div className="w-full shrink-0 sm:w-auto sm:min-w-[12rem]">
+    <div className="relative">
       <button
         type="button"
         aria-expanded={open}
@@ -147,24 +133,31 @@ export function AssistantExportControl({ bundle }: { bundle: AssistantBundle }) 
           e.stopPropagation();
           setOpen((v) => !v);
         }}
-        className="rounded-lg border border-[#d4c4bc] bg-white px-3 py-1.5 text-xs font-semibold text-[#5c4a4e] shadow-sm hover:bg-[#faf7f5]"
+        className={cn(
+          "inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition",
+          open
+            ? "border-[var(--sk-maroon)] bg-[var(--sk-maroon)] text-white"
+            : "border-[var(--sk-line-2)] bg-white text-[var(--sk-ink-2)] hover:border-[var(--sk-maroon)] hover:text-[var(--sk-maroon)]",
+        )}
       >
-        {open ? "Close export" : "Export"}
+        <Download className="size-3.5" />
+        Export
       </button>
       {open ? (
         <div
-          className="mt-2 w-full min-w-[16rem] rounded-xl border border-[#eaded9] bg-white p-3 shadow-md"
+          className="sk-pop absolute bottom-full right-0 z-30 mb-2 w-64 rounded-xl border border-[var(--sk-line)] bg-white p-3 text-left shadow-[var(--sk-shadow)]"
           onClick={(e) => e.stopPropagation()}
         >
-          <p className="text-xs font-semibold text-[#28161a]">Fields</p>
-          <div className="mt-2 max-h-40 space-y-1 overflow-y-auto">
+          <p className="flex items-center gap-1.5 text-xs font-semibold text-[var(--sk-ink)]">
+            <FileSpreadsheet className="size-3.5 text-[var(--sk-maroon)]" />
+            Columns to export
+          </p>
+          <div className="mt-2 max-h-40 space-y-1 overflow-y-auto pr-1">
             {fieldOptions.map((f) => (
-              <label
-                key={f.key}
-                className="flex cursor-pointer items-center gap-2 text-xs text-[#3d2a2f]"
-              >
+              <label key={f.key} className="flex cursor-pointer items-center gap-2 text-xs text-[var(--sk-ink-2)]">
                 <input
                   type="checkbox"
+                  className="accent-[#730321]"
                   checked={selected.includes(f.key)}
                   onChange={() => toggleField(f.key)}
                 />
@@ -172,32 +165,29 @@ export function AssistantExportControl({ bundle }: { bundle: AssistantBundle }) 
               </label>
             ))}
           </div>
-          <p className="mt-3 text-xs font-semibold text-[#28161a]">Format</p>
-          <div className="mt-1 flex gap-2">
-            {(["CSV", "XLSX"] as const).map((f) => (
+          <div className="mt-3 grid grid-cols-2 gap-1 rounded-lg bg-[var(--sk-cream-2)] p-1">
+            {(["XLSX", "CSV"] as const).map((f) => (
               <button
                 key={f}
                 type="button"
                 onClick={() => setFormat(f)}
-                className={`rounded-md px-2 py-1 text-xs font-medium ${
-                  format === f
-                    ? "bg-[#9a6f2a] text-white"
-                    : "bg-[#f3ebe6] text-[#5c4a4e]"
-                }`}
+                className={cn(
+                  "rounded-md py-1 text-xs font-semibold",
+                  format === f ? "bg-white text-[var(--sk-maroon)] shadow-sm" : "text-[var(--sk-muted)]",
+                )}
               >
                 {f === "XLSX" ? "Excel" : "CSV"}
               </button>
             ))}
           </div>
-          {error ? (
-            <p className="mt-2 text-xs text-red-700">{error}</p>
-          ) : null}
+          {error ? <p className="mt-2 text-xs text-[var(--sk-bad)]">{error}</p> : null}
           <button
             type="button"
             disabled={busy}
             onClick={() => void runExport()}
-            className="mt-3 w-full rounded-lg bg-[#28161a] px-3 py-2 text-xs font-semibold text-white disabled:opacity-60"
+            className="mt-3 inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-gradient-to-br from-[var(--sk-maroon-2)] to-[var(--sk-maroon)] px-3 py-2 text-xs font-semibold text-white disabled:opacity-60"
           >
+            {busy ? <Loader2 className="size-3.5 animate-spin" /> : <Download className="size-3.5" />}
             {busy ? "Exporting…" : "Download"}
           </button>
         </div>
