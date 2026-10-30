@@ -2,11 +2,13 @@
 
 import { useState } from "react";
 import {
+  Coins,
   Download,
   Gift,
   IndianRupee,
   Pencil,
   Plus,
+  Scale,
   Send,
   ShieldCheck,
   UserRound,
@@ -59,6 +61,16 @@ import { useAppSelector } from "@/src/store/hooks";
 import { CustomerEcommerceOrdersTab } from "@/src/features/customers/customer-ecommerce-orders-tab";
 import { CustomerDigitalMetalsTab } from "@/src/features/customers/customer-digital-metals-tab";
 import {
+  DigiGoldPortfolioCard,
+  DigiGoldSummaryPanel,
+  StorePortfolioCard,
+  StoreSummaryPanel,
+} from "@/src/features/customers/customer-commerce-overview";
+import { CounterBuyMetalDialog } from "@/src/features/customers/counter/counter-buy-metal-dialog";
+import { CounterSellMetalDialog } from "@/src/features/customers/counter/counter-sell-metal-dialog";
+import { CounterStoreOrderDialog } from "@/src/features/customers/counter/counter-store-order-dialog";
+import { SellCashPayoutButton } from "@/src/features/customers/counter/sell-cash-payout-button";
+import {
   canViewDigitalMetalsWorkspace,
   resolveDigitalMetalsServerAccess,
 } from "@/src/lib/digital-metals-entitlement";
@@ -71,6 +83,8 @@ import {
   useGetCustomerPaymentsQuery,
   useGetCustomerQuery,
   useGetCustomerEcommerceOrdersMetaQuery,
+  useGetCustomerEcommerceSummaryQuery,
+  useGetDigitalMetalsCustomerSummaryQuery,
   useGetCustomerSchemesQuery,
   useGetSubscriptionQuery,
   useGetSettingsOperationsQuery,
@@ -88,6 +102,10 @@ export function CustomerDetailPage({ id }: { id: string }) {
   const [nomineeOpen, setNomineeOpen] = useState(false);
   const [password, setPassword] = useState("");
   const [statusOpen, setStatusOpen] = useState(false);
+  const [buyMetalOpen, setBuyMetalOpen] = useState(false);
+  const [sellMetalOpen, setSellMetalOpen] = useState(false);
+  const [storeOrderOpen, setStoreOrderOpen] = useState(false);
+  const [tab, setTab] = useState("summary");
   const [statusMode, setStatusMode] = useState<
     "deactivate" | "block" | "restore"
   >("deactivate");
@@ -121,6 +139,22 @@ export function CustomerDetailPage({ id }: { id: string }) {
   const showDigitalMetalsTab =
     hasPermission(sessionUser, "digital-metals.read")
     && canViewDigitalMetalsWorkspace(dmAccess);
+  const dmSummaryQuery = useGetDigitalMetalsCustomerSummaryQuery(id, {
+    skip: !showDigitalMetalsTab,
+  });
+  const storeSummaryQuery = useGetCustomerEcommerceSummaryQuery(id, {
+    skip: !showEcommerceOrdersTab,
+  });
+  const canDmTrade =
+    showDigitalMetalsTab
+    && hasPermission(sessionUser, "digital-metals.assisted.trade")
+    && dmAccess?.active !== false
+    && dmAccess?.paused !== true;
+  const canDmApprove = hasPermission(sessionUser, "digital-metals.sell.approve");
+  const canStoreOrder =
+    showEcommerceOrdersTab
+    && hasPermission(sessionUser, "ecommerce.assisted.order")
+    && ecommerceAccess?.active !== false;
   const schemesOverviewQuery = useGetCustomerSchemesQuery({
     customerId: id,
     limit: 100,
@@ -162,12 +196,18 @@ export function CustomerDetailPage({ id }: { id: string }) {
   const lifetime =
     customer.lifetimePaid ??
     schemesOverview.reduce((sum, s) => sum + Number(s.paid ?? 0), 0);
-  const outstanding = schemesOverview.reduce(
+  const isLiveEnrollment = (status: string) =>
+    ["ACTIVE", "LOCKED", "DEFAULTED"].includes(status);
+  const liveOverview = schemesOverview.filter((x) => isLiveEnrollment(x.status));
+  // Only live enrollments count; redeemed/closed schemes owe nothing.
+  const remainingOnPlans = liveOverview.reduce(
     (sum, s) => sum + Number(s.outstanding ?? 0),
     0,
   );
-  const isLiveEnrollment = (status: string) =>
-    ["ACTIVE", "LOCKED", "DEFAULTED"].includes(status);
+  const dueNow = liveOverview.reduce(
+    (sum, s) => sum + Number((s as { dueNow?: number }).dueNow ?? 0),
+    0,
+  );
   const payableEnrollments = schemesOverview.filter(
     (x) =>
       isLiveEnrollment(x.status) &&
@@ -177,7 +217,7 @@ export function CustomerDetailPage({ id }: { id: string }) {
     isLiveEnrollment(x.status),
   );
   const overdueSchemes = activeSchemes.filter(
-    (s) => Number(s.outstanding ?? 0) > 0 && s.nextDue !== "—",
+    (s) => Number((s as { dueNow?: number }).dueNow ?? 0) > 0,
   );
   const nextDueScheme =
     activeSchemes.find((s) => s.nextDue && s.nextDue !== "—") ??
@@ -282,6 +322,34 @@ export function CustomerDetailPage({ id }: { id: string }) {
         onOpenChange={setStatusOpen}
         mode={statusMode}
       />
+      {canDmTrade ? (
+        <>
+          <CounterBuyMetalDialog
+            open={buyMetalOpen}
+            onOpenChange={setBuyMetalOpen}
+            customerId={id}
+            customerName={customer.name}
+            rates={dmSummaryQuery.data?.rates ?? []}
+          />
+          <CounterSellMetalDialog
+            open={sellMetalOpen}
+            onOpenChange={setSellMetalOpen}
+            customerId={id}
+            customerName={customer.name}
+            rates={dmSummaryQuery.data?.rates ?? []}
+            holdings={dmSummaryQuery.data?.holdings ?? []}
+            canApprove={canDmApprove}
+          />
+        </>
+      ) : null}
+      {canStoreOrder ? (
+        <CounterStoreOrderDialog
+          open={storeOrderOpen}
+          onOpenChange={setStoreOrderOpen}
+          customerId={id}
+          customerName={customer.name}
+        />
+      ) : null}
       <PortalBackLink fallbackHref="/customers">← Back</PortalBackLink>
       <PageHeader
         eyebrow="Customer record"
@@ -308,21 +376,25 @@ export function CustomerDetailPage({ id }: { id: string }) {
           icon={Gift}
           label="Active schemes"
           value={activeSchemes.length}
-          detail={`${overdueSchemes.length} with balance due`}
+          detail={
+            overdueSchemes.length
+              ? `${overdueSchemes.length} with an amount due now`
+              : "Nothing due right now"
+          }
         />
         <StatCard
           icon={IndianRupee}
           label="Lifetime paid"
           value={money(lifetime)}
-          detail={`Across ${schemesOverview.length || customer.paymentCount || 0} enrollments`}
+          detail={`Across ${schemesOverview.length} enrollment${schemesOverview.length === 1 ? "" : "s"} (all time)`}
           tone="wine"
         />
         <StatCard
           icon={IndianRupee}
-          label="Current outstanding"
-          value={money(outstanding || customer.overdueAmount || 0)}
-          detail={`${Math.max(0, (nextDueScheme?.tenure ?? 0) - (nextDueScheme?.progress ?? 0))} payable cycles left`}
-          tone="red"
+          label="Due now"
+          value={money(dueNow)}
+          detail={`${money(remainingOnPlans)} still to pay over the plan${liveOverview.length === 1 ? "" : "s"}`}
+          tone={dueNow > 0 ? "red" : "green"}
         />
         <StatCard
           icon={Gift}
@@ -345,11 +417,32 @@ export function CustomerDetailPage({ id }: { id: string }) {
         <StatCard
           icon={ShieldCheck}
           label="KYC"
-          value={customer.kyc === "VERIFIED" ? "Verified" : "Pending"}
-          detail="Identity verification"
-          tone="green"
+          value={customer.kyc === "VERIFIED" ? "Verified" : customer.kyc === "REJECTED" ? "Rejected" : "Pending"}
+          detail={customer.kyc === "VERIFIED" ? "Identity verified" : customer.kyc === "REJECTED" ? "Ask the customer to resubmit" : "Not verified yet"}
+          tone={customer.kyc === "VERIFIED" ? "green" : "gold"}
         />
       </div>
+      {showDigitalMetalsTab || showEcommerceOrdersTab ? (
+        <div className={showDigitalMetalsTab && showEcommerceOrdersTab ? "grid gap-4 lg:grid-cols-2" : "grid gap-4"}>
+          {showDigitalMetalsTab ? (
+            <DigiGoldPortfolioCard
+              summary={dmSummaryQuery.data}
+              loading={dmSummaryQuery.isLoading}
+              canTrade={canDmTrade}
+              onBuy={() => setBuyMetalOpen(true)}
+              onSell={() => setSellMetalOpen(true)}
+            />
+          ) : null}
+          {showEcommerceOrdersTab ? (
+            <StorePortfolioCard
+              summary={storeSummaryQuery.data}
+              loading={storeSummaryQuery.isLoading}
+              canOrder={canStoreOrder}
+              onNewOrder={() => setStoreOrderOpen(true)}
+            />
+          ) : null}
+        </div>
+      ) : null}
       <Surface>
         <div className="flex flex-col gap-5 p-6 lg:flex-row lg:items-center lg:justify-between">
           <div className="min-w-0">
@@ -363,6 +456,7 @@ export function CustomerDetailPage({ id }: { id: string }) {
                 <Button
                   size="sm"
                   className="shrink-0"
+                  data-tour="customer-enrol"
                   onClick={() => setEnrollOpen(true)}
                 >
                   <Plus />
@@ -468,7 +562,7 @@ export function CustomerDetailPage({ id }: { id: string }) {
           </div>
         </div>
       </Surface>
-      <PageTabs defaultValue="summary">
+      <PageTabs value={tab} onValueChange={setTab}>
         <PageTabsBar sectionLabel="Customer views">
           <PageTab value="summary">Summary</PageTab>
           <PageTab value="schemes">Schemes</PageTab>
@@ -538,6 +632,16 @@ export function CustomerDetailPage({ id }: { id: string }) {
               </div>
             </Surface>
           </div>
+          {(showDigitalMetalsTab && dmSummaryQuery.data) || (showEcommerceOrdersTab && storeSummaryQuery.data) ? (
+            <div className="mt-5 grid gap-5 xl:grid-cols-[1.2fr_.8fr]">
+              {showDigitalMetalsTab && dmSummaryQuery.data ? (
+                <DigiGoldSummaryPanel summary={dmSummaryQuery.data} onOpenTab={() => setTab("digital-metals")} />
+              ) : null}
+              {showEcommerceOrdersTab && storeSummaryQuery.data ? (
+                <StoreSummaryPanel summary={storeSummaryQuery.data} onOpenTab={() => setTab("ecommerce-orders")} />
+              ) : null}
+            </div>
+          ) : null}
         </PageTabsPanel>
         <PageTabsPanel value="schemes">
           <Surface title="Enrollments" description="Active and past schemes">
@@ -592,7 +696,29 @@ export function CustomerDetailPage({ id }: { id: string }) {
         ) : null}
         {showDigitalMetalsTab ? (
           <PageTabsPanel value="digital-metals">
-            <CustomerDigitalMetalsTab customerId={id} />
+            <CustomerDigitalMetalsTab
+              customerId={id}
+              actions={
+                canDmTrade ? (
+                  <>
+                    <Button size="sm" variant="outline" onClick={() => setBuyMetalOpen(true)}>
+                      <Coins />
+                      Buy
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setSellMetalOpen(true)}
+                      disabled={!dmSummaryQuery.data?.holdings.some((h) => Number(h.availableUg) > 0)}
+                    >
+                      <Scale />
+                      Sell
+                    </Button>
+                  </>
+                ) : null
+              }
+              sellAction={canDmTrade ? (row) => <SellCashPayoutButton row={row} /> : undefined}
+            />
           </PageTabsPanel>
         ) : null}
         <PageTabsPanel value="payments">

@@ -30,6 +30,7 @@ import {
   useGetBranchesQuery,
   usePatchPlanMutation,
 } from "@/src/store/api/admin-api";
+import { istBusinessDateToday } from "@/src/lib/ist-business-date";
 
 function ToggleRow({
   label,
@@ -82,7 +83,7 @@ export function PlanAvailabilityDialog({
   };
 
   const displayName = String(plan.displayName ?? plan.name ?? "Plan");
-  const todayYmd = new Date().toISOString().slice(0, 10);
+  const todayYmd = istBusinessDateToday();
   const enrolFrom = form.enrolmentOpenFrom || null;
   const enrolTo = form.enrolmentOpenTo || null;
   const outsideEnrolWindow =

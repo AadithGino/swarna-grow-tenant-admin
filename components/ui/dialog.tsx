@@ -7,6 +7,28 @@ import { Dialog as DialogPrimitive } from "radix-ui";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 
+/**
+ * Clicks on the guided-tour card must not close the dialog it is pointing into.
+ * Radix reports the outside click after React has re-rendered the card, so the
+ * clicked button may already be detached — the tour marks its own pointer-downs
+ * on <html data-tour-pointer="1"> (see TourProvider).
+ */
+function keepOpenForTourUi<E extends Event>(
+  handler: ((event: E) => void) | undefined,
+) {
+  return (event: E) => {
+    const target = event.target;
+    const onTourUi =
+      (target instanceof Element && target.closest("[data-tour-ui]")) ||
+      document.documentElement.dataset.tourPointer === "1";
+    if (onTourUi) {
+      event.preventDefault();
+      return;
+    }
+    handler?.(event);
+  };
+}
+
 function Dialog({
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Root>) {
@@ -51,6 +73,7 @@ function DialogContent({
   className,
   children,
   showCloseButton = true,
+  onInteractOutside,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Content> & {
   showCloseButton?: boolean;
@@ -60,6 +83,7 @@ function DialogContent({
       <DialogOverlay />
       <DialogPrimitive.Content
         data-slot="dialog-content"
+        onInteractOutside={keepOpenForTourUi(onInteractOutside)}
         className={cn(
           "fixed top-[50%] left-[50%] z-50 grid w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 rounded-lg border bg-background p-6 shadow-lg duration-200 outline-none data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 sm:max-w-lg",
           className,

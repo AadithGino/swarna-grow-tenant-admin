@@ -7,6 +7,8 @@ export function portalPathFromContract(actionPath: string): string {
     "/dues": "/dues",
     "/maturities": "/maturity",
     "/cash-handovers": "/cash-control",
+    "/cash": "/cash-control",
+    "/grievances": "/support",
     "/settings/gold-rate": "/gold-rates",
     "/settings/subscription": "/settings",
     "/redemptions": "/maturity",

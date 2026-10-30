@@ -267,34 +267,36 @@ export function CashControlPage() {
           icon={WalletCards}
           label="Cash in hand"
           value={money(s.inHand ?? 0)}
-          detail="Across active staff"
+          detail={
+            s.staffHoldingCash != null
+              ? `Held by ${s.staffHoldingCash} staff right now`
+              : "With collection staff right now"
+          }
         />
         <StatCard
           icon={HandCoins}
-          label="Submitted"
+          label="Awaiting acceptance"
           value={money(s.submitted ?? 0)}
-          detail="Awaiting branch acceptance"
-          tone="gold"
-        />
-        <StatCard
-          icon={UsersRound}
-          label="Pending handovers"
-          value={s.pendingHandovers ?? 0}
-          detail="Review today"
-          tone="cream"
+          detail={`${s.pendingHandovers ?? 0} handover${s.pendingHandovers === 1 ? "" : "s"} submitted, not yet accepted`}
+          tone={(s.pendingHandovers ?? 0) > 0 ? "gold" : "cream"}
         />
         <StatCard
           icon={AlertTriangle}
-          label="Discrepancy"
+          label="Open discrepancies"
           value={money(s.discrepancy ?? 0)}
           detail={
-            (s.pendingHandovers ?? 0) > 0
-              ? `${s.pendingHandovers} pending handover${s.pendingHandovers === 1 ? "" : "s"}`
-              : (s.discrepancy ?? 0) > 0
-                ? "Resolve in handover queue"
-                : "No open discrepancies"
+            (s.discrepancy ?? 0) > 0
+              ? "Short/excess on handovers — resolve below"
+              : "No open discrepancies"
           }
-          tone="red"
+          tone={(s.discrepancy ?? 0) > 0 ? "red" : "green"}
+        />
+        <StatCard
+          icon={UsersRound}
+          label="Staff holding cash"
+          value={s.staffHoldingCash ?? staffRows.filter((r) => r.balance > 0).length}
+          detail="Should hand over before day end"
+          tone="cream"
         />
       </div>
       {cashInHandChart ? (

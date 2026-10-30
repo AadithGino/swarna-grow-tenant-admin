@@ -15,6 +15,10 @@ export type RedemptionFulfillmentSummary = {
   goldHandedGrams: number;
   goldHandoverValue: number;
   maturityCount: number;
+  /** Cash + gold handed out on maturity redemptions only. */
+  maturityHandedOut?: number;
+  /** Settled as credit toward a shop purchase (no cash/gold handed out). */
+  purchaseCredit?: number;
   prematureCount: number;
   prematurePenalty: number;
 };
@@ -78,7 +82,7 @@ export function RedemptionFulfillmentCard({
           icon={Gift}
           label="Maturity redemptions"
           value={String(data.maturityCount)}
-          detail={`${money(data.totalSettled)} total settled`}
+          detail={`${money(data.maturityHandedOut ?? data.totalSettled)} handed out (cash + gold)`}
           tone="cream"
         />
         <StatCard
@@ -96,7 +100,11 @@ export function RedemptionFulfillmentCard({
           icon={IndianRupee}
           label="Cash handed out"
           value={money(data.cashHandedOut)}
-          detail="Cash payout mode"
+          detail={
+            (data.purchaseCredit ?? 0) > 0
+              ? `Plus ${money(data.purchaseCredit ?? 0)} given as purchase credit`
+              : "Paid in cash to customers"
+          }
           tone="wine"
         />
         <StatCard

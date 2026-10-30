@@ -81,6 +81,7 @@ import {
   resolvePaidAmountBenefitTreatment,
 } from "@/src/lib/cash-settlement-basis";
 import { PlanAvailabilityDialog } from "@/src/features/schemes/plan-availability-dialog";
+import { istBusinessDateToday } from "@/src/lib/ist-business-date";
 
 export function PlanDetailPage({ planId }: { planId: string }) {
   const router = useRouter();
@@ -108,7 +109,7 @@ export function PlanDetailPage({ planId }: { planId: string }) {
               (p.scheduleRules as Record<string, unknown> | null)
                 ?.firstInstallmentModeDefault ?? "COLLECT_NOW",
           }),
-      startDate: new Date().toISOString().slice(0, 10),
+      startDate: istBusinessDateToday(),
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- preview when plan payload loads
   }, [planId, planQuery.data]);

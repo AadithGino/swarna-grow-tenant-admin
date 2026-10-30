@@ -90,7 +90,15 @@ export type AssistantBlock =
       action?: Record<string, unknown>;
     };
 
+/** On-screen walkthrough attached to an answer (id matches a tour in src/lib/tours/registry). */
+export type AssistantGuide = {
+  id: string;
+  title: string;
+};
+
 export type AssistantBundle = {
+  /** Present when Sidekick offers a "Show me step by step" walkthrough. */
+  guide?: AssistantGuide;
   /** "agent" for the tool-calling engine; absent on legacy router answers. */
   engine?: "agent";
   blocks?: AssistantBlock[];

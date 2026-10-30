@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
+import { Landmark } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,18 +15,10 @@ import { useCustomerTenant } from "@/src/components/customer/customer-tenant-con
 import { customerPath } from "@/src/lib/customer-tenant";
 import { CustomerDigitalMetalsDocumentPanel } from "@/src/features/customer/customer-digital-metals-document-panel";
 import {
-  formatAssetLabel,
   parseAssetKey,
   quoteReadyAssets,
   type CapabilityAsset,
 } from "@/src/lib/digital-metals-asset-ui";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import {
   useCancelCustomerDigitalMetalsSellOrderMutation,
   useConfirmCustomerDigitalMetalsSellOrderMutation,
@@ -45,10 +38,11 @@ import {
 } from "@/src/lib/customer-digital-metals-sell-receipt";
 import {
   bankDestinationStatusLabel,
+  CustomerDmMetalChoice,
   CustomerDmPageShell,
+  CustomerDmQuickChips,
   CustomerDmSurface,
   CustomerDmTimeline,
-  customerDmMetalAccent,
   sellOrderStatusLabel,
 } from "@/src/features/customer/customer-digital-metals-shared";
 
@@ -160,71 +154,117 @@ export function CustomerDigitalMetalsSellPage() {
     }
   }
 
+  const availableG = selectedWallet ? Number(selectedWallet.availableUg) / 1_000_000 : 0;
+  const rateG = Number(
+    (selectedWallet as { estimatedSaleValue?: { ratePerGramPaise?: number } } | undefined)?.estimatedSaleValue?.ratePerGramPaise ?? 0,
+  );
+  const gramsNum = Number(grams);
+  const estimatePaise = rateG && gramsNum > 0 ? Math.round(rateG * gramsNum) : null;
+  const trimG = (g: number) => String(Math.floor(g * 10_000) / 10_000);
+  const gramChips = availableG > 0
+    ? [
+        { label: "25%", value: trimG(availableG * 0.25) },
+        { label: "50%", value: trimG(availableG * 0.5) },
+        { label: "All available", value: trimG(availableG) },
+      ]
+    : [];
+
   return (
     <CustomerDmPageShell
       title="Sell digital metal"
-      subtitle="Sell from your available balance. Metal is reserved until your jeweller approves the sale."
+      subtitle="Sell from your available balance. Metal is held while your jeweller approves, then the money goes to your verified bank."
       backHref={portfolioBack}
+      backLabel="Wallet"
       testId="customer-dm-sell-form"
     >
       {pool.length === 0 ? (
-        <CustomerDmSurface>
-          <p className="text-sm text-[#5c3d42]">You need available metal before you can sell.</p>
-          <Button type="button" asChild className="mt-4">
+        <CustomerDmSurface className="text-center">
+          <p className="text-sm text-[#5c4f52]">You need available metal before you can sell.</p>
+          <Button type="button" asChild className="mt-4 h-11 rounded-full px-6 text-white" style={{ background: "var(--customer-primary, #730321)" }}>
             <Link href={customerPath(tenantSlug, "digital-metals", "buy")}>Buy metal</Link>
           </Button>
         </CustomerDmSurface>
       ) : (
-        <CustomerDmSurface>
-          <div className="space-y-4 lg:max-w-md">
-            <div>
-              <Label htmlFor="sell-wallet">Your holding</Label>
-              <Select value={assetSel || undefined} onValueChange={setAssetSel}>
-                <SelectTrigger id="sell-wallet" className="mt-1.5" data-testid="customer-dm-sell-asset">
-                  <SelectValue placeholder="Choose wallet" />
-                </SelectTrigger>
-                <SelectContent>
-                  {pool.map((w) => (
-                    <SelectItem key={`${w.metal}:${w.finenessPpm}`} value={`${w.metal}:${w.finenessPpm}`}>
-                      {formatAssetLabel(String(w.metal), Number(w.finenessPpm))} · {ugToGramsDisplay(w.availableUg)}{" "}
-                      available
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+        <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_19rem]">
+          <CustomerDmSurface>
+            <fieldset>
+              <legend className="text-[15px] font-semibold text-[#221a1d]">Sell from</legend>
+              <div className="mt-3">
+                <CustomerDmMetalChoice
+                  label="Wallet to sell from"
+                  testId="customer-dm-sell-asset"
+                  value={assetSel}
+                  onChange={setAssetSel}
+                  options={pool.map((w) => ({
+                    key: `${w.metal}:${w.finenessPpm}`,
+                    metal: String(w.metal),
+                    finenessPpm: Number(w.finenessPpm),
+                    detail: <>{ugToGramsDisplay(w.availableUg)} available</>,
+                  }))}
+                />
+              </div>
+              {selectedWallet && Number(selectedWallet.reservedUg) > 0 ? (
+                <p className="mt-3 text-xs text-[#7a6f72]">
+                  {ugToGramsDisplay(selectedWallet.reservedUg)} is held for other orders and can&apos;t be sold right now.
+                </p>
+              ) : null}
+            </fieldset>
+
+            <div className="mt-7 border-t border-[#f0e6e0] pt-6">
+              <Label htmlFor="grams" className="text-[15px] font-semibold text-[#221a1d]">
+                Grams to sell
+              </Label>
+              <div className="mt-3 flex max-w-sm items-center rounded-2xl border border-[#e3d6ce] bg-white px-4 focus-within:border-[var(--customer-primary,#730321)] focus-within:ring-2 focus-within:ring-[rgba(var(--customer-primary-rgb,115,3,33),0.15)]">
+                <Input
+                  id="grams"
+                  inputMode="decimal"
+                  value={grams}
+                  onChange={(e) => setGrams(e.target.value.replace(/[^\d.]/g, ""))}
+                  className="h-14 border-0 bg-transparent px-0 font-serif text-3xl tabular-nums shadow-none focus-visible:ring-0 md:text-3xl"
+                />
+                <span className="font-serif text-2xl text-[#9a8d90]">g</span>
+              </div>
+              {gramChips.length ? (
+                <div className="mt-3">
+                  <CustomerDmQuickChips chips={gramChips} onPick={setGrams} active={grams} />
+                </div>
+              ) : null}
+              {selectedWallet && gramsNum * 1_000_000 > Number(selectedWallet.availableUg) ? (
+                <p className="mt-3 text-xs font-medium text-red-700">That&apos;s more than your available balance.</p>
+              ) : null}
             </div>
-            {selectedWallet ? (
-              <p className="text-sm text-[#5c3d42]">
-                Available to sell:{" "}
-                <strong>{ugToGramsDisplay(selectedWallet.availableUg)}</strong>
-                {Number(selectedWallet.reservedUg) > 0 ? (
-                  <span className="text-xs text-[#8a6a70]">
-                    {" "}
-                    ({ugToGramsDisplay(selectedWallet.reservedUg)} reserved for other orders)
-                  </span>
-                ) : null}
-              </p>
-            ) : null}
-            <div>
-              <Label htmlFor="grams">Quantity to sell (grams)</Label>
-              <Input
-                id="grams"
-                inputMode="decimal"
-                value={grams}
-                onChange={(e) => setGrams(e.target.value)}
-                className="mt-1.5 max-w-xs"
-              />
+
+            <div className="mt-7 flex flex-col gap-2 sm:flex-row">
+              <Button
+                type="button"
+                className="h-12 rounded-full px-7 text-[15px] text-white"
+                style={{ background: "var(--customer-primary, #730321)" }}
+                onClick={() => void onContinue()}
+                disabled={createState.isLoading}
+              >
+                {createState.isLoading ? "Getting today's rate…" : "Review payout quote"}
+              </Button>
+              <Button type="button" variant="ghost" className="h-12 rounded-full" asChild>
+                <Link href={customerPath(tenantSlug, "digital-metals", "bank")}>Bank accounts</Link>
+              </Button>
             </div>
-          </div>
-          <div className="mt-6 flex flex-col gap-2 sm:flex-row">
-            <Button type="button" className="min-h-11" onClick={() => void onContinue()} disabled={createState.isLoading}>
-              Review payout quote
-            </Button>
-            <Button type="button" variant="outline" className="min-h-11" asChild>
-              <Link href={customerPath(tenantSlug, "digital-metals", "bank")}>Bank accounts</Link>
-            </Button>
-          </div>
-        </CustomerDmSurface>
+          </CustomerDmSurface>
+
+          <aside className="rounded-[1.25rem] border border-[#ecdfd8] bg-[#fcfaf8] p-5">
+            <p className="text-sm font-semibold text-[#221a1d]">Estimated payout</p>
+            <p className="mt-2 font-serif text-3xl tabular-nums text-[var(--customer-primary,#730321)]">
+              {estimatePaise != null ? formatInrFromPaise(estimatePaise) : "—"}
+            </p>
+            <p className="mt-1 text-xs leading-5 text-[#7a6f72]">
+              {rateG ? `At today's sell rate of ${formatInrFromPaise(rateG)}/g, before fees. The review screen shows the exact amount.` : "The review screen shows the exact rate and fees."}
+            </p>
+            <ol className="mt-5 space-y-3 border-t border-[#ecdfd8] pt-4 text-xs leading-5 text-[#5c4f52]">
+              <li><strong className="text-[#221a1d]">1.</strong> Confirm the quote and pick a verified bank account.</li>
+              <li><strong className="text-[#221a1d]">2.</strong> Your jeweller approves the sale — grams are held until then.</li>
+              <li><strong className="text-[#221a1d]">3.</strong> Money is transferred, usually within 1–2 business days.</li>
+            </ol>
+          </aside>
+        </div>
       )}
     </CustomerDmPageShell>
   );
@@ -296,12 +336,13 @@ export function CustomerDigitalMetalsSellReviewPage({ quoteId }: { quoteId: stri
 
   return (
     <CustomerDmPageShell
+      narrow
       title="Review sell & payout"
       subtitle="Net settlement goes to your verified bank after jeweller approval."
       backHref={customerPath(tenantSlug, "digital-metals", "sell")}
       testId="customer-dm-sell-review"
     >
-      <DigitalMetalsQuoteBreakdown quote={{ ...quote, side: "SELL" }} className="border-[#eaded9] bg-[#faf8f7]" />
+      <DigitalMetalsQuoteBreakdown quote={{ ...quote, side: "SELL" }} className="rounded-[1.25rem] border-[#ecdfd8] bg-white p-5" />
       {expiresAt ? (
         <p className="mt-3 text-xs text-amber-900">
           Confirm before {new Date(expiresAt).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })} (IST) or request a
@@ -349,35 +390,51 @@ export function CustomerDigitalMetalsSellReviewPage({ quoteId }: { quoteId: stri
           </div>
         </CustomerDmSurface>
       ) : (
-        <div className="mt-4 space-y-2">
-          <Label htmlFor="payout-bank">Payout bank account</Label>
-          <Select value={selectedBank || undefined} onValueChange={setSelectedBank}>
-            <SelectTrigger id="payout-bank" className="min-h-11 w-full max-w-md" data-testid="customer-dm-sell-payout-bank">
-              <SelectValue placeholder="Choose verified bank" />
-            </SelectTrigger>
-            <SelectContent>
-              {activeBanks.map((b) => (
-                <SelectItem key={b.id} value={b.id}>
-                  {b.accountHolderName} · ****{b.accountLast4}
-                  {b.bankName ? ` · ${b.bankName}` : ""}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+        <fieldset className="mt-6">
+          <legend className="mb-3 text-[15px] font-semibold text-[#221a1d]">Pay the money into</legend>
+          <div role="radiogroup" aria-label="Payout bank account" className="space-y-2.5" data-testid="customer-dm-sell-payout-bank">
+            {activeBanks.map((b) => {
+              const selected = selectedBank === b.id;
+              return (
+                <button
+                  key={b.id}
+                  type="button"
+                  role="radio"
+                  aria-checked={selected}
+                  onClick={() => setSelectedBank(b.id)}
+                  className={`flex w-full items-center gap-3.5 rounded-2xl border bg-white p-4 text-left transition ${selected ? "border-[var(--customer-primary,#730321)] shadow-[0_0_0_1px_var(--customer-primary,#730321)]" : "border-[#e6d9d1] hover:border-[#cdb9b0]"}`}
+                >
+                  <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-[rgba(var(--customer-primary-rgb,115,3,33),0.07)] text-[var(--customer-primary,#730321)]">
+                    <Landmark className="size-5" aria-hidden />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-sm font-semibold text-[#221a1d]">
+                      {b.bankName ? `${b.bankName} ` : ""}•••• {b.accountLast4}
+                    </span>
+                    <span className="block text-xs text-[#7a6f72]">
+                      {b.accountHolderName} · {b.ifsc}
+                    </span>
+                  </span>
+                  <span className={`grid size-5 shrink-0 place-items-center rounded-full border-2 ${selected ? "border-[var(--customer-primary,#730321)]" : "border-[#d6c8c0]"}`} aria-hidden>
+                    {selected ? <span className="size-2.5 rounded-full bg-[var(--customer-primary,#730321)]" /> : null}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
           {pendingBanks.length ? (
-            <p className="text-xs text-amber-900">
+            <p className="mt-3 text-xs text-amber-900">
               {pendingBanks.length} other account(s) awaiting jeweller verification — not shown until active.
             </p>
           ) : null}
-          <p className="text-xs text-[#8a6a70]">
-            In production, verification is done manually by your jeweller — not an instant automated bank check.
-          </p>
-        </div>
+          <p className="mt-2 text-xs text-[#7a6f72]">Accounts are verified by your jeweller, not by an instant automated bank check.</p>
+        </fieldset>
       )}
-      <div className="mt-6 flex flex-col gap-2 sm:flex-row">
+      <div className="mt-7 flex flex-col gap-2 sm:flex-row">
         <Button
           type="button"
-          className="min-h-11"
+          className="h-12 rounded-full px-7 text-[15px] text-white"
+          style={{ background: "var(--customer-primary, #730321)" }}
           onClick={() => void onConfirm()}
           disabled={
             orderState.isLoading
@@ -495,9 +552,11 @@ export function CustomerDigitalMetalsSellOrderPage({ orderId }: { orderId: strin
 
   return (
     <CustomerDmPageShell
+      narrow
       title={statusCopy.title}
       subtitle={statusCopy.detail}
       backHref={customerPath(tenantSlug, "digital-metals")}
+      backLabel="Wallet"
       testId="customer-dm-sell-order"
     >
       {sellSummary ? (

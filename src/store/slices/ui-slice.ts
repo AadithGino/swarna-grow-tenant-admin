@@ -9,6 +9,16 @@ interface UiState {
   paymentSuccessOpen: boolean;
 }
 const ACTING_BRANCH_STORAGE_KEY = "swarnagrow.actingBranch";
+const SIDEBAR_COLLAPSED_STORAGE_KEY = "swarnagrow.sidebarCollapsed";
+
+function readStoredSidebarCollapsed(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    return localStorage.getItem(SIDEBAR_COLLAPSED_STORAGE_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
 
 function readStoredBranchId(): string {
   if (typeof window === "undefined") return "ALL";
@@ -17,7 +27,7 @@ function readStoredBranchId(): string {
 }
 
 const initialState: UiState = {
-  sidebarCollapsed: false,
+  sidebarCollapsed: readStoredSidebarCollapsed(),
   branchId: readStoredBranchId(),
   globalSearch: "",
   paymentSuccess: null,
@@ -30,6 +40,15 @@ const uiSlice = createSlice({
   reducers: {
     toggleSidebar(state) {
       state.sidebarCollapsed = !state.sidebarCollapsed;
+      if (typeof window === "undefined") return;
+      try {
+        localStorage.setItem(
+          SIDEBAR_COLLAPSED_STORAGE_KEY,
+          state.sidebarCollapsed ? "1" : "0",
+        );
+      } catch {
+        // storage unavailable — keep in-memory state only
+      }
     },
     setBranch(state, action: PayloadAction<string>) {
       state.branchId = action.payload;

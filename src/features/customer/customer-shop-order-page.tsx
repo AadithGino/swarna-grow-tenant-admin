@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Download, Headphones, MapPin, Package } from "lucide-react";
+import { ArrowLeft, Download, Headphones, MapPin, Store, Truck } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -41,7 +41,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { ProfileSubpageHeader } from "@/src/features/customer/customer-profile-shared";
 import {
   buildShopOrderTimeline,
   formatAddressBlock,
@@ -51,6 +50,8 @@ import {
 } from "@/src/features/customer/customer-shop-order-progress";
 import { downloadCustomerShopOrderInvoice } from "@/src/lib/customer-shop-order-invoice";
 import { CustomerShopPoliciesLinks } from "@/src/features/customer/customer-shop-policies";
+import { ShopProductArt } from "@/src/features/customer/customer-shop-ui";
+import { cn } from "@/lib/utils";
 
 function formatInr(paise: number) {
   return `₹${(paise / 100).toLocaleString("en-IN", { minimumFractionDigits: 2 })}`;
@@ -268,309 +269,276 @@ export function CustomerShopOrderPage({ orderId }: { orderId: string }) {
     }
   }
 
+  const sectionTitle = "text-[15px] font-semibold text-[#221a1d]";
+  const card = "rounded-[1.25rem] border border-[#ecdfd8] bg-white p-5";
+  const tracking =
+    o.fulfilmentMode === "DELIVERY" && o.deliveryTracking && typeof o.deliveryTracking === "object"
+      ? (o.deliveryTracking as Record<string, unknown>)
+      : null;
+  const trackingUrl = tracking?.trackingUrl ? String(tracking.trackingUrl) : "";
+  const safeTrackingUrl = trackingUrl.startsWith("https://") ? trackingUrl : "";
+  const showCancellation = Boolean(caps?.directCancelAllowed || caps?.cancellationRequestAllowed || caps?.contactStoreForReturn);
+
   return (
-    <div className="mx-auto max-w-lg pb-10">
-      <ProfileSubpageHeader
-        tenantSlug={tenantSlug}
-        title={String(o.orderNumber ?? "Order details")}
-        backHref={customerShopOrdersPath(tenantSlug)}
-        preferHistoryBack={false}
-      />
-
-      <p className="text-xs font-semibold text-[#777280]">
-        Placed {formatShopOrderDate(o.createdAt)}
-        {o.paymentMethod === "COD" ? " · Cash on delivery" : " · Online payment"}
-      </p>
-
-      <div className="mt-4 space-y-4">
-        <ShopOrderStatusHero timeline={timeline} />
-
-        <section className="customer-surface p-4">
-          <h2 className="text-xs font-black uppercase tracking-wide text-[#999]">Order progress</h2>
-          <div className="mt-4">
-            <ShopOrderProgressStepper timeline={timeline} />
-          </div>
-          {o.expiresAt && o.status === "PENDING_PAYMENT" ? (
-            <p className="mt-3 text-xs text-amber-900">
-              Pay before {new Date(String(o.expiresAt)).toLocaleString()}
-            </p>
-          ) : null}
-          {o.expiresAt && o.status === "COD_PENDING_ACCEPTANCE" ? (
-            <p className="mt-3 text-xs text-amber-900">
-              Store must confirm by {new Date(String(o.expiresAt)).toLocaleString()}
-            </p>
-          ) : null}
-        </section>
-
-        <section className="customer-surface space-y-3 p-4">
-          <h2 className="text-xs font-black uppercase tracking-wide text-[#999]">Support</h2>
-          <p className="text-xs text-[#777280]">
-            Open a ticket linked to this order so staff can see your order number and history.
+    <div className="mx-auto max-w-5xl pb-10">
+      <Link
+        href={customerShopOrdersPath(tenantSlug)}
+        className="inline-flex items-center gap-1.5 text-sm font-medium text-[var(--customer-primary,#730321)] underline-offset-4 hover:underline"
+      >
+        <ArrowLeft className="size-4" /> All orders
+      </Link>
+      <div className="mt-3 flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="font-serif text-[2rem] leading-tight text-[#221a1d]">Order {String(o.orderNumber ?? "details")}</h1>
+          <p className="mt-1 text-sm text-[#7a6f72]">
+            Placed {formatShopOrderDate(o.createdAt)}
+            {o.paymentMethod === "COD" ? " · Cash on delivery" : " · Online payment"}
+            {delivery ? " · Delivery" : " · Branch pickup"}
           </p>
-          <Button
-            type="button"
-            variant="outline"
-            className="w-full rounded-xl font-bold"
-            onClick={() => {
-              setHelpSubject(`Help with order ${String(o.orderNumber ?? orderId)}`);
-              setHelpDescription("");
-              setHelpOpen(true);
-            }}
-          >
-            <Headphones className="mr-2 size-4" />
-            Get help with this order
+        </div>
+        {invoiceAvailable ? (
+          <Button type="button" variant="outline" className="h-10 rounded-full" onClick={() => void onDownloadInvoice()}>
+            <Download className="mr-2 size-4" />
+            Invoice (PDF)
           </Button>
-        </section>
-
-        {o.fulfilmentMode === "DELIVERY" &&
-        o.deliveryTracking &&
-        typeof o.deliveryTracking === "object" ? (
-          <section className="customer-surface space-y-2 p-4">
-            <h2 className="text-xs font-black uppercase tracking-wide text-[#999]">Delivery</h2>
-            {(() => {
-              const t = o.deliveryTracking as Record<string, unknown>;
-              const url = t.trackingUrl ? String(t.trackingUrl) : "";
-              const safeUrl = url.startsWith("https://") ? url : "";
-              return (
-                <>
-                  {t.carrierName || t.trackingNumber ? (
-                    <p className="text-sm text-[#444]">
-                      {[t.carrierName, t.trackingNumber].filter(Boolean).map(String).join(" · ")}
-                    </p>
-                  ) : (
-                    <p className="text-sm text-[#777280]">Courier details will appear when the store adds them.</p>
-                  )}
-                  {safeUrl ? (
-                    <a
-                      href={safeUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-sm font-semibold text-primary underline-offset-4 hover:underline"
-                    >
-                      Track shipment
-                    </a>
-                  ) : null}
-                </>
-              );
-            })()}
-          </section>
         ) : null}
+      </div>
 
-        {String(o.status) === "DELIVERED" ? (
-          <section className="customer-surface space-y-3 p-4">
-            <h2 className="text-xs font-black uppercase tracking-wide text-[#999]">Returns & exchanges</h2>
-            {orderReturn.data?.request ? (
-              <div className="text-sm text-[#444]">
-                <p>
-                  Request status: <strong>{String(orderReturn.data.request.status)}</strong>
-                </p>
-                <p className="mt-1 text-xs text-[#777280]">{String(orderReturn.data.request.reason ?? "")}</p>
-              </div>
-            ) : (
-              <>
-                <p className="text-xs text-[#777280]">
-                  Submit a return or exchange request. Approval and refunds are handled separately by the store.
-                </p>
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="w-full rounded-xl font-bold"
-                  onClick={() => setReturnDialogOpen(true)}
-                >
-                  Request return or exchange
-                </Button>
-              </>
-            )}
-          </section>
-        ) : null}
-
-        {(caps?.directCancelAllowed || caps?.cancellationRequestAllowed || caps?.contactStoreForReturn) ? (
-          <section className="customer-surface space-y-3 p-4">
-            <h2 className="text-xs font-black uppercase tracking-wide text-[#999]">Cancellation</h2>
-            {caps?.contactStoreForReturn && String(o.status) !== "DELIVERED" ? (
-              <p className="text-sm text-[#555]">
-                This order has shipped. It cannot be cancelled here — contact the store if you need help.
+      <div className="mt-6 grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_21rem]">
+        <div className="space-y-6">
+          <ShopOrderStatusHero timeline={timeline}>
+            <ShopOrderProgressStepper timeline={timeline} horizontal />
+            {o.expiresAt && o.status === "PENDING_PAYMENT" ? (
+              <p className="mt-4 text-xs text-amber-900">
+                Pay before {new Date(String(o.expiresAt)).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}
               </p>
             ) : null}
-            {caps?.directCancelAllowed ? (
-              <Button
-                type="button"
-                variant="outline"
-                className="w-full rounded-xl font-bold"
-                disabled={cancelOrderState.isLoading}
-                onClick={() => setCancelDialog("direct")}
-              >
-                Cancel order
-              </Button>
+            {o.expiresAt && o.status === "COD_PENDING_ACCEPTANCE" ? (
+              <p className="mt-4 text-xs text-amber-900">
+                Store must confirm by {new Date(String(o.expiresAt)).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}
+              </p>
             ) : null}
-            {caps?.cancellationRequestAllowed ? (
-              <>
-                <p className="text-xs text-[#777280]">
-                  Submitting a request does not cancel the order or refund payment until staff approve.
-                </p>
+          </ShopOrderStatusHero>
+
+          {tracking ? (
+            <section className={cn(card, "flex flex-wrap items-center gap-4")}>
+              <span className="grid size-11 shrink-0 place-items-center rounded-xl customer-accent-tint-surface">
+                <Truck className="size-5 customer-gold-copy" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <h2 className={sectionTitle}>Shipment</h2>
+                {tracking.carrierName || tracking.trackingNumber ? (
+                  <p className="mt-0.5 text-sm text-[#4d4245]">
+                    {[tracking.carrierName, tracking.trackingNumber].filter(Boolean).map(String).join(" · ")}
+                  </p>
+                ) : (
+                  <p className="mt-0.5 text-sm text-[#7a6f72]">Courier details will appear when the store adds them.</p>
+                )}
+              </div>
+              {safeTrackingUrl ? (
+                <a
+                  href={safeTrackingUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex h-10 items-center rounded-full border border-[#e3d6ce] px-4 text-sm font-semibold text-[var(--customer-primary,#730321)] hover:bg-[#faf5f2]"
+                >
+                  Track shipment
+                </a>
+              ) : null}
+            </section>
+          ) : null}
+
+          <section className="overflow-hidden rounded-[1.25rem] border border-[#ecdfd8] bg-white">
+            <h2 className={cn(sectionTitle, "border-b border-[#ecdfd8] px-5 py-4")}>Items ({lines.length})</h2>
+            <ul className="divide-y divide-[#f0e6e0]">
+              {lines.map((line) => (
+                <li key={String(line.productId)} className="flex items-center gap-4 px-5 py-4">
+                  <ShopProductArt uploadId={(line.imageUploadId as string | undefined) ?? null} alt="" className="size-16 sm:size-20" rounded="rounded-xl" />
+                  <div className="min-w-0 flex-1">
+                    <p className="line-clamp-2 font-serif text-base leading-snug text-[#221a1d]">{String(line.name ?? "Item")}</p>
+                    <p className="mt-0.5 text-xs text-[#7a6f72]">
+                      Qty {String(line.quantity ?? 1)}
+                      {line.sku ? ` · ${String(line.sku)}` : ""}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className="font-semibold tabular-nums text-[#221a1d]">{formatInr(Number(line.lineTotalPaise ?? 0))}</p>
+                    {line.unitPricePaise != null && Number(line.quantity ?? 1) > 1 ? (
+                      <p className="text-[11px] text-[#9a8d90]">{formatInr(Number(line.unitPricePaise))} each</p>
+                    ) : null}
+                  </div>
+                </li>
+              ))}
+            </ul>
+            <dl className="space-y-2 border-t border-[#ecdfd8] bg-[#fcfaf8] px-5 py-4 text-sm">
+              <div className="flex justify-between">
+                <dt className="text-[#7a6f72]">Subtotal</dt>
+                <dd className="tabular-nums">{formatInr(Number(o.subtotalPaise ?? 0))}</dd>
+              </div>
+              <div className="flex justify-between">
+                <dt className="text-[#7a6f72]">Tax</dt>
+                <dd className="tabular-nums">{formatInr(Number(o.taxPaise ?? 0))}</dd>
+              </div>
+              <div className="flex justify-between">
+                <dt className="text-[#7a6f72]">{delivery ? "Delivery" : "Pickup"}</dt>
+                <dd className="tabular-nums">{Number(o.fulfilmentChargePaise ?? 0) ? formatInr(Number(o.fulfilmentChargePaise)) : "Free"}</dd>
+              </div>
+              <div className="flex justify-between border-t border-[#ecdfd8] pt-2 text-base font-semibold text-[#221a1d]">
+                <dt>Total</dt>
+                <dd className="tabular-nums text-[var(--customer-primary,#730321)]">{formatInr(Number(o.totalPaise ?? 0))}</dd>
+              </div>
+            </dl>
+          </section>
+
+          {String(o.status) === "DELIVERED" ? (
+            <section className={cn(card, "space-y-3")}>
+              <h2 className={sectionTitle}>Returns & exchanges</h2>
+              {orderReturn.data?.request ? (
+                <div className="text-sm text-[#4d4245]">
+                  <p>
+                    Request status: <strong>{String(orderReturn.data.request.status)}</strong>
+                  </p>
+                  <p className="mt-1 text-xs text-[#7a6f72]">{String(orderReturn.data.request.reason ?? "")}</p>
+                </div>
+              ) : (
+                <>
+                  <p className="text-sm text-[#7a6f72]">
+                    Not quite right? Send a return or exchange request. The store approves it and confirms any refund separately.
+                  </p>
+                  <Button type="button" variant="outline" className="h-10 rounded-full" onClick={() => setReturnDialogOpen(true)}>
+                    Request return or exchange
+                  </Button>
+                </>
+              )}
+            </section>
+          ) : null}
+        </div>
+
+        <aside className="space-y-4 lg:sticky lg:top-28">
+          {(ui.canPay || showTestHarness) && (
+            <section className={cn(card, "space-y-3")} style={{ borderColor: "rgba(var(--customer-primary-rgb, 115, 3, 33), 0.35)" }}>
+              <h2 className={sectionTitle}>Payment due</h2>
+              <p className="text-2xl font-bold tabular-nums text-[var(--customer-primary,#730321)]">{formatInr(Number(o.totalPaise ?? 0))}</p>
+              {ui.detail ? <p className="text-xs leading-5 text-[#7a6f72]">{ui.detail}</p> : null}
+              {ui.canPay ? (
                 <Button
                   type="button"
-                  variant="outline"
-                  className="w-full rounded-xl font-bold"
-                  disabled={requestState.isLoading}
-                  onClick={() => setCancelDialog("request")}
+                  className="h-12 w-full rounded-full text-[15px] font-semibold text-white"
+                  style={{ background: "var(--customer-primary, #730321)" }}
+                  disabled={createState.isLoading}
+                  onClick={() => void onPay()}
                 >
-                  Request cancellation
+                  {createState.isLoading ? "Starting payment…" : "Pay now"}
                 </Button>
-              </>
-            ) : null}
-          </section>
-        ) : null}
-
-        {(ui.canPay || showTestHarness) && (
-          <section className="customer-surface space-y-3 p-4">
-            <h2 className="text-xs font-black uppercase tracking-wide text-[#999]">Payment</h2>
-            {ui.detail ? <p className="text-sm text-[#555]">{ui.detail}</p> : null}
-            {ui.canPay ? (
-              <Button
-                type="button"
-                className="w-full rounded-xl font-bold"
-                disabled={createState.isLoading}
-                onClick={() => void onPay()}
-              >
-                {createState.isLoading ? "Starting payment…" : "Pay now"}
-              </Button>
-            ) : null}
-            {showTestHarness ? (
-              <div className="rounded-xl border border-dashed border-amber-400 bg-amber-50 p-3 text-sm">
-                <p className="font-bold text-amber-950">Test payment (dev only)</p>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="secondary"
-                    disabled={completeHarnessState.isLoading || !pollAttemptId}
-                    onClick={() => void onHarnessComplete("COMPLETED")}
-                  >
-                    Mock success
-                  </Button>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    disabled={completeHarnessState.isLoading || !pollAttemptId}
-                    onClick={() => void onHarnessComplete("FAILED")}
-                  >
-                    Mock failed
-                  </Button>
-                </div>
-              </div>
-            ) : null}
-          </section>
-        )}
-
-        <section className="customer-surface overflow-hidden">
-          <h2 className="border-b border-[#ece6e1] px-4 py-3 text-xs font-black uppercase tracking-wide text-[#999]">
-            Items ({lines.length})
-          </h2>
-          <ul className="divide-y divide-[#f0ebe6]">
-            {lines.map((line) => (
-              <li key={String(line.productId)} className="flex gap-3 px-4 py-4">
-                <span
-                  className="grid size-14 shrink-0 place-items-center rounded-xl text-[var(--customer-primary,#730321)]"
-                  style={{ background: "rgba(var(--customer-primary-rgb, 115, 3, 33), 0.08)" }}
-                >
-                  <Package className="size-6" />
-                </span>
-                <div className="min-w-0 flex-1">
-                  <p className="font-bold text-[#171722]">{String(line.name ?? "Item")}</p>
-                  <p className="text-sm text-[#777280]">Quantity: {String(line.quantity ?? 1)}</p>
-                  {line.sku ? (
-                    <p className="text-[10px] text-[#aaa]">SKU {String(line.sku)}</p>
-                  ) : null}
-                </div>
-                <div className="text-right">
-                  <p className="font-bold">{formatInr(Number(line.lineTotalPaise ?? 0))}</p>
-                  {line.unitPricePaise != null ? (
-                    <p className="text-[10px] text-[#999]">
-                      {formatInr(Number(line.unitPricePaise))} / unit
-                    </p>
-                  ) : null}
-                </div>
-              </li>
-            ))}
-          </ul>
-        </section>
-
-        <section className="customer-surface p-4">
-          <h2 className="text-xs font-black uppercase tracking-wide text-[#999]">
-            {delivery ? "Delivery address" : "Fulfilment"}
-          </h2>
-          {delivery && address ? (
-            <div className="mt-3 flex gap-3 text-sm">
-              <MapPin className="mt-0.5 size-5 shrink-0 text-[var(--customer-primary,#730321)]" />
-              <div className="text-[#444]">
-                {address.lines.map((line) => (
-                  <p key={line}>{line}</p>
-                ))}
-                {address.mobile ? <p className="mt-1 text-[#777280]">Phone: {address.mobile}</p> : null}
-              </div>
-            </div>
-          ) : !delivery ? (
-            <p className="mt-2 text-sm text-[#555]">
-              Branch pickup
-              {o.pickupBranchId ? (
-                <span className="ml-1 font-mono text-xs">({String(o.pickupBranchId)})</span>
               ) : null}
-            </p>
-          ) : (
-            <p className="mt-2 text-sm text-[#777280]">No address on file for this order.</p>
+              {showTestHarness ? (
+                <div className="rounded-xl border border-dashed border-amber-400 bg-amber-50 p-3 text-sm">
+                  <p className="font-bold text-amber-950">Test payment (dev only)</p>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="secondary"
+                      disabled={completeHarnessState.isLoading || !pollAttemptId}
+                      onClick={() => void onHarnessComplete("COMPLETED")}
+                    >
+                      Mock success
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      disabled={completeHarnessState.isLoading || !pollAttemptId}
+                      onClick={() => void onHarnessComplete("FAILED")}
+                    >
+                      Mock failed
+                    </Button>
+                  </div>
+                </div>
+              ) : null}
+            </section>
           )}
-        </section>
 
-        {invoiceAvailable ? (
-          <section className="customer-surface p-4">
-            <h2 className="text-xs font-black uppercase tracking-wide text-[#999]">Invoice</h2>
-            <p className="mt-2 text-sm text-[#555]">
-              Download a PDF tax invoice for this order (seller GSTIN and line items from checkout).
-            </p>
+          <section className={card}>
+            <h2 className={sectionTitle}>{delivery ? "Delivery address" : "Pickup"}</h2>
+            {delivery && address ? (
+              <div className="mt-3 flex gap-3 text-sm">
+                <MapPin className="mt-0.5 size-5 shrink-0 customer-gold-copy" />
+                <div className="text-[#4d4245]">
+                  {address.lines.map((line) => (
+                    <p key={line}>{line}</p>
+                  ))}
+                  {address.mobile ? <p className="mt-1 text-[#7a6f72]">Phone: {address.mobile}</p> : null}
+                </div>
+              </div>
+            ) : !delivery ? (
+              <div className="mt-3 flex gap-3 text-sm">
+                <Store className="mt-0.5 size-5 shrink-0 customer-gold-copy" />
+                <p className="text-[#4d4245]">
+                  {o.pickupBranchName ? String(o.pickupBranchName) : "Branch pickup"}
+                  {!o.pickupBranchName && o.pickupBranchId ? <span className="ml-1 font-mono text-xs">({String(o.pickupBranchId)})</span> : null}
+                  <span className="mt-1 block text-xs text-[#7a6f72]">Bring a photo ID when you collect.</span>
+                </p>
+              </div>
+            ) : (
+              <p className="mt-2 text-sm text-[#7a6f72]">No address on file for this order.</p>
+            )}
+          </section>
+
+          <section className={cn(card, "space-y-3")}>
+            <h2 className={sectionTitle}>Need help?</h2>
+            <p className="text-xs leading-5 text-[#7a6f72]">Open a ticket linked to this order so staff can see your order number and history.</p>
             <Button
               type="button"
               variant="outline"
-              className="mt-3 w-full rounded-xl font-bold"
-              onClick={() => void onDownloadInvoice()}
+              className="h-10 w-full rounded-full"
+              onClick={() => {
+                setHelpSubject(`Help with order ${String(o.orderNumber ?? orderId)}`);
+                setHelpDescription("");
+                setHelpOpen(true);
+              }}
             >
-              <Download className="mr-2 size-4" />
-              Download invoice (PDF)
+              <Headphones className="mr-2 size-4" />
+              Get help with this order
             </Button>
           </section>
-        ) : null}
 
-        <section className="customer-surface p-4">
-          <h2 className="text-xs font-black uppercase tracking-wide text-[#999]">Order summary</h2>
-          <dl className="mt-3 space-y-2 text-sm">
-            <div className="flex justify-between">
-              <dt className="text-[#777280]">Subtotal</dt>
-              <dd>{formatInr(Number(o.subtotalPaise ?? 0))}</dd>
-            </div>
-            <div className="flex justify-between">
-              <dt className="text-[#777280]">Tax</dt>
-              <dd>{formatInr(Number(o.taxPaise ?? 0))}</dd>
-            </div>
-            <div className="flex justify-between">
-              <dt className="text-[#777280]">Delivery / fulfilment</dt>
-              <dd>{formatInr(Number(o.fulfilmentChargePaise ?? 0))}</dd>
-            </div>
-            <div className="flex justify-between border-t border-[#ece6e1] pt-2 text-base font-black">
-              <dt>Total</dt>
-              <dd>{formatInr(Number(o.totalPaise ?? 0))}</dd>
-            </div>
-          </dl>
-        </section>
+          {showCancellation ? (
+            <section className={cn(card, "space-y-3")}>
+              <h2 className={sectionTitle}>Cancellation</h2>
+              {caps?.contactStoreForReturn && String(o.status) !== "DELIVERED" ? (
+                <p className="text-sm text-[#5c4f52]">This order has shipped. It can&apos;t be cancelled here — contact the store if you need help.</p>
+              ) : null}
+              {caps?.directCancelAllowed ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="h-10 w-full rounded-full text-red-700 hover:bg-red-50 hover:text-red-800"
+                  disabled={cancelOrderState.isLoading}
+                  onClick={() => setCancelDialog("direct")}
+                >
+                  Cancel order
+                </Button>
+              ) : null}
+              {caps?.cancellationRequestAllowed ? (
+                <>
+                  <p className="text-xs text-[#7a6f72]">A request doesn&apos;t cancel or refund anything until the store approves it.</p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-10 w-full rounded-full"
+                    disabled={requestState.isLoading}
+                    onClick={() => setCancelDialog("request")}
+                  >
+                    Request cancellation
+                  </Button>
+                </>
+              ) : null}
+            </section>
+          ) : null}
 
-        <CustomerShopPoliciesLinks className="customer-surface p-4" />
-
-        <Link
-          href={customerShopOrdersPath(tenantSlug)}
-          className="block text-center text-sm font-bold text-[var(--customer-primary,#730321)]"
-        >
-          ← Back to all orders
-        </Link>
+          <CustomerShopPoliciesLinks className="px-1" />
+        </aside>
       </div>
 
       <Dialog open={returnDialogOpen} onOpenChange={setReturnDialogOpen}>

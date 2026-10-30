@@ -9,6 +9,15 @@ import { realmHasStoredSession } from "@/src/lib/auth-token-storage";
 import {
   Activity,
   AlertTriangle,
+  BadgeCheck,
+  Banknote,
+  Boxes,
+  Gem,
+  Megaphone,
+  Settings2,
+  ShoppingCart,
+  Store,
+  TrendingUp,
   Bell,
   Building2,
   CalendarClock,
@@ -27,7 +36,6 @@ import {
   PackageCheck,
   PanelLeftClose,
   PanelLeftOpen,
-  Percent,
   Scale,
   Coins,
   Search,
@@ -73,6 +81,9 @@ import {
 import { BrandMark } from "@/src/components/brand/brand-mark";
 import { PaymentSuccessHost } from "@/src/components/common/payment-success-host";
 import { AssistantPanel } from "@/src/components/assistant/AssistantPanel";
+import { GuidesMenu } from "@/src/components/tour/guides-menu";
+import { TourProvider } from "@/src/components/tour/tour-provider";
+import { WelcomeTourPrompt } from "@/src/components/tour/welcome-tour-prompt";
 import { hasPermission } from "@/src/lib/permissions";
 import { SecuritySessionsDialog } from "@/src/features/auth/security-sessions-dialog";
 import { canAccessRoute } from "@/src/lib/permissions";
@@ -102,59 +113,50 @@ type NavItem = {
   href: string;
   icon: typeof LayoutDashboard;
   badgeKey?: NavBadgeKey;
+  /** Only highlight on an exact path match (section overview pages). */
+  exact?: boolean;
+  /** Extra path prefixes that should highlight this item. */
+  match?: string[];
 };
 
-const groups: { label: string; items: NavItem[] }[] = [
+type NavGroup = {
+  id: string;
+  label: string;
+  items: NavItem[];
+  /**
+   * Module gate: only shown when the tenant has the module. Module groups are
+   * long, so they render as ONE expandable menu entry (icon + chevron) whose
+   * pages are indented under it. Core groups are always open — no hidden pages.
+   */
+  module?: "ecommerce" | "digitalMetals";
+  /** Icon for the module's parent row. */
+  icon?: typeof LayoutDashboard;
+};
+
+const groups: NavGroup[] = [
   {
+    id: "overview",
     label: "Overview",
-    items: [{ label: "Dashboard", href: "/", icon: LayoutDashboard }],
+    items: [{ label: "Dashboard", href: "/", icon: LayoutDashboard, exact: true }],
   },
   {
-    label: "Store operations",
-    items: [
-      { label: "Orders", href: "/ecommerce/orders", icon: ClipboardList },
-      { label: "Courier COD", href: "/ecommerce/courier-cod", icon: Truck },
-      {
-        label: "Payment exceptions",
-        href: "/ecommerce/payment-exceptions",
-        icon: AlertTriangle,
-      },
-    ],
-  },
-  {
-    label: "Digital metals",
-    items: [{ label: "Workspace", href: "/digital-metals", icon: Coins }],
-  },
-  {
-    label: "Online store",
-    items: [
-      { label: "Catalog", href: "/ecommerce", icon: ShoppingBag },
-      { label: "Categories", href: "/ecommerce/categories", icon: Layers3 },
-      { label: "Banners", href: "/ecommerce/banners", icon: ImageIcon },
-      { label: "Inventory", href: "/ecommerce/inventory", icon: Package },
-      {
-        label: "Store gold rates",
-        href: "/ecommerce/gold-rates",
-        icon: Scale,
-      },
-      { label: "Tax settings", href: "/ecommerce/tax", icon: Percent },
-      {
-        label: "Fulfilment",
-        href: "/ecommerce/fulfilment",
-        icon: PackageCheck,
-      },
-    ],
-  },
-  {
-    label: "Customer operations",
+    id: "customers",
+    label: "Customers & schemes",
     items: [
       { label: "Customers", href: "/customers", icon: UsersRound },
       { label: "Enrollments", href: "/enrollments", icon: ClipboardList },
-      { label: "Dues", href: "/dues", icon: CalendarClock, badgeKey: "dues" },
+      { label: "Dues & overdue", href: "/dues", icon: CalendarClock, badgeKey: "dues" },
+      {
+        label: "Maturity & redemption",
+        href: "/maturity",
+        icon: Gift,
+        badgeKey: "openRedemptions",
+      },
     ],
   },
   {
-    label: "Money & fulfilment",
+    id: "money",
+    label: "Money",
     items: [
       { label: "Collections", href: "/collections", icon: HandCoins },
       {
@@ -163,17 +165,64 @@ const groups: { label: string; items: NavItem[] }[] = [
         icon: WalletCards,
         badgeKey: "cashHandovers",
       },
-      {
-        label: "Maturity & redemption",
-        href: "/maturity",
-        icon: Gift,
-        badgeKey: "openRedemptions",
-      },
       { label: "Gold rates", href: "/gold-rates", icon: Scale },
     ],
   },
   {
-    label: "Engagement & insight",
+    id: "store",
+    label: "Online store",
+    module: "ecommerce",
+    icon: Store,
+    items: [
+      { label: "Overview", href: "/ecommerce", icon: Store, exact: true },
+      { label: "Orders", href: "/ecommerce/orders", icon: ShoppingBag },
+      { label: "Products", href: "/ecommerce/catalog", icon: Gem, match: ["/ecommerce/products"] },
+      { label: "Categories", href: "/ecommerce/categories", icon: Layers3 },
+      { label: "Inventory", href: "/ecommerce/inventory", icon: Package },
+      { label: "Banners", href: "/ecommerce/banners", icon: ImageIcon },
+      { label: "Push campaigns", href: "/ecommerce/campaigns", icon: Megaphone },
+      { label: "Courier COD", href: "/ecommerce/courier-cod", icon: Truck },
+      {
+        label: "Payment exceptions",
+        href: "/ecommerce/payment-exceptions",
+        icon: AlertTriangle,
+      },
+      {
+        label: "Store settings",
+        href: "/ecommerce/gold-rates",
+        icon: Settings2,
+        match: ["/ecommerce/tax", "/ecommerce/fulfilment"],
+      },
+    ],
+  },
+  {
+    id: "digital-gold",
+    label: "Digital Gold & Silver",
+    module: "digitalMetals",
+    icon: Coins,
+    items: [
+      { label: "Overview", href: "/digital-metals", icon: Coins, exact: true },
+      { label: "Purchases", href: "/digital-metals/purchases", icon: ShoppingCart },
+      { label: "Sell approvals", href: "/digital-metals/sells", icon: HandCoins },
+      { label: "Payouts", href: "/digital-metals/payouts", icon: Banknote },
+      { label: "Bank verification", href: "/digital-metals/bank-verification", icon: BadgeCheck },
+      { label: "Redemptions", href: "/digital-metals/redemption/orders", icon: Gift },
+      { label: "Fulfilment queue", href: "/digital-metals/redemption/fulfilment", icon: PackageCheck },
+      { label: "Coin & bar catalogue", href: "/digital-metals/redemption/catalogue", icon: Package },
+      { label: "Procurement", href: "/digital-metals/procurement", icon: Boxes },
+      { label: "Hedge book", href: "/digital-metals/hedge", icon: TrendingUp },
+      { label: "Payment exceptions", href: "/digital-metals/payment-exceptions", icon: AlertTriangle },
+      {
+        label: "Rates & settings",
+        href: "/digital-metals/rates",
+        icon: Settings2,
+        match: ["/digital-metals/settings", "/digital-metals/quote"],
+      },
+    ],
+  },
+  {
+    id: "engagement",
+    label: "Engage & insight",
     items: [
       {
         label: "Reminder centre",
@@ -186,7 +235,8 @@ const groups: { label: string; items: NavItem[] }[] = [
     ],
   },
   {
-    label: "Configuration",
+    id: "config",
+    label: "Setup",
     items: [
       { label: "Schemes", href: "/schemes", icon: Landmark },
       { label: "Staff & branches", href: "/staff-branches", icon: Building2 },
@@ -196,94 +246,242 @@ const groups: { label: string; items: NavItem[] }[] = [
   },
 ];
 
+function isNavItemActive(pathname: string, item: NavItem) {
+  if (item.exact) return pathname === item.href;
+  const prefixes = [item.href, ...(item.match ?? [])];
+  return prefixes.some((p) => pathname === p || pathname.startsWith(`${p}/`));
+}
+
+const NAV_MODULES_STORAGE_KEY = "swarnagrow.navModulesOpen";
+
+function readStoredModules(): Record<string, boolean> {
+  try {
+    const raw = window.localStorage.getItem(NAV_MODULES_STORAGE_KEY);
+    const parsed = raw ? (JSON.parse(raw) as unknown) : null;
+    return parsed && typeof parsed === "object" ? (parsed as Record<string, boolean>) : {};
+  } catch {
+    return {};
+  }
+}
+
+function NavBadge({ count, active }: { count: number; active?: boolean }) {
+  return (
+    <span
+      className={cn(
+        "grid h-5 min-w-5 shrink-0 place-items-center rounded-full px-1.5 text-[0.7rem] font-bold tabular-nums",
+        active ? "bg-[#7b0a2b] text-white" : "bg-[#f3d9a4] text-[#4a0e1c]",
+      )}
+      aria-label={`${count} pending`}
+    >
+      {count > 99 ? "99+" : count}
+    </span>
+  );
+}
+
+const navLinkBase =
+  "relative flex min-h-10 items-center rounded-xl text-[0.92rem] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f3d9a4]/70";
+const navLinkActive =
+  "bg-[#fbeed2] font-semibold text-[#3d0c15] shadow-[0_6px_16px_-10px_rgba(226,200,143,0.9)]";
+const navLinkIdle = "text-[#fbeff1] hover:bg-white/10 hover:text-white";
+
+function NavLink({
+  item,
+  active,
+  count,
+  compact,
+  nested,
+  onNavigate,
+}: {
+  item: NavItem;
+  active: boolean;
+  count?: number;
+  compact: boolean;
+  nested?: boolean;
+  onNavigate?: () => void;
+}) {
+  const router = useRouter();
+  const Icon = item.icon;
+  const link = (
+    <Link
+      href={item.href}
+      onClick={(event) => {
+        // vinext Link soft-nav is broken on the Vercel/Nitro build; router.push still works.
+        event.preventDefault();
+        onNavigate?.();
+        router.push(item.href);
+      }}
+      data-tour={`nav:${item.href}`}
+      aria-current={active ? "page" : undefined}
+      aria-label={compact ? item.label : undefined}
+      className={cn(
+        navLinkBase,
+        compact ? "justify-center px-2" : nested ? "gap-2.5 py-1.5 pl-3 pr-2.5" : "gap-3 px-3",
+        active ? navLinkActive : navLinkIdle,
+      )}
+    >
+      <Icon
+        className={cn(
+          "shrink-0",
+          nested ? "size-4" : "size-[1.1rem]",
+          active ? "text-[#7b0a2b]" : "text-[#f3d9a4]",
+        )}
+        aria-hidden
+      />
+      {!compact ? (
+        <>
+          <span className="min-w-0 flex-1 truncate">{item.label}</span>
+          {count ? <NavBadge count={count} active={active} /> : null}
+        </>
+      ) : count ? (
+        <span className="absolute right-1 top-1 size-2 rounded-full bg-[#f3d9a4]" aria-hidden />
+      ) : null}
+    </Link>
+  );
+  if (!compact) return link;
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>{link}</TooltipTrigger>
+      <TooltipContent side="right">
+        {item.label}
+        {count ? ` · ${count}` : ""}
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
 function Navigation({
   compact = false,
-  mobile = false,
+  onNavigate,
 }: {
   compact?: boolean;
-  mobile?: boolean;
+  onNavigate?: () => void;
 }) {
-  const pathname = usePathname();
+  const pathname = usePathname() ?? "/";
   const user = useAppSelector((s) => s.session.session?.user);
   const badges = useNavBadges();
   const ecommerceNav = useEcommerceWorkspaceNavVisible();
   const digitalMetalsNav = useDigitalMetalsWorkspaceNavVisible();
+  const [openModules, setOpenModules] = useState<Record<string, boolean>>(() =>
+    typeof window === "undefined" ? {} : readStoredModules(),
+  );
+
+  function toggleModule(id: string, open: boolean) {
+    setOpenModules((prev) => {
+      const next = { ...prev, [id]: open };
+      try {
+        window.localStorage.setItem(NAV_MODULES_STORAGE_KEY, JSON.stringify(next));
+      } catch {
+        // Storage can be unavailable (private mode) — the toggle still works for this visit.
+      }
+      return next;
+    });
+  }
+
   return (
-    <nav className="flex-1 overflow-y-auto px-3 py-5 scrollbar-thin">
-      {groups.map((group) => {
-        if (
-          group.label === "Digital metals" &&
-          !digitalMetalsNav.showDigitalMetalsNav
-        ) {
+    <nav className="flex-1 overflow-y-auto px-3 pb-4 pt-2 scrollbar-thin" aria-label="Main" data-tour="shell-nav">
+      {groups.map((group, index) => {
+        if (group.module === "digitalMetals" && !digitalMetalsNav.showDigitalMetalsNav) {
           return null;
         }
-        if (
-          (group.label === "Online store" ||
-            group.label === "Store operations") &&
-          !ecommerceNav.showEcommerceNav
-        ) {
+        if (group.module === "ecommerce" && !ecommerceNav.showEcommerceNav) {
           return null;
         }
-        const items = group.items.filter((item) =>
-          canAccessRoute(item.href, user),
-        );
+        const items = group.items.filter((item) => canAccessRoute(item.href, user));
         if (!items.length) return null;
-        return (
-          <div key={group.label} className="mb-5">
-            {!compact && (
-              <div className="mb-2 px-3 text-[0.68rem] font-bold uppercase tracking-[0.17em] text-[#c59a9f]">
-                {group.label}
+        const containsActive = items.some((item) => isNavItemActive(pathname, item));
+
+        // ── Module (Online store / Digital Gold): one expandable entry ──
+        if (group.module) {
+          const ParentIcon = group.icon ?? Store;
+          const total = items.reduce(
+            (sum, item) => sum + (item.badgeKey ? badges[item.badgeKey] ?? 0 : 0),
+            0,
+          );
+          if (compact) {
+            const overview = items[0];
+            return (
+              <div key={group.id} className="mt-2 border-t border-white/10 pt-2">
+                <NavLink
+                  item={{ ...overview, label: group.label, icon: ParentIcon }}
+                  active={containsActive}
+                  count={total}
+                  compact
+                  onNavigate={onNavigate}
+                />
               </div>
-            )}
-            <div className="space-y-1">
-              {items.map(({ label, href, icon: Icon, badgeKey }) => {
-                const count = badgeKey ? badges[badgeKey] : undefined;
-                const active =
-                  href === "/" ||
-                  href === "/ecommerce" ||
-                  href === "/digital-metals"
-                    ? pathname === href
-                    : pathname === href || pathname.startsWith(`${href}/`);
-                const link = (
-                  <Link
-                    href={href}
-                    className={cn(
-                      "flex min-h-11 items-center rounded-xl text-[0.92rem] transition-colors",
-                      compact ? "justify-center px-2" : "gap-3 px-3",
-                      active
-                        ? "bg-[#f7e9c9] font-semibold text-[#49121f]"
-                        : "text-[#f6e8e9] hover:bg-white/10 hover:text-white",
-                    )}
-                  >
-                    <Icon className="size-[1.15rem] shrink-0" />
-                    {!compact && (
-                      <>
-                        <span className="min-w-0 flex-1 truncate">{label}</span>
-                        {count ? (
-                          <span
-                            className={cn(
-                              "grid min-w-6 place-items-center rounded-full px-1.5 py-0.5 text-xs",
-                              active
-                                ? "bg-[#730321] text-white"
-                                : "bg-[#81283d] text-[#ffe9b5]",
-                            )}
-                          >
-                            {count}
-                          </span>
-                        ) : null}
-                      </>
-                    )}
-                  </Link>
-                );
-                return compact && !mobile ? (
-                  <Tooltip key={href}>
-                    <TooltipTrigger asChild>{link}</TooltipTrigger>
-                    <TooltipContent side="right">{label}</TooltipContent>
-                  </Tooltip>
-                ) : (
-                  <div key={href}>{link}</div>
-                );
-              })}
+            );
+          }
+          const open = containsActive || Boolean(openModules[group.id]);
+          const panelId = `nav-module-${group.id}`;
+          return (
+            <div key={group.id} className="mt-1">
+              <button
+                type="button"
+                onClick={() => toggleModule(group.id, !open)}
+                aria-expanded={open}
+                aria-controls={panelId}
+                className={cn(
+                  navLinkBase,
+                  "w-full gap-3 px-3 text-left",
+                  containsActive && !open ? navLinkActive : navLinkIdle,
+                  containsActive && open && "font-semibold text-white",
+                )}
+              >
+                <ParentIcon
+                  className={cn("size-[1.1rem] shrink-0", containsActive && !open ? "text-[#7b0a2b]" : "text-[#f3d9a4]")}
+                  aria-hidden
+                />
+                <span className="min-w-0 flex-1 truncate">{group.label}</span>
+                {!open && total ? <NavBadge count={total} /> : null}
+                <ChevronDown
+                  className={cn("size-4 shrink-0 opacity-80 transition-transform", !open && "-rotate-90")}
+                  aria-hidden
+                />
+              </button>
+              {open ? (
+                <div
+                  id={panelId}
+                  className="mb-1 ml-[1.4rem] mt-0.5 space-y-0.5 border-l border-white/15 pl-2"
+                >
+                  {items.map((item) => (
+                    <NavLink
+                      key={item.href}
+                      item={item}
+                      nested
+                      active={isNavItemActive(pathname, item)}
+                      count={item.badgeKey ? badges[item.badgeKey] : undefined}
+                      compact={false}
+                      onNavigate={onNavigate}
+                    />
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          );
+        }
+
+        // ── Core group: always visible, plain (non-clickable) heading ──
+        return (
+          <div
+            key={group.id}
+            className={cn(index > 0 && (compact ? "mt-2 border-t border-white/10 pt-2" : "mt-4"))}
+          >
+            {!compact && index > 0 ? (
+              <p className="mb-1 px-3 text-[0.72rem] font-semibold uppercase tracking-[0.08em] text-[#e9c98e]">
+                {group.label}
+              </p>
+            ) : null}
+            <div className="space-y-0.5">
+              {items.map((item) => (
+                <NavLink
+                  key={item.href}
+                  item={item}
+                  active={isNavItemActive(pathname, item)}
+                  count={item.badgeKey ? badges[item.badgeKey] : undefined}
+                  compact={compact}
+                  onNavigate={onNavigate}
+                />
+              ))}
             </div>
           </div>
         );
@@ -292,48 +490,60 @@ function Navigation({
   );
 }
 
-function Sidebar({ mobile = false }: { mobile?: boolean }) {
+function Sidebar({
+  mobile = false,
+  forceCompact = false,
+  onNavigate,
+}: {
+  mobile?: boolean;
+  /** Rail mode while Sidekick is open on narrower screens (not saved). */
+  forceCompact?: boolean;
+  onNavigate?: () => void;
+}) {
   const dispatch = useAppDispatch();
-  const collapsed =
-    useAppSelector((state) => state.ui.sidebarCollapsed) && !mobile;
+  const stored = useAppSelector((state) => state.ui.sidebarCollapsed);
+  const collapsed = (stored || forceCompact) && !mobile;
   return (
     <aside
       className={cn(
-        "flex h-full flex-col bg-[#490b17] transition-[width] duration-200",
-        collapsed ? "w-[5.125rem]" : "w-[17.5rem]",
+        "flex h-full flex-col bg-[linear-gradient(180deg,#520d1c_0%,#430a16_55%,#370811_100%)] transition-[width] duration-200",
+        collapsed ? "w-[4.75rem]" : "w-[17.25rem]",
       )}
     >
       <div
         className={cn(
-          "flex h-[5.5rem] items-center border-b border-white/15 px-4",
-          collapsed ? "justify-center" : "justify-between",
+          "flex h-[4.5rem] shrink-0 items-center border-b border-white/10",
+          collapsed ? "justify-center px-2" : "px-4",
         )}
       >
-        <BrandMark compact={collapsed} />
-        {!collapsed && !mobile && (
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            className="text-white hover:bg-white/10 hover:text-white"
-            onClick={() => dispatch(toggleSidebar())}
-          >
-            <PanelLeftClose />
-            <span className="sr-only">Collapse sidebar</span>
-          </Button>
-        )}
+        <Link href="/" onClick={onNavigate} aria-label="Swarna Grow — dashboard" className="min-w-0 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f3d9a4]/70">
+          <BrandMark compact={collapsed} />
+        </Link>
       </div>
-      {collapsed && (
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          className="mx-auto mt-3 text-white hover:bg-white/10 hover:text-white"
-          onClick={() => dispatch(toggleSidebar())}
-        >
-          <PanelLeftOpen />
-          <span className="sr-only">Expand sidebar</span>
-        </Button>
-      )}
-      <Navigation compact={collapsed} mobile={mobile} />
+      <Navigation compact={collapsed} onNavigate={onNavigate} />
+      {!mobile && !forceCompact ? (
+        <div className="shrink-0 border-t border-white/10 p-3">
+          <button
+            type="button"
+            onClick={() => dispatch(toggleSidebar())}
+            aria-label={collapsed ? "Expand menu" : "Collapse menu"}
+            title={collapsed ? "Expand menu" : "Collapse menu"}
+            className={cn(
+              "flex min-h-10 w-full items-center rounded-xl text-sm text-[#fbeff1] transition-colors hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f3d9a4]/70",
+              collapsed ? "justify-center" : "gap-3 px-3",
+            )}
+          >
+            {collapsed ? (
+              <PanelLeftOpen className="size-[1.1rem] text-[#f3d9a4]" aria-hidden />
+            ) : (
+              <>
+                <PanelLeftClose className="size-[1.1rem] text-[#f3d9a4]" aria-hidden />
+                <span>Collapse menu</span>
+              </>
+            )}
+          </button>
+        </div>
+      ) : null}
     </aside>
   );
 }
@@ -355,7 +565,13 @@ function formatRoleLabel(role?: string) {
     .replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-function Topbar({ onOpenAssistant }: { onOpenAssistant?: () => void }) {
+function Topbar({
+  onToggleAssistant,
+  assistantOpen = false,
+}: {
+  onToggleAssistant?: () => void;
+  assistantOpen?: boolean;
+}) {
   const dispatch = useAppDispatch();
   const router = useRouter();
   const session = useAppSelector((state) => state.session.session);
@@ -406,13 +622,13 @@ function Topbar({ onOpenAssistant }: { onOpenAssistant?: () => void }) {
       <header className="sticky top-0 z-30 flex h-[5.125rem] items-center gap-3 border-b border-[#e8dcd8] bg-white/95 px-4 backdrop-blur md:px-6">
         <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
           <SheetTrigger asChild>
-            <Button variant="outline" size="icon" className="lg:hidden">
+            <Button variant="outline" size="icon" className="lg:hidden" aria-label="Open menu">
               <Menu />
             </Button>
           </SheetTrigger>
           <SheetContent
             side="left"
-            className="w-[17.8125rem] border-none bg-[#490b17] p-0"
+            className="w-[17.25rem] border-none bg-[#490b17] p-0"
           >
             <SheetHeader className="sr-only">
               <SheetTitle>Navigation</SheetTitle>
@@ -420,10 +636,10 @@ function Topbar({ onOpenAssistant }: { onOpenAssistant?: () => void }) {
                 Open a section of the tenant admin portal
               </SheetDescription>
             </SheetHeader>
-            <MemoSidebar mobile />
+            <MemoSidebar mobile onNavigate={() => setMobileOpen(false)} />
           </SheetContent>
         </Sheet>
-        <div className="relative max-w-[39.375rem] flex-1">
+        <div className="relative max-w-[39.375rem] flex-1" data-tour="shell-search">
           <Search className="absolute left-4 top-1/2 size-5 -translate-y-1/2 text-[#7f7375]" />
           <Input
             value={search}
@@ -441,7 +657,7 @@ function Topbar({ onOpenAssistant }: { onOpenAssistant?: () => void }) {
               }
             }}
             placeholder="Search customers, phone, enrollment…"
-            className="h-12 cursor-text rounded-xl border-[#e3d5d0] bg-[#faf7f5] pl-12 pr-14 text-base shadow-sm"
+            className="h-11 cursor-text rounded-xl border-[#e3d5d0] bg-[#faf7f5] pl-12 pr-14 text-base text-[#28161a] shadow-sm placeholder:text-[#7f7375]"
           />
           <button
             type="button"
@@ -451,28 +667,37 @@ function Topbar({ onOpenAssistant }: { onOpenAssistant?: () => void }) {
             ⌘ K
           </button>
         </div>
-        {onOpenAssistant ? (
-          <Button type="button" variant="outline" onClick={onOpenAssistant}
-            className="shrink-0 gap-2 rounded-xl border-[#d9b6c0] bg-[#fff6f8] text-[#730321] hover:bg-[#f9e9ee]"
-            aria-label="Open Sidekick analytics assistant">
-            <Sparkles className="size-4" /><span className="hidden sm:inline">Ask Sidekick</span>
+        {onToggleAssistant ? (
+          <Button
+            type="button"
+            variant="outline"
+            onClick={onToggleAssistant}
+            data-tour="shell-sidekick"
+            aria-pressed={assistantOpen}
+            className={cn(
+              "h-11 shrink-0 gap-2 rounded-xl border-[#d9b6c0] font-semibold",
+              assistantOpen
+                ? "bg-[#730321] text-white hover:bg-[#5e0a20] hover:text-white"
+                : "bg-[#fff6f8] text-[#730321] hover:bg-[#f9e9ee] hover:text-[#730321]",
+            )}
+            aria-label={assistantOpen ? "Close Sidekick" : "Open Sidekick analytics assistant"}
+          >
+            <Sparkles className="size-4" />
+            <span className="hidden sm:inline">{assistantOpen ? "Close Sidekick" : "Ask Sidekick"}</span>
           </Button>
         ) : null}
         <div className="ml-auto hidden items-center gap-2 md:flex">
-          <Select defaultValue="admin">
-            <SelectTrigger className="h-12 w-[11.875rem] rounded-xl bg-[#faf7f5]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="admin">Jewellery admin</SelectItem>
-            </SelectContent>
-          </Select>
           {canPickActingBranch ? (
             <Select
               value={branch}
               onValueChange={(value) => dispatch(setBranch(value))}
             >
-              <SelectTrigger className="h-12 w-[10.625rem] rounded-xl bg-[#faf7f5]">
+              <SelectTrigger
+                data-tour="shell-branch"
+                className="h-11 w-[11rem] rounded-xl bg-[#faf7f5] text-[#28161a]"
+                aria-label="Branch shown across the portal"
+              >
+                <Building2 className="size-4 text-[#7b0a2b]" aria-hidden />
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -486,9 +711,14 @@ function Topbar({ onOpenAssistant }: { onOpenAssistant?: () => void }) {
             </Select>
           ) : null}
         </div>
+        <GuidesMenu
+          onAskSidekick={
+            onToggleAssistant && !assistantOpen ? onToggleAssistant : undefined
+          }
+        />
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" className="h-12 gap-3 px-2">
+            <Button variant="ghost" className="h-11 gap-3 px-2 text-[#28161a]">
               <span className="grid size-10 place-items-center rounded-full bg-[#730321] font-bold text-white">
                 {initials}
               </span>
@@ -535,25 +765,65 @@ function Topbar({ onOpenAssistant }: { onOpenAssistant?: () => void }) {
 
 const MemoTopbar = memo(Topbar);
 
-function AdminShellGrid({ children, onOpenAssistant }: { children: React.ReactNode; onOpenAssistant?: () => void }) {
-  const collapsed = useAppSelector((state) => state.ui.sidebarCollapsed);
+const SIDEKICK_WIDE_STORAGE_KEY = "swarnagrow.sidekickWide";
+
+function useMediaQuery(query: string) {
+  const [matches, setMatches] = useState(false);
+  useEffect(() => {
+    const media = window.matchMedia(query);
+    const update = () => setMatches(media.matches);
+    update();
+    media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
+  }, [query]);
+  return matches;
+}
+
+function AdminShellGrid({
+  children,
+  assistant,
+  assistantOpen,
+  onToggleAssistant,
+}: {
+  children: React.ReactNode;
+  assistant?: React.ReactNode;
+  assistantOpen: boolean;
+  onToggleAssistant?: () => void;
+}) {
+  const storedCollapsed = useAppSelector((state) => state.ui.sidebarCollapsed);
+  const roomy = useMediaQuery("(min-width: 1680px)");
+  // Give the page room: while Sidekick is docked on a typical laptop screen the
+  // menu shrinks to icons, so cards don't get squeezed between two panels.
+  const forceCompact = assistantOpen && !roomy;
+  const collapsed = storedCollapsed || forceCompact;
   return (
-    <div
-      className={cn(
-        "min-h-screen bg-[#fbf8f5] lg:grid",
-        collapsed
-          ? "lg:grid-cols-[5.125rem_minmax(0,1fr)]"
-          : "lg:grid-cols-[17.5rem_minmax(0,1fr)]",
-      )}
-    >
+    <div className="min-h-screen bg-[#fbf8f5]">
       <div className="fixed inset-y-0 left-0 z-40 hidden lg:block">
-        <MemoSidebar />
+        <MemoSidebar forceCompact={forceCompact} />
       </div>
-      <div className="min-w-0 lg:col-start-2">
-        <MemoTopbar onOpenAssistant={onOpenAssistant} />
-        <main className="min-h-[calc(100vh-5.125rem)] bg-[linear-gradient(#8f6c5c0a_1px,transparent_1px),linear-gradient(90deg,#8f6c5c0a_1px,transparent_1px)] bg-[size:2.75rem_2.75rem] p-4 md:p-7 lg:p-8">
-          <div className="mx-auto max-w-[105rem] space-y-7">{children}</div>
-        </main>
+      <div
+        className={cn(
+          "flex min-h-screen transition-[padding] duration-200",
+          collapsed ? "lg:pl-[4.75rem]" : "lg:pl-[17.25rem]",
+        )}
+      >
+        <div className="min-w-0 flex-1">
+          <MemoTopbar
+            onToggleAssistant={onToggleAssistant}
+            assistantOpen={assistantOpen}
+          />
+          <main className="min-h-[calc(100vh-4.5rem)] p-4 md:p-6 lg:p-8">
+            <div
+              className={cn(
+                "mx-auto space-y-7",
+                assistantOpen ? "max-w-[90rem]" : "max-w-[105rem]",
+              )}
+            >
+              {children}
+            </div>
+          </main>
+        </div>
+        {assistant}
       </div>
     </div>
   );
@@ -561,7 +831,24 @@ function AdminShellGrid({ children, onOpenAssistant }: { children: React.ReactNo
 
 export function AdminShell({ children }: { children: React.ReactNode }) {
   const [assistantOpen, setAssistantOpen] = useState(false);
-  const openAssistant = useCallback(() => setAssistantOpen(true), []);
+  const toggleAssistant = useCallback(() => setAssistantOpen((v) => !v), []);
+  const [assistantWide, setAssistantWide] = useState(() => {
+    try {
+      return typeof window !== "undefined" && localStorage.getItem(SIDEKICK_WIDE_STORAGE_KEY) === "1";
+    } catch {
+      return false;
+    }
+  });
+  const toggleAssistantWide = useCallback(() => {
+    setAssistantWide((prev) => {
+      try {
+        localStorage.setItem(SIDEKICK_WIDE_STORAGE_KEY, prev ? "0" : "1");
+      } catch {
+        // per-visit only when storage is unavailable
+      }
+      return !prev;
+    });
+  }, []);
   const router = useRouter();
   const pathname = usePathname();
   const mounted = useClientMounted();
@@ -593,10 +880,30 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   const showAssistant = hasPermission(session?.user, "report.read");
 
   return (
-    <>
-      <AdminShellGrid onOpenAssistant={showAssistant ? openAssistant : undefined}>{children}</AdminShellGrid>
+    <TourProvider
+      onTourStart={() => {
+        // On phones and tablets Sidekick covers the page — step aside so the guide is visible.
+        if (!window.matchMedia("(min-width: 1024px)").matches) setAssistantOpen(false);
+      }}
+    >
+      <AdminShellGrid
+        assistantOpen={showAssistant && assistantOpen}
+        onToggleAssistant={showAssistant ? toggleAssistant : undefined}
+        assistant={
+          showAssistant ? (
+            <AssistantPanel
+              open={assistantOpen}
+              onOpenChange={setAssistantOpen}
+              wide={assistantWide}
+              onToggleWide={toggleAssistantWide}
+            />
+          ) : null
+        }
+      >
+        {children}
+      </AdminShellGrid>
       <PaymentSuccessHost />
-      {showAssistant ? <AssistantPanel open={assistantOpen} onOpenChange={setAssistantOpen} /> : null}
-    </>
+      <WelcomeTourPrompt />
+    </TourProvider>
   );
 }

@@ -18,6 +18,7 @@ import {
   money,
   schemePlans,
 } from "@/src/mocks/customer-data";
+import { customerCommerceMock } from "@/src/mocks/customer-commerce-mocks";
 import type {
   CustomerGrievance,
   CustomerHome,
@@ -100,6 +101,11 @@ const mockBaseQuery: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQueryErro
   const url = routeOf(args);
   const method = typeof args === "string" ? "GET" : String(args.method ?? "GET").toUpperCase();
   const body = typeof args === "string" ? undefined : (args.body as Record<string, unknown> | undefined);
+  const params = typeof args === "string" ? undefined : (args.params as Record<string, unknown> | undefined);
+
+  const demo = customerCommerceMock({ url, method, body, params });
+  // Clone: RTK freezes results, and the demo store mutates its own records.
+  if (demo) return "error" in demo ? { error: demo.error as FetchBaseQueryError } : ok(structuredClone(demo.data));
 
   if (url === "/public/tenants/resolve") return ok({ resolvedBy: "TENANT_CODE", tenantCode: "KAI", tenants: [customerTenant] });
   if (url === "/public/auth/otp/request") {

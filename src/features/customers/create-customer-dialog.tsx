@@ -92,11 +92,12 @@ export function CreateCustomerDialog({
   return (
     <ActionDialog
       trigger={
-        <Button>
+        <Button data-tour="customers-create">
           <Plus />
           Create customer
         </Button>
       }
+      tourId="customer-create"
       title="Create customer"
       description="Mobile must be unique in your tenant. Leave email blank if the customer has none."
       actionLabel="Create customer"

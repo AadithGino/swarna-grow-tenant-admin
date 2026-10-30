@@ -50,8 +50,8 @@ export const mockSettingsOperations = {
   redemptionApprovalRequired: true,
   termsAndConditions:
     "1. Scheme is valid for the stated tenure.\n2. Benefit applies only if all installments are paid.",
-  ecommerceEnabled: false,
-  ecommerce: { planEntitled: true, enabled: false, active: false },
+  ecommerceEnabled: true,
+  ecommerce: { planEntitled: true, enabled: true, active: true },
   audit: { version: 4 },
 };
 
@@ -109,8 +109,9 @@ export const mockSubscription = {
     customerSelfEnrol: true,
     advancedReports: false,
     ecommerce: true,
+    digitalMetals: true,
   },
-  ecommerce: { planEntitled: true, enabled: false, active: false },
+  ecommerce: { planEntitled: true, enabled: true, active: true },
 };
 
 export const mockAvailablePlans = [

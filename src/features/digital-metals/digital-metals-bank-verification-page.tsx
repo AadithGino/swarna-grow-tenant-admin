@@ -1,124 +1,158 @@
 "use client";
 
-import Link from "next/link";
 import { useState } from "react";
-import { PageHeader, Surface } from "@/src/components/common/page-parts";
-import { PageSkeleton, QueryError } from "@/src/components/common/query-state";
+import { BadgeCheck, Landmark } from "lucide-react";
+import { PageHeader } from "@/src/components/common/page-parts";
+import { EmptyState, QueryError } from "@/src/components/common/query-state";
 import { StatusBadge } from "@/src/components/common/status-badge";
-import { Button } from "@/components/ui/button";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+  AdminTable,
+  ListPanel,
+  LoadMoreFooter,
+  type AdminColumn,
+} from "@/src/components/admin-ui/admin-table";
+import { FilterBar, FilterSearch, QuickViews } from "@/src/components/admin-ui/filter-bar";
+import { Notice } from "@/src/components/admin-ui/detail-parts";
+import { useLoadMoreList } from "@/src/hooks/use-load-more-list";
 import { useGetDigitalMetalsBankVerificationQueueQuery } from "@/src/store/api/admin-api";
 import { useDigitalMetalsServerEntitlement } from "./digital-metals-admin-shared";
+import { DM_SECTION, DmCustomerCell, DmGate, shortDateTime } from "./digital-metals-admin-ui";
+
+type BankRow = Record<string, unknown> & { id: string };
+
+const STATUS_VIEWS = [
+  { value: "PENDING_VERIFICATION", label: "To verify" },
+  { value: "ACTIVE", label: "Verified" },
+  { value: "DISABLED", label: "Disabled" },
+  { value: "ALL", label: "All" },
+];
+
+const rowId = (r: BankRow) => String(r.id);
 
 export function DigitalMetalsBankVerificationPage() {
   const ent = useDigitalMetalsServerEntitlement();
   const [status, setStatus] = useState("PENDING_VERIFICATION");
-  const [cursor, setCursor] = useState<string | undefined>(undefined);
-  const [cursors, setCursors] = useState<(string | undefined)[]>([undefined]);
+  const [search, setSearch] = useState("");
+  const list = useLoadMoreList<BankRow>(status, rowId);
   const queue = useGetDigitalMetalsBankVerificationQueueQuery(
-    { status: status === "ALL" ? undefined : status, limit: 25, cursor },
+    { status: status === "ALL" ? undefined : status, limit: 25, cursor: list.cursor },
     { skip: !ent.workspaceVisible },
   );
 
-  if (ent.loading || queue.isLoading) return <PageSkeleton cards={2} />;
-  if (!ent.workspaceVisible) {
-    return (
-      <div className="p-6">
-        <PageHeader title="Bank verification" />
-        <p className="text-sm text-muted-foreground">{ent.disabledMessage}</p>
-      </div>
-    );
-  }
-  if (queue.isError) return <QueryError error={queue.error} onRetry={queue.refetch} />;
-
-  const items = queue.data?.items ?? [];
+  const merged = list.merge((queue.data?.items ?? []) as BankRow[]);
+  const needle = search.trim().toLowerCase();
+  const rows = needle
+    ? merged.filter((r) => {
+        const c = r.customer as { name?: string; customerNumber?: string } | null;
+        return [r.accountHolderName, r.ifsc, r.bankName, r.accountLast4, c?.name, c?.customerNumber]
+          .filter(Boolean)
+          .some((v) => String(v).toLowerCase().includes(needle));
+      })
+    : merged;
   const meta = queue.data?.meta;
 
-  return (
-    <div className="space-y-6 p-6" data-testid="digital-metals-bank-verification-queue">
-      <PageHeader
-        eyebrow="Digital metals"
-        title="Bank verification queue"
-        description="Manual verification for sell payout accounts. Full account numbers are never shown here."
-      />
-      <div className="flex flex-wrap items-end gap-3">
-        <div className="w-48">
-          <p className="mb-1 text-xs font-medium text-muted-foreground">Status</p>
-          <Select
-            value={status}
-            onValueChange={(v) => {
-              setStatus(v);
-              setCursor(undefined);
-              setCursors([undefined]);
-            }}
-          >
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="PENDING_VERIFICATION">Pending verification</SelectItem>
-              <SelectItem value="ACTIVE">Active</SelectItem>
-              <SelectItem value="DISABLED">Disabled</SelectItem>
-              <SelectItem value="ALL">All</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
-      <Surface title={`Accounts (${items.length}${meta?.hasMore ? "+" : ""})`}>
-        <div className="divide-y">
-          {items.length === 0 ? (
-            <p className="p-4 text-sm text-muted-foreground">No matching bank destinations.</p>
-          ) : (
-            items.map((row) => {
-              const customer = row.customer as { id?: string; name?: string; customerNumber?: string } | null;
-              return (
-                <div key={String(row.id)} className="grid gap-2 px-4 py-3 md:grid-cols-[1fr_auto] md:items-center">
-                  <div>
-                    <p className="font-medium">{String(row.accountHolderName ?? "Account")}</p>
-                    <p className="text-xs text-muted-foreground">
-                      ****{String(row.accountLast4 ?? "????")} · {String(row.ifsc ?? "—")}
-                      {row.bankName ? ` · ${String(row.bankName)}` : ""}
-                    </p>
-                    <p className="mt-1 text-xs">
-                      {customer?.name ? (
-                        <Link href={`/customers/${customer.id}`} className="underline underline-offset-2">
-                          {customer.name}
-                          {customer.customerNumber ? ` (#${customer.customerNumber})` : ""}
-                        </Link>
-                      ) : (
-                        "Customer"
-                      )}
-                    </p>
-                  </div>
-                  <StatusBadge status={String(row.status ?? "")} />
-                </div>
-              );
-            })
-          )}
-        </div>
-        {meta?.hasMore ? (
-          <div className="border-t px-4 py-3">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                const next = meta.nextCursor ?? undefined;
-                setCursors((prev) => [...prev, next]);
-                setCursor(next);
-              }}
-            >
-              Load more
-            </Button>
+  const columns: AdminColumn<BankRow>[] = [
+    {
+      key: "customer",
+      header: "Customer",
+      primary: true,
+      cell: (r) => <DmCustomerCell customer={r.customer as Parameters<typeof DmCustomerCell>[0]["customer"]} />,
+      sortValue: (r) => String((r.customer as { name?: string } | null)?.name ?? ""),
+    },
+    {
+      key: "account",
+      header: "Account",
+      cell: (r) => (
+        <div className="flex items-center gap-3">
+          <span className="grid size-9 place-items-center rounded-xl bg-[#f6efec] text-[#7b0a2b]">
+            <Landmark className="size-4" aria-hidden />
+          </span>
+          <div className="min-w-0">
+            <p className="truncate font-semibold">{String(r.accountHolderName ?? "Account")}</p>
+            <p className="truncate text-xs text-[#857a7d]">
+              {r.bankName ? `${String(r.bankName)} · ` : ""}••••{String(r.accountLast4 ?? "????")}
+            </p>
           </div>
-        ) : null}
-      </Surface>
-    </div>
+        </div>
+      ),
+    },
+    { key: "ifsc", header: "IFSC", cell: (r) => <span className="tabular-nums">{String(r.ifsc ?? "—")}</span>, hideOnMobile: true },
+    {
+      key: "added",
+      header: "Added",
+      cell: (r) => <span className="text-sm text-[#5c4a4e]">{shortDateTime(r.createdAt as string | undefined)}</span>,
+      sortValue: (r) => String(r.createdAt ?? ""),
+      hideOnMobile: true,
+    },
+    {
+      key: "status",
+      header: "Status",
+      primary: true,
+      cell: (r) => (
+        <StatusBadge
+          status={String(r.status ?? "")}
+          label={r.status === "PENDING_VERIFICATION" ? "To verify" : r.status === "ACTIVE" ? "Verified" : undefined}
+        />
+      ),
+    },
+  ];
+
+  return (
+    <DmGate loading={ent.loading} visible={ent.workspaceVisible} message={ent.disabledMessage} title="Bank verification">
+      <div className="space-y-6" data-testid="digital-metals-bank-verification-queue">
+        <PageHeader
+          eyebrow={DM_SECTION}
+          icon={BadgeCheck}
+          title="Bank verification"
+          description="Customers add a bank account before their first sale. Verify it from the customer's profile — full account numbers are never shown here."
+        />
+        <Notice tone="blue" icon={BadgeCheck}>
+          Open a row to go to the customer, then verify or disable the account from their Digital Gold tab after checking a
+          cancelled cheque or statement.
+        </Notice>
+        <ListPanel
+          toolbar={
+            <FilterBar
+              quickViews={<QuickViews value={status} onChange={setStatus} options={STATUS_VIEWS} ariaLabel="Verification status" />}
+              search={<FilterSearch value={search} onChange={setSearch} placeholder="Search name, bank, IFSC or last 4 digits" />}
+              resultLabel={`${rows.length}${meta?.hasMore ? "+" : ""} accounts`}
+            />
+          }
+        >
+          {queue.isError ? (
+            <QueryError error={queue.error} onRetry={queue.refetch} />
+          ) : (
+            <AdminTable
+              columns={columns}
+              rows={rows}
+              getRowId={rowId}
+              rowHref={(r) => {
+                const id = (r.customer as { id?: string } | null)?.id;
+                return id ? `/customers/${id}` : undefined;
+              }}
+              loading={queue.isLoading}
+              fetching={queue.isFetching && !queue.isLoading}
+              caption="Bank accounts awaiting verification"
+              empty={
+                <EmptyState
+                  icon={BadgeCheck}
+                  title={status === "PENDING_VERIFICATION" ? "All caught up" : "No accounts match"}
+                  detail={status === "PENDING_VERIFICATION" ? "No bank accounts are waiting for verification." : "Try another status."}
+                />
+              }
+              footer={
+                <LoadMoreFooter
+                  shown={rows.length}
+                  hasMore={meta?.hasMore}
+                  loading={queue.isFetching}
+                  noun="accounts"
+                  onLoadMore={() => list.loadMore(merged, meta?.nextCursor)}
+                />
+              }
+            />
+          )}
+        </ListPanel>
+      </div>
+    </DmGate>
   );
 }

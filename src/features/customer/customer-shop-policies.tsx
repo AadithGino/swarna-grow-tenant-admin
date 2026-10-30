@@ -25,13 +25,13 @@ export function CustomerShopPoliciesLinks({ className }: { className?: string })
   return (
     <>
       <nav className={className} aria-label="Store policies">
-        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Store policies</p>
-        <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm">
+        <p className="text-xs font-semibold text-[#7a6f72]">Store policies</p>
+        <ul className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1 text-sm">
           {POLICY_KEYS.map(({ key, label }) => (
             <li key={key}>
               <button
                 type="button"
-                className="text-primary underline-offset-4 hover:underline"
+                className="font-medium text-[var(--customer-primary,#730321)] underline-offset-4 hover:underline"
                 onClick={() => setOpenKey(key)}
               >
                 {label}

@@ -1,13 +1,16 @@
 "use client";
 
 import Link from "next/link";
-import { QueryError } from "@/src/components/common/query-state";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
+import { ArrowDownLeft, ArrowUpRight, Banknote, Building2, Coins, Package, ShieldAlert, Store } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { QueryError } from "@/src/components/common/query-state";
+import { Surface } from "@/src/components/common/page-parts";
 import { StatusBadge } from "@/src/components/common/status-badge";
 import { newIdempotencyKey } from "@/src/lib/idempotency";
-import { formatDeliveryAddressSnapshot, ugToGramsDisplay } from "@/src/lib/digital-metals-display";
-import { money } from "@/src/lib/format";
+import { formatDeliveryAddressSnapshot } from "@/src/lib/digital-metals-display";
 import {
   useGetDigitalMetalsBuyOrdersQuery,
   useGetDigitalMetalsCustomerPassbookQuery,
@@ -18,13 +21,80 @@ import {
   useResolveDigitalMetalsRiskHoldMutation,
 } from "@/src/store/api/admin-api";
 import { DigitalMetalsCustomerBankPanel } from "@/src/features/digital-metals/digital-metals-customer-bank-panel";
+import { MetalPill, dmInr, dmWeight, shortDateTime } from "@/src/features/digital-metals/digital-metals-admin-ui";
 
 function formatUg(ug: string) {
   const grams = Number(ug) / 1_000_000;
   return `${grams.toFixed(4)} g`;
 }
 
-export function CustomerDigitalMetalsTab({ customerId }: { customerId: string }) {
+type Row = Record<string, unknown>;
+
+function ChannelChip({ counter }: { counter: boolean }) {
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[0.7rem] font-semibold",
+        counter ? "bg-[#f7ecee] text-[#7b0a2b]" : "bg-slate-100 text-slate-600",
+      )}
+    >
+      {counter ? <Store className="size-3" aria-hidden /> : null}
+      {counter ? "Counter" : "App"}
+    </span>
+  );
+}
+
+function OrderRow({
+  href,
+  icon,
+  metal,
+  title,
+  meta,
+  amount,
+  status,
+  extra,
+}: {
+  href: string;
+  icon: ReactNode;
+  metal?: string;
+  title: ReactNode;
+  meta: ReactNode;
+  amount: ReactNode;
+  status: string;
+  extra?: ReactNode;
+}) {
+  return (
+    <li className="flex flex-wrap items-center gap-3 px-5 py-3">
+      <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-[#faf5f2] text-[#7b0a2b]">{icon}</span>
+      <Link href={href} className="min-w-0 flex-1 hover:underline">
+        <span className="flex flex-wrap items-center gap-2 font-semibold text-[#28161a]">
+          {metal ? <MetalPill metal={metal} /> : null}
+          {title}
+        </span>
+        <span className="mt-0.5 block truncate text-xs text-[#8a7c80]">{meta}</span>
+      </Link>
+      <div className="flex shrink-0 flex-col items-end gap-1">
+        <span className="font-bold tabular-nums text-[#28161a]">{amount}</span>
+        <StatusBadge status={status} />
+      </div>
+      {extra ? <div className="w-full sm:w-auto">{extra}</div> : null}
+    </li>
+  );
+}
+
+/**
+ * Customer → Digital metals. `actions` (Buy / Sell buttons) and `sellAction` (e.g. Pay cash) are passed in by
+ * the customer page so this tab only reads data.
+ */
+export function CustomerDigitalMetalsTab({
+  customerId,
+  actions,
+  sellAction,
+}: {
+  customerId: string;
+  actions?: ReactNode;
+  sellAction?: (row: Row) => ReactNode;
+}) {
   const wallets = useGetDigitalMetalsCustomerWalletsQuery(customerId);
   const passbook = useGetDigitalMetalsCustomerPassbookQuery({ customerId, limit: 25 });
   const riskHolds = useGetDigitalMetalsCustomerRiskHoldsQuery(customerId);
@@ -44,203 +114,253 @@ export function CustomerDigitalMetalsTab({ customerId }: { customerId: string })
     );
   }
 
+  const walletItems = wallets.data?.items ?? [];
+  const buys = (buyOrders.data?.items ?? []) as Row[];
+  const sells = (sellOrders.data?.items ?? []) as Row[];
+  const redemptions = (redemptionOrders.data?.items ?? []) as Row[];
+  const holds = (riskHolds.data?.items ?? []) as Row[];
+  const ledger = (passbook.data?.items ?? []) as Row[];
+
   return (
-    <div className="space-y-6" data-testid="admin-customer-digital-metals-tab">
-      <div className="rounded-2xl border border-[#e8d9d0] bg-[#faf7f4] px-5 py-4">
-        <h2 className="font-serif text-xl font-semibold text-[#31242a]">Digital metal wallets</h2>
-        <p className="mt-1 text-xs text-muted-foreground">
-          Branch-scoped staff only see customers in their branch.
-        </p>
-      </div>
-      <ul className="space-y-2 text-sm">
-        {(wallets.data?.items ?? []).length === 0 ? (
-          <li className="text-muted-foreground">No wallets yet.</li>
+    <div className="space-y-5" data-testid="admin-customer-digital-metals-tab">
+      <Surface
+        icon={Coins}
+        title="Vault balance"
+        description="What the customer holds right now. Branch staff only see customers in their branch."
+        action={actions}
+      >
+        {wallets.isLoading ? (
+          <p className="px-5 py-6 text-sm text-[#8a7c80]">Loading…</p>
+        ) : walletItems.length === 0 ? (
+          <p className="px-5 py-6 text-sm text-[#8a7c80]">No wallets yet. The first purchase opens one.</p>
         ) : (
-          wallets.data?.items.map((w) => (
-            <li key={w.id} className="rounded-xl border bg-card px-4 py-3">
-              <p className="font-medium">
-                {w.metal} ({w.finenessPpm / 1000}‰)
-              </p>
-              <p>Available {formatUg(w.availableUg)}</p>
-              <p className="text-xs text-muted-foreground">
-                Held {formatUg(w.heldUg)} · Reserved {formatUg(w.reservedUg)}
-              </p>
-            </li>
-          ))
-        )}
-      </ul>
-
-      <DigitalMetalsCustomerBankPanel customerId={customerId} />
-
-      <div data-testid="admin-customer-digital-metals-purchases">
-        <h3 className="text-sm font-semibold">Purchases</h3>
-        {buyOrders.isLoading ? (
-          <p className="mt-2 text-xs text-muted-foreground">Loading…</p>
-        ) : (buyOrders.data?.items ?? []).length === 0 ? (
-          <p className="mt-2 text-xs text-muted-foreground">No buy orders.</p>
-        ) : (
-          <ul className="mt-2 space-y-2 text-sm">
-            {buyOrders.data?.items.map((row) => (
-              <li key={String(row.id)} className="rounded-xl border bg-card px-4 py-3">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <p className="font-medium">
-                    {String(row.metal ?? "")} · {ugToGramsDisplay(String(row.quantityUg ?? "0"))}
-                  </p>
-                  <StatusBadge status={String(row.status ?? "")} />
+          <ul className={cn("grid gap-px bg-[#f1e8e5]", walletItems.length > 1 && "sm:grid-cols-2")}>
+            {walletItems.map((w) => (
+              <li key={w.id} className="bg-white px-5 py-4">
+                <div className="flex items-center justify-between gap-2">
+                  <MetalPill metal={w.metal} />
+                  <span className="text-xs text-[#8a7c80]">{(w.finenessPpm / 10_000).toFixed(1)}% pure</span>
                 </div>
-                <p className="mt-1 text-xs text-muted-foreground">{money(Number(row.totalPayablePaise ?? 0))}</p>
-                <Link
-                  href={`/digital-metals/purchases/${encodeURIComponent(String(row.id))}`}
-                  className="mt-2 inline-block text-xs font-medium text-primary underline-offset-2 hover:underline"
-                >
-                  View purchase
-                </Link>
-              </li>
-            ))}
-          </ul>
-        )}
-        {(buyOrders.data?.meta?.hasMore ?? false) ? (
-          <Link href="/digital-metals/purchases" className="mt-2 inline-block text-xs underline">
-            All purchases
-          </Link>
-        ) : null}
-      </div>
-
-      <div data-testid="admin-customer-digital-metals-sells">
-        <h3 className="text-sm font-semibold">Sell orders</h3>
-        {sellOrders.isLoading ? (
-          <p className="mt-2 text-xs text-muted-foreground">Loading…</p>
-        ) : (sellOrders.data?.items ?? []).length === 0 ? (
-          <p className="mt-2 text-xs text-muted-foreground">No sell orders.</p>
-        ) : (
-          <ul className="mt-2 space-y-2 text-sm">
-            {sellOrders.data?.items.map((row) => (
-              <li key={String(row.id)} className="rounded-xl border bg-card px-4 py-3">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <p className="font-medium">
-                    {String(row.metal ?? "")} · {ugToGramsDisplay(String(row.quantityUg ?? "0"))}
-                  </p>
-                  <StatusBadge status={String(row.status ?? "")} />
-                </div>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Settlement {money(Number(row.settlementPaise ?? 0))}
+                <p className="mt-2 text-[1.6rem] font-extrabold tabular-nums tracking-tight text-[#28161a]">{dmWeight(w.heldUg)}</p>
+                <p className="text-sm font-medium text-[#3a2a2f]">Available {formatUg(w.availableUg)}</p>
+                <p className="text-xs text-[#8a7c80]">
+                  {Number(w.reservedUg) > 0 ? `${formatUg(w.reservedUg)} reserved for pending sells` : "Nothing reserved"}
+                  {Number(w.pendingBuyUg) > 0 ? ` · ${formatUg(w.pendingBuyUg)} awaiting payment` : ""}
                 </p>
-                <Link
-                  href={`/digital-metals/sells/${encodeURIComponent(String(row.id))}`}
-                  className="mt-2 inline-block text-xs font-medium text-primary underline-offset-2 hover:underline"
-                >
-                  View sell
-                </Link>
               </li>
             ))}
           </ul>
         )}
+      </Surface>
+
+      <div className="grid gap-5 xl:grid-cols-2">
+        <Surface
+          title="Purchases"
+          description="Latest buys, from the app or the counter"
+          data-testid="admin-customer-digital-metals-purchases"
+          action={
+            <Link href="/digital-metals/purchases" className="text-sm font-semibold text-[#7b0a2b] hover:underline">
+              All purchases
+            </Link>
+          }
+        >
+          {buyOrders.isLoading ? (
+            <p className="px-5 py-6 text-sm text-[#8a7c80]">Loading…</p>
+          ) : buys.length === 0 ? (
+            <p className="px-5 py-6 text-sm text-[#8a7c80]">No buy orders.</p>
+          ) : (
+            <ul className="divide-y divide-[#f3eae7]">
+              {buys.map((row) => (
+                <OrderRow
+                  key={String(row.id)}
+                  href={`/digital-metals/purchases/${encodeURIComponent(String(row.id))}`}
+                  icon={<ArrowDownLeft className="size-4" aria-hidden />}
+                  metal={String(row.metal ?? "")}
+                  title={
+                    <>
+                      {dmWeight(String(row.quantityUg ?? "0"))}
+                      <ChannelChip counter={row.channel === "COUNTER"} />
+                    </>
+                  }
+                  meta={shortDateTime(String(row.createdAt ?? "") || null)}
+                  amount={dmInr(Number(row.totalPayablePaise ?? 0))}
+                  status={String(row.status ?? "")}
+                />
+              ))}
+            </ul>
+          )}
+        </Surface>
+
+        <Surface
+          title="Sells"
+          description="Grams sold back to the shop and how they were paid"
+          data-testid="admin-customer-digital-metals-sells"
+          action={
+            <Link href="/digital-metals/sells" className="text-sm font-semibold text-[#7b0a2b] hover:underline">
+              All sells
+            </Link>
+          }
+        >
+          {sellOrders.isLoading ? (
+            <p className="px-5 py-6 text-sm text-[#8a7c80]">Loading…</p>
+          ) : sells.length === 0 ? (
+            <p className="px-5 py-6 text-sm text-[#8a7c80]">No sell orders.</p>
+          ) : (
+            <ul className="divide-y divide-[#f3eae7]">
+              {sells.map((row) => {
+                const cash = row.payoutMethod === "CASH";
+                return (
+                  <OrderRow
+                    key={String(row.id)}
+                    href={`/digital-metals/sells/${encodeURIComponent(String(row.id))}`}
+                    icon={<ArrowUpRight className="size-4" aria-hidden />}
+                    metal={String(row.metal ?? "")}
+                    title={
+                      <>
+                        {dmWeight(String(row.quantityUg ?? "0"))}
+                        <ChannelChip counter={Boolean(row.assisted)} />
+                      </>
+                    }
+                    meta={
+                      <span className="inline-flex items-center gap-1">
+                        {cash ? <Banknote className="size-3" aria-hidden /> : <Building2 className="size-3" aria-hidden />}
+                        {cash ? "Cash payout" : "Bank payout"} · {shortDateTime(String(row.createdAt ?? "") || null)}
+                      </span>
+                    }
+                    amount={`Settlement ${dmInr(Number(row.settlementPaise ?? 0))}`}
+                    status={String(row.status ?? "")}
+                    extra={sellAction ? sellAction(row) : null}
+                  />
+                );
+              })}
+            </ul>
+          )}
+        </Surface>
       </div>
 
-      <div data-testid="admin-customer-digital-metals-redemptions">
-        <h3 className="text-sm font-semibold">Physical redemption</h3>
-        <p className="mt-1 text-xs text-muted-foreground">
-          Open and recent redemption orders for this customer.
-        </p>
-        {redemptionOrders.isLoading ? (
-          <p className="mt-2 text-xs text-muted-foreground">Loading…</p>
-        ) : redemptionOrders.isError ? (
-          <p className="mt-2 text-xs text-destructive">Could not load redemption orders.</p>
-        ) : (redemptionOrders.data?.items ?? []).length === 0 ? (
-          <p className="mt-2 text-xs text-muted-foreground">No redemption orders yet.</p>
-        ) : (
-          <ul className="mt-2 space-y-2 text-sm">
-            {redemptionOrders.data?.items.map((row) => {
-              const id = String(row.id);
-              const snapshot = row.deliveryAddressSnapshot as Record<string, unknown> | undefined;
-              const snap = row.snapshot as Record<string, unknown> | undefined;
-              const fulfilment =
-                String(row.fulfilmentMode) === "DELIVERY"
-                  ? formatDeliveryAddressSnapshot(snapshot) || "Delivery"
-                  : snap?.pickupBranchLabel
-                    ? `Pickup · ${String(snap.pickupBranchLabel)}`
-                    : row.pickupBranchId
-                      ? `Pickup · ${String(row.pickupBranchId)}`
-                      : "Pickup";
-              return (
-                <li key={id} className="rounded-xl border bg-card px-4 py-3">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <p className="font-medium">
-                      {ugToGramsDisplay(String(row.quantityUg ?? "0"))} {String(row.metal ?? "")}
-                    </p>
-                    <StatusBadge status={String(row.status ?? "")} />
-                  </div>
-                  <p className="mt-1 text-xs text-muted-foreground">{fulfilment}</p>
-                  <Link
+      <Surface bodyClassName="p-5">
+        <DigitalMetalsCustomerBankPanel customerId={customerId} />
+      </Surface>
+
+      <div className="grid gap-5 xl:grid-cols-2">
+        <Surface
+          icon={Package}
+          title="Coin & bar redemptions"
+          description="Open and recent requests to take metal home"
+          data-testid="admin-customer-digital-metals-redemptions"
+        >
+          {redemptionOrders.isLoading ? (
+            <p className="px-5 py-6 text-sm text-[#8a7c80]">Loading…</p>
+          ) : redemptionOrders.isError ? (
+            <p className="px-5 py-6 text-sm text-destructive">Could not load redemption orders.</p>
+          ) : redemptions.length === 0 ? (
+            <p className="px-5 py-6 text-sm text-[#8a7c80]">No redemption orders yet.</p>
+          ) : (
+            <ul className="divide-y divide-[#f3eae7]">
+              {redemptions.map((row) => {
+                const id = String(row.id);
+                const snapshot = row.deliveryAddressSnapshot as Record<string, unknown> | undefined;
+                const snap = row.snapshot as Record<string, unknown> | undefined;
+                const fulfilment =
+                  String(row.fulfilmentMode) === "DELIVERY"
+                    ? formatDeliveryAddressSnapshot(snapshot) || "Delivery"
+                    : snap?.pickupBranchLabel
+                      ? `Pickup · ${String(snap.pickupBranchLabel)}`
+                      : row.pickupBranchId
+                        ? `Pickup · ${String(row.pickupBranchId)}`
+                        : "Pickup";
+                return (
+                  <OrderRow
+                    key={id}
                     href={`/digital-metals/redemption/orders/${encodeURIComponent(id)}`}
-                    className="mt-2 inline-block text-xs font-medium text-primary underline-offset-2 hover:underline"
-                  >
-                    View order
-                  </Link>
+                    icon={<Package className="size-4" aria-hidden />}
+                    metal={String(row.metal ?? "")}
+                    title={dmWeight(String(row.quantityUg ?? "0"))}
+                    meta={fulfilment}
+                    amount=""
+                    status={String(row.status ?? "")}
+                  />
+                );
+              })}
+            </ul>
+          )}
+        </Surface>
+
+        <Surface
+          icon={ShieldAlert}
+          title="Risk holds"
+          description="Holds block new sells until resolved"
+          data-testid="admin-customer-digital-metals-risk-holds"
+        >
+          {riskHolds.isLoading ? (
+            <p className="px-5 py-6 text-sm text-[#8a7c80]">Loading…</p>
+          ) : holds.length === 0 ? (
+            <p className="px-5 py-6 text-sm text-[#8a7c80]">No active or past holds.</p>
+          ) : (
+            <ul className="divide-y divide-[#f3eae7]">
+              {holds.map((hold) => (
+                <li key={String(hold.id)} className="space-y-2 px-5 py-3 text-sm">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="font-semibold text-[#28161a]">{String(hold.reasonCode).replace(/_/g, " ").toLowerCase()}</p>
+                    <StatusBadge status={String(hold.status)} />
+                  </div>
+                  <p className="text-xs text-[#8a7c80]">Exposure {dmInr(Number(hold.exposurePaise ?? 0))}</p>
+                  {hold.status === "ACTIVE" ? (
+                    <div className="flex flex-col gap-2 sm:flex-row">
+                      <Input
+                        className="h-9 flex-1"
+                        placeholder="Resolution note (audited)"
+                        value={resolutionNote}
+                        onChange={(e) => setResolutionNote(e.target.value)}
+                      />
+                      <Button
+                        type="button"
+                        size="sm"
+                        disabled={resolveState.isLoading || resolutionNote.trim().length < 3}
+                        onClick={() =>
+                          void resolveHold({
+                            holdId: String(hold.id),
+                            resolutionNote: resolutionNote.trim(),
+                            idempotencyKey: newIdempotencyKey(),
+                          }).then(() => riskHolds.refetch())
+                        }
+                      >
+                        Resolve
+                      </Button>
+                    </div>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          )}
+        </Surface>
+      </div>
+
+      <Surface title="Passbook" description="Every gram in and out of the vault">
+        {passbook.isLoading ? (
+          <p className="px-5 py-6 text-sm text-[#8a7c80]">Loading…</p>
+        ) : ledger.length === 0 ? (
+          <p className="px-5 py-6 text-sm text-[#8a7c80]">No entries yet.</p>
+        ) : (
+          <ul className="divide-y divide-[#f3eae7]">
+            {ledger.map((row) => {
+              const delta = Number(row.quantityUgDelta ?? 0);
+              return (
+                <li key={String(row.id)} className="flex items-center justify-between gap-3 px-5 py-2.5 text-sm">
+                  <span className="min-w-0">
+                    <span className="block font-medium capitalize text-[#28161a]">{String(row.entryType ?? "").replace(/_/g, " ").toLowerCase()}</span>
+                    <span className="block text-xs text-[#8a7c80]">{shortDateTime(String(row.createdAt ?? row.occurredAt ?? "") || null)}</span>
+                  </span>
+                  <span className={cn("font-bold tabular-nums", delta < 0 ? "text-red-700" : delta > 0 ? "text-emerald-700" : "text-[#5d4f53]")}>
+                    {delta > 0 ? "+" : delta < 0 ? "−" : ""}
+                    {dmWeight(Math.abs(delta))}
+                  </span>
                 </li>
               );
             })}
           </ul>
         )}
-      </div>
-
-      <div data-testid="admin-customer-digital-metals-risk-holds">
-        <h3 className="text-sm font-semibold">Risk holds</h3>
-        {riskHolds.isLoading ? (
-          <p className="mt-2 text-xs text-muted-foreground">Loading…</p>
-        ) : (riskHolds.data?.items ?? []).length === 0 ? (
-          <p className="mt-2 text-xs text-muted-foreground">No active or historical holds.</p>
-        ) : (
-          <ul className="mt-2 space-y-2 text-xs">
-            {riskHolds.data?.items.map((hold) => (
-              <li key={String(hold.id)} className="rounded-xl border bg-card px-3 py-2">
-                <p className="font-medium">
-                  {String(hold.reasonCode)} · {String(hold.status)}
-                </p>
-                <p className="text-muted-foreground">Exposure ₹{Number(hold.exposurePaise ?? 0) / 100}</p>
-                {hold.status === "ACTIVE" ? (
-                  <div className="mt-2 flex flex-col gap-2 sm:flex-row">
-                    <input
-                      className="flex-1 rounded-md border px-2 py-1 text-xs"
-                      placeholder="Resolution note (audited)"
-                      value={resolutionNote}
-                      onChange={(e) => setResolutionNote(e.target.value)}
-                    />
-                    <Button
-                      type="button"
-                      size="sm"
-                      disabled={resolveState.isLoading || resolutionNote.trim().length < 3}
-                      onClick={() =>
-                        void resolveHold({
-                          holdId: String(hold.id),
-                          resolutionNote: resolutionNote.trim(),
-                          idempotencyKey: newIdempotencyKey(),
-                        }).then(() => riskHolds.refetch())
-                      }
-                    >
-                      Resolve
-                    </Button>
-                  </div>
-                ) : null}
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-      <div>
-        <h3 className="text-sm font-semibold">Passbook</h3>
-        {passbook.isLoading ? (
-          <p className="mt-2 text-xs text-muted-foreground">Loading…</p>
-        ) : (
-          <ul className="mt-2 space-y-1 text-xs text-muted-foreground">
-            {(passbook.data?.items ?? []).map((row) => (
-              <li key={String(row.id)}>
-                {String(row.entryType)} · Δ {String(row.quantityUgDelta)} µg
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
+      </Surface>
     </div>
   );
 }

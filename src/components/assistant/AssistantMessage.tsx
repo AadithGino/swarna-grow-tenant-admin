@@ -1,6 +1,16 @@
 "use client";
 
-import { ArrowDownRight, ArrowUpRight, ChevronDown, CornerDownRight, ListChecks, Sparkles } from "lucide-react";
+import {
+  ArrowDownRight,
+  ArrowUpRight,
+  ChevronDown,
+  CornerDownRight,
+  Footprints,
+  ListChecks,
+  PlayCircle,
+  Sparkles,
+  Square,
+} from "lucide-react";
 import { useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
 import { AssistantExportControl } from "@/src/components/assistant/AssistantExportControl";
@@ -14,9 +24,12 @@ import {
   useCountUp,
   useRevealText,
 } from "@/src/components/assistant/sidekick-primitives";
+import { useTours } from "@/src/components/tour/tour-provider";
+import { getTour } from "@/src/lib/tours/registry";
 import type {
   AssistantBlock,
   AssistantBundle,
+  AssistantGuide,
   AssistantStatCard,
   AssistantTableBlockData,
 } from "@/src/types/assistant";
@@ -258,6 +271,67 @@ function HowIGotThis({ bundle }: { bundle: AssistantBundle }) {
   );
 }
 
+/** "Show me step by step" — launches the on-screen walkthrough Sidekick attached. */
+function GuideCard({ guide }: { guide: AssistantGuide }) {
+  const { start, stop, canRun, activeTourId, progress } = useTours();
+  const tour = getTour(guide.id);
+  if (!tour) return null;
+  const allowed = canRun(tour.id);
+  const running = activeTourId === tour.id;
+  const done = Boolean(progress.completed[tour.id]);
+  return (
+    <div className="sk-pop mt-3.5 overflow-hidden rounded-2xl border border-[#ead9b4] bg-[linear-gradient(135deg,#fffaf0_0%,#fbf1dc_100%)]">
+      <div className="flex items-start gap-3 px-4 pt-3.5">
+        <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-white text-[var(--sk-maroon)] shadow-[0_6px_14px_-8px_rgba(115,3,33,0.5)]">
+          <Footprints className="size-[18px]" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#9a6f2a]">On-screen guide</p>
+          <p className="mt-0.5 text-[14.5px] font-bold leading-snug text-[var(--sk-ink)]">{tour.title}</p>
+          <p className="mt-0.5 text-[12px] text-[var(--sk-ink-2)]">
+            {tour.steps.length} steps · ≈ {tour.minutes} min{done ? " · done before" : ""}
+          </p>
+        </div>
+      </div>
+      <div className="mt-3.5 flex items-center gap-2 border-t border-[#ead9b4] bg-white/60 px-4 py-2.5">
+        {!allowed ? (
+          <p className="text-[12px] text-[var(--sk-ink-2)]">
+            {tour.module === "ecommerce"
+              ? "The online store isn't switched on for your shop yet. Turn it on under Settings → Subscription."
+              : tour.module === "digitalMetals"
+                ? "Digi Gold isn't switched on for your shop yet. Turn it on under Settings → Subscription."
+                : "Your role doesn't include this screen. Ask the owner to give you access."}
+          </p>
+        ) : running ? (
+          <>
+            <span className="inline-flex items-center gap-1.5 text-[12.5px] font-semibold text-[var(--sk-maroon)]">
+              <i className="sk-live-dot block size-1.5 rounded-full bg-[var(--sk-maroon)]" />
+              Guide running on screen
+            </span>
+            <button
+              type="button"
+              onClick={stop}
+              className="ml-auto inline-flex h-8 items-center gap-1.5 rounded-lg border border-[var(--sk-line-2)] bg-white px-2.5 text-[12px] font-semibold text-[var(--sk-ink-2)] hover:border-[var(--sk-maroon)] hover:text-[var(--sk-maroon)]"
+            >
+              <Square className="size-3" />
+              Stop
+            </button>
+          </>
+        ) : (
+          <button
+            type="button"
+            onClick={() => start(tour.id, "sidekick")}
+            className="inline-flex h-9 w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-br from-[var(--sk-maroon-2)] to-[var(--sk-maroon)] px-4 text-[13px] font-semibold text-white shadow-[0_8px_18px_-10px_rgba(115,3,33,0.9)] transition hover:-translate-y-px"
+          >
+            <PlayCircle className="size-4" />
+            {done ? "Show me again" : "Show me step by step"}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function AssistantMessage({
   bundle,
   fresh = false,
@@ -308,6 +382,8 @@ export function AssistantMessage({
           )}
         />
       ) : null}
+
+      {bundle.guide && (done || !fresh) ? <GuideCard guide={bundle.guide} /> : null}
 
       {blocks.length && (done || !fresh) ? (
         <div className="mt-3.5 space-y-3">

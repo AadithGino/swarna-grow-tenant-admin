@@ -98,6 +98,12 @@ export function GoldRatesPage() {
     branchId: actingBranchId,
     ...pager.queryParams,
   });
+  // Newest entries (always page 1) drive the cards and trend, so paging the
+  // history table no longer changes "current", "change" or the chart.
+  const latestQuery = useGetGoldRatesQuery({
+    branchId: actingBranchId,
+    limit: 15,
+  });
   const currentQuery = useGetGoldRateCurrentQuery(
     actingBranchId ? { branchId: actingBranchId } : undefined,
   );
@@ -133,22 +139,37 @@ export function GoldRatesPage() {
     [query.data?.history],
   );
   const page = query.data?.page ?? emptyPageMeta();
-  const historyCurrent = query.data?.current;
+  const latest = useMemo(
+    () => latestQuery.data?.history ?? [],
+    [latestQuery.data?.history],
+  );
+  const historyCurrent = latestQuery.data?.current ?? query.data?.current;
   const liveCurrent = currentQuery.data;
+  const currentIndex = Math.max(
+    0,
+    latest.findIndex(
+      (r: { effectiveAt: string }) =>
+        liveCurrent?.effectiveAt != null &&
+        r.effectiveAt === liveCurrent.effectiveAt,
+    ),
+  );
+  const currentEntry = latest[currentIndex] as
+    | { enteredBy?: string; branch?: string }
+    | undefined;
   const current = {
     ratePerGram:
       liveCurrent?.ratePerGram ?? historyCurrent?.ratePerGram ?? 0,
     effectiveAt:
       liveCurrent?.effectiveAt ?? historyCurrent?.effectiveAt ?? "—",
-    branch: historyCurrent?.branch ?? "All branches",
-    enteredBy: historyCurrent?.enteredBy ?? "—",
+    branch: currentEntry?.branch ?? historyCurrent?.branch ?? "All branches",
+    enteredBy: currentEntry?.enteredBy ?? historyCurrent?.enteredBy ?? "—",
     isSetForToday:
       liveCurrent?.isSetForToday ?? historyCurrent?.isSetForToday ?? false,
   };
 
   const trend = useMemo(
     () =>
-      [...history]
+      [...latest]
         .reverse()
         .slice(-14)
         .map(
@@ -161,12 +182,13 @@ export function GoldRatesPage() {
             rate: r.ratePerGram,
           }),
         ),
-    [history],
+    [latest],
   );
 
-  const previous =
-    (history[1] as { ratePerGram?: number } | undefined)?.ratePerGram ??
-    current.ratePerGram;
+  const previousEntry = latest[currentIndex + 1] as
+    | { ratePerGram?: number }
+    | undefined;
+  const previous = previousEntry?.ratePerGram ?? current.ratePerGram;
   const change = current.ratePerGram - previous;
   const changePct =
     previous > 0 ? Math.abs((change / previous) * 100).toFixed(2) : "0.00";
@@ -192,11 +214,12 @@ export function GoldRatesPage() {
               }
             }}
             trigger={
-              <Button onClick={() => setDialogOpen(true)}>
+              <Button data-tour="goldrate-add" onClick={() => setDialogOpen(true)}>
                 <Plus />
                 Add gold rate
               </Button>
             }
+            tourId="goldrate"
             title="Set gold rate"
             description="The new rate is immutable and becomes effective on the business date below (IST)."
             actionLabel="Publish rate"
@@ -328,7 +351,7 @@ export function GoldRatesPage() {
           icon={change >= 0 ? ArrowUpRight : ArrowDownRight}
           label="Change from previous"
           value={`${change >= 0 ? "+" : ""}${money(change)}`}
-          detail={`${changePct}% movement`}
+          detail={previousEntry ? `${changePct}% vs the previous rate` : "No earlier rate to compare"}
           tone={change >= 0 ? "green" : "red"}
         />
         <StatCard

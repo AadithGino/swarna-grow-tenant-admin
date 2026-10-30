@@ -1,6 +1,6 @@
 "use client";
 
-import { Plus, Receipt, Tags, Trash2 } from "lucide-react";
+import { Plus, Receipt, Tags, Trash2, Percent } from "lucide-react";
 import { useExternalValueSync } from "@/src/hooks/use-external-value-sync";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -34,7 +34,6 @@ import {
   EcommerceReadinessPanel,
   EcommerceRelatedLink,
   EcommerceSettingsHint,
-  EcommerceCatalogNav,
   EcommerceSetupSteps,
   gstBpsFromPercentInput,
   gstPercentFromBps,
@@ -157,21 +156,18 @@ export function EcommerceTaxSettingsPage() {
   return (
     <>
       <PageHeader
-        eyebrow="Online store"
-        title="Tax settings"
-        description="Step 1 of store checkout: GST labels on products and HSN/SAC codes for quotes and invoices."
+        eyebrow="Online store · Store settings"
+        icon={Percent}
+        title="GST & HSN"
+        description="GST buckets on products and the HSN/SAC codes used on quotes and invoices."
         actions={
-          <Button type="button" disabled={!entitled} onClick={save}>
+          <Button type="button" className="rounded-xl" disabled={!entitled} onClick={save}>
             Save tax settings
           </Button>
         }
       />
-      {!entitled ? (
-        <p className="mb-4 text-sm text-amber-800">{disabledMessage}</p>
-      ) : null}
-
-      <EcommerceCatalogNav />
       <EcommerceSetupSteps active="tax" />
+      {!entitled ? <p className="text-sm text-amber-800">{disabledMessage}</p> : null}
 
       <EcommerceReadinessPanel
         blockers={taxBlockers}
@@ -228,7 +224,7 @@ export function EcommerceTaxSettingsPage() {
               </p>
             ) : (
               <div className="overflow-hidden rounded-xl border border-[#eaded9]">
-                <div className="hidden grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)_100px_88px_40px] gap-3 border-b border-[#eaded9] bg-[#faf7f5] px-4 py-2.5 text-xs font-bold uppercase tracking-wide text-muted-foreground lg:grid">
+                <div className="hidden grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)_100px_88px_40px] gap-3 border-b border-[#eaded9] bg-[#faf7f5] px-4 py-2.5 text-xs font-semibold text-muted-foreground lg:grid">
                   <span>Code</span>
                   <span>Customer-facing label</span>
                   <span>GST %</span>

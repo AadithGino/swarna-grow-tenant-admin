@@ -22,6 +22,7 @@ import {
   useResolveGatewaySettlementMismatchMutation,
   useUploadGatewaySettlementMutation,
 } from "@/src/store/api/admin-api";
+import { istBusinessDateToday } from "@/src/lib/ist-business-date";
 
 const CATEGORIES = [
   "PROVIDER_CONFIRMED",
@@ -47,7 +48,7 @@ export function GatewaySettlementPanel() {
   const [upload, uploadState] = useUploadGatewaySettlementMutation();
   const [resolve, resolveState] = useResolveGatewaySettlementMismatchMutation();
   const [businessDate, setBusinessDate] = useState(
-    new Date().toISOString().slice(0, 10),
+    istBusinessDateToday(),
   );
   const [fileName, setFileName] = useState("phonepe-settlement.json");
   const [statement, setStatement] = useState("[]");

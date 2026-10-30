@@ -19,18 +19,10 @@ import {
 } from "@/src/lib/customer-payment-redirect";
 import { env } from "@/src/config/env";
 import {
-  formatAssetLabel,
   parseAssetKey,
   quoteReadyAssets,
   type CapabilityAsset,
 } from "@/src/lib/digital-metals-asset-ui";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import {
   useCreateDigitalMetalsBuyOrderMutation,
   useCreateDigitalMetalsBuyPaymentIntentMutation,
@@ -51,10 +43,14 @@ import { DigitalMetalsQuoteBreakdown } from "@/src/lib/digital-metals-quote-prev
 import { formatInrFromPaise, ugToGramsDisplay } from "@/src/lib/digital-metals-display";
 import {
   buyOrderStatusLabel,
+  CustomerDmMetalChoice,
   CustomerDmPageShell,
+  CustomerDmQuickChips,
   CustomerDmSurface,
   CustomerDmTimeline,
   customerDmMetalAccent,
+  dmAssetName,
+  DmCoinArt,
 } from "@/src/features/customer/customer-digital-metals-shared";
 
 function dmOrderPath(tenantSlug: string | null, orderId: string) {
@@ -123,60 +119,108 @@ export function CustomerDigitalMetalsBuyPage() {
     }
   }
 
+  const budgetNumber = Number(budgetRupees);
+  const amountChips = [500, 1000, 5000, 10000].map((n) => ({ label: `₹${n.toLocaleString("en-IN")}`, value: String(n) }));
+
   return (
     <CustomerDmPageShell
-      title="Buy digital metal"
-      subtitle="Choose metal and how much you want to spend. Rates and taxes are locked on the review screen."
+      title="Buy digital gold or silver"
+      subtitle="Pick a metal and how much to spend. You'll see the exact grams, rate and tax before paying."
       backHref={portfolioBack}
-      backLabel="Portfolio"
+      backLabel="Wallet"
       testId="customer-dm-buy-form"
     >
-      <CustomerDmSurface>
-        <div className="space-y-4 lg:max-w-md">
-          <div>
-            <Label htmlFor="dm-buy-asset">Metal & purity</Label>
-            <Select value={assetSel || undefined} onValueChange={setAssetSel} disabled={!tradable.length}>
-              <SelectTrigger id="dm-buy-asset" className="mt-1.5" data-testid="customer-dm-buy-asset">
-                <SelectValue placeholder={tradable.length ? "Choose metal" : "No metals available"} />
-              </SelectTrigger>
-              <SelectContent>
-                {tradable.map((a) => (
-                  <SelectItem key={`${a.metal}:${a.finenessPpm}`} value={`${a.metal}:${a.finenessPpm}`}>
-                    {formatAssetLabel(String(a.metal), Number(a.finenessPpm))}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {asset ? (
-              <p className={`mt-2 inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${accent.chip}`}>
-                {formatAssetLabel(asset.metal, asset.finenessPpm)}
-              </p>
-            ) : null}
-          </div>
-          <div>
-            <Label htmlFor="budget">Amount to spend (₹)</Label>
-            <Input
-              id="budget"
-              inputMode="decimal"
-              value={budgetRupees}
-              onChange={(e) => setBudgetRupees(e.target.value)}
-              className="mt-1.5 max-w-xs text-lg font-semibold"
-              aria-describedby="budget-hint"
-            />
-            <p id="budget-hint" className="mt-1 text-xs text-[#8a6a70]">
-              Minimum ₹100. Grams are calculated from the live buy rate at review.
+      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_19rem]">
+        <CustomerDmSurface>
+          <fieldset>
+            <legend className="text-[15px] font-semibold text-[#221a1d]">Metal</legend>
+            <div className="mt-3">
+              {tradable.length ? (
+                <CustomerDmMetalChoice
+                  label="Metal and purity"
+                  testId="customer-dm-buy-asset"
+                  value={assetSel}
+                  onChange={setAssetSel}
+                  options={tradable.map((a) => ({
+                    key: `${a.metal}:${a.finenessPpm}`,
+                    metal: String(a.metal),
+                    finenessPpm: Number(a.finenessPpm),
+                    detail: String(a.metal) === "SILVER" ? "Fine silver, held in grams" : "Investment-grade gold, held in grams",
+                  }))}
+                />
+              ) : (
+                <p className="text-sm text-[#7a6f72]" data-testid="customer-dm-buy-asset">No metals are available to buy right now.</p>
+              )}
+            </div>
+          </fieldset>
+
+          <div className="mt-7 border-t border-[#f0e6e0] pt-6">
+            <Label htmlFor="budget" className="text-[15px] font-semibold text-[#221a1d]">
+              Amount to spend
+            </Label>
+            <div className="mt-3 flex max-w-sm items-center rounded-2xl border border-[#e3d6ce] bg-white px-4 focus-within:border-[var(--customer-primary,#730321)] focus-within:ring-2 focus-within:ring-[rgba(var(--customer-primary-rgb,115,3,33),0.15)]">
+              <span className="font-serif text-2xl text-[#9a8d90]">₹</span>
+              <Input
+                id="budget"
+                inputMode="decimal"
+                value={budgetRupees}
+                onChange={(e) => setBudgetRupees(e.target.value.replace(/[^\d.]/g, ""))}
+                className="h-14 border-0 bg-transparent pl-2 font-serif text-3xl tabular-nums shadow-none focus-visible:ring-0 md:text-3xl"
+                aria-describedby="budget-hint"
+              />
+            </div>
+            <div className="mt-3">
+              <CustomerDmQuickChips chips={amountChips} onPick={setBudgetRupees} active={budgetRupees} />
+            </div>
+            <p id="budget-hint" className="mt-3 text-xs text-[#7a6f72]">
+              Minimum ₹100. Grams are worked out from the live buy rate on the next screen.
             </p>
           </div>
-        </div>
-        <div className="mt-6 flex flex-col gap-2 sm:flex-row">
-          <Button type="button" className="min-h-11 flex-1 sm:flex-none" onClick={() => void onContinue()} disabled={createState.isLoading || !asset}>
-            Review quote
-          </Button>
-          <Button type="button" variant="outline" className="min-h-11" asChild>
-            <Link href={portfolioBack}>Cancel</Link>
-          </Button>
-        </div>
-      </CustomerDmSurface>
+
+          <div className="mt-7 flex flex-col gap-2 sm:flex-row">
+            <Button
+              type="button"
+              className="h-12 rounded-full px-7 text-[15px] text-white sm:flex-none"
+              style={{ background: "var(--customer-primary, #730321)" }}
+              onClick={() => void onContinue()}
+              disabled={createState.isLoading || !asset || !(budgetNumber >= 100)}
+            >
+              {createState.isLoading ? "Getting today's rate…" : "Review quote"}
+            </Button>
+            <Button type="button" variant="ghost" className="h-12 rounded-full" asChild>
+              <Link href={portfolioBack}>Cancel</Link>
+            </Button>
+          </div>
+        </CustomerDmSurface>
+
+        <aside className="rounded-[1.25rem] border border-[#ecdfd8] bg-[#fcfaf8] p-5">
+          <p className="text-sm font-semibold text-[#221a1d]">How buying works</p>
+          <ol className="mt-4 space-y-4 text-sm">
+            {[
+              ["See your grams", "We lock today's rate for a few minutes and show tax and fees."],
+              ["Pay securely", "UPI, card or net banking through the payment gateway."],
+              ["Metal is credited", "Grams land in your wallet as soon as payment is confirmed."],
+            ].map(([title, detail], i) => (
+              <li key={title} className="flex gap-3">
+                <span className="grid size-6 shrink-0 place-items-center rounded-full bg-white text-xs font-bold text-[var(--customer-primary,#730321)] ring-1 ring-[#e8dbd3]">{i + 1}</span>
+                <span>
+                  <span className="block font-medium text-[#221a1d]">{title}</span>
+                  <span className="text-xs leading-5 text-[#7a6f72]">{detail}</span>
+                </span>
+              </li>
+            ))}
+          </ol>
+          {asset ? (
+            <div className={`mt-5 flex items-center gap-3 rounded-xl px-3 py-2.5 text-xs ${accent.chip}`}>
+              <DmCoinArt metal={asset.metal} size={28} />
+              <span>
+                Buying <strong>{dmAssetName(asset.metal, asset.finenessPpm)}</strong>
+                {budgetNumber >= 100 ? <> for ₹{budgetNumber.toLocaleString("en-IN")}</> : null}
+              </span>
+            </div>
+          ) : null}
+        </aside>
+      </div>
     </CustomerDmPageShell>
   );
 }
@@ -231,13 +275,14 @@ export function CustomerDigitalMetalsBuyReviewPage({ quoteId }: { quoteId: strin
 
   return (
     <CustomerDmPageShell
+      narrow
       title="Review purchase"
       subtitle="Confirm grams, rates, fees, and total payable before payment."
       backHref={customerPath(tenantSlug, "digital-metals", "buy")}
       testId="customer-dm-buy-review"
     >
-      <DigitalMetalsQuoteBreakdown quote={{ ...quote, side: "BUY" }} className="border-[#eaded9] bg-[#faf8f7]" />
-      <label className="mt-5 flex min-h-11 items-start gap-3 rounded-xl border border-[#eaded9] bg-white px-4 py-3 text-sm text-[#5c3d42]">
+      <DigitalMetalsQuoteBreakdown quote={{ ...quote, side: "BUY" }} className="rounded-[1.25rem] border-[#ecdfd8] bg-white p-5" />
+      <label className="mt-5 flex min-h-11 cursor-pointer items-start gap-3 rounded-2xl border border-[#ecdfd8] bg-white px-4 py-3.5 text-sm text-[#4d4245]">
         <input
           type="checkbox"
           checked={termsAccepted}
@@ -252,7 +297,8 @@ export function CustomerDigitalMetalsBuyReviewPage({ quoteId }: { quoteId: strin
       <div className="mt-6 flex flex-col gap-2 sm:flex-row">
         <Button
           type="button"
-          className="min-h-11 flex-1 sm:flex-none"
+          className="h-12 rounded-full px-7 text-[15px] text-white"
+          style={{ background: "var(--customer-primary, #730321)" }}
           onClick={() => void onAccept()}
           disabled={createOrderState.isLoading}
         >
@@ -458,10 +504,11 @@ export function CustomerDigitalMetalsBuyOrderPage({ orderId }: { orderId: string
 
   return (
     <CustomerDmPageShell
+      narrow
       title={statusCopy.title}
       subtitle={statusCopy.detail}
       backHref={portfolioHref}
-      backLabel="Portfolio"
+      backLabel="Wallet"
       testId="customer-dm-buy-order"
     >
       <CustomerDigitalMetalsPurchaseSuccessDialog
@@ -509,7 +556,8 @@ export function CustomerDigitalMetalsBuyOrderPage({ orderId }: { orderId: string
         {canPay ? (
           <Button
             type="button"
-            className="mt-5 min-h-11 w-full sm:w-auto"
+            className="mt-5 h-12 w-full rounded-full px-7 text-[15px] text-white sm:w-auto"
+            style={{ background: "var(--customer-primary, #730321)" }}
             onClick={() => void onPay()}
             disabled={createIntentState.isLoading || submittingPay}
           >

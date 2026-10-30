@@ -24,6 +24,16 @@ import {
 import { readContractResponseBody } from "@/src/lib/contract-response";
 import { normalizeFetchBaseQueryError } from "@/src/lib/api-error";
 import { newIdempotencyKey } from "@/src/lib/idempotency";
+import type {
+  CounterOrderOptions,
+  CounterOrderQuote,
+  CounterPaymentMode,
+  CustomerDigitalMetalsSummary,
+  CustomerEcommerceSummary,
+  DigitalMetalsDashboardSummary,
+  DmCounterQuote,
+  DmMetal,
+} from "@/src/lib/counter-trade-types";
 import { ensureMutationJsonBody } from "@/src/lib/rtk-mutation-body";
 import { rtkDataResult, rtkErrorResult } from "@/src/lib/rtk-query-result";
 import type { FetchBaseQueryMeta } from "@reduxjs/toolkit/query";
@@ -116,35 +126,6 @@ export type DateRangeQueryParams = {
   period?: string;
   preset?: string;
 };
-
-function isoDate(d: Date) {
-  return d.toISOString().slice(0, 10);
-}
-
-/** Map dashboard period presets to backend from/to (IST calendar days). */
-function periodToDateRange(period?: string): { from?: string; to?: string } {
-  const now = new Date();
-  const to = isoDate(now);
-  if (!period || period === "THIS_MONTH") {
-    const from = new Date(now.getFullYear(), now.getMonth(), 1);
-    return { from: isoDate(from), to };
-  }
-  if (period === "LAST_MONTH") {
-    const from = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-    const end = new Date(now.getFullYear(), now.getMonth(), 0);
-    return { from: isoDate(from), to: isoDate(end) };
-  }
-  if (period === "THIS_WEEK") {
-    const day = now.getDay() || 7;
-    const from = new Date(now);
-    from.setDate(now.getDate() - day + 1);
-    return { from: isoDate(from), to };
-  }
-  if (period === "TODAY") {
-    return { from: to, to };
-  }
-  return {};
-}
 
 type ApiArgs = FetchArgs & { mockKey: string };
 
@@ -349,6 +330,7 @@ const appBaseQuery = (async (args, api, extraOptions) => {
           mockKey: args.mockKey,
           params: args.params as Record<string, unknown>,
           body: args.body as Record<string, unknown>,
+          url: typeof args.url === "string" ? args.url : undefined,
         }),
       };
     } catch (error) {
@@ -651,10 +633,11 @@ export const adminApi = createApi({
       async queryFn(arg, _api, _extra, baseQuery) {
         const period = arg?.period ?? "THIS_MONTH";
         const branchId = arg?.branchId;
+        // Presets are resolved by the backend on IST calendar days. Computing
+        // from/to here with toISOString() shifted every range one day early
+        // for Indian browsers (e.g. "This month" started on the 30th/31st).
         const range =
-          arg?.from && arg?.to
-            ? { from: arg.from, to: arg.to }
-            : periodToDateRange(period);
+          arg?.from && arg?.to ? { from: arg.from, to: arg.to } : {};
         const defaultChartKeys = [
           "collection-trend",
           "collection-by-mode",
@@ -3773,7 +3756,7 @@ export const adminApi = createApi({
       invalidatesTags: ["Ecommerce"],
     }),
     getEcommerceInventory: builder.query<
-      { items: Record<string, any>[] },
+      { items: Record<string, any>[]; totalProducts?: number; truncated: boolean },
       { q?: string; limit?: number } | void
     >({
       query: (params) => ({
@@ -3784,8 +3767,14 @@ export const adminApi = createApi({
       transformResponse: (raw) => {
         const payload = contractPayload(raw) as {
           items?: Record<string, unknown>[];
+          totalProducts?: number;
+          truncated?: boolean;
         };
-        return { items: payload?.items ?? [] };
+        return {
+          items: payload?.items ?? [],
+          totalProducts: payload?.totalProducts,
+          truncated: Boolean(payload?.truncated),
+        };
       },
       providesTags: ["Ecommerce"],
     }),
@@ -4174,6 +4163,181 @@ export const adminApi = createApi({
       providesTags: (_r, _e, customerId) => [
         { type: "DigitalMetals", id: `wallets-${customerId}` },
       ],
+    }),
+    /* ── Counter trades & summaries ── */
+    getDigitalMetalsCustomerSummary: builder.query<CustomerDigitalMetalsSummary, string>({
+      query: (customerId) => ({
+        url: `/admin/digital-metals/customers/${encodeURIComponent(customerId)}/summary`,
+        mockKey: "digitalMetalsCustomerSummary",
+      }),
+      transformResponse: (raw) => contractPayload(raw) as CustomerDigitalMetalsSummary,
+      providesTags: (_r, _e, customerId) => [{ type: "DigitalMetals", id: `summary-${customerId}` }],
+    }),
+    getDigitalMetalsDashboardSummary: builder.query<
+      DigitalMetalsDashboardSummary,
+      { period?: string; from?: string; to?: string; branchId?: string } | void
+    >({
+      query: (params) => ({
+        url: "/admin/digital-metals/dashboard-summary",
+        params: params ?? {},
+        mockKey: "digitalMetalsDashboardSummary",
+      }),
+      transformResponse: (raw) => contractPayload(raw) as DigitalMetalsDashboardSummary,
+      providesTags: [{ type: "DigitalMetals", id: "dashboard-summary" }],
+    }),
+    createDigitalMetalsCounterBuyQuote: builder.mutation<
+      DmCounterQuote,
+      {
+        customerId: string;
+        metal: DmMetal;
+        finenessPpm: number;
+        inputMode: "BUDGET_INR" | "QUANTITY_UG";
+        budgetPaise?: number;
+        quantityUg?: number;
+      }
+    >({
+      query: ({ customerId, ...body }) => ({
+        url: `/admin/digital-metals/customers/${encodeURIComponent(customerId)}/counter/buy-quote`,
+        method: "POST",
+        body,
+        mockKey: "digitalMetalsCounterBuyQuote",
+      }),
+      transformResponse: (raw) => contractPayload(raw) as DmCounterQuote,
+    }),
+    placeDigitalMetalsCounterBuy: builder.mutation<
+      { order: Record<string, unknown>; cashCustody: "STAFF" | "OWNER" | null },
+      {
+        customerId: string;
+        idempotencyKey: string;
+        quoteId: string;
+        paymentMode: CounterPaymentMode;
+        paymentReference?: string;
+        note?: string;
+      }
+    >({
+      query: ({ customerId, idempotencyKey, ...body }) => ({
+        url: `/admin/digital-metals/customers/${encodeURIComponent(customerId)}/counter/buy`,
+        method: "POST",
+        body: { ...body, customerConsent: true },
+        headers: { "X-Idempotency-Key": idempotencyKey },
+        mockKey: "digitalMetalsCounterBuy",
+      }),
+      transformResponse: (raw) =>
+        contractPayload(raw) as { order: Record<string, unknown>; cashCustody: "STAFF" | "OWNER" | null },
+      invalidatesTags: ["DigitalMetals", "Cash", "Customer"],
+    }),
+    createDigitalMetalsCounterSellQuote: builder.mutation<
+      DmCounterQuote,
+      { customerId: string; metal: DmMetal; finenessPpm: number; quantityUg: number }
+    >({
+      query: ({ customerId, ...body }) => ({
+        url: `/admin/digital-metals/customers/${encodeURIComponent(customerId)}/counter/sell-quote`,
+        method: "POST",
+        body,
+        mockKey: "digitalMetalsCounterSellQuote",
+      }),
+      transformResponse: (raw) => contractPayload(raw) as DmCounterQuote,
+    }),
+    placeDigitalMetalsCounterSell: builder.mutation<
+      { order: Record<string, unknown> },
+      {
+        customerId: string;
+        idempotencyKey: string;
+        quoteId: string;
+        payoutMethod: "BANK" | "CASH";
+        bankDestinationId?: string;
+        note?: string;
+      }
+    >({
+      query: ({ customerId, idempotencyKey, ...body }) => ({
+        url: `/admin/digital-metals/customers/${encodeURIComponent(customerId)}/counter/sell`,
+        method: "POST",
+        body: { ...body, customerConsent: true },
+        headers: { "X-Idempotency-Key": idempotencyKey },
+        mockKey: "digitalMetalsCounterSell",
+      }),
+      transformResponse: (raw) => contractPayload(raw) as { order: Record<string, unknown> },
+      invalidatesTags: ["DigitalMetals", "Customer"],
+    }),
+    recordDigitalMetalsSellCashPayout: builder.mutation<
+      {
+        order: Record<string, unknown>;
+        payable: { id: string; amountPaise: number; outstandingPaise: number; status: string; settledAt: string | null };
+        alreadyPaid: boolean;
+        cashCustody: "STAFF" | "OWNER";
+      },
+      { orderId: string; idempotencyKey: string; receiptNote?: string }
+    >({
+      query: ({ orderId, idempotencyKey, ...body }) => ({
+        url: `/admin/digital-metals/sell-orders/${encodeURIComponent(orderId)}/cash-payout`,
+        method: "POST",
+        body,
+        headers: { "X-Idempotency-Key": idempotencyKey },
+        mockKey: "digitalMetalsSellCashPayout",
+      }),
+      transformResponse: (raw) =>
+        contractPayload(raw) as {
+          order: Record<string, unknown>;
+          payable: { id: string; amountPaise: number; outstandingPaise: number; status: string; settledAt: string | null };
+          alreadyPaid: boolean;
+          cashCustody: "STAFF" | "OWNER";
+        },
+      invalidatesTags: ["DigitalMetals", "Cash"],
+    }),
+    getCustomerEcommerceSummary: builder.query<CustomerEcommerceSummary, string>({
+      query: (customerId) => ({
+        url: `/admin/customers/${encodeURIComponent(customerId)}/ecommerce/summary`,
+        mockKey: "customerEcommerceSummary",
+      }),
+      transformResponse: (raw) => contractPayload(raw) as CustomerEcommerceSummary,
+      providesTags: (_r, _e, customerId) => [{ type: "Ecommerce", id: `customer-summary-${customerId}` }],
+    }),
+    getCustomerCounterOrderOptions: builder.query<CounterOrderOptions, string>({
+      query: (customerId) => ({
+        url: `/admin/customers/${encodeURIComponent(customerId)}/ecommerce/counter/options`,
+        mockKey: "customerCounterOrderOptions",
+      }),
+      transformResponse: (raw) => contractPayload(raw) as CounterOrderOptions,
+    }),
+    createCustomerCounterOrderQuote: builder.mutation<
+      CounterOrderQuote,
+      {
+        customerId: string;
+        lines: { productId: string; quantity: number }[];
+        fulfilmentMode: "BRANCH_PICKUP" | "DELIVERY";
+        pickupBranchId?: string;
+        addressId?: string;
+      }
+    >({
+      query: ({ customerId, ...body }) => ({
+        url: `/admin/customers/${encodeURIComponent(customerId)}/ecommerce/counter/quote`,
+        method: "POST",
+        body,
+        mockKey: "customerCounterOrderQuote",
+      }),
+      transformResponse: (raw) => contractPayload(raw) as CounterOrderQuote,
+    }),
+    placeCustomerCounterOrder: builder.mutation<
+      { order: Record<string, unknown>; cashCustody: "STAFF" | "OWNER" | null },
+      {
+        customerId: string;
+        idempotencyKey: string;
+        quoteId: string;
+        paymentMode: CounterPaymentMode;
+        paymentReference?: string;
+        note?: string;
+      }
+    >({
+      query: ({ customerId, idempotencyKey, ...body }) => ({
+        url: `/admin/customers/${encodeURIComponent(customerId)}/ecommerce/counter/orders`,
+        method: "POST",
+        body: { ...body, customerConsent: true },
+        headers: { "X-Idempotency-Key": idempotencyKey },
+        mockKey: "customerCounterOrder",
+      }),
+      transformResponse: (raw) =>
+        contractPayload(raw) as { order: Record<string, unknown>; cashCustody: "STAFF" | "OWNER" | null },
+      invalidatesTags: ["Ecommerce", "Cash", "Customer"],
     }),
     getDigitalMetalsCustomerPassbook: builder.query<
       {
@@ -6100,7 +6264,7 @@ export const adminApi = createApi({
       providesTags: ["Settings"],
     }),
     getDefaulters: builder.query<
-      ReturnType<typeof adaptListBundle>,
+      ReturnType<typeof adaptDueList>,
       (ListQueryParams & { q?: string; branchId?: string }) | void
     >({
       query: (params) => ({
@@ -6108,7 +6272,7 @@ export const adminApi = createApi({
         params: params ?? {},
         mockKey: "getDefaulters",
       }),
-      transformResponse: adaptListBundle,
+      transformResponse: adaptDueList,
       providesTags: ["Enrollment"],
     }),
     getFlexibleLocks: builder.query<
@@ -6539,6 +6703,17 @@ export const {
   useRetryDigitalMetalsOutboxEventMutation,
   useRetryDigitalMetalsDocumentFromOpsMutation,
   useGetDigitalMetalsCustomerWalletsQuery,
+  useGetDigitalMetalsCustomerSummaryQuery,
+  useGetDigitalMetalsDashboardSummaryQuery,
+  useCreateDigitalMetalsCounterBuyQuoteMutation,
+  usePlaceDigitalMetalsCounterBuyMutation,
+  useCreateDigitalMetalsCounterSellQuoteMutation,
+  usePlaceDigitalMetalsCounterSellMutation,
+  useRecordDigitalMetalsSellCashPayoutMutation,
+  useGetCustomerEcommerceSummaryQuery,
+  useGetCustomerCounterOrderOptionsQuery,
+  useCreateCustomerCounterOrderQuoteMutation,
+  usePlaceCustomerCounterOrderMutation,
   useGetDigitalMetalsCustomerPassbookQuery,
   useGetDigitalMetalsBuyOrdersQuery,
   useGetDigitalMetalsBuyOrderQuery,

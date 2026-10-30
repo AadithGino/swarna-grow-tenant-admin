@@ -6,31 +6,18 @@ import {
   ChartLine,
   History,
   Loader2,
-  Maximize2,
-  Minimize2,
-  Minus,
+  PanelRightClose,
+  PanelRightOpen,
   Plus,
   TriangleAlert,
   Trophy,
   Wallet,
   X,
 } from "lucide-react";
-import {
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-  type PointerEvent as ReactPointerEvent,
-} from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import { AssistantConversationDrawer } from "@/src/components/assistant/AssistantConversationDrawer";
 import { AssistantVirtualMessageList } from "@/src/components/assistant/AssistantVirtualMessageList";
-import {
-  clampAssistantGeometry,
-  readAssistantGeometry,
-  writeAssistantGeometry,
-  type AssistantPanelGeometry,
-} from "@/src/components/assistant/assistant-panel-geometry";
 import {
   clearAssistantConversationId,
   readAssistantConversationId,
@@ -50,6 +37,9 @@ const SUGGESTED = [
 
 const LANGUAGE_EXAMPLES = ["aaj kitna collection hua?", "ഈ മാസത്തെ കളക്ഷൻ എത്ര?", "Schemes maturing next month"];
 
+/** How-to questions: Sidekick answers with an on-screen walkthrough. */
+const HOW_TO_EXAMPLES = ["How do I add a customer?", "How do I add a product?", "How do I set today's gold rate?"];
+
 function HeaderButton({
   label,
   onClick,
@@ -68,37 +58,30 @@ function HeaderButton({
       title={label}
       disabled={disabled}
       onClick={onClick}
-      className="grid size-8 place-items-center rounded-lg text-[var(--sk-muted)] transition hover:bg-[var(--sk-cream-2)] hover:text-[var(--sk-ink)] disabled:opacity-40"
+      className="grid size-8 place-items-center rounded-lg text-[var(--sk-ink-2)] transition hover:bg-[var(--sk-cream-2)] hover:text-[var(--sk-ink)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sk-maroon)]/40 disabled:opacity-40"
     >
       {children}
     </button>
   );
 }
 
-type DragKind = "move" | "resize";
-
+/**
+ * Sidekick chat, docked on the right of the admin shell. On desktop it takes its
+ * own column (the page reflows beside it instead of being covered); on phones it
+ * opens full-screen. The parent decides width — see AdminShell.
+ */
 export function AssistantFloatingWindow({
   open,
   onOpenChange,
+  wide = false,
+  onToggleWide,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  wide?: boolean;
+  onToggleWide?: () => void;
 }) {
-  const [minimized, setMinimized] = useState(false);
-  const [expanded, setExpanded] = useState(false);
   const [mobile, setMobile] = useState(false);
-  const [geom, setGeom] = useState<AssistantPanelGeometry>(() =>
-    readAssistantGeometry(),
-  );
-  const dragRef = useRef<{
-    kind: DragKind;
-    startX: number;
-    startY: number;
-    origin: AssistantPanelGeometry;
-  } | null>(null);
-  const startDragRef = useRef<
-    (kind: DragKind, e: PointerEvent, origin: AssistantPanelGeometry) => void
-  >(() => {});
 
   const session = useAppSelector((s) => s.session.session);
   const storageScope: AssistantStorageScope | null = session
@@ -181,7 +164,7 @@ export function AssistantFloatingWindow({
   }, [resetLocal, storageScope]);
 
   useEffect(() => {
-    const active = open && !minimized;
+    const active = open;
     if (active && !prevPanelActiveRef.current) {
       setScrollEpoch((n) => n + 1);
     }
@@ -190,147 +173,44 @@ export function AssistantFloatingWindow({
       const timer = window.setTimeout(() => inputRef.current?.focus(), 150);
       return () => window.clearTimeout(timer);
     }
-  }, [open, minimized]);
-
-  useEffect(() => {
-    writeAssistantGeometry(geom);
-  }, [geom]);
-
-  useEffect(() => {
-    const onResize = () => {
-      setGeom((g) => clampAssistantGeometry(g));
-    };
-    window.addEventListener("resize", onResize);
-    return () => window.removeEventListener("resize", onResize);
-  }, []);
-
-  useEffect(() => {
-    const onPointerMove = (e: PointerEvent) => {
-      const drag = dragRef.current;
-      if (!drag) return;
-      const dx = e.clientX - drag.startX;
-      const dy = e.clientY - drag.startY;
-      const { origin } = drag;
-      if (drag.kind === "move") {
-        setGeom(
-          clampAssistantGeometry({
-            ...origin,
-            x: origin.x + dx,
-            y: origin.y + dy,
-          }),
-        );
-        return;
-      }
-      setGeom(
-        clampAssistantGeometry({
-          ...origin,
-          width: origin.width + dx,
-          height: origin.height + dy,
-        }),
-      );
-    };
-
-    const endDrag = () => {
-      dragRef.current = null;
-      window.removeEventListener("pointermove", onPointerMove);
-      window.removeEventListener("pointerup", endDrag);
-      window.removeEventListener("pointercancel", endDrag);
-    };
-
-    const onStart = (
-      kind: DragKind,
-      e: PointerEvent,
-      origin: AssistantPanelGeometry,
-    ) => {
-      if (e.button !== 0) return;
-      dragRef.current = {
-        kind,
-        startX: e.clientX,
-        startY: e.clientY,
-        origin,
-      };
-      window.addEventListener("pointermove", onPointerMove);
-      window.addEventListener("pointerup", endDrag);
-      window.addEventListener("pointercancel", endDrag);
-    };
-
-    startDragRef.current = onStart;
-    return () => endDrag();
-  }, []);
-
-  const startDrag = useCallback(
-    (kind: DragKind, e: ReactPointerEvent) => {
-      e.preventDefault();
-      startDragRef.current(kind, e.nativeEvent, geom);
-    },
-    [geom],
-  );
+  }, [open]);
 
   if (!open) return null;
 
-  if (minimized) {
-    return (
-      <button
-        type="button"
-        className="sidekick fixed bottom-6 right-6 z-[60] flex max-w-[min(100vw-3rem,20rem)] items-center gap-2.5 rounded-full border border-[var(--sk-line-2)] bg-white py-1.5 pl-1.5 pr-4 text-sm font-semibold text-[var(--sk-ink)] shadow-[var(--sk-shadow)] transition hover:-translate-y-0.5"
-        onClick={() => setMinimized(false)}
-      >
-        <SidekickOrb size={28} busy={isLoading} />
-        <span className="truncate">{ASSISTANT_NAME}</span>
-        {isLoading ? <span className="sk-shimmer text-xs font-medium">thinking…</span> : null}
-      </button>
-    );
-  }
-
   return (
     <div
-      className="sidekick fixed z-[60]"
-      style={mobile ? { inset: 0, width: "100%", height: "100dvh" } : expanded ? { inset: 24 } : {
-        left: geom.x,
-        top: geom.y,
-        width: geom.width,
-        height: geom.height,
-      }}
+      className="sidekick flex h-full min-h-0 flex-col"
       role="dialog"
       aria-label={`Analytics ${ASSISTANT_NAME}`}
     >
-      <div className="relative flex h-full min-h-0 flex-col overflow-hidden border border-[rgba(115,3,33,0.12)] bg-[radial-gradient(120%_70%_at_50%_0,#fff_0,#fffdf9_50%,var(--sk-cream)_100%)] shadow-[0_2px_6px_rgba(34,18,25,0.05),0_44px_80px_-34px_rgba(62,12,21,0.5)] md:rounded-[20px]">
-        <header
-          className="relative flex shrink-0 items-center gap-3 border-b border-[var(--sk-line)] bg-white/90 px-4 py-3 backdrop-blur md:cursor-grab md:px-5 md:active:cursor-grabbing"
-          onPointerDown={(e) => {
-            if (mobile || expanded || (e.target as HTMLElement).closest("[data-no-drag]")) return;
-            startDrag("move", e);
-          }}
-        >
-          <SidekickOrb size={34} busy={isLoading} />
-          <div className="min-w-0 flex-1 select-none">
+      <div className="relative flex h-full min-h-0 flex-col overflow-hidden bg-[radial-gradient(120%_70%_at_50%_0,#fff_0,#fffdf9_50%,var(--sk-cream)_100%)]">
+        <header className="relative flex shrink-0 items-center gap-3 border-b border-[var(--sk-line)] bg-white px-4 py-3">
+          <SidekickOrb size={32} busy={isLoading} />
+          <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
               <span className="truncate text-[15px] font-bold tracking-tight text-[var(--sk-ink)]">{ASSISTANT_NAME}</span>
-              <span className="hidden items-center gap-1.5 rounded-full bg-[var(--sk-gold-soft)] px-2 py-0.5 text-[10.5px] font-semibold whitespace-nowrap text-[var(--sk-maroon)] sm:inline-flex">
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-[var(--sk-gold-soft)] px-2 py-0.5 text-[10.5px] font-semibold whitespace-nowrap text-[var(--sk-maroon)]">
                 <i className="sk-live-dot block size-1.5 rounded-full bg-[var(--sk-ok)]" />
-                AI analyst · live data
+                Live data
               </span>
             </div>
-            <p className="mt-0.5 truncate text-[11.5px] text-[var(--sk-muted)]">
-              {isLoading ? <span className="sk-shimmer font-medium">Working on your question…</span> : mobile ? "AI analyst · live data" : "Ask anything about your shop, in your own words"}
+            <p className="mt-0.5 truncate text-[12px] text-[var(--sk-ink-2)]">
+              {isLoading ? <span className="sk-shimmer font-medium">Working on your question…</span> : "Your AI shop analyst"}
             </p>
           </div>
-          <div className="flex shrink-0 items-center gap-0.5" data-no-drag>
+          <div className="flex shrink-0 items-center gap-0.5">
             <HeaderButton label="New chat" disabled={isLoading} onClick={startNewChat}>
               <Plus className="size-4" />
             </HeaderButton>
             <HeaderButton label="Chat history" onClick={() => setHistoryOpen(true)}>
               <History className="size-4" />
             </HeaderButton>
-            {!mobile ? (
-              <HeaderButton label={expanded ? "Restore window" : "Expand workspace"} onClick={() => setExpanded((value) => !value)}>
-                {expanded ? <Minimize2 className="size-4" /> : <Maximize2 className="size-4" />}
+            {!mobile && onToggleWide ? (
+              <HeaderButton label={wide ? "Make panel narrower" : "Make panel wider"} onClick={onToggleWide}>
+                {wide ? <PanelRightClose className="size-4" /> : <PanelRightOpen className="size-4" />}
               </HeaderButton>
             ) : null}
-            <HeaderButton label="Minimize" onClick={() => setMinimized(true)}>
-              <Minus className="size-4" />
-            </HeaderButton>
-            <HeaderButton label="Close" onClick={() => onOpenChange(false)}>
+            <HeaderButton label="Close Sidekick" onClick={() => onOpenChange(false)}>
               <X className="size-4" />
             </HeaderButton>
           </div>
@@ -356,16 +236,16 @@ export function AssistantFloatingWindow({
         !isLoading &&
         !initialLoading &&
         !conversationId ? (
-          <div className="min-h-0 flex-1 overflow-y-auto px-5 py-8 md:px-10 md:py-10">
+          <div className="min-h-0 flex-1 overflow-y-auto px-5 py-8">
             <div className="mx-auto flex max-w-xl flex-col items-center text-center">
               <SidekickOrb size={60} className="sk-pop" />
-              <h2 className="sk-rise mt-5 text-[26px] font-extrabold leading-tight tracking-[-0.03em] text-[var(--sk-ink)] md:text-[30px]" style={{ animationDelay: "60ms" }}>
+              <h2 className="sk-rise mt-5 text-[24px] font-extrabold leading-tight tracking-[-0.03em] text-[var(--sk-ink)]" style={{ animationDelay: "60ms" }}>
                 Ask anything about your business
               </h2>
-              <p className="sk-rise mt-2 max-w-md text-[13.5px] leading-6 text-[var(--sk-muted)]" style={{ animationDelay: "120ms" }}>
-                Collections, customers, dues, schemes, staff, Digi Gold and store orders — answered from your live data in seconds.
+              <p className="sk-rise mt-2 max-w-md text-[13.5px] leading-6 text-[var(--sk-ink-2)]" style={{ animationDelay: "120ms" }}>
+                Collections, customers, dues, schemes, staff, Digi Gold and store orders, answered from your live data in seconds. Forgot how to do something? Ask, and I&apos;ll show you on screen.
               </p>
-              <div className="mt-6 grid w-full gap-2.5 sm:grid-cols-2">
+              <div className={cn("mt-6 grid w-full gap-2.5", wide && "sm:grid-cols-2")}>
                 {SUGGESTED.map(({ text, icon: Icon }, i) => (
                   <button
                     key={text}
@@ -382,7 +262,21 @@ export function AssistantFloatingWindow({
                   </button>
                 ))}
               </div>
-              <div className="sk-fade mt-6 flex flex-wrap items-center justify-center gap-1.5 text-[11.5px] text-[var(--sk-muted)]" style={{ animationDelay: "480ms" }}>
+              <div className="sk-fade mt-5 flex flex-wrap items-center justify-center gap-1.5 text-[12px] text-[var(--sk-ink-2)]" style={{ animationDelay: "440ms" }}>
+                <span>Show me how:</span>
+                {HOW_TO_EXAMPLES.map((q) => (
+                  <button
+                    key={q}
+                    type="button"
+                    disabled={isLoading}
+                    onClick={() => void ask(q)}
+                    className="rounded-full border border-[#ead9b4] bg-[var(--sk-gold-soft)] px-2.5 py-1 font-medium text-[var(--sk-maroon)] hover:border-[var(--sk-maroon)]"
+                  >
+                    {q}
+                  </button>
+                ))}
+              </div>
+              <div className="sk-fade mt-3 flex flex-wrap items-center justify-center gap-1.5 text-[12px] text-[var(--sk-ink-2)]" style={{ animationDelay: "480ms" }}>
                 <span>Ask your way:</span>
                 {LANGUAGE_EXAMPLES.map((q) => (
                   <button
@@ -439,7 +333,7 @@ export function AssistantFloatingWindow({
               ref={inputRef}
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
-              placeholder={mobile ? "Ask anything…" : "Ask anything — e.g. who paid the most this week?"}
+              placeholder={wide ? "Ask anything — e.g. who paid the most this week?" : "Ask anything…"}
               aria-label={`Message ${ASSISTANT_NAME}`}
               rows={1}
               maxLength={2000}
@@ -461,28 +355,15 @@ export function AssistantFloatingWindow({
               {isLoading ? <Loader2 className="size-4 animate-spin" /> : <ArrowUp className="size-4" strokeWidth={2.5} />}
             </button>
           </div>
-          <div className="mt-1.5 flex items-center justify-between gap-3 px-1 text-[10.5px] text-[var(--sk-muted)]">
-            <span className="inline-flex items-center gap-1">
-              <CalendarClock className="size-3" />
-              Answers come from your live data · read-only
+          <div className="mt-1.5 flex items-center justify-between gap-3 px-1 text-[11px] text-[var(--sk-ink-2)]">
+            <span className="inline-flex min-w-0 items-center gap-1 truncate">
+              <CalendarClock className="size-3 shrink-0" />
+              Read-only answers from your live data
             </span>
-            <span className="hidden sm:inline">Enter to send · Shift + Enter for a new line</span>
+            {wide ? <span className="shrink-0">Enter to send · Shift+Enter new line</span> : null}
           </div>
         </form>
 
-        {!mobile && !expanded ? <div
-          className="absolute bottom-0 right-0 z-10 size-5 cursor-se-resize"
-          aria-hidden
-          onPointerDown={(e) => startDrag("resize", e)}
-        >
-          <svg
-            viewBox="0 0 16 16"
-            className="absolute bottom-1 right-1 size-3 text-[var(--sk-line-2)]"
-            fill="currentColor"
-          >
-            <path d="M14 14H10V12H12V10H14V14ZM14 10H12V8H14V10ZM10 10H8V8H10V10Z" />
-          </svg>
-        </div> : null}
       </div>
     </div>
   );

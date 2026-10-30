@@ -198,7 +198,7 @@ export function RemindersPage() {
   const readCount = Number(s.read ?? 0);
   const deliveryRate =
     sentCount > 0
-      ? `${Math.round((deliveredCount / sentCount) * 1000) / 10}% delivery`
+      ? `${Math.round((deliveredCount / sentCount) * 1000) / 10}% of attempted`
       : "No messages in period";
   const readRate =
     deliveredCount > 0
@@ -226,14 +226,11 @@ export function RemindersPage() {
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
         <StatCard
           icon={Send}
-          label="Sent"
+          label="Attempted"
           value={s.sent ?? 0}
-          detail={
-            periodSummary.periodLabel ??
-            (from && to
-              ? `${from} – ${to}`
-              : "Selected period")
-          }
+          detail={`${
+            from && to ? `${from} – ${to}` : "All time"
+          }${(s.queued ?? 0) > 0 ? ` · ${s.queued} still queued` : ""}`}
         />
         <StatCard
           icon={CheckCheck}
@@ -253,17 +250,17 @@ export function RemindersPage() {
           icon={AlertTriangle}
           label="Failed"
           value={s.failed ?? 0}
-          detail="Eligible for retry"
-          tone="red"
+          detail={(s.failed ?? 0) > 0 ? "Open the log below to retry" : "Nothing failed"}
+          tone={(s.failed ?? 0) > 0 ? "red" : "green"}
         />
         <StatCard
           icon={MessageCircleMore}
-          label="Quota used"
+          label="WhatsApp quota used"
           value={`${quota?.quotaUsedPercent ?? s.quotaUsed ?? 0}%`}
           detail={
-            quota?.quotaLimit != null
-              ? `${quota.sent ?? 0} of ${quota.quotaLimit} messages`
-              : "Usage this billing period"
+            quota?.quotaLimit
+              ? `${quota.quotaUsed ?? 0} of ${quota.quotaLimit} WhatsApp this month (all branches)`
+              : "No WhatsApp limit on your plan"
           }
           tone="gold"
         />

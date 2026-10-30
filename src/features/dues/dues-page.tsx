@@ -2,14 +2,11 @@
 
 import { useMemo, useState } from "react";
 import {
-  AlertTriangle,
   Bell,
   CalendarClock,
   Download,
-  IndianRupee,
   Link2,
   Phone,
-  ShieldAlert,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -21,16 +18,11 @@ import {
   type WorkboardDatePreset,
 } from "@/src/components/common/date-range-filter";
 import { PaginatedDataTable } from "@/src/components/common/paginated-data-table";
-import {
-  ListToolbar,
-  SearchFilterBar,
-  type FilterOption,
-} from "@/src/components/common/search-filter-bar";
-import {
-  PageHeader,
-  StatCard,
-  Surface,
-} from "@/src/components/common/page-parts";
+import { type FilterOption } from "@/src/components/common/search-filter-bar";
+import { Surface } from "@/src/components/common/page-parts";
+import { HeroStat, SectionHero, heroButtonClass } from "@/src/components/admin-ui/section-hero";
+import { ListPanel } from "@/src/components/admin-ui/admin-table";
+import { FilterBar, FilterSearch, QuickViews } from "@/src/components/admin-ui/filter-bar";
 import {
   EmptyState,
   PageSkeleton,
@@ -77,12 +69,13 @@ import {
   EnrollmentLink,
 } from "@/src/components/common/portal-entity-links";
 
+// Values match the backend workboard states (backend/src/lib/dues-workboard.js).
 const DUE_KIND_FILTERS: FilterOption[] = [
   { value: "ALL", label: "All" },
-  { value: "DUE", label: "Due today" },
-  { value: "GRACE", label: "Grace" },
+  { value: "DUE", label: "Due now" },
+  { value: "GRACE", label: "In grace" },
   { value: "OVERDUE", label: "Overdue" },
-  { value: "DEFAULTED", label: "Defaulters" },
+  { value: "DEFAULTED", label: "Defaulted" },
 ];
 
 export function DuesPage() {
@@ -166,10 +159,11 @@ export function DuesPage() {
   if (invalidCustomRange) {
     return (
       <>
-        <PageHeader
-          eyebrow="Customer operations"
+        <SectionHero
+          icon={CalendarClock}
+          eyebrow="Gold schemes"
           title="Dues & overdue"
-          description="Work through current dues, grace-period accounts, overdue cycles and default risk."
+          description="Who owes an instalment, who is in grace, and who has slipped into default."
         />
         <Surface title="Invalid period">
           <EmptyState title="Fix the date range" detail={dateRangeError ?? ""} />
@@ -181,40 +175,13 @@ export function DuesPage() {
   if (query.isError || !query.data)
     return <QueryError error={query.error} onRetry={query.refetch} />;
   const s = query.data.summary ?? {};
-  const rows =
-    board === "defaulters"
-      ? query.data.items.map((r: Record<string, unknown>) => ({
-          id: String(r.id ?? r._id ?? ""),
-          schemeId: String(r.id ?? r._id ?? ""),
-          customerId: String(
-            r.customerId ??
-              (r.customer as { id?: string })?.id ??
-              "",
-          ),
-          customer:
-            typeof r.customer === "string"
-              ? r.customer
-              : ((r.customer as { name?: string })?.name ?? "—"),
-          phone:
-            (r.customer as { mobile?: string })?.mobile ??
-            String(r.phone ?? "—"),
-          enrollmentNo: String(
-            r.enrollmentNumber ?? r.enrollmentNo ?? "—",
-          ),
-          plan:
-            (r.plan as { name?: string })?.name ??
-            (r.planSnapshot as { name?: string })?.name ??
-            String(r.plan ?? "—"),
-          branch:
-            typeof r.branch === "string"
-              ? r.branch
-              : ((r.branch as { name?: string })?.name ?? "—"),
-          dueDate: "—",
-          amount: 0,
-          overdueDays: 0,
-          status: "DEFAULTED",
-        }))
-      : query.data.items;
+  const byState = (s as { customersByState?: Record<string, number> })
+    .customersByState;
+  const customersDetail = (state: string) =>
+    byState?.[state] != null
+      ? `${byState[state]} customer${byState[state] === 1 ? "" : "s"}`
+      : undefined;
+  const rows = query.data.items;
   const ageingChart =
     board === "overdues" ? (s as { chart?: unknown })?.chart : undefined;
   const page = query.data.page ?? emptyPageMeta();
@@ -225,84 +192,98 @@ export function DuesPage() {
         open={bulkSheetOpen}
         onOpenChange={setBulkSheetOpen}
       />
-      <PageHeader
-        eyebrow="Customer operations"
+      <SectionHero
+        icon={CalendarClock}
+        eyebrow="Gold schemes"
         title="Dues & overdue"
-        description="Work through current dues, grace-period accounts, overdue cycles and default risk."
+        description="Who owes an instalment, who is in grace, and who has slipped into default. Collect at the counter, send a pay link or a reminder from each row."
         actions={
-          <>
-            <div className="space-y-1">
-              <WorkboardDateRangeFilter
-                label="Due"
-                mode={rangeMode}
-                onModeChange={setRangeMode}
-                from={from}
-                to={to}
-                onFromChange={setFrom}
-                onToChange={setTo}
-              />
-              {rangeMode === "CUSTOM" ? (
-                <FormFieldError message={dateRangeError} />
-              ) : null}
-            </div>
-            <Button
-              variant="outline"
-              onClick={() =>
-                downloadCsv(
-                  "dues-and-overdue.csv",
-                  ["Customer", "Enrollment", "Due date", "Amount", "Status"],
-                  rows.map((r: any) => [
-                    r.customer,
-                    r.enrollmentNo,
-                    r.dueDate,
-                    r.amount,
-                    r.status,
-                  ]),
-                )
-              }
-            >
-              <Download />
-              Export
-            </Button>
-          </>
+          <button
+            type="button"
+            className={heroButtonClass}
+            onClick={() =>
+              downloadCsv(
+                "dues-and-overdue.csv",
+                ["Customer", "Enrollment", "Due date", "Amount", "Status"],
+                rows.map((r: any) => [
+                  r.customer,
+                  r.enrollmentNo,
+                  r.dueDate,
+                  r.amount,
+                  r.status,
+                ]),
+              )
+            }
+          >
+            <Download className="size-4" aria-hidden />
+            Export
+          </button>
         }
-      />
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-        <StatCard
-          icon={CalendarClock}
-          label="Due"
-          value={money(s.due ?? 0)}
-          detail={`${s.customers ?? 0} customers · board totals`}
-        />
-        <StatCard
-          icon={IndianRupee}
-          label="Grace period"
-          value={money(s.grace ?? 0)}
-          detail="Follow up gently"
-          tone="gold"
-        />
-        <StatCard
-          icon={AlertTriangle}
-          label="Overdue"
-          value={money(s.overdue ?? 0)}
-          detail="Action required"
-          tone="red"
-        />
-        <StatCard
-          icon={ShieldAlert}
-          label="Defaulted"
-          value={money(s.defaulted ?? 0)}
-          detail="Escalated accounts"
-          tone="red"
-        />
-        <StatCard
-          icon={Bell}
-          label="Customers"
-          value={s.customers ?? 0}
-          detail="In current view"
-          tone="cream"
-        />
-      </div>
+      >
+        {board === "dues" ? (
+          <>
+            <HeroStat
+              label="Due now"
+              value={money(s.due ?? 0)}
+              detail={customersDetail("DUE") ?? "Due today or later"}
+              active={kind === "DUE"}
+              onClick={() => setKind(kind === "DUE" ? "ALL" : "DUE")}
+            />
+            <HeroStat
+              label="In grace"
+              value={money(s.grace ?? 0)}
+              detail={customersDetail("GRACE") ?? "Past due date, grace running"}
+              active={kind === "GRACE"}
+              onClick={() => setKind(kind === "GRACE" ? "ALL" : "GRACE")}
+            />
+            <HeroStat
+              label="Overdue"
+              value={money(s.overdue ?? 0)}
+              detail={customersDetail("OVERDUE") ?? "Grace ended — call today"}
+              active={kind === "OVERDUE"}
+              onClick={() => setKind(kind === "OVERDUE" ? "ALL" : "OVERDUE")}
+            />
+            <HeroStat
+              label="Defaulted"
+              value={money(s.defaulted ?? 0)}
+              detail={customersDetail("DEFAULTED") ?? "Arrears on defaulted schemes"}
+              active={kind === "DEFAULTED"}
+              onClick={() => setKind(kind === "DEFAULTED" ? "ALL" : "DEFAULTED")}
+            />
+            <HeroStat
+              label="Customers"
+              value={s.customers ?? 0}
+              detail="With any amount pending"
+            />
+          </>
+        ) : board === "overdues" ? (
+          <>
+            <HeroStat
+              label="Overdue amount"
+              value={money(s.overdue ?? 0)}
+              detail="Unpaid after grace ended"
+            />
+            <HeroStat
+              label="Customers"
+              value={s.customers ?? 0}
+              detail="Need a follow-up call"
+            />
+          </>
+        ) : (
+          <>
+            <HeroStat
+              label="Defaulted arrears"
+              value={money(s.defaulted ?? 0)}
+              detail="Unpaid instalments already due"
+            />
+            <HeroStat
+              label="Customers"
+              value={s.customers ?? 0}
+              detail="With a defaulted scheme"
+            />
+          </>
+        )}
+      </SectionHero>
       <PageTabs
         value={board}
         onValueChange={(v) =>
@@ -326,39 +307,38 @@ export function DuesPage() {
           </div>
         </Surface>
       ) : null}
-      {board !== "defaulters" ? (
-        <ListToolbar>
-          <SearchFilterBar
-            searchValue={q}
-            onSearchChange={setQ}
-            searchPlaceholder="Search customer, phone or enrollment"
-            filterValue={kind}
-            onFilterChange={setKind}
-            filterOptions={DUE_KIND_FILTERS}
-            filterLabel="View"
+      <ListPanel
+        title={board === "defaulters" ? "Defaulters registry" : board === "overdues" ? "Overdue workboard" : "Due workboard"}
+        toolbar={
+          <FilterBar
+            quickViews={
+              board !== "defaulters" ? (
+                <QuickViews value={kind} onChange={setKind} options={DUE_KIND_FILTERS} ariaLabel="Due view" />
+              ) : null
+            }
+            search={<FilterSearch value={q} onChange={setQ} placeholder="Customer, phone or enrollment" />}
+            filters={
+              board !== "defaulters" ? (
+                <div className="space-y-1">
+                  <WorkboardDateRangeFilter
+                    label="Due"
+                    mode={rangeMode}
+                    onModeChange={setRangeMode}
+                    from={from}
+                    to={to}
+                    onFromChange={setFrom}
+                    onToChange={setTo}
+                  />
+                  {rangeMode === "CUSTOM" ? <FormFieldError message={dateRangeError} /> : null}
+                </div>
+              ) : null
+            }
+            resultLabel={
+              board === "defaulters"
+                ? "Every scheme in default — open one for recovery actions"
+                : "Collect at the counter · Link sends an online pay URL · Bell queues a WhatsApp reminder"
+            }
           />
-        </ListToolbar>
-      ) : (
-        <ListToolbar>
-          <SearchFilterBar
-            searchValue={q}
-            onSearchChange={setQ}
-            searchPlaceholder="Search customer, phone or enrollment"
-            filterValue="ALL"
-            onFilterChange={() => {}}
-            filterOptions={[{ value: "ALL", label: "All" }]}
-            filterLabel="View"
-          />
-        </ListToolbar>
-      )}
-      <Surface
-        title={
-          board === "defaulters" ? "Defaulters registry" : "Due workboard"
-        }
-        description={
-          board === "defaulters"
-            ? "All schemes in DEFAULTED status · open enrollment for recovery actions"
-            : "Collect at counter · Link creates an online pay URL · Bell queues WhatsApp reminder"
         }
       >
         <div className="overflow-x-auto">
@@ -410,14 +390,32 @@ export function DuesPage() {
               },
               {
                 key: "amount",
-                header: "Amount",
-                render: (r: any) => <strong>{money(r.amount)}</strong>,
+                header: board === "defaulters" ? "Arrears" : "Amount",
+                render: (r: any) =>
+                  board === "defaulters" ||
+                  Number(r.openInstalments ?? 1) > 1 ? (
+                    <span>
+                      <strong>{money(r.totalOpenAmount ?? r.amount)}</strong>
+                      {Number(r.openInstalments ?? 1) > 1 ? (
+                        <span className="block text-xs text-muted-foreground">
+                          {r.openInstalments} instalments · next{" "}
+                          {money(r.amount)}
+                        </span>
+                      ) : null}
+                    </span>
+                  ) : (
+                    <strong>{money(r.amount)}</strong>
+                  ),
               },
               {
                 key: "age",
                 header: "Age",
                 render: (r: any) =>
-                  r.overdueDays ? `${r.overdueDays} days` : "Today",
+                  r.overdueDays
+                    ? `${r.overdueDays} day${r.overdueDays === 1 ? "" : "s"} late`
+                    : r.status === "DUE"
+                      ? "On time"
+                      : "—",
               },
               {
                 key: "status",
@@ -542,7 +540,7 @@ export function DuesPage() {
             ]}
           />
         </div>
-      </Surface>
+      </ListPanel>
     </>
   );
 }

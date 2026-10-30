@@ -1,4 +1,5 @@
 /** Form state aligned with POST /admin/scheme-plans (05-scheme-plans.md). */
+import { istBusinessDateToday } from "@/src/lib/ist-business-date";
 
 export type BenefitType =
   | "ONE_FREE_INSTALLMENT"
@@ -520,7 +521,7 @@ export function buildPreviewScheduleBody(
 
   const core = {
     installmentAmountPaise: paise(amount),
-    startDate: opts?.startDate ?? new Date().toISOString().slice(0, 10),
+    startDate: opts?.startDate ?? istBusinessDateToday(),
     firstInstallmentMode: form.firstInstallmentCollectNow
       ? "COLLECT_NOW"
       : "START_NEXT_CYCLE",

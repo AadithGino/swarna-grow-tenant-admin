@@ -117,6 +117,9 @@ export function CustomersPage() {
     metricNumber("CUSTOMERS_WITH_ACTIVE_SCHEME") ??
     metricNumber("WITH_ACTIVE_SCHEME") ??
     null;
+  const scopeLabel =
+    analyticsQuery.data?.scope?.label ??
+    (branchId ? "Selected branch" : "All branches");
   const totalCustomers: number =
     metricNumber("TOTAL_CUSTOMERS") ??
     metricNumber("TOTAL") ??
@@ -125,10 +128,10 @@ export function CustomersPage() {
     <>
       <PageHeader
         title="Customers"
-        description={`${totalCustomers} customer records across all branches.`}
+        description={`${totalCustomers} customer record${totalCustomers === 1 ? "" : "s"} · ${scopeLabel}`}
         actions={
           <>
-            <Button variant="outline" onClick={() => setImportOpen(true)}>
+            <Button variant="outline" data-tour="customers-import" onClick={() => setImportOpen(true)}>
               <Upload />
               Import
             </Button>
@@ -165,10 +168,12 @@ export function CustomersPage() {
           value={totalCustomers}
           detail={
             analyticsQuery.isFetching
-              ? "Updating tenant totals…"
-              : branches.length
-                ? `Across ${branches.length} branch${branches.length === 1 ? "" : "es"}`
-                : "Tenant-wide from analytics"
+              ? "Updating totals…"
+              : branchId
+                ? scopeLabel
+                : branches.length
+                  ? `Across ${branches.length} branch${branches.length === 1 ? "" : "es"}`
+                  : scopeLabel
           }
         />
         <StatCard
@@ -179,7 +184,7 @@ export function CustomersPage() {
             (() => {
               const pending = metric("KYC_PENDING");
               return typeof pending === "number"
-                ? `${pending} pending`
+                ? `${pending} not verified yet (submitted or not started)`
                 : "Verification coverage";
             })()
           }
@@ -191,7 +196,7 @@ export function CustomersPage() {
           value={activeSchemesMetric ?? "—"}
           detail={
             activeSchemesMetric != null
-              ? "Customers with live enrollments (branch scope)"
+              ? "Paying, capped or defaulted enrollment"
               : "Open Analytics tab for branch totals"
           }
           tone="gold"
@@ -226,6 +231,7 @@ export function CustomersPage() {
             </SelectContent>
           </Select>
         </div>
+        <div data-tour="customers-table">
         <PaginatedDataTable
           rows={rows}
           page={page}
@@ -302,6 +308,7 @@ export function CustomersPage() {
             },
           ]}
         />
+        </div>
       </Surface>
         </PageTabsPanel>
       </PageTabs>

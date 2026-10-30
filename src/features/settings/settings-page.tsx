@@ -61,7 +61,7 @@ import { CustomerPortalUrlField } from "@/src/features/settings/customer-portal-
 import { SettingsOperationsPanel } from "@/src/features/settings/settings-operations-panel";
 import { SubscriptionInvoicesPanel } from "@/src/features/settings/subscription-invoices-panel";
 import {
-  EcommerceCatalogNav,
+  EcommerceQuickLinks,
   EcommerceRelatedLink,
   EcommerceSettingsHint,
   SettingsToggleRow,
@@ -1461,7 +1461,7 @@ export function SettingsPage({
                       Set up products, gold rates, tax, and fulfilment. Use the quick links below or
                       the <strong>Online store</strong> section in the sidebar.
                     </EcommerceSettingsHint>
-                    <EcommerceCatalogNav />
+                    <EcommerceQuickLinks />
                     <p className="text-sm text-muted-foreground">
                       Checkout readiness:{" "}
                       <EcommerceRelatedLink href="/ecommerce/tax" label="Tax settings" /> →{" "}

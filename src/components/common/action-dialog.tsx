@@ -32,6 +32,7 @@ export function ActionDialog({
   className,
   onError,
   suppressDefaultErrorToast,
+  tourId,
 }: {
   trigger?: React.ReactNode;
   title: string;
@@ -49,6 +50,8 @@ export function ActionDialog({
   onError?: (err: unknown) => void;
   /** Skip default toast when `onError` handles messaging. */
   suppressDefaultErrorToast?: boolean;
+  /** Guided-tour hooks: marks the dialog `<id>:dialog` and the action `<id>:submit`. */
+  tourId?: string;
 }) {
   const [internalOpen, setInternalOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -65,6 +68,7 @@ export function ActionDialog({
       {trigger && <DialogTrigger asChild>{trigger}</DialogTrigger>}
       <DialogContent
         className={cn(dialogScrollShellClass, "sm:max-w-xl", className)}
+        data-tour={tourId ? `${tourId}:dialog` : undefined}
       >
         <DialogBody className="overflow-y-auto pb-2">
           <DialogHeader className="text-left">
@@ -98,6 +102,7 @@ export function ActionDialog({
             Cancel
           </Button>
           <Button
+            data-tour={tourId ? `${tourId}:submit` : undefined}
             disabled={busy || submitDisabled}
             onClick={async () => {
               setBusy(true);

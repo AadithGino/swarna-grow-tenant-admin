@@ -7,8 +7,9 @@ import { Button } from "@/components/ui/button";
 import { PageSkeleton, QueryError } from "@/src/components/common/query-state";
 import { StatusBadge } from "@/src/components/common/status-badge";
 import { useCustomerTenant } from "@/src/components/customer/customer-tenant-context";
-import { money } from "@/src/lib/format";
-import { ugToGramsDisplay } from "@/src/lib/digital-metals-display";
+import { formatInrFromPaise, ugToGramsDisplay } from "@/src/lib/digital-metals-display";
+import { customerPath } from "@/src/lib/customer-tenant";
+import { ChevronRight } from "lucide-react";
 import {
   customerDigitalMetalsOrderActionLabel,
   customerDigitalMetalsOrderHref,
@@ -20,7 +21,7 @@ import {
   useGetCustomerDigitalMetalsRedemptionOrdersQuery,
   useGetCustomerDigitalMetalsSellOrdersQuery,
 } from "@/src/store/api/customer-api";
-import { CustomerDmPageShell, CustomerDmSurface } from "@/src/features/customer/customer-digital-metals-shared";
+import { CustomerDmPageShell, DmCoinArt } from "@/src/features/customer/customer-digital-metals-shared";
 
 const TABS: { id: CustomerDmOrderKind; label: string }[] = [
   { id: "buy", label: "Purchases" },
@@ -88,59 +89,73 @@ export function CustomerDigitalMetalsOrdersPage() {
 
   return (
     <CustomerDmPageShell
+      narrow
       title="Orders & tracking"
-      subtitle="Purchases, sales, and physical redemptions — including unpaid checkout steps."
-      backHref={`/${tenantSlug}/digital-metals`}
+      subtitle="Purchases, sales and coin or bar redemptions — including anything still waiting for payment."
+      backHref={customerPath(tenantSlug, "digital-metals")}
+      backLabel="Wallet"
       testId="customer-dm-orders-page"
     >
-      <div className="flex flex-wrap gap-2">
+      <div className="flex gap-2 overflow-x-auto pb-1" role="tablist" aria-label="Order type">
         {TABS.map((t) => (
-          <Button
+          <button
             key={t.id}
             type="button"
-            size="sm"
-            variant={tab === t.id ? "default" : "outline"}
+            role="tab"
+            aria-selected={tab === t.id}
             onClick={() => {
               setTab(t.id);
               setCursor(undefined);
               setStack([]);
             }}
+            className={`h-9 shrink-0 rounded-full border px-4 text-sm font-medium transition ${tab === t.id ? "border-transparent text-white" : "border-[#e3d6ce] bg-white text-[#4d4245] hover:bg-[#faf5f2]"}`}
+            style={tab === t.id ? { background: "var(--customer-primary, #730321)" } : undefined}
           >
             {t.label}
-          </Button>
+          </button>
         ))}
       </div>
 
-      <CustomerDmSurface className="mt-4">
+      <div className="mt-5">
         {mergedItems.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No orders in this category yet.</p>
+          <p className="rounded-[1.25rem] border border-dashed border-[#e3d6ce] px-4 py-10 text-center text-sm text-[#7a6f72]">No orders of this type yet.</p>
         ) : (
-          <ul className="divide-y">
+          <ul className="divide-y divide-[#f0e6e0] overflow-hidden rounded-[1.25rem] border border-[#ecdfd8] bg-white">
             {mergedItems.map((row) => {
               const id = String(row.id);
               const status = String(row.status ?? "");
               const href = customerDigitalMetalsOrderHref(tenantSlug, tab, id);
+              const metal = String(row.metal ?? "GOLD");
               const amountPaise =
                 tab === "buy"
                   ? Number(row.totalPayablePaise ?? 0)
                   : tab === "sell"
                     ? Number(row.settlementPaise ?? 0)
                     : Number(row.chargeTotalPaise ?? 0);
+              const title =
+                tab === "redemption" && row.itemLabel
+                  ? String(row.itemLabel)
+                  : `${tab === "sell" ? "Sold" : "Bought"} ${ugToGramsDisplay(String(row.quantityUg ?? "0"))} ${metal === "SILVER" ? "silver" : "gold"}`;
               return (
-                <li key={id} className="py-3">
-                  <div className="flex flex-wrap items-start justify-between gap-2">
-                    <div>
-                      <p className="font-medium text-[#28161a]">
-                        {String(row.metal ?? "Metal")} · {ugToGramsDisplay(String(row.quantityUg ?? "0"))}
+                <li key={id}>
+                  <Link href={href} className="group flex items-center gap-4 px-4 py-4 transition hover:bg-[#fcfaf8] sm:px-5">
+                    <DmCoinArt metal={metal} size={40} />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                        <p className="font-medium text-[#221a1d]">{title}</p>
+                        <StatusBadge status={status} />
+                      </div>
+                      <p className="mt-0.5 text-xs text-[#7a6f72]">
+                        {formatWhen(row.createdAt ?? row.updatedAt)}
+                        {tab === "redemption" ? ` · ${ugToGramsDisplay(String(row.quantityUg ?? "0"))}` : ""}
                       </p>
-                      <p className="mt-0.5 text-xs text-muted-foreground">
-                        {formatWhen(row.createdAt ?? row.updatedAt)} · {money(amountPaise)}
-                      </p>
+                      <p className="mt-1 text-xs font-semibold text-[var(--customer-primary,#730321)]">{customerDigitalMetalsOrderActionLabel(status, tab)}</p>
                     </div>
-                    <StatusBadge status={status} />
-                  </div>
-                  <Link href={href} className="mt-2 inline-flex text-xs font-medium text-primary underline underline-offset-2">
-                    {customerDigitalMetalsOrderActionLabel(status, tab)}
+                    <div className="shrink-0 text-right">
+                      <p className="font-semibold tabular-nums text-[#221a1d]">{formatInrFromPaise(amountPaise)}</p>
+                      <p className="text-[11px] text-[#9a8d90]">{tab === "buy" ? (status === "CREDITED" ? "paid" : "amount") : tab === "sell" ? "payout" : "charges"}</p>
+                    </div>
+                    <ChevronRight className="size-4 shrink-0 text-[#b3a5a8] transition group-hover:translate-x-0.5" aria-hidden />
                   </Link>
                 </li>
               );
@@ -151,7 +166,7 @@ export function CustomerDigitalMetalsOrdersPage() {
           <Button
             type="button"
             variant="outline"
-            className="mt-4 w-full"
+            className="mt-4 h-11 w-full rounded-full"
             onClick={() => {
               setStack(mergedItems);
               setCursor(active.data?.meta?.nextCursor ?? undefined);
@@ -160,7 +175,7 @@ export function CustomerDigitalMetalsOrdersPage() {
             Load more
           </Button>
         ) : null}
-      </CustomerDmSurface>
+      </div>
     </CustomerDmPageShell>
   );
 }

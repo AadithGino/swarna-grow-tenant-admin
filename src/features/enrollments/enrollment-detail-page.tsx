@@ -6,6 +6,8 @@ import {
   CalendarClock,
   Download,
   Gift,
+  HandCoins,
+  Landmark,
   IndianRupee,
   LockKeyhole,
   MessageCircleMore,
@@ -19,8 +21,8 @@ import { toastApiError } from "@/src/lib/api-error";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { DataTable } from "@/src/components/common/data-table";
+import { HeroStat, HeroStatusPill, SectionHero, heroButtonClass, heroPrimaryButtonClass } from "@/src/components/admin-ui/section-hero";
 import {
-  PageHeader,
   StatCard,
   Surface,
 } from "@/src/components/common/page-parts";
@@ -207,22 +209,48 @@ export function EnrollmentDetailPage({ id }: { id: string }) {
       {(inProgress || closedOut) && (
         <EnrollmentRedemptionStatus enrollment={row} />
       )}
-      <PageHeader
-        eyebrow="Enrollment record"
+      <SectionHero
+        icon={Landmark}
+        eyebrow={`Enrollment ${row.enrollmentNo}`}
         title={row.plan}
-        description={`${row.enrollmentNo} · ${row.customer} · ${row.branch}`}
+        description={
+          <>
+            {row.customerId ? (
+              <Link href={`/customers/${row.customerId}`} className="font-semibold text-white underline-offset-4 hover:underline">
+                {row.customer}
+              </Link>
+            ) : (
+              row.customer
+            )}{" "}
+            · {row.branch}
+          </>
+        }
+        status={
+          <HeroStatusPill
+            tone={
+              closedOut
+                ? "off"
+                : ["LOCKED", "DEFAULTED"].includes(row.status) || inProgress
+                  ? "paused"
+                  : matured
+                    ? "off"
+                    : "live"
+            }
+          >
+            {String(row.status).replaceAll("_", " ").toLowerCase().replace(/^\w/, (c) => c.toUpperCase())}
+          </HeroStatusPill>
+        }
         actions={
           <>
             {row.customerId ? (
-              <Button variant="outline" asChild>
-                <Link href={`/customers/${row.customerId}`}>
-                  <UserRound />
-                  View customer
-                </Link>
-              </Button>
+              <Link href={`/customers/${row.customerId}`} className={heroButtonClass}>
+                <UserRound className="size-4" aria-hidden />
+                View customer
+              </Link>
             ) : null}
-            <Button
-              variant="outline"
+            <button
+              type="button"
+              className={`${heroButtonClass} disabled:cursor-not-allowed disabled:opacity-50`}
               disabled={
                 createLinkState.isLoading ||
                 matured ||
@@ -231,18 +259,24 @@ export function EnrollmentDetailPage({ id }: { id: string }) {
               }
               onClick={() => void handleSendPaymentLink()}
             >
-              <Send />
+              <Send className="size-4" aria-hidden />
               Send payment link
-            </Button>
+            </button>
             {row.canRecordPayment !== false && !matured && !closedOut ? (
               <PaymentDialog
                 schemeId={row.id}
                 customer={row.customer}
                 lockScheme
+                trigger={
+                  <button type="button" className={heroPrimaryButtonClass}>
+                    <HandCoins className="size-4" aria-hidden />
+                    Collect payment
+                  </button>
+                }
               />
             ) : (
-              <Button disabled>
-                <Gift />
+              <span className={`${heroButtonClass} cursor-default opacity-80`}>
+                <Gift className="size-4" aria-hidden />
                 {closedOut
                   ? row.status === "REDEEMED"
                     ? "Redeemed"
@@ -252,11 +286,37 @@ export function EnrollmentDetailPage({ id }: { id: string }) {
                     : matured
                       ? "Ready to redeem"
                       : "Not payable"}
-              </Button>
+              </span>
             )}
           </>
         }
-      />
+      >
+        <HeroStat
+          label="Total paid"
+          value={money(row.paid)}
+          detail={
+            displayMode === "FIXED"
+              ? `${row.progress} instalments paid`
+              : displayMode === "FLEXIBLE_LOCK_WINDOW"
+                ? `${row.progress} capped cycles complete`
+                : `${row.monthlyBreakdown?.reduce((sum, m) => sum + m.paymentCount, 0) ?? 0} payments in the free window`
+          }
+        />
+        <HeroStat
+          label="Progress"
+          value={
+            displayMode === "FLEXIBLE_FREE_WINDOW"
+              ? `${row.monthlyBreakdown?.filter((m) => m.paid > 0).length ?? 0} / 6`
+              : `${row.progress} / ${row.tenure}`
+          }
+          detail={`${Math.round(percent)}% complete`}
+        />
+        <HeroStat
+          label="Maturity"
+          value={row.maturity}
+          detail={closedOut ? "Enrollment closed" : matured || inProgress ? "Term complete" : "Projected term end"}
+        />
+      </SectionHero>
       {displayMode === "FLEXIBLE_LOCK_WINDOW" && (
         <div className="rounded-2xl border border-[#eadbb5] bg-[#fff8e8] px-5 py-4 text-sm">
           <div className="flex flex-wrap items-center gap-2">
@@ -286,32 +346,7 @@ export function EnrollmentDetailPage({ id }: { id: string }) {
           </p>
         </div>
       )}
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-        <StatCard
-          icon={IndianRupee}
-          label="Total paid"
-          value={money(row.paid)}
-          detail={
-            displayMode === "FIXED"
-              ? `${row.progress} successful installments`
-              : displayMode === "FLEXIBLE_LOCK_WINDOW"
-                ? `${row.progress} capped cycles complete`
-                : `${row.monthlyBreakdown?.reduce((s, m) => s + m.paymentCount, 0) ?? 0} payments in the free window`
-          }
-        />
-        <StatCard
-          icon={CalendarClock}
-          label="Progress"
-          value={
-            displayMode === "FLEXIBLE_LOCK_WINDOW"
-              ? `${row.progress} / ${row.tenure} cycles`
-              : displayMode === "FLEXIBLE_FREE_WINDOW"
-                ? `${row.monthlyBreakdown?.filter((m) => m.paid > 0).length ?? 0} / 6`
-                : `${row.progress} / ${row.tenure}`
-          }
-          detail={`${Math.round(percent)}% completed`}
-          tone="gold"
-        />
+      <div className="grid gap-4 sm:grid-cols-2">
         <StatCard
           icon={IndianRupee}
           label={
@@ -345,19 +380,6 @@ export function EnrollmentDetailPage({ id }: { id: string }) {
                 : row.nextDue
           }
           tone={closedOut ? "green" : inProgress ? "gold" : matured ? "cream" : "red"}
-        />
-        <StatCard
-          icon={Gift}
-          label="Maturity"
-          value={row.maturity.split(" ").slice(0, 2).join(" ")}
-          detail={
-            closedOut
-              ? "Enrollment closed"
-              : matured || inProgress
-                ? "Term complete"
-                : "Projected term end"
-          }
-          tone="cream"
         />
         <StatCard
           icon={row.valueBasis === "GOLD_WEIGHT" ? Scale : LockKeyhole}

@@ -13,7 +13,8 @@ export function parseAssetKey(key: string): { metal: "GOLD" | "SILVER"; fineness
 }
 
 export function formatAssetLabel(metal: string, finenessPpm: number): string {
-  const purity = finenessPpm >= 1000 ? `${(finenessPpm / 1000).toFixed(1)}‰` : `${finenessPpm} ppm`;
+  // 999000 → "999", 999900 → "999.9" (millesimal fineness, as printed on bars and coins).
+  const purity = finenessPpm >= 1000 ? `${Number((finenessPpm / 1000).toFixed(1))}` : `${finenessPpm} ppm`;
   const name = metal === "SILVER" ? "Silver" : "Gold";
   return `${name} ${purity}`;
 }

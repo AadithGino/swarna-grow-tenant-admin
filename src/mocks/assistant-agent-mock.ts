@@ -1,4 +1,5 @@
 import type { AssistantBundle } from "@/src/types/assistant";
+import { TOURS } from "@/src/lib/tours/registry";
 
 /**
  * Demo answers for mock mode (NEXT_PUBLIC_USE_MOCKS) — fictional shop data shaped exactly
@@ -26,8 +27,45 @@ const base = (q: string): Pick<AssistantBundle, "engine" | "asOf" | "conversatio
   messageId: `amg_mock_${q.length}_${Date.now()}`,
 });
 
+/** Mock-mode stand-in for the backend's instant guide matcher (guides.js). */
+function mockGuideAnswer(q: string): AssistantBundle | null {
+  const how = /\b(how|where|steps?|guide|show me|teach|forgot|kaise|kahan|sikhao|batao)\b/.test(q);
+  const imperative = /^(please\s+)?(add|create|new|set|record|enrol|enroll|register|upload|collect)\b/.test(q);
+  if ((!how && !imperative) || /\b(how many|how much|kitne|kitna|who|which|when|total)\b|\d/.test(q)) return null;
+  const words = new Set(q.replace(/[^a-z\s]/g, " ").split(/\s+/).map((w) => w.replace(/s$/, "")));
+  const hit = TOURS.map((t) => ({
+    t,
+    score: Math.max(0, ...t.keywords.map((k) => {
+      const parts = k.split(" ").map((w) => w.replace(/s$/, ""));
+      return parts.every((w) => words.has(w)) ? parts.length : 0;
+    })),
+  }))
+    .filter((x) => x.score > 0)
+    .sort((a, b) => b.score - a.score)[0]?.t;
+  if (!hit) return null;
+  const steps = hit.steps
+    .filter((s) => !s.optional && !s.field)
+    .map((s) => `- ${s.title}`)
+    .join("\n");
+  return {
+    ...base(q),
+    summaryText: hit.title,
+    narrative: `Here's how. Tap **Show me step by step** and I'll open the page and highlight each click for you.\n${steps}`,
+    statCards: [],
+    chart: null,
+    table: null,
+    blocks: [],
+    steps: [],
+    followUps: [],
+    guide: { id: hit.id, title: hit.title },
+  };
+}
+
 export function mockAgentAnswer(message: string): AssistantBundle {
   const q = message.toLowerCase();
+
+  const guide = mockGuideAnswer(q);
+  if (guide) return guide;
 
   if (/compare|vs|cash and upi|cash vs/.test(q)) {
     const ds = days(14);

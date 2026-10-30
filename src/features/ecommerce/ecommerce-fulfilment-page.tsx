@@ -45,7 +45,6 @@ import {
   EcommerceRelatedLink,
   EcommerceSettingsHint,
   EcommerceSettingsToggle,
-  EcommerceCatalogNav,
   EcommerceSetupSteps,
 } from "@/src/features/ecommerce/ecommerce-settings-ui";
 
@@ -197,21 +196,18 @@ export function EcommerceFulfilmentPage() {
   return (
     <>
       <PageHeader
-        eyebrow="Online store"
-        title="Fulfilment & checkout"
-        description="Step 2: how orders are fulfilled, what shoppers agree to, and GST on the payment screen."
+        eyebrow="Online store · Store settings"
+        icon={Truck}
+        title="Delivery & checkout"
+        description="How orders reach customers, the policies they agree to, and GST on the payment screen."
         actions={
-          <Button type="button" disabled={!access.entitled || !access.canWrite} onClick={save}>
+          <Button type="button" className="rounded-xl" disabled={!access.entitled || !access.canWrite} onClick={save}>
             Save fulfilment settings
           </Button>
         }
       />
-      {!access.entitled ? (
-        <p className="mb-4 text-sm text-amber-800">{access.disabledMessage}</p>
-      ) : null}
-
-      <EcommerceCatalogNav />
       <EcommerceSetupSteps active="fulfilment" />
+      {!access.entitled ? <p className="text-sm text-amber-800">{access.disabledMessage}</p> : null}
 
       <EcommerceReadinessPanel
         blockers={blockers}

@@ -330,7 +330,7 @@ function EcommerceProductDialogBody({
 
   return (
     <>
-      <DialogContent className={`${dialogScrollShellClass} sm:max-w-4xl`}>
+      <DialogContent className={`${dialogScrollShellClass} sm:max-w-4xl`} data-tour="product:dialog">
         <DialogBody className="overflow-y-auto pb-2">
           <DialogHeader className="text-left">
             <DialogTitle className="font-serif text-2xl">
@@ -806,6 +806,7 @@ function EcommerceProductDialogBody({
               <Button
                 type="button"
                 variant="secondary"
+                data-tour="product:save"
                 disabled={!entitled || saving}
                 onClick={() => persistProduct()}
               >
@@ -814,6 +815,7 @@ function EcommerceProductDialogBody({
               {serverStatus !== "PUBLISHED" ? (
                 <Button
                   type="button"
+                  data-tour="product:publish"
                   disabled={!entitled || saving}
                   onClick={() => persistProduct({ publishAfter: true })}
                 >

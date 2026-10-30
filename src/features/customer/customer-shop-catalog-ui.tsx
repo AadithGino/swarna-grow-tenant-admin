@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { Loader2, Package, Search, ShoppingCart, SlidersHorizontal, X } from "lucide-react";
+import { Loader2, Package, Plus, Search, ShoppingBag, SlidersHorizontal, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -24,31 +24,134 @@ import { ShopPriceLabel } from "@/src/features/ecommerce/ecommerce-admin-shared"
 import { EcommerceCatalogImage } from "@/src/features/ecommerce/ecommerce-catalog-image";
 import { customerPath } from "@/src/lib/customer-tenant";
 import { customerShopOrdersPath } from "@/src/lib/customer-shop-paths";
-import { customerBrandClass, customerBrandStyle } from "@/src/lib/customer-brand-styles";
+import { customerBrandStyle } from "@/src/lib/customer-brand-styles";
+import {
+  productMeta,
+  productOfferLabel,
+  productStock,
+  SHOP_HAIRLINE,
+  SHOP_INK,
+  SHOP_MUTED,
+  StockDot,
+} from "@/src/features/customer/customer-shop-ui";
 
-export type ShopCategoryOption = { id: string; name: string };
+export type ShopCategoryOption = { id: string; name: string; imageUploadId?: string | null; imageUrl?: string | null };
 
 const sortLabels: Record<"newest" | "name", string> = {
-  newest: "Newest",
-  name: "Name (A–Z)",
+  newest: "Newest first",
+  name: "Name, A to Z",
 };
 
-function ToolbarPillButton({
+function SearchField({
+  id,
+  value,
+  onChange,
   className,
-  children,
-  ...props
-}: React.ComponentProps<"button">) {
+}: {
+  id: string;
+  value: string;
+  onChange: (value: string) => void;
+  className?: string;
+}) {
   return (
-    <button
-      type="button"
-      className={cn(
-        "flex h-11 min-h-11 flex-1 items-center justify-center gap-2 rounded-full border border-[#ddd5cf] bg-white px-4 text-sm font-semibold text-[#2a3544] transition hover:bg-[#faf8f6]",
-        className,
-      )}
-      {...props}
-    >
-      {children}
-    </button>
+    <div className={cn("relative", className)}>
+      <Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-[#9a8d90]" aria-hidden />
+      <Input
+        id={id}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="h-11 rounded-full border-[#e3d6ce] bg-white pl-10 pr-10 text-sm shadow-none"
+        placeholder="Search rings, coins, jhumkas…"
+        autoComplete="off"
+        aria-label="Search the collection"
+      />
+      {value ? (
+        <button
+          type="button"
+          className="absolute right-1.5 top-1/2 grid size-8 -translate-y-1/2 place-items-center rounded-full text-[#82777a] hover:bg-[#f4ece8]"
+          aria-label="Clear search"
+          onClick={() => onChange("")}
+        >
+          <X className="size-4" />
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
+function SortSelect({ sort, onSortChange, id }: { sort: "newest" | "name"; onSortChange: (s: "newest" | "name") => void; id?: string }) {
+  return (
+    <Select value={sort} onValueChange={(v) => onSortChange(v === "name" ? "name" : "newest")}>
+      <SelectTrigger
+        id={id}
+        className="h-11 min-h-11 w-full rounded-full border-[#e3d6ce] bg-white px-4 text-sm font-medium text-[#3a2f33] shadow-none sm:w-44"
+        aria-label="Sort products"
+      >
+        <SelectValue>{sortLabels[sort]}</SelectValue>
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value="newest">{sortLabels.newest}</SelectItem>
+        <SelectItem value="name">{sortLabels.name}</SelectItem>
+      </SelectContent>
+    </Select>
+  );
+}
+
+/** Round "display tray" tiles: All + each active category. */
+export function CustomerShopCategoryRail({
+  categories,
+  categoryId,
+  onCategoryChange,
+}: {
+  categories: ShopCategoryOption[];
+  categoryId?: string;
+  onCategoryChange: (id: string | undefined) => void;
+}) {
+  if (!categories.length) return null;
+  const tiles: (ShopCategoryOption & { all?: boolean })[] = [{ id: "__all", name: "Everything", all: true }, ...categories];
+  return (
+    <nav aria-label="Collections" className="-mx-4 overflow-x-auto px-4 pb-1 [scrollbar-width:none] sm:-mx-6 sm:px-6 lg:mx-0 lg:px-0 [&::-webkit-scrollbar]:hidden">
+      <ul className="flex gap-4 sm:gap-6">
+        {tiles.map((c) => {
+          const active = c.all ? !categoryId : categoryId === c.id;
+          return (
+            <li key={c.id} className="shrink-0">
+              <button
+                type="button"
+                onClick={() => onCategoryChange(c.all ? undefined : c.id)}
+                aria-pressed={active}
+                className="group flex w-[4.6rem] flex-col items-center gap-2 text-center focus-visible:outline-none sm:w-[5.4rem]"
+              >
+                <span
+                  className={cn(
+                    "relative grid size-[4.25rem] place-items-center overflow-hidden rounded-full border-2 bg-white transition sm:size-20",
+                    active ? "border-[var(--customer-primary,#730321)]" : "border-transparent group-hover:border-[#e2cfc6]",
+                    "group-focus-visible:ring-2 group-focus-visible:ring-[var(--customer-primary,#730321)] group-focus-visible:ring-offset-2",
+                  )}
+                >
+                  <span className="absolute inset-[3px] overflow-hidden rounded-full customer-primary-tint-surface">
+                    {c.all ? (
+                      <span className="grid h-full w-full place-items-center">
+                        <ShoppingBag className="size-6 text-[var(--customer-primary,#730321)]" strokeWidth={1.6} aria-hidden />
+                      </span>
+                    ) : c.imageUploadId || c.imageUrl ? (
+                      <EcommerceCatalogImage uploadId={c.imageUploadId} viewUrl={c.imageUrl} channel="customer" alt="" fill className="object-cover" />
+                    ) : (
+                      <span className="grid h-full w-full place-items-center font-serif text-xl text-[var(--customer-primary,#730321)]">
+                        {c.name.slice(0, 1)}
+                      </span>
+                    )}
+                  </span>
+                </span>
+                <span className={cn("line-clamp-1 text-xs", active ? "font-semibold text-[var(--customer-primary,#730321)]" : "font-medium text-[#5d5154]")}>
+                  {c.name}
+                </span>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+    </nav>
   );
 }
 
@@ -67,6 +170,7 @@ export function CustomerShopCatalogToolbar({
   hasActiveFilters,
   onClearFilters,
   searchQ,
+  cartCount = 0,
 }: {
   tenantSlug: string;
   searchInput: string;
@@ -82,146 +186,87 @@ export function CustomerShopCatalogToolbar({
   hasActiveFilters: boolean;
   onClearFilters: () => void;
   searchQ?: string;
+  cartCount?: number;
 }) {
   const [filtersOpen, setFiltersOpen] = useState(false);
   const activeCategory = categories.find((c) => c.id === categoryId);
-  const eyebrow = searchQ ? "Search" : "Shop";
-  const title = searchQ
-    ? "Results"
-    : activeCategory
-      ? activeCategory.name
-      : "All jewellery";
-
-  const filterSummaryParts: string[] = [];
-  if (searchQ) filterSummaryParts.push(`“${searchQ}”`);
-  if (activeCategory) filterSummaryParts.push(activeCategory.name);
+  const heading = searchQ ? `Results for “${searchQ}”` : activeCategory ? activeCategory.name : "The full collection";
+  const count = loadingResults ? "Updating…" : `${resultCount ?? 0} ${resultCount === 1 ? "piece" : "pieces"}`;
 
   return (
-    <div className="sticky top-0 z-20 -mx-4 mb-3 bg-[#faf8f6]/98 px-4 pb-2 pt-0 backdrop-blur-md sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
-      <p
-        className={cn(
-          "text-[11px] font-bold uppercase tracking-[0.22em]",
-          customerBrandClass.accentText,
-        )}
-      >
-        {eyebrow}
-      </p>
-      <h1 className="mt-1 font-serif text-[1.65rem] font-normal uppercase leading-tight tracking-wide text-[#1e2a3a] sm:text-3xl">
-        {title}
-      </h1>
-      <p className="mt-1 text-sm text-[#8a8580]">
-        {loadingResults ? "Updating…" : `${resultCount ?? 0} ${resultCount === 1 ? "item" : "items"}`}
-      </p>
-
-      <div className="mt-3 flex gap-2.5">
-        <ToolbarPillButton
+    <div className="sticky top-[68px] z-20 -mx-4 border-b border-[#efe5df] bg-[#fbf8f5]/95 px-4 py-3 backdrop-blur-md sm:top-[76px] sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
+      <div className="flex items-center gap-3">
+        <div className="min-w-0 flex-1">
+          <h2 className={cn("truncate font-serif text-xl leading-tight sm:text-2xl", SHOP_INK)}>{heading}</h2>
+          <p className={cn("mt-0.5 flex flex-wrap items-center gap-x-2 text-xs", SHOP_MUTED)}>
+            <span aria-live="polite">{count}</span>
+            {hasActiveFilters ? (
+              <button
+                type="button"
+                className="font-semibold text-[var(--customer-primary,#730321)] underline-offset-2 hover:underline"
+                onClick={onClearFilters}
+              >
+                Clear filters
+              </button>
+            ) : null}
+          </p>
+        </div>
+        <SearchField id="shop-search-desktop" value={searchInput} onChange={onSearchInputChange} className="hidden w-72 md:block lg:w-80" />
+        <div className="hidden md:block">
+          <SortSelect sort={sort} onSortChange={onSortChange} />
+        </div>
+        <button
+          type="button"
           onClick={() => setFiltersOpen(true)}
           aria-expanded={filtersOpen}
           aria-controls="shop-filters-sheet"
+          className="relative inline-flex h-11 items-center gap-2 rounded-full border border-[#e3d6ce] bg-white px-4 text-sm font-medium text-[#3a2f33] md:hidden"
         >
-          <SlidersHorizontal className="size-4 shrink-0 opacity-70" aria-hidden />
-          Filters
+          <SlidersHorizontal className="size-4 opacity-70" aria-hidden />
+          Search & sort
           {hasActiveFilters ? (
-            <span
-              className="size-2 shrink-0 rounded-full bg-[var(--customer-primary,#730321)]"
-              aria-label="Filters applied"
-            />
+            <span className="absolute right-1.5 top-1.5 size-2 rounded-full bg-[var(--customer-primary,#730321)]" aria-label="Filters applied" />
           ) : null}
-        </ToolbarPillButton>
-
-        <Select value={sort} onValueChange={(v) => onSortChange(v === "name" ? "name" : "newest")}>
-          <SelectTrigger
-            className="h-11 min-h-11 flex-1 rounded-full border-[#ddd5cf] bg-white px-4 text-sm font-semibold text-[#2a3544] shadow-none"
-            aria-label="Sort products"
-          >
-            <SelectValue>{sortLabels[sort]}</SelectValue>
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="newest">Newest</SelectItem>
-            <SelectItem value="name">Name (A–Z)</SelectItem>
-          </SelectContent>
-        </Select>
+        </button>
+        <Link
+          href={customerPath(tenantSlug, "shop", "cart")}
+          className="relative grid size-11 shrink-0 place-items-center rounded-full text-white shadow-sm"
+          style={customerBrandStyle.primaryBg}
+          aria-label={cartCount ? `Cart, ${cartCount} items` : "Cart"}
+        >
+          <ShoppingBag className="size-[1.15rem]" />
+          {cartCount ? (
+            <span className="absolute -right-1 -top-1 grid min-w-5 place-items-center rounded-full bg-[var(--customer-accent,#c9a227)] px-1 text-[10px] font-bold leading-5 text-[#2a1f12] ring-2 ring-[#fbf8f5]">
+              {cartCount > 99 ? "99+" : cartCount}
+            </span>
+          ) : null}
+        </Link>
       </div>
 
-      {hasActiveFilters ? (
-        <p className="mt-2 line-clamp-2 text-xs text-[#8a8580]">
-          {filterSummaryParts.join(" · ")}
-          {" · "}
-          <button
-            type="button"
-            className={cn("font-semibold underline-offset-2 hover:underline", customerBrandClass.linkBack)}
-            onClick={onClearFilters}
-          >
-            Clear
-          </button>
-        </p>
-      ) : showOrdersLink ? (
-        <p className="mt-2 text-right text-xs">
-          <Link
-            href={customerShopOrdersPath(tenantSlug)}
-            className={cn("font-semibold underline-offset-2 hover:underline", customerBrandClass.linkBack)}
-          >
-            My orders
-          </Link>
-        </p>
-      ) : null}
-
       <Sheet open={filtersOpen} onOpenChange={setFiltersOpen}>
-        <SheetContent
-          id="shop-filters-sheet"
-          side="bottom"
-          className="max-h-[min(88vh,640px)] overflow-y-auto rounded-t-3xl px-5 pb-8 pt-6"
-        >
+        <SheetContent id="shop-filters-sheet" side="bottom" className="max-h-[min(88vh,640px)] overflow-y-auto rounded-t-3xl px-5 pb-8 pt-6">
           <SheetHeader className="text-left">
-            <SheetTitle className="font-serif text-xl uppercase tracking-wide">Filters</SheetTitle>
-            <SheetDescription>Search and narrow by collection.</SheetDescription>
+            <SheetTitle className="font-serif text-xl">Search & sort</SheetTitle>
+            <SheetDescription>Find a piece by name or narrow to one collection.</SheetDescription>
           </SheetHeader>
-
           <div className="mt-5 space-y-5">
             <div>
-              <label htmlFor="shop-search" className="mb-2 block text-xs font-bold uppercase tracking-wide text-[#8a8580]">
+              <label htmlFor="shop-search" className={cn("mb-2 block text-xs font-semibold", SHOP_MUTED)}>
                 Search
               </label>
-              <div className="relative">
-                <Search
-                  className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[#82777a]"
-                  aria-hidden
-                />
-                <Input
-                  id="shop-search"
-                  value={searchInput}
-                  onChange={(e) => onSearchInputChange(e.target.value)}
-                  className="h-11 rounded-xl pl-9 pr-9"
-                  placeholder="Search by product name…"
-                  autoComplete="off"
-                />
-                {searchInput ? (
-                  <button
-                    type="button"
-                    className="absolute right-2 top-1/2 grid size-8 -translate-y-1/2 place-items-center rounded-lg text-[#82777a] hover:bg-muted"
-                    aria-label="Clear search"
-                    onClick={() => onSearchInputChange("")}
-                  >
-                    <X className="size-4" />
-                  </button>
-                ) : null}
-              </div>
-              <p className="mt-1.5 text-xs text-muted-foreground">Type at least 2 letters to search.</p>
+              <SearchField id="shop-search" value={searchInput} onChange={onSearchInputChange} />
+              <p className="mt-1.5 text-xs text-muted-foreground">Type at least 2 letters.</p>
             </div>
-
             <div>
-              <label htmlFor="shop-category" className="mb-2 block text-xs font-bold uppercase tracking-wide text-[#8a8580]">
-                Category
+              <label htmlFor="shop-category" className={cn("mb-2 block text-xs font-semibold", SHOP_MUTED)}>
+                Collection
               </label>
-              <Select
-                value={categoryId ?? "__all"}
-                onValueChange={(v) => onCategoryChange(v === "__all" ? undefined : v)}
-              >
-                <SelectTrigger id="shop-category" className="h-11 w-full rounded-xl">
-                  <SelectValue placeholder="All jewellery" />
+              <Select value={categoryId ?? "__all"} onValueChange={(v) => onCategoryChange(v === "__all" ? undefined : v)}>
+                <SelectTrigger id="shop-category" className="h-11 w-full rounded-full">
+                  <SelectValue placeholder="Everything" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="__all">All jewellery</SelectItem>
+                  <SelectItem value="__all">Everything</SelectItem>
                   {categories.map((c) => (
                     <SelectItem key={c.id} value={c.id}>
                       {c.name}
@@ -230,42 +275,27 @@ export function CustomerShopCatalogToolbar({
                 </SelectContent>
               </Select>
             </div>
-
             <div>
-              <label htmlFor="shop-sort-sheet" className="mb-2 block text-xs font-bold uppercase tracking-wide text-[#8a8580]">
+              <label htmlFor="shop-sort-sheet" className={cn("mb-2 block text-xs font-semibold", SHOP_MUTED)}>
                 Sort
               </label>
-              <Select value={sort} onValueChange={(v) => onSortChange(v === "name" ? "name" : "newest")}>
-                <SelectTrigger id="shop-sort-sheet" className="h-11 w-full rounded-xl">
-                  <SelectValue>{sortLabels[sort]}</SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="newest">Newest</SelectItem>
-                  <SelectItem value="name">Name (A–Z)</SelectItem>
-                </SelectContent>
-              </Select>
+              <SortSelect id="shop-sort-sheet" sort={sort} onSortChange={onSortChange} />
             </div>
-
             <div className="flex flex-col gap-2 border-t pt-4">
               {hasActiveFilters ? (
-                <Button type="button" variant="outline" className="h-11 rounded-xl" onClick={onClearFilters}>
-                  Reset all filters
+                <Button type="button" variant="outline" className="h-11 rounded-full" onClick={onClearFilters}>
+                  Clear filters
                 </Button>
               ) : null}
               {showOrdersLink ? (
-                <Button type="button" variant="ghost" className="h-11 rounded-xl" asChild>
+                <Button type="button" variant="ghost" className="h-11 rounded-full" asChild>
                   <Link href={customerShopOrdersPath(tenantSlug)} onClick={() => setFiltersOpen(false)}>
                     My orders
                   </Link>
                 </Button>
               ) : null}
-              <Button
-                type="button"
-                className="h-11 rounded-xl text-white"
-                style={customerBrandStyle.primaryBg}
-                onClick={() => setFiltersOpen(false)}
-              >
-                Show {resultCount ?? 0} items
+              <Button type="button" className="h-11 rounded-full text-white" style={customerBrandStyle.primaryBg} onClick={() => setFiltersOpen(false)}>
+                Show {resultCount ?? 0} {resultCount === 1 ? "piece" : "pieces"}
               </Button>
             </div>
           </div>
@@ -273,23 +303,6 @@ export function CustomerShopCatalogToolbar({
       </Sheet>
     </div>
   );
-}
-
-function displaySku(product: Record<string, unknown>) {
-  const sku = String(product.sku ?? "").trim();
-  if (sku) return sku.toUpperCase();
-  const slug = String(product.slug ?? "");
-  if (slug) return slug.replace(/-/g, " ").toUpperCase().slice(0, 24);
-  return String(product.id ?? "").slice(-8).toUpperCase();
-}
-
-function availabilityTone(
-  availability: { purchasable?: boolean; stockPolicy?: string } | undefined,
-) {
-  if (!availability) return "neutral" as const;
-  if (availability.purchasable === false) return "out" as const;
-  if (availability.stockPolicy === "MADE_TO_ORDER") return "mto" as const;
-  return "in" as const;
 }
 
 export function CustomerShopProductCard({
@@ -305,73 +318,83 @@ export function CustomerShopProductCard({
 }) {
   const slug = String(product.slug);
   const href = customerPath(tenantSlug, "shop", encodeURIComponent(slug));
-  const availability = product.availability as
-    | { label?: string; purchasable?: boolean; stockPolicy?: string }
-    | undefined;
-  const tone = availabilityTone(availability);
+  const stock = productStock(product);
   const pricing = product.pricing as { computable?: boolean } | undefined;
-  const canAdd = pricing?.computable !== false && availability?.purchasable !== false;
-  const sku = displaySku(product);
+  const canAdd = pricing?.computable !== false && stock.tone !== "out";
+  const images = (product.imageUploadIds as string[] | undefined) ?? [];
+  const imageUrls = (product.imageUrls as { viewUrl?: string }[] | undefined) ?? [];
+  const offer = productOfferLabel(product);
+  const meta = productMeta(product);
+  const name = String(product.name);
 
   return (
-    <article className="flex min-w-0 flex-col border border-[#e5e0db] bg-white">
-      <Link href={href} className="relative block aspect-[3/4] bg-[#f7f4f1]">
+    <article className="group relative flex min-w-0 flex-col">
+      <Link
+        href={href}
+        className="relative block aspect-[4/5] overflow-hidden rounded-[1.25rem] customer-primary-tint-surface focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--customer-primary,#730321)]"
+        aria-label={name}
+      >
         <EcommerceCatalogImage
-          uploadId={(product.imageUploadIds as string[] | undefined)?.[0]}
-          viewUrl={(product.imageUrls as { viewUrl?: string }[] | undefined)?.[0]?.viewUrl}
+          uploadId={images[0]}
+          viewUrl={imageUrls[0]?.viewUrl}
           channel="customer"
-          alt={String(product.name)}
+          alt={name}
           fill
-          className="object-cover"
+          className="object-cover transition duration-500 group-hover:scale-[1.03]"
         />
-        {product.featured === true ? (
-          <span className="absolute left-0 top-3 bg-white/90 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-[#1e2a3a]">
-            Featured
+        {images[1] ? (
+          <span className="absolute inset-0 opacity-0 transition duration-500 group-hover:opacity-100 motion-reduce:hidden" aria-hidden>
+            <EcommerceCatalogImage uploadId={images[1]} viewUrl={imageUrls[1]?.viewUrl} channel="customer" alt="" fill className="object-cover" />
           </span>
         ) : null}
-        {tone === "out" ? (
-          <span className="absolute inset-x-0 bottom-0 bg-[#1e2a3a]/80 py-1.5 text-center text-[10px] font-semibold uppercase tracking-wide text-white">
-            Sold out
+        <span className="absolute left-3 top-3 flex flex-col items-start gap-1.5">
+          {offer ? (
+            <span className="rounded-full bg-[var(--customer-primary,#730321)] px-2.5 py-1 text-[11px] font-semibold text-white shadow-sm">
+              {offer}
+            </span>
+          ) : null}
+          {product.featured === true ? (
+            <span className="rounded-full bg-white/90 px-2.5 py-1 text-[11px] font-semibold text-[#3a2f33] shadow-sm backdrop-blur">
+              Featured
+            </span>
+          ) : null}
+        </span>
+        {stock.tone === "out" ? (
+          <span className="absolute inset-0 grid place-items-center bg-white/45 backdrop-blur-[1px]">
+            <span className="rounded-full bg-[#221a1d]/85 px-3 py-1 text-xs font-semibold text-white">Sold out</span>
           </span>
         ) : null}
       </Link>
 
-      <div className="flex items-end justify-between gap-2 border-t border-[#ece7e2] p-3">
-        <Link href={href} className="min-w-0 flex-1">
-          <p className="line-clamp-1 text-[11px] font-semibold uppercase tracking-wide text-[#1e2a3a]">
-            {sku}
-          </p>
-          <div className="mt-1">
-            <ShopPriceLabel
-              pricing={product.pricing as Parameters<typeof ShopPriceLabel>[0]["pricing"]}
-              className={cn("text-[15px] font-bold tabular-nums text-[#1e2a3a]", customerBrandClass.price)}
-            />
-          </div>
-          <p className="mt-1 line-clamp-1 text-[11px] text-[#8a8580]">{String(product.name)}</p>
-          {availability?.label && tone !== "out" ? (
-            <p className="mt-0.5 text-[10px] text-[#9a9590]">{availability.label}</p>
-          ) : null}
-        </Link>
-        <button
-          type="button"
-          disabled={!canAdd || adding}
-          aria-label={`Add ${String(product.name)} to cart`}
-          className={cn(
-            "grid size-11 shrink-0 place-items-center rounded-md border border-[#e5e0db] bg-[#f3f0ec] text-[#5c6775] transition hover:bg-[#ebe6e0] disabled:opacity-40",
-            adding && "opacity-70",
-          )}
-          onClick={(e) => {
-            e.preventDefault();
-            onAddToCart();
-          }}
-        >
-          {adding ? (
-            <Loader2 className="size-5 animate-spin" />
-          ) : (
-            <ShoppingCart className="size-5" strokeWidth={1.5} />
-          )}
-        </button>
-      </div>
+      <button
+        type="button"
+        disabled={!canAdd || adding}
+        aria-label={`Add ${name} to cart`}
+        title={canAdd ? "Add to cart" : stock.tone === "out" ? "Sold out" : "Price unavailable"}
+        className={cn(
+          "absolute right-3 top-3 grid size-10 place-items-center rounded-full bg-white text-[var(--customer-primary,#730321)] shadow-[0_6px_18px_rgba(40,20,25,0.14)] transition",
+          "hover:scale-105 disabled:pointer-events-none disabled:opacity-0",
+          "sm:opacity-0 sm:group-focus-within:opacity-100 sm:group-hover:opacity-100",
+        )}
+        onClick={(e) => {
+          e.preventDefault();
+          onAddToCart();
+        }}
+      >
+        {adding ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-[1.15rem]" strokeWidth={2.2} />}
+      </button>
+
+      <Link href={href} className="mt-3 block min-w-0 px-0.5">
+        <h3 className={cn("line-clamp-2 font-serif text-[15px] leading-snug sm:text-base", SHOP_INK)}>{name}</h3>
+        {meta ? <p className={cn("mt-1 text-xs", SHOP_MUTED)}>{meta}</p> : null}
+        <div className="mt-1.5 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+          <ShopPriceLabel
+            pricing={product.pricing as Parameters<typeof ShopPriceLabel>[0]["pricing"]}
+            className="text-[15px] font-semibold tabular-nums text-[var(--customer-primary,#730321)] sm:text-base"
+          />
+          {stock.tone !== "out" ? <StockDot stock={stock} /> : null}
+        </div>
+      </Link>
     </article>
   );
 }
@@ -386,19 +409,20 @@ export function CustomerShopEmptyState({
   onReset: () => void;
 }) {
   return (
-    <div className="border border-[#e5e0db] bg-white p-10 text-center sm:p-12">
-      <Package className={cn("mx-auto size-9", customerBrandClass.accentText)} />
-      <h3 className="mt-4 font-serif text-xl uppercase tracking-wide text-[#1e2a3a]">
-        {searchQ ? "No matches" : "Nothing here yet"}
-      </h3>
-      <p className="mt-2 text-sm text-muted-foreground">
-        {searchQ ? "Try different filters or clear your search." : "Check back soon or browse all jewellery."}
+    <div className={cn("rounded-[1.5rem] border bg-white px-6 py-14 text-center", SHOP_HAIRLINE)}>
+      <span className="mx-auto grid size-14 place-items-center rounded-full customer-accent-tint-surface">
+        <Package className="size-6 customer-gold-copy" aria-hidden />
+      </span>
+      <h3 className={cn("mt-4 font-serif text-2xl", SHOP_INK)}>{searchQ ? "Nothing matches that search" : "This collection is empty for now"}</h3>
+      <p className={cn("mx-auto mt-2 max-w-sm text-sm leading-6", SHOP_MUTED)}>
+        {searchQ ? "Try a shorter word, or browse everything in the store." : "New pieces are added often. Browse everything in the meantime."}
       </p>
       {hasFilters ? (
-        <Button type="button" variant="outline" className="mt-5 rounded-full px-6" onClick={onReset}>
-          Reset filters
+        <Button type="button" variant="outline" className="mt-6 rounded-full px-6" onClick={onReset}>
+          Browse everything
         </Button>
       ) : null}
     </div>
   );
 }
+

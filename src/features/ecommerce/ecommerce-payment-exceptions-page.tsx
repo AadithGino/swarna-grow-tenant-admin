@@ -1,137 +1,144 @@
 "use client";
 
 import Link from "next/link";
-import { AlertTriangle, ArrowRight } from "lucide-react";
+import { useState } from "react";
+import { AlertTriangle, ArrowRight, ShieldAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { PageHeader, StatCard, Surface } from "@/src/components/common/page-parts";
-import { PageSkeleton, QueryError } from "@/src/components/common/query-state";
+import { PageHeader } from "@/src/components/common/page-parts";
+import { EmptyState, QueryError } from "@/src/components/common/query-state";
 import { StatusBadge } from "@/src/components/common/status-badge";
+import { AdminTable, IdChip, ListPanel, type AdminColumn } from "@/src/components/admin-ui/admin-table";
+import { FilterBar, FilterSearch, QuickViews } from "@/src/components/admin-ui/filter-bar";
+import { Notice } from "@/src/components/admin-ui/detail-parts";
 import { useGetEcommercePaymentExceptionsQuery } from "@/src/store/api/admin-api";
 import { useEcommerceAdminAccess } from "@/src/features/ecommerce/ecommerce-admin-shared";
-import {
-  EcommerceOperationsNav,
-  EcommerceSettingsHint,
-} from "@/src/features/ecommerce/ecommerce-settings-ui";
 
 function formatInr(paise: number) {
   return `₹${(paise / 100).toLocaleString("en-IN", { minimumFractionDigits: 2 })}`;
 }
 
+const KIND_COPY: Record<string, { label: string; help: string }> = {
+  EXCEPTION_REFUND: { label: "Exception refund", help: "A refund case is open for this payment." },
+  STUCK_RECONCILE: { label: "Stuck reconcile", help: "The gateway hasn't confirmed the outcome — retry reconcile." },
+  INITIATION_UNCERTAIN: { label: "Initiation uncertain", help: "We can't tell if the payment started — check with the gateway." },
+  LATE_SUCCESS_REFUND_REQUIRED: { label: "Late success — refund needed", help: "Paid after the order expired. Refund the customer." },
+};
+
 function kindLabel(kind: string) {
-  switch (kind) {
-    case "EXCEPTION_REFUND":
-      return "Exception refund";
-    case "STUCK_RECONCILE":
-      return "Stuck reconcile";
-    case "INITIATION_UNCERTAIN":
-      return "Initiation uncertain";
-    case "LATE_SUCCESS_REFUND_REQUIRED":
-      return "Late success — refund required";
-    default:
-      return kind.replaceAll("_", " ").toLowerCase();
-  }
+  return KIND_COPY[kind]?.label ?? kind.replaceAll("_", " ").toLowerCase();
 }
+
+type Row = Record<string, unknown>;
 
 export function EcommercePaymentExceptionsPage() {
   const { canRead, readBlockedMessage } = useEcommerceAdminAccess();
   const query = useGetEcommercePaymentExceptionsQuery({ limit: 80 }, { skip: !canRead });
+  const [kind, setKind] = useState("ALL");
+  const [search, setSearch] = useState("");
   if (!canRead) {
-    return (
-      <PageHeader
-        title="Payment exceptions"
-        description={readBlockedMessage ?? "Ecommerce read access required."}
-      />
-    );
+    return <PageHeader title="Payment exceptions" description={readBlockedMessage ?? "Ecommerce read access required."} />;
   }
-  if (query.isLoading) return <PageSkeleton cards={1} />;
-  if (query.isError) return <QueryError error={query.error} onRetry={query.refetch} />;
-  const items = query.data?.items ?? [];
+  const items = (query.data?.items ?? []) as Row[];
+  const counts = items.reduce<Record<string, number>>((acc, r) => {
+    const k = String(r.kind ?? "OTHER");
+    acc[k] = (acc[k] ?? 0) + 1;
+    return acc;
+  }, {});
+  const needle = search.trim().toLowerCase();
+  const rows = items.filter(
+    (r) =>
+      (kind === "ALL" || String(r.kind) === kind) &&
+      (!needle || [r.orderId, r.orderNumber, r.refundCaseId, r.paymentAttemptId].filter(Boolean).some((v) => String(v).toLowerCase().includes(needle))),
+  );
+  const keyOf = (row: Row) => `${String(row.kind)}-${String(row.orderId ?? "")}-${String(row.refundCaseId ?? row.paymentAttemptId ?? "")}`;
+
+  const columns: AdminColumn<Row>[] = [
+    {
+      key: "kind",
+      header: "Problem",
+      primary: true,
+      cell: (row) => (
+        <div className="max-w-[24rem]">
+          <p className="font-semibold text-[#28161a]">{kindLabel(String(row.kind ?? ""))}</p>
+          <p className="text-xs leading-5 text-[#857a7d]">{KIND_COPY[String(row.kind)]?.help ?? "Needs a decision."}</p>
+        </div>
+      ),
+    },
+    {
+      key: "order",
+      header: "Order",
+      cell: (row) => (row.orderId ? <IdChip>{String(row.orderNumber ?? `…${String(row.orderId).slice(-8)}`)}</IdChip> : "—"),
+    },
+    { key: "status", header: "Status", cell: (row) => (row.status ? <StatusBadge status={String(row.status)} /> : "—") },
+    {
+      key: "updated",
+      header: "Updated",
+      cell: (row) => <span className="text-sm text-[#5c4a4e]">{row.updatedAt ? new Date(String(row.updatedAt)).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" }) : "—"}</span>,
+      sortValue: (row) => String(row.updatedAt ?? ""),
+      hideOnMobile: true,
+    },
+    {
+      key: "amount",
+      header: "Amount",
+      align: "right",
+      primary: true,
+      cell: (row) => <span className="font-bold">{row.amountPaise != null ? formatInr(Number(row.amountPaise)) : "—"}</span>,
+      sortValue: (row) => Number(row.amountPaise ?? 0),
+    },
+  ];
 
   return (
-    <>
+    <div className="space-y-6">
       <PageHeader
-        eyebrow="Store operations"
+        eyebrow="Online store"
+        icon={ShieldAlert}
         title="Payment exceptions"
-        description="Provider failures, late captures, and refunds that need a decision."
+        description="Gateway failures, late captures and refunds that need a decision. Open the order to fix each one."
         actions={
-          <Button variant="outline" size="sm" asChild>
+          <Button variant="outline" asChild className="rounded-xl">
             <Link href="/ecommerce/orders">
-              All orders
-              <ArrowRight className="size-4" />
+              All orders <ArrowRight />
             </Link>
           </Button>
         }
       />
-      <EcommerceOperationsNav />
-      <div className="mb-6 grid gap-4 sm:grid-cols-2">
-        <StatCard
-          icon={AlertTriangle}
-          label="Open exceptions"
-          value={items.length}
-          detail="Resolve from the order detail screen"
-          tone={items.length ? "red" : "green"}
-        />
-        <StatCard
-          icon={AlertTriangle}
-          label="Queue status"
-          value={items.length ? "Action needed" : "Clear"}
-          detail="Check orders with online payment issues"
-          tone={items.length ? "gold" : "green"}
-        />
-      </div>
-      <EcommerceSettingsHint icon={AlertTriangle} title="What belongs here">
-        These are not courier COD items — use{" "}
-        <Link href="/ecommerce/courier-cod" className="font-semibold text-[#730321] underline">
+      <Notice tone="blue" icon={AlertTriangle}>
+        Cash collected by couriers isn&apos;t handled here — use{" "}
+        <Link href="/ecommerce/courier-cod" className="font-semibold underline-offset-2 hover:underline">
           Courier COD
         </Link>{" "}
-        for cash collection and bank remittance. Open each order to retry reconciliation or issue
-        refunds.
-      </EcommerceSettingsHint>
-      <Surface title="Open queue" className="mt-6">
-        {items.length === 0 ? (
-          <p className="p-6 text-sm text-muted-foreground">No open payment exceptions.</p>
+        for collection and bank remittance.
+      </Notice>
+      <ListPanel
+        toolbar={
+          <FilterBar
+            quickViews={
+              <QuickViews
+                value={kind}
+                onChange={setKind}
+                options={[{ value: "ALL", label: "All", count: items.length }, ...Object.keys(counts).map((k) => ({ value: k, label: kindLabel(k), count: counts[k] }))]}
+                ariaLabel="Exception type"
+              />
+            }
+            search={<FilterSearch value={search} onChange={setSearch} placeholder="Search order or case ID" />}
+            resultLabel={`${rows.length} open`}
+          />
+        }
+      >
+        {query.isError ? (
+          <QueryError error={query.error} onRetry={query.refetch} />
         ) : (
-          <ul className="divide-y divide-[#eaded9]">
-            {items.map((row) => {
-              const orderId = String(row.orderId ?? "");
-              const key = `${String(row.kind)}-${orderId}-${String(row.refundCaseId ?? row.paymentAttemptId ?? "")}`;
-              return (
-                <li
-                  key={key}
-                  className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between"
-                >
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="font-semibold text-[#28161a]">
-                        {kindLabel(String(row.kind ?? ""))}
-                      </span>
-                      {row.status ? (
-                        <StatusBadge status="PENDING" label={String(row.status)} />
-                      ) : null}
-                    </div>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      {row.amountPaise != null ? formatInr(Number(row.amountPaise)) : "—"}
-                      {orderId ? ` · Order …${orderId.slice(-8)}` : null}
-                    </p>
-                    {row.updatedAt ? (
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        Updated {new Date(String(row.updatedAt)).toLocaleString()}
-                      </p>
-                    ) : null}
-                  </div>
-                  {orderId ? (
-                    <Button size="sm" variant="outline" asChild>
-                      <Link href={`/ecommerce/orders/${encodeURIComponent(orderId)}`}>
-                        Open order
-                      </Link>
-                    </Button>
-                  ) : null}
-                </li>
-              );
-            })}
-          </ul>
+          <AdminTable
+            columns={columns}
+            rows={rows}
+            getRowId={keyOf}
+            rowHref={(row) => (row.orderId ? `/ecommerce/orders/${encodeURIComponent(String(row.orderId))}` : undefined)}
+            loading={query.isLoading}
+            caption="Open payment exceptions"
+            empty={<EmptyState icon={ShieldAlert} title="No open payment exceptions" detail="Every online payment matches its order." />}
+          />
         )}
-      </Surface>
-    </>
+      </ListPanel>
+    </div>
   );
 }

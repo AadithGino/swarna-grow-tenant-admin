@@ -120,9 +120,9 @@ function ToggleRow({
   onCheckedChange: (v: boolean) => void;
 }) {
   return (
-    <div className="flex items-center justify-between gap-4 rounded-xl border p-4">
+    <div data-field-row="" className="flex items-center justify-between gap-4 rounded-xl border p-4">
       <div>
-        <strong className="text-sm">{label}</strong>
+        <strong data-field-label="" className="text-sm">{label}</strong>
         {detail ? (
           <p className="text-sm text-muted-foreground">{detail}</p>
         ) : null}
@@ -338,11 +338,13 @@ export function PlanBuilderWizard({
           </Button>
         }
       />
-      <PlanBuilderStepper
-        steps={steps}
-        currentIndex={resolvedStepIndex}
-        onSelect={setStepIndex}
-      />
+      <div data-tour="plan-wizard-steps">
+        <PlanBuilderStepper
+          steps={steps}
+          currentIndex={resolvedStepIndex}
+          onSelect={setStepIndex}
+        />
+      </div>
       {form.editLocked ? (
         <Surface className="mb-4 border-amber-200 bg-amber-50">
           <p className="p-4 text-sm text-amber-950">
@@ -354,6 +356,7 @@ export function PlanBuilderWizard({
       <div className="grid gap-5 lg:grid-cols-[1fr_minmax(280px,340px)]">
         <Surface title={stepCopy.title} description={stepCopy.description}>
           <fieldset
+            data-tour="plan-wizard-form"
             disabled={financialLocked}
             className="space-y-5 p-6 disabled:opacity-60"
           >
@@ -1623,6 +1626,7 @@ export function PlanBuilderWizard({
             </Button>
             {resolvedStepIndex < steps.length - 1 ? (
               <Button
+                data-tour="plan-wizard-continue"
                 onClick={() => {
                   const stepErrors = validatePlanBuilderStep(current.id, form, {
                     isEdit,
@@ -1685,7 +1689,7 @@ export function PlanBuilderWizard({
             )}
           </div>
         </Surface>
-        <div className="lg:sticky lg:top-4 lg:self-start">
+        <div className="lg:sticky lg:top-4 lg:self-start" data-tour="plan-wizard-preview">
           <PlanBuilderCustomerPreview
             form={form}
             steps={steps}

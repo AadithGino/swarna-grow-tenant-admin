@@ -32,22 +32,20 @@ import { portalPathFromContract } from "@/src/lib/contract-paths";
 import {
   useDismissAlertMutation,
   useGetAlertsQuery,
-  useGetBranchesQuery,
   useGetDashboardQuery,
+  useGetDigitalMetalsDashboardSummaryQuery,
   useGetEcommerceReportsQuery,
   useGetEcommerceWorkspaceSummaryQuery,
   useGetGoldRateCurrentQuery,
 } from "@/src/store/api/admin-api";
 import { useEcommerceWorkspaceNavVisible } from "@/src/features/ecommerce/ecommerce-admin-shared";
 import { EcommerceDashboardSection } from "@/src/features/dashboard/ecommerce-dashboard-section";
+import { DigitalMetalsDashboardSection } from "@/src/features/dashboard/digital-metals-dashboard-section";
+import { useDigitalMetalsWorkspaceNavVisible } from "@/src/features/digital-metals/digital-metals-admin-shared";
 import { ecommerceInsightsQueryFromDashboard } from "@/src/lib/ecommerce-dashboard-period";
 import { useClientMounted } from "@/src/hooks/use-client-mounted";
-import {
-  useActingBranchId,
-  useActingBranchKey,
-} from "@/src/hooks/use-acting-branch-id";
-import { useAppDispatch, useAppSelector } from "@/src/store/hooks";
-import { setBranch } from "@/src/store/slices/ui-slice";
+import { useActingBranchId } from "@/src/hooks/use-acting-branch-id";
+import { useAppSelector } from "@/src/store/hooks";
 import type { ChartSeriesBlock } from "@/src/types/admin-report";
 import type { PortalAlert } from "@/src/types/domain";
 
@@ -75,22 +73,11 @@ function greetingForHour(hour: number) {
 
 export function DashboardPage() {
   const mounted = useClientMounted();
-  const dispatch = useAppDispatch();
   const [period, setPeriod] = useState("THIS_MONTH");
-  const globalBranch = useActingBranchKey();
   const branchId = useActingBranchId();
   const session = useAppSelector((s) => s.session.session);
-  const multiBranch = session?.capabilities?.multiBranch !== false;
-  const canPickActingBranch =
-    multiBranch &&
-    (session?.user?.role === "TENANT_OWNER" ||
-      session?.user?.role === "TENANT_ADMIN");
   const displayName = session?.user?.name?.trim() || "there";
   const greeting = greetingForHour(new Date().getHours());
-  const branchesQuery = useGetBranchesQuery(
-    { limit: 50 },
-    { skip: !multiBranch },
-  );
   const goldCurrent = useGetGoldRateCurrentQuery(
     branchId ? { branchId } : undefined,
   );
@@ -155,6 +142,12 @@ export function DashboardPage() {
         !fulfilmentTo,
     },
   );
+  const dmNav = useDigitalMetalsWorkspaceNavVisible();
+  const showDmDashboard = dmNav.showDigitalMetalsNav && dmNav.workspaceVisible;
+  const dmSummary = useGetDigitalMetalsDashboardSummaryQuery(
+    { ...ecommercePeriodQuery, ...(branchId ? { branchId } : {}) },
+    { skip: skipDashboard || !mounted || !showDmDashboard },
+  );
   const alertsQuery = useGetAlertsQuery(branchId ? { branchId } : undefined);
   const [dismissAlert] = useDismissAlertMutation();
 
@@ -181,31 +174,29 @@ export function DashboardPage() {
   const rangeControls = (
     <>
       <Select
-        value={rangeMode}
-        onValueChange={(v) => setRangeMode(v as "preset" | "custom")}
+        value={rangeMode === "custom" ? "CUSTOM" : period}
+        onValueChange={(v) => {
+          if (v === "CUSTOM") {
+            setRangeMode("custom");
+            return;
+          }
+          setRangeMode("preset");
+          setPeriod(v);
+        }}
       >
-        <SelectTrigger className="w-[9rem]">
-          <SelectValue />
+        <SelectTrigger className="h-10 w-[10.5rem] bg-white" aria-label="Period">
+          <SelectValue placeholder="Period" />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value="preset">Preset period</SelectItem>
-          <SelectItem value="custom">Custom range</SelectItem>
+          {PERIOD_OPTIONS.map((o) => (
+            <SelectItem key={o.value} value={o.value}>
+              {o.label}
+            </SelectItem>
+          ))}
+          <SelectItem value="CUSTOM">Custom dates…</SelectItem>
         </SelectContent>
       </Select>
-      {rangeMode === "preset" ? (
-        <Select value={period} onValueChange={setPeriod}>
-          <SelectTrigger className="w-[10rem]">
-            <SelectValue placeholder="Period" />
-          </SelectTrigger>
-          <SelectContent>
-            {PERIOD_OPTIONS.map((o) => (
-              <SelectItem key={o.value} value={o.value}>
-                {o.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      ) : (
+      {rangeMode === "custom" ? (
         <div className="space-y-1">
           <DateRangeFilter
             from={customFrom}
@@ -215,7 +206,7 @@ export function DashboardPage() {
           />
           <FormFieldError message={customRangeError} />
         </div>
-      )}
+      ) : null}
     </>
   );
 
@@ -225,24 +216,6 @@ export function DashboardPage() {
       description={headerDescription}
       actions={
         <div className="flex flex-wrap items-center gap-2">
-          {canPickActingBranch && branchesQuery.data?.items?.length ? (
-            <Select
-              value={globalBranch}
-              onValueChange={(v) => dispatch(setBranch(v))}
-            >
-              <SelectTrigger className="w-[10rem]">
-                <SelectValue placeholder="Branch" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="ALL">All branches</SelectItem>
-                {branchesQuery.data.items.map((b: any) => (
-                  <SelectItem key={b.id} value={b.id}>
-                    {b.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          ) : null}
           {rangeControls}
           <PaymentDialog
             trigger={
@@ -309,8 +282,6 @@ export function DashboardPage() {
     <>
       {pageHeader}
 
-      <SetupChecklist />
-
       <DashboardBlockingAlerts
         goldRate={
           goldCurrent.isLoading
@@ -328,6 +299,8 @@ export function DashboardPage() {
       />
 
       {widgets ? <DashboardWidgetGrid widgets={widgets} /> : null}
+
+      <SetupChecklist />
 
       {data.redemptionFulfillment ? (
         <RedemptionFulfillmentCard
@@ -385,6 +358,16 @@ export function DashboardPage() {
         />
       ) : null}
 
+      {showDmDashboard ? (
+        <DigitalMetalsDashboardSection
+          summary={dmSummary.data}
+          loading={dmSummary.isFetching}
+          error={dmSummary.isError ? dmSummary.error : undefined}
+          onRetry={() => void dmSummary.refetch()}
+          periodLabel={data.period?.label ?? period.replaceAll("_", " ").toLowerCase()}
+        />
+      ) : null}
+
       <Surface
         title="Alert centre"
         description="Cash, messaging, and payment items needing attention"
@@ -397,6 +380,7 @@ export function DashboardPage() {
         <DashboardAlertList alerts={panelAlerts} onDismiss={handleDismiss} />
       </Surface>
 
+      {(data.attention ?? []).length ? (
       <Surface
         title="Operational attention"
         description="Items that need an owner today"
@@ -429,7 +413,7 @@ export function DashboardPage() {
             {
               key: "amount",
               header: "Amount",
-              render: (r: any) => money(r.amount),
+              render: (r: any) => (Number(r.amount) ? money(r.amount) : "—"),
             },
             { key: "age", header: "Age", render: (r: any) => r.age },
             {
@@ -458,6 +442,7 @@ export function DashboardPage() {
           ]}
         />
       </Surface>
+      ) : null}
     </>
   );
 }

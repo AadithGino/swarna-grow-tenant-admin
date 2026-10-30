@@ -35,6 +35,9 @@ yarn-error.log*
 # vercel
 .vercel
 
+# graphify local AST cache (regenerate with `graphify extract . --code-only`)
+graphify-out/cache/
+
 # typescript
 next-env.d.ts
 *.tsbuildinfo

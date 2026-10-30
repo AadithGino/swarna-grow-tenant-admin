@@ -145,6 +145,8 @@ export function PlanBuilderStepper({
             <li key={step.id}>
               <button
                 type="button"
+                data-tour={`plan-step:${step.id}`}
+                aria-current={active ? "step" : undefined}
                 onClick={() => onSelect(i)}
                 className={cn(
                   "flex items-center gap-2 rounded-full border px-3 py-1.5 text-left text-xs font-semibold transition-colors",

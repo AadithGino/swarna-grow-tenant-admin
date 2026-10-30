@@ -253,10 +253,10 @@ const DigitalMetalsBankVerificationPage = dynamic(
     ),
   options,
 );
-const DigitalMetalsAdminLayout = dynamic(
+const EcommerceStoreOverviewPage = dynamic(
   () =>
-    import("@/src/features/digital-metals/digital-metals-admin-nav").then(
-      (m) => m.DigitalMetalsAdminLayout,
+    import("@/src/features/ecommerce/ecommerce-store-overview-page").then(
+      (m) => m.EcommerceStoreOverviewPage,
     ),
   options,
 );
@@ -545,7 +545,7 @@ export function PortalRouter({ slug }: { slug: string[] }) {
       else if (id === "bank-verification")
         dmInner = <DigitalMetalsBankVerificationPage />;
       else dmInner = <DigitalMetalsWorkspacePage />;
-      page = <DigitalMetalsAdminLayout>{dmInner}</DigitalMetalsAdminLayout>;
+      page = dmInner;
       break;
     }
     case "ecommerce":
@@ -563,7 +563,8 @@ export function PortalRouter({ slug }: { slug: string[] }) {
         page = <EcommerceCourierCodWorkspacePage />;
       else if (id === "payment-exceptions")
         page = <EcommercePaymentExceptionsPage />;
-      else page = <EcommerceCatalogPage />;
+      else if (id === "catalog" || id === "products") page = <EcommerceCatalogPage />;
+      else page = <EcommerceStoreOverviewPage />;
       break;
     case "settings":
       if (id === "subscription")

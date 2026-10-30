@@ -1,17 +1,21 @@
 "use client";
 
 import Link from "next/link";
-import { CheckCircle2, Circle } from "lucide-react";
+import { CheckCircle2, Circle, PlayCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Surface } from "@/src/components/common/page-parts";
 import { useAppSelector } from "@/src/store/hooks";
+import { useTours } from "@/src/components/tour/tour-provider";
+import { tourForSetupTask } from "@/src/lib/tours/registry";
 
 export function SetupChecklist() {
   const session = useAppSelector((s) => s.session.session);
+  const { start, canRun } = useTours();
   const tasks = session?.setupTasks ?? [];
   if (!tasks.length || session?.setupComplete) return null;
   const done = tasks.filter((t) => t.completed).length;
   return (
+    <div data-tour="setup-checklist">
     <Surface
       title="Complete your setup"
       description={`${done} of ${tasks.length} tasks done — finish these before day-to-day operations.`}
@@ -34,13 +38,30 @@ export function SetupChecklist() {
               </span>
             </div>
             {!task.completed ? (
-              <Button size="sm" variant="outline" asChild>
-                <Link href={task.href}>Open</Link>
-              </Button>
+              <div className="flex shrink-0 items-center gap-2">
+                {(() => {
+                  const guide = tourForSetupTask(task.key);
+                  return guide && canRun(guide.id) ? (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="text-[#730321]"
+                      onClick={() => start(guide.id, "checklist")}
+                    >
+                      <PlayCircle />
+                      Show me
+                    </Button>
+                  ) : null;
+                })()}
+                <Button size="sm" variant="outline" asChild>
+                  <Link href={task.href}>Open</Link>
+                </Button>
+              </div>
             ) : null}
           </li>
         ))}
       </ul>
     </Surface>
+    </div>
   );
 }

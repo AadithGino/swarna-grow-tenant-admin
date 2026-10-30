@@ -1,8 +1,12 @@
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import vinext from "vinext";
 import { defineConfig } from "vite";
 import hostingConfig from "./.openai/hosting.json";
 import { readExecutionProfile } from "./scripts/execution-profile.mjs";
 import { sites } from "./build/sites-vite-plugin";
+
+const rootDir = path.dirname(fileURLToPath(import.meta.url));
 
 const SITE_CREATOR_PLACEHOLDER_DATABASE_ID =
   "00000000-0000-4000-8000-000000000000";
@@ -36,6 +40,46 @@ const localBindingConfig = {
 };
 
 export default defineConfig(async () => {
+  // Vercel / Nitro path (vinext docs): use Nitro instead of Cloudflare Workers plugin.
+  const deployVercel =
+    process.env.VERCEL === "1"
+    || process.env.NITRO_PRESET === "vercel"
+    || process.env.DEPLOY_TARGET === "vercel";
+
+  if (deployVercel) {
+    process.env.NITRO_PRESET ??= "vercel";
+    const { nitro } = await import("nitro/vite");
+    // vinext Link soft-nav breaks under Nitro minify: dynamic
+    // `const { navigateClientSide } = await import(...)` loses the export name.
+    // Fall back to a full document navigation when the soft-nav entry is missing.
+    const patchVinextLink = {
+      name: "swarna-patch-vinext-link",
+      enforce: "pre" as const,
+      transform(code: string, id: string) {
+        const norm = id.replace(/\\/g, "/");
+        if (!norm.includes("/vinext/") || !norm.endsWith("/shims/link.js")) {
+          return null;
+        }
+        const needle =
+          "const { navigateClientSide } = loadedNavigationModule ?? await loadNavigationModule();";
+        if (!code.includes(needle)) return null;
+        return code.replace(
+          needle,
+          `const __navMod = loadedNavigationModule ?? await loadNavigationModule();
+			const navigateClientSide = __navMod.navigateClientSide;
+			if (typeof navigateClientSide !== "function") {
+				if (replace) window.location.replace(absoluteFullHref);
+				else window.location.assign(absoluteFullHref);
+				return;
+			}`,
+        );
+      },
+    };
+    return {
+      plugins: [patchVinextLink, vinext(), sites({ mockAuth: false }), nitro()],
+    };
+  }
+
   // Use Miniflare's local Request.cf placeholder unless fetching is requested.
   process.env.CLOUDFLARE_CF_FETCH_ENABLED ??= "false";
   process.env.WRANGLER_SEND_METRICS ??= "false";

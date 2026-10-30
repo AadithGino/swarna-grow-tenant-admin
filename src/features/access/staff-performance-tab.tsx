@@ -15,20 +15,16 @@ import {
 } from "@/src/features/access/access-detail-visuals";
 import { MoneyPair } from "@/src/features/access/access-detail-parts";
 import { useCursorPagination } from "@/src/hooks/use-cursor-pagination";
+import { istMonthToDateRange } from "@/src/lib/ist-business-date";
 import { emptyPageMeta } from "@/src/lib/cursor-pagination";
 import {
   useGetStaffPerformanceSectionQuery,
   useGetStaffPerformanceSummaryQuery,
 } from "@/src/store/api/admin-api";
 
-function isoDate(d: Date) {
-  return d.toISOString().slice(0, 10);
-}
-
 function defaultMonthRange() {
-  const now = new Date();
-  const from = new Date(now.getFullYear(), now.getMonth(), 1);
-  return { from: isoDate(from), to: isoDate(now) };
+  // IST calendar month; toISOString() on a local-midnight date started the range a day early.
+  return istMonthToDateRange();
 }
 
 function formatWhen(iso?: string | null) {

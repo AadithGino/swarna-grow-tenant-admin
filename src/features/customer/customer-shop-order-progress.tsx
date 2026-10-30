@@ -243,31 +243,44 @@ function StepIcon({ state }: { state: StepState }) {
     );
   }
   return (
-    <span className="grid size-7 shrink-0 place-items-center rounded-full border-2 border-[#d8d0c8] bg-[#f5f1ed]">
-      <Circle className="size-2.5 text-[#bbb]" />
+    <span className="grid size-7 shrink-0 place-items-center rounded-full border-2 border-[#ded2ca] bg-white">
+      <span className="size-1.5 rounded-full bg-[#cbbcb4]" />
     </span>
+  );
+}
+
+function stepLabelClass(state: StepState) {
+  return cn(
+    "text-sm font-semibold",
+    state === "current" && "text-[var(--customer-primary,#730321)]",
+    state === "complete" && "text-[#221a1d]",
+    state === "upcoming" && "text-[#9a8d90]",
+    (state === "failed" || state === "cancelled") && "text-red-700",
   );
 }
 
 export function ShopOrderProgressStepper({
   timeline,
   compact,
+  horizontal,
 }: {
   timeline: OrderTimeline;
   compact?: boolean;
+  /** Row layout from `sm` up; falls back to the vertical list on phones. */
+  horizontal?: boolean;
 }) {
   const { steps } = timeline;
   if (compact) {
     return (
-      <div className="flex items-center gap-0.5">
+      <div className="flex items-center gap-1" aria-hidden>
         {steps.map((step) => (
           <div
             key={step.id}
             className={cn(
-              "h-1 flex-1 rounded-full first:rounded-l-full last:rounded-r-full",
+              "h-1.5 flex-1 rounded-full",
               step.state === "complete" && "bg-emerald-600",
               step.state === "current" && "bg-[var(--customer-primary,#730321)]",
-              step.state === "upcoming" && "bg-[#e8e2dc]",
+              step.state === "upcoming" && "bg-[#ece3dd]",
               (step.state === "failed" || step.state === "cancelled") && "bg-red-500",
             )}
           />
@@ -276,8 +289,8 @@ export function ShopOrderProgressStepper({
     );
   }
 
-  return (
-    <ol className="space-y-0">
+  const vertical = (
+    <ol className={cn("space-y-0", horizontal && "sm:hidden")}>
       {steps.map((step, index) => {
         const last = index === steps.length - 1;
         return (
@@ -285,53 +298,57 @@ export function ShopOrderProgressStepper({
             <div className="flex flex-col items-center">
               <StepIcon state={step.state} />
               {!last ? (
-                <div
-                  className={cn(
-                    "my-1 w-0.5 flex-1 min-h-[1.75rem]",
-                    step.state === "complete" ? "bg-emerald-600" : "bg-[#e8e2dc]",
-                  )}
-                />
+                <div className={cn("my-1 min-h-[1.5rem] w-0.5 flex-1", step.state === "complete" ? "bg-emerald-600" : "bg-[#ece3dd]")} />
               ) : null}
             </div>
             <div className={cn("pb-5 pt-0.5", last && "pb-0")}>
-              <p
-                className={cn(
-                  "text-sm font-bold",
-                  step.state === "current" && "text-[var(--customer-primary,#730321)]",
-                  step.state === "complete" && "text-[#171722]",
-                  step.state === "upcoming" && "text-[#999]",
-                  (step.state === "failed" || step.state === "cancelled") && "text-red-700",
-                )}
-              >
-                {step.label}
-              </p>
-              {step.state === "current" && step.hint ? (
-                <p className="text-xs text-[#777280]">{step.hint}</p>
-              ) : null}
+              <p className={stepLabelClass(step.state)}>{step.label}</p>
+              {step.state === "current" && step.hint ? <p className="text-xs text-[#7a6f72]">{step.hint}</p> : null}
             </div>
           </li>
         );
       })}
     </ol>
   );
+  if (!horizontal) return vertical;
+  return (
+    <>
+      {vertical}
+      <ol className="hidden sm:flex">
+        {steps.map((step, index) => {
+          const last = index === steps.length - 1;
+          return (
+            <li key={step.id} className="flex min-w-0 flex-1 flex-col items-center text-center">
+              <div className="flex w-full items-center">
+                <span className={cn("h-0.5 flex-1", index === 0 ? "bg-transparent" : steps[index - 1].state === "complete" ? "bg-emerald-600" : "bg-[#ece3dd]")} />
+                <StepIcon state={step.state} />
+                <span className={cn("h-0.5 flex-1", last ? "bg-transparent" : step.state === "complete" ? "bg-emerald-600" : "bg-[#ece3dd]")} />
+              </div>
+              <p className={cn("mt-2 px-1", stepLabelClass(step.state), "text-xs sm:text-[13px]")}>{step.label}</p>
+            </li>
+          );
+        })}
+      </ol>
+    </>
+  );
 }
 
-export function ShopOrderStatusHero({ timeline }: { timeline: OrderTimeline }) {
-  const toneClass =
+export function ShopOrderStatusHero({ timeline, children }: { timeline: OrderTimeline; children?: React.ReactNode }) {
+  const accent =
     timeline.tone === "success"
-      ? "border-emerald-200 bg-emerald-50 text-emerald-950"
+      ? "bg-emerald-600"
       : timeline.tone === "warning"
-        ? "border-amber-200 bg-amber-50 text-amber-950"
+        ? "bg-amber-500"
         : timeline.tone === "danger"
-          ? "border-red-200 bg-red-50 text-red-950"
-          : "border-[#ece6e1] bg-[#faf7f4] text-[#171722]";
+          ? "bg-red-600"
+          : "bg-[var(--customer-primary,#730321)]";
 
   return (
-    <div className={cn("rounded-2xl border px-4 py-4", toneClass)}>
-      <p className="text-lg font-black tracking-tight">{timeline.headline}</p>
-      {timeline.subheadline ? (
-        <p className="mt-1 text-sm opacity-80">{timeline.subheadline}</p>
-      ) : null}
+    <div className="relative overflow-hidden rounded-[1.4rem] border border-[#ecdfd8] bg-white px-5 py-5 sm:px-6">
+      <span className={cn("absolute inset-y-0 left-0 w-1.5", accent)} aria-hidden />
+      <p className="font-serif text-2xl leading-tight text-[#221a1d]">{timeline.headline}</p>
+      {timeline.subheadline ? <p className="mt-1 text-sm text-[#6d6265]">{timeline.subheadline}</p> : null}
+      {children ? <div className="mt-6">{children}</div> : null}
     </div>
   );
 }

@@ -53,9 +53,13 @@ export function formatUtcIsoForDisplay(iso: string | null | undefined): string {
   if (!iso) return "—";
   try {
     const tz = DATETIME_LOCAL_TIMEZONE_LABEL;
+    // dateStyle/timeStyle can't be combined with timeZoneName (throws in Chromium), so spell it out.
     const formatted = new Date(iso).toLocaleString(undefined, {
-      dateStyle: "medium",
-      timeStyle: "short",
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
       timeZoneName: "short",
     });
     return `${formatted} (${tz})`;

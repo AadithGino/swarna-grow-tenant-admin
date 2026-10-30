@@ -86,49 +86,40 @@ export function SupportPage() {
         title="Support desk"
         description="Customer grievances, fixed SLA timers, assignment, conversation history and resolution."
       />
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
         <StatCard
           icon={Headphones}
-          label="Open"
-          value={s.open}
-          detail={
-            (s.inProgress ?? 0) > 0 || (s.waitingForCustomer ?? 0) > 0
-              ? `${s.inProgress ?? 0} in progress · ${s.waitingForCustomer ?? 0} waiting`
-              : "New tickets"
-          }
+          label="Needs action"
+          value={(s.open ?? 0) + (s.inProgress ?? 0)}
+          detail={`${s.open ?? 0} new · ${s.inProgress ?? 0} in progress`}
+          tone={(s.open ?? 0) + (s.inProgress ?? 0) > 0 ? "wine" : "green"}
         />
         <StatCard
           icon={Clock3}
-          label="In progress"
-          value={s.inProgress ?? 0}
-          detail="Assigned / being worked"
-          tone="cream"
-        />
-        <StatCard
-          icon={Headphones}
           label="Waiting on customer"
           value={s.waitingForCustomer ?? 0}
-          detail="Awaiting customer reply"
+          detail="We replied — awaiting the customer"
+          tone="cream"
         />
         <StatCard
           icon={AlertTriangle}
           label="Urgent"
-          value={s.urgent}
-          detail="Respond immediately"
-          tone="red"
+          value={s.urgent ?? 0}
+          detail="Open tickets marked urgent"
+          tone={(s.urgent ?? 0) > 0 ? "red" : "cream"}
         />
         <StatCard
           icon={Clock3}
-          label="SLA overdue"
-          value={s.overdue}
-          detail="Requires escalation"
-          tone="gold"
+          label="First reply overdue"
+          value={s.overdue ?? 0}
+          detail="No reply yet and SLA time passed"
+          tone={(s.overdue ?? 0) > 0 ? "red" : "cream"}
         />
         <StatCard
           icon={CheckCircle2}
           label="Resolved today"
-          value={s.resolvedToday}
-          detail="Within target"
+          value={s.resolvedToday ?? 0}
+          detail="Closed since midnight"
           tone="green"
         />
       </div>

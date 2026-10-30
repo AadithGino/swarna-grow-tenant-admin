@@ -4,19 +4,20 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import {
+  FilePlus2,
   IndianRupee,
-  Layers3,
+  Landmark,
+  LayoutGrid,
+  List,
   LockKeyhole,
   Plus,
   Scale,
-  UsersRound,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ListSearchInput } from "@/src/components/common/list-search-input";
 import { useDebouncedValue } from "@/src/hooks/use-debounced-value";
 import {
   listSearchQueryForApi,
@@ -29,17 +30,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { HeroStat, SectionHero, heroButtonClass, heroPrimaryButtonClass } from "@/src/components/admin-ui/section-hero";
+import { ListPanel } from "@/src/components/admin-ui/admin-table";
+import { FilterBar, FilterSearch, FilterSelect, QuickViews } from "@/src/components/admin-ui/filter-bar";
+import { CursorPagination } from "@/src/components/common/cursor-pagination";
+import { PlanCard } from "@/src/features/schemes/plan-card";
+import type { SchemePlan } from "@/src/types/domain";
 import { ActionDialog } from "@/src/components/common/action-dialog";
 import { FormFieldError } from "@/src/components/common/form-field-error";
 import { toastApiError } from "@/src/lib/api-error";
 import { validateQuickPlanDraft } from "@/src/lib/plan-builder-validation";
 import { PaginatedDataTable } from "@/src/components/common/paginated-data-table";
-import {
-  FieldLabel,
-  PageHeader,
-  StatCard,
-  Surface,
-} from "@/src/components/common/page-parts";
+import { FieldLabel } from "@/src/components/common/page-parts";
 
 import { PlanRowActions } from "@/src/features/schemes/plan-row-actions";
 import { PageSkeleton, QueryError } from "@/src/components/common/query-state";
@@ -72,6 +74,7 @@ export function SchemesPage() {
   const [deactivatePlan] = useDeactivatePlanMutation();
   const [previewSchedule, previewState] = usePreviewPlanScheduleMutation();
   const [status, setStatus] = useState("ALL");
+  const [view, setView] = useState<"cards" | "table">("cards");
   const [valueBasis, setValueBasis] = useState("ALL");
   const [paymentPattern, setPaymentPattern] = useState("ALL");
   const [q, setQ] = useState("");
@@ -153,26 +156,39 @@ export function SchemesPage() {
     toast.success(`${row.name} deactivated`);
   };
 
+  const activeFilters = [
+    ...(status !== "ALL"
+      ? [{ key: "status", label: statusFilters.find((f) => f.value === status)?.label ?? status, onClear: () => setStatus("ALL") }]
+      : []),
+    ...(valueBasis !== "ALL"
+      ? [{ key: "basis", label: valueBasis === "CASH" ? "Cash value" : "Gold weight", onClear: () => setValueBasis("ALL") }]
+      : []),
+    ...(paymentPattern !== "ALL"
+      ? [{ key: "pattern", label: paymentPattern === "FIXED_DATE" ? "Fixed date" : "Flexible", onClear: () => setPaymentPattern("ALL") }]
+      : []),
+    ...(q.trim() ? [{ key: "q", label: `“${q.trim()}”`, onClear: () => setQ("") }] : []),
+  ];
+  const maxEnrollments = Math.max(1, ...rows.map((r: SchemePlan) => Number(r.activeEnrollments ?? 0)));
+
   return (
     <>
-      <PageHeader
-        eyebrow="Configuration"
+      <SectionHero
+        icon={Landmark}
+        eyebrow="Gold schemes"
         title="Scheme plans"
-        description="Build reusable scheme templates, preview schedules and version rules safely."
+        description="The monthly savings plans customers join. Build a plan once, preview its schedule, and every enrollment follows the same rules."
         actions={
-          <>
           <PermissionGate permission={ACTION.planWrite}>
-            <Button asChild>
-              <Link href="/schemes/new">
-                <Plus />
-                Plan builder
-              </Link>
-            </Button>
+            <Link href="/schemes/new" className={heroPrimaryButtonClass} data-tour="schemes-builder">
+              <Plus className="size-4" aria-hidden />
+              Plan builder
+            </Link>
             <ActionDialog
             trigger={
-              <Button variant="outline">
+              <button type="button" className={heroButtonClass}>
+                <FilePlus2 className="size-4" aria-hidden />
                 Quick draft
-              </Button>
+              </button>
             }
             title="New scheme plan"
             description="Creates a draft. Complete benefit and redemption rules before publishing."
@@ -375,216 +391,240 @@ export function SchemesPage() {
             </div>
           </ActionDialog>
           </PermissionGate>
-          </>
         }
-      />
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <StatCard
-          icon={Layers3}
-          label="Active plans"
-          value={s.active}
-          detail="Available for enrollment"
-        />
-        <StatCard
-          icon={Layers3}
-          label="Draft plans"
-          value={s.draft}
-          detail="Not customer-visible"
-          tone="gold"
-        />
-        <StatCard
-          icon={UsersRound}
-          label="Active enrollments"
-          value={s.enrollments}
-          detail="Across all plans"
-          tone="cream"
-        />
-        <StatCard
-          icon={IndianRupee}
-          label="Monthly plan value"
-          value={money(s.monthlyValue)}
-          detail="Projected contributions"
-          tone="wine"
-        />
-      </div>
-      <Surface>
-        <div className="grid gap-4 border-b border-[#eaded9] p-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_200px_200px] xl:items-end">
-          <ListSearchInput
-            value={q}
-            onChange={setQ}
-            placeholder="Plan name or code…"
-            inputClassName="h-11"
+      >
+        <HeroStat label="Active plans" value={s.active} detail="Open for new enrollments" />
+        <HeroStat label="Drafts" value={s.draft} detail="Not visible to customers" />
+        <HeroStat label="Active enrollments" value={Number(s.enrollments ?? 0).toLocaleString("en-IN")} detail="Across every plan" href="/enrollments" />
+        <HeroStat label="Monthly plan value" value={money(s.monthlyValue)} detail="Expected instalments a month" />
+      </SectionHero>
+
+      <ListPanel
+        toolbar={
+          <FilterBar
+            quickViews={
+              <QuickViews
+                value={status}
+                onChange={setStatus}
+                options={statusFilters.map((f) => ({ value: f.value, label: f.label }))}
+                ariaLabel="Filter by plan status"
+              />
+            }
+            search={<FilterSearch value={q} onChange={setQ} placeholder="Plan name or code" />}
+            filters={
+              <>
+                <FilterSelect
+                  label="Value"
+                  value={valueBasis}
+                  onChange={setValueBasis}
+                  options={[
+                    { value: "ALL", label: "All" },
+                    { value: "CASH", label: "Cash" },
+                    { value: "GOLD_WEIGHT", label: "Gold weight" },
+                  ]}
+                />
+                <FilterSelect
+                  label="Pattern"
+                  value={paymentPattern}
+                  onChange={setPaymentPattern}
+                  options={[
+                    { value: "ALL", label: "All" },
+                    { value: "FIXED_DATE", label: "Fixed date" },
+                    { value: "FLEXIBLE_AVERAGE", label: "Flexible" },
+                  ]}
+                />
+              </>
+            }
+            actions={
+              <div role="radiogroup" aria-label="Layout" className="inline-flex rounded-xl border border-[#e6dad6] bg-white p-1">
+                {(
+                  [
+                    ["cards", LayoutGrid, "Cards"],
+                    ["table", List, "Table"],
+                  ] as const
+                ).map(([key, Icon, label]) => (
+                  <button
+                    key={key}
+                    type="button"
+                    role="radio"
+                    aria-checked={view === key}
+                    aria-label={`${label} view`}
+                    onClick={() => setView(key)}
+                    className={cn(
+                      "grid size-8 place-items-center rounded-lg transition-colors",
+                      view === key ? "bg-[#5e0a20] text-white" : "text-[#7a6d70] hover:text-[#28161a]",
+                    )}
+                  >
+                    <Icon className="size-4" />
+                  </button>
+                ))}
+              </div>
+            }
+            activeFilters={activeFilters}
+            onClearAll={() => {
+              setStatus("ALL");
+              setValueBasis("ALL");
+              setPaymentPattern("ALL");
+              setQ("");
+            }}
+            resultLabel={`${rows.length} plan${rows.length === 1 ? "" : "s"}${page.hasMore ? "+" : ""}`}
           />
-          <div className="min-w-0">
-            <p className="mb-3 text-xs font-bold uppercase tracking-[0.14em] text-[#9a6f2a]">
-              Status
-            </p>
-            <div
-              className="inline-flex max-w-full flex-wrap gap-1 rounded-xl border border-[#e4d7d2] bg-[#faf7f5] p-1"
-              role="tablist"
-              aria-label="Filter by plan status"
-            >
-              {statusFilters.map((tab) => (
-                <button
-                  key={tab.value}
-                  type="button"
-                  role="tab"
-                  aria-selected={status === tab.value}
-                  onClick={() => setStatus(tab.value)}
-                  className={cn(
-                    "rounded-lg px-3.5 py-2 text-sm font-semibold transition-colors",
-                    status === tab.value
-                      ? "bg-[#730321] text-white shadow-sm"
-                      : "text-[#5c4a4e] hover:bg-white/80",
-                  )}
-                >
-                  {tab.label}
-                </button>
+        }
+      >
+        {view === "table" ? (
+          <PaginatedDataTable
+            rows={rows}
+            page={page}
+            pageIndex={pager.pageIndex}
+            onNext={() => pager.goNext(page.nextCursor)}
+            onPrevious={pager.goPrevious}
+            canPrevious={pager.canPrevious}
+            onRowClick={(r: { id: string }) => router.push(`/schemes/${r.id}`)}
+            columns={[
+              {
+                key: "plan",
+                header: "Plan",
+                className: "min-w-[200px]",
+                render: (r: any) => (
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <strong className="truncate">{r.name}</strong>
+                      {r.editLocked ? (
+                        <Badge
+                          variant="outline"
+                          className="shrink-0 border-amber-300 bg-amber-50 text-[0.65rem] text-amber-900"
+                        >
+                          <LockKeyhole className="size-3" />
+                          Locked
+                        </Badge>
+                      ) : null}
+                    </div>
+                    <p className="mt-0.5 text-xs text-muted-foreground">{r.code}</p>
+                  </div>
+                ),
+              },
+              {
+                key: "basis",
+                header: "Basis",
+                className: "hidden md:table-cell whitespace-nowrap",
+                render: (r: any) => (
+                  <span className="inline-flex items-center gap-2 text-sm">
+                    {r.valueBasis === "GOLD_WEIGHT" ? (
+                      <Scale className="size-4 shrink-0 text-[#9a6f2a]" />
+                    ) : (
+                      <IndianRupee className="size-4 shrink-0 text-[#9a6f2a]" />
+                    )}
+                    <span className="hidden lg:inline">
+                      {r.valueBasis.replaceAll("_", " ")}
+                    </span>
+                  </span>
+                ),
+              },
+              {
+                key: "pattern",
+                header: "Pattern",
+                className: "hidden lg:table-cell whitespace-nowrap text-sm",
+                render: (r: any) =>
+                  r.paymentPattern.replaceAll("_", " ").replace("DATE", "date"),
+              },
+              {
+                key: "tenure",
+                header: "Tenure",
+                render: (r: any) => `${r.tenure ?? "—"} months`,
+              },
+              {
+                key: "display",
+                header: "Display name",
+                className: "hidden xl:table-cell text-sm text-muted-foreground",
+                render: (r: any) => r.displayName ?? r.name,
+              },
+              {
+                key: "amount",
+                header: "From",
+                render: (r: any) => money(r.amount),
+              },
+              {
+                key: "enrollments",
+                header: "Enrollments",
+                render: (r: any) => r.activeEnrollments,
+              },
+              {
+                key: "status",
+                header: "Status",
+                render: (r: any) => <StatusBadge status={r.status} />,
+              },
+              {
+                key: "action",
+                header: "",
+                className: "w-[1%] whitespace-nowrap text-right",
+                render: (r: any) => (
+                  <PermissionGate
+                    permission={ACTION.planWrite}
+                    fallback={
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        asChild
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <Link href={`/schemes/${r.id}`}>View</Link>
+                      </Button>
+                    }
+                  >
+                    <PlanRowActions
+                      plan={r}
+                      onDuplicate={handleDuplicate}
+                      onActivate={handleActivate}
+                      onDeactivate={handleDeactivate}
+                    />
+                  </PermissionGate>
+                ),
+              },
+            ]}
+        />
+        ) : rows.length === 0 ? (
+          <p className="px-5 py-10 text-center text-sm text-[#857a7d]">
+            No plans match these filters.
+          </p>
+        ) : (
+          <>
+            <div className="grid gap-4 p-5 md:grid-cols-2 2xl:grid-cols-3">
+              {rows.map((plan: SchemePlan) => (
+                <PlanCard
+                  key={plan.id}
+                  plan={plan}
+                  share={Number(plan.activeEnrollments ?? 0) / maxEnrollments}
+                  actions={
+                    <PermissionGate
+                      permission={ACTION.planWrite}
+                      fallback={
+                        <Button size="sm" variant="ghost" asChild>
+                          <Link href={`/schemes/${plan.id}`}>View</Link>
+                        </Button>
+                      }
+                    >
+                      <PlanRowActions
+                        plan={plan}
+                        onDuplicate={handleDuplicate}
+                        onActivate={handleActivate}
+                        onDeactivate={handleDeactivate}
+                      />
+                    </PermissionGate>
+                  }
+                />
               ))}
             </div>
-          </div>
-          <div>
-            <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
-              Value basis
-            </label>
-            <Select value={valueBasis} onValueChange={setValueBasis}>
-              <SelectTrigger className="h-11 w-full">
-                <SelectValue placeholder="Value basis" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="ALL">All value bases</SelectItem>
-                <SelectItem value="CASH">Cash</SelectItem>
-                <SelectItem value="GOLD_WEIGHT">Gold weight</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div>
-            <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
-              Payment pattern
-            </label>
-            <Select value={paymentPattern} onValueChange={setPaymentPattern}>
-              <SelectTrigger className="h-11 w-full">
-                <SelectValue placeholder="Payment pattern" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="ALL">All patterns</SelectItem>
-                <SelectItem value="FIXED_DATE">Fixed date</SelectItem>
-                <SelectItem value="FLEXIBLE_AVERAGE">Flexible average</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-        <PaginatedDataTable
-          rows={rows}
-          page={page}
-          pageIndex={pager.pageIndex}
-          onNext={() => pager.goNext(page.nextCursor)}
-          onPrevious={pager.goPrevious}
-          canPrevious={pager.canPrevious}
-          onRowClick={(r: { id: string }) => router.push(`/schemes/${r.id}`)}
-          columns={[
-            {
-              key: "plan",
-              header: "Plan",
-              className: "min-w-[200px]",
-              render: (r: any) => (
-                <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <strong className="truncate">{r.name}</strong>
-                    {r.editLocked ? (
-                      <Badge
-                        variant="outline"
-                        className="shrink-0 border-amber-300 bg-amber-50 text-[0.65rem] text-amber-900"
-                      >
-                        <LockKeyhole className="size-3" />
-                        Locked
-                      </Badge>
-                    ) : null}
-                  </div>
-                  <p className="mt-0.5 text-xs text-muted-foreground">{r.code}</p>
-                </div>
-              ),
-            },
-            {
-              key: "basis",
-              header: "Basis",
-              className: "hidden md:table-cell whitespace-nowrap",
-              render: (r: any) => (
-                <span className="inline-flex items-center gap-2 text-sm">
-                  {r.valueBasis === "GOLD_WEIGHT" ? (
-                    <Scale className="size-4 shrink-0 text-[#9a6f2a]" />
-                  ) : (
-                    <IndianRupee className="size-4 shrink-0 text-[#9a6f2a]" />
-                  )}
-                  <span className="hidden lg:inline">
-                    {r.valueBasis.replaceAll("_", " ")}
-                  </span>
-                </span>
-              ),
-            },
-            {
-              key: "pattern",
-              header: "Pattern",
-              className: "hidden lg:table-cell whitespace-nowrap text-sm",
-              render: (r: any) =>
-                r.paymentPattern.replaceAll("_", " ").replace("DATE", "date"),
-            },
-            {
-              key: "tenure",
-              header: "Tenure",
-              render: (r: any) => `${r.tenure ?? "—"} months`,
-            },
-            {
-              key: "display",
-              header: "Display name",
-              className: "hidden xl:table-cell text-sm text-muted-foreground",
-              render: (r: any) => r.displayName ?? r.name,
-            },
-            {
-              key: "amount",
-              header: "From",
-              render: (r: any) => money(r.amount),
-            },
-            {
-              key: "enrollments",
-              header: "Enrollments",
-              render: (r: any) => r.activeEnrollments,
-            },
-            {
-              key: "status",
-              header: "Status",
-              render: (r: any) => <StatusBadge status={r.status} />,
-            },
-            {
-              key: "action",
-              header: "",
-              className: "w-[1%] whitespace-nowrap text-right",
-              render: (r: any) => (
-                <PermissionGate
-                  permission={ACTION.planWrite}
-                  fallback={
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      asChild
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <Link href={`/schemes/${r.id}`}>View</Link>
-                    </Button>
-                  }
-                >
-                  <PlanRowActions
-                    plan={r}
-                    onDuplicate={handleDuplicate}
-                    onActivate={handleActivate}
-                    onDeactivate={handleDeactivate}
-                  />
-                </PermissionGate>
-              ),
-            },
-          ]}
-        />
-      </Surface>
+            <CursorPagination
+              page={page}
+              pageIndex={pager.pageIndex}
+              rowCount={rows.length}
+              onNext={() => pager.goNext(page.nextCursor)}
+              onPrevious={pager.goPrevious}
+              canPrevious={pager.canPrevious}
+            />
+          </>
+        )}
+      </ListPanel>
     </>
   );
 }

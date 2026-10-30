@@ -3,15 +3,12 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { CalendarDays, Clock3, Gift, IndianRupee, Scale } from "lucide-react";
+import { Gift } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DateRangeFilter } from "@/src/components/common/date-range-filter";
 import { PaginatedDataTable } from "@/src/components/common/paginated-data-table";
-import {
-  PageHeader,
-  StatCard,
-  Surface,
-} from "@/src/components/common/page-parts";
+import { Surface } from "@/src/components/common/page-parts";
+import { HeroStat, SectionHero } from "@/src/components/admin-ui/section-hero";
 import {
   PageTab,
   PageTabs,
@@ -251,73 +248,38 @@ export function MaturityPage() {
           />
         </>
       ) : null}
-      <PageHeader
+      <SectionHero
+        icon={Gift}
+        eyebrow="Gold schemes"
         title="Maturity & redemption"
-        description="Plan maturities, liabilities and redemption workflow."
-        actions={
-          view !== "month" ? (
-            <div className="space-y-1">
-              <DateRangeFilter
-                label="Maturity"
-                from={from}
-                to={to}
-                onFromChange={setFrom}
-                onToChange={setTo}
-                presetLabel={wideListRangePresetLabel()}
-                onPreset={() => {
-                  const { from: nextFrom, to: nextTo } =
-                    applyWideListRangePreset();
-                  setFrom(nextFrom);
-                  setTo(nextTo);
-                }}
-              />
-              <FormFieldError message={dateRangeError} />
-            </div>
-          ) : null
-        }
-      />
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
-        <StatCard
-          icon={CalendarDays}
-          label="Upcoming 30 days"
+        description="Schemes reaching the end of their term, what the shop owes on them, and the redemptions waiting to be handed over."
+      >
+        <HeroStat
+          label="Maturing in next 30 days"
           value={s.upcoming ?? 0}
-          detail={money(s.liability ?? 0)}
+          detail={`${money(s.upcomingLiability ?? 0)} paid in so far`}
         />
-        <StatCard
-          icon={Gift}
-          label="Matured today"
+        <HeroStat
+          label="Maturing today"
           value={s.maturedToday ?? 0}
-          detail={money(s.maturedTodayLiability ?? 0)}
-          tone="cream"
+          detail={`${money(s.maturedTodayLiability ?? 0)} paid in`}
         />
-        <StatCard
-          icon={Clock3}
-          label="Term-ended incomplete"
+        <HeroStat
+          label="Term ended, incomplete"
           value={s.incomplete ?? 0}
-          detail={money(s.incompleteLiability ?? 0)}
-          tone="gold"
+          detail={`Defaulted · ${money(s.incompleteLiability ?? 0)} paid in`}
         />
-        <StatCard
-          icon={Gift}
-          label="Matured not redeemed"
+        <HeroStat
+          label="Matured, not redeemed"
           value={s.notRedeemed ?? 0}
-          detail={money(s.liability ?? 0)}
-          tone="red"
+          detail={`${money(s.notRedeemedLiability ?? 0)} to hand over`}
         />
-        <StatCard
-          icon={IndianRupee}
-          label="Liability due"
+        <HeroStat
+          label={view === "month" ? "Maturing in selected month" : "Maturing in chosen dates"}
           value={money(s.liability ?? 0)}
-          detail={grams(s.gold ?? 0)}
+          detail={`${s.periodCount ?? 0} schemes · ${grams(s.gold ?? 0)} gold`}
         />
-        <StatCard
-          icon={Scale}
-          label="Gold liability"
-          value={grams(s.gold ?? 0)}
-          detail={money(s.liability ?? 0)}
-          tone="cream"
-        />
-      </div>
+      </SectionHero>
       <PageTabs value={view} onValueChange={setView}>
         <PageTabsBar sectionLabel="Maturity views">
           <PageTab value="month">Month</PageTab>
@@ -327,7 +289,7 @@ export function MaturityPage() {
         </PageTabsBar>
         <PageTabsPanel value="month" flush>
           <Surface>
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b p-4">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#efe5e1] p-4">
               <Button
                 variant="outline"
                 type="button"
@@ -335,7 +297,12 @@ export function MaturityPage() {
               >
                 ← Previous
               </Button>
-              <h2 className="text-xl font-extrabold">{monthMeta.label}</h2>
+              <div className="text-center">
+                <h2 className="text-xl font-extrabold tracking-tight text-[#28161a]">{monthMeta.label}</h2>
+                <p className="text-xs text-[#857a7d]">
+                  {Object.values(eventMap).reduce((n, list) => n + list.length, 0)} schemes mature this month
+                </p>
+              </div>
               <div className="flex gap-2">
                 <Button
                   variant="outline"
@@ -353,9 +320,9 @@ export function MaturityPage() {
                 </Button>
               </div>
             </div>
-            <div className="grid grid-cols-7 border-b bg-[#fbf8f5] text-center text-xs font-bold uppercase tracking-wider text-muted-foreground">
+            <div className="grid grid-cols-7 border-b border-[#efe5e1] bg-[#fbf8f5] text-center text-xs font-semibold text-[#857a7d]">
               {WEEKDAYS.map((d) => (
-                <div key={d} className="p-3">
+                <div key={d} className="p-2.5">
                   {d}
                 </div>
               ))}
@@ -366,7 +333,7 @@ export function MaturityPage() {
                   return (
                     <div
                       key={`pad-${index}`}
-                      className="min-h-28 border-b border-r bg-[#fafafa]"
+                      className="min-h-20 border-b border-r border-[#f3eae7] bg-[#fbf8f6] sm:min-h-28"
                     />
                   );
                 }
@@ -374,21 +341,29 @@ export function MaturityPage() {
                 const dayEvents = eventMap[dateKey] ?? [];
                 const isToday = dateKey === appTodayYmd();
                 return (
-                  <div key={dateKey} className="min-h-28 border-b border-r p-2">
+                  <div
+                    key={dateKey}
+                    className={
+                      dayEvents.length
+                        ? "min-h-20 border-b border-r border-[#f3eae7] bg-[#fffaf0] p-1.5 sm:min-h-28 sm:p-2"
+                        : "min-h-20 border-b border-r border-[#f3eae7] p-1.5 sm:min-h-28 sm:p-2"
+                    }
+                  >
                     <span
                       className={
                         isToday
-                          ? "grid size-7 place-items-center rounded-full bg-[#730321] text-xs text-white"
-                          : "text-xs"
+                          ? "grid size-7 place-items-center rounded-full bg-[#730321] text-xs font-bold text-white"
+                          : "inline-grid size-7 place-items-center text-xs font-medium text-[#5c4a4e]"
                       }
                     >
                       {cell.day}
                     </span>
                     <div className="mt-1 space-y-1">
                       {dayEvents.slice(0, 2).map((r: any) => (
-                        <div
+                        <Link
                           key={r.id}
-                          className="rounded-lg border border-[#e6d6b4] bg-[#fff8e8] p-2 text-[0.68rem]"
+                          href={`/enrollments/${r.id}`}
+                          className="block rounded-lg border border-[#ead5ad] bg-gradient-to-br from-[#fff8e8] to-[#fbefd2] p-1.5 text-[0.68rem] transition-colors hover:border-[#c9a227] sm:p-2"
                         >
                           <strong className="block truncate">
                             {r.customer}
@@ -401,7 +376,7 @@ export function MaturityPage() {
                               ? grams(r.accumulatedGold ?? 0)
                               : money(r.paid)}
                           </span>
-                        </div>
+                        </Link>
                       ))}
                       {dayEvents.length > 2 ? (
                         <button
@@ -427,7 +402,29 @@ export function MaturityPage() {
           </Surface>
         </PageTabsPanel>
         <PageTabsPanel value="list" flush>
-          <Surface title="Maturity list">
+          <Surface
+            title="Maturity list"
+            description="Schemes maturing in the chosen dates"
+            action={
+              <div className="space-y-1">
+                <DateRangeFilter
+                  label="Maturity"
+                  from={from}
+                  to={to}
+                  onFromChange={setFrom}
+                  onToChange={setTo}
+                  presetLabel={wideListRangePresetLabel()}
+                  onPreset={() => {
+                    const { from: nextFrom, to: nextTo } =
+                      applyWideListRangePreset();
+                    setFrom(nextFrom);
+                    setTo(nextTo);
+                  }}
+                />
+                <FormFieldError message={dateRangeError} />
+              </div>
+            }
+          >
             <PaginatedDataTable
               rows={items}
               page={page}

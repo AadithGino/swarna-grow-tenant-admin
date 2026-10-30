@@ -22,6 +22,10 @@ const ROOT_ALLOW_FILES = new Set([
   "next.config.ts",
   "vitest.config.ts",
   "vitest.setup.ts",
+  "vite.config.ts",
+  "vercel.json",
+  ".vercelignore",
+  "components.json",
 ]);
 
 const ROOT_ALLOW_PREFIXES = [
@@ -34,6 +38,7 @@ const ROOT_ALLOW_PREFIXES = [
   "lib/",
   "hooks/",
   "vendor/",
+  "build/",
   "swarna-grow-api-contract-v1.2/",
 ];
 

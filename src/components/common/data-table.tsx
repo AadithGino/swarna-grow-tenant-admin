@@ -28,13 +28,13 @@ export function DataTable<T extends { id: string }>({
 }) {
   if (!rows.length) return <EmptyState title={emptyTitle} />;
   return (
-    <Table>
-      <TableHeader className="bg-[#fbf7f4]">
+    <Table className="min-w-full">
+      <TableHeader className="bg-[#fbf8f6]">
         <TableRow>
           {columns.map((column) => (
             <TableHead
               key={column.key}
-              className={`h-11 px-3 text-xs font-bold uppercase tracking-[0.06em] text-[#74676a] ${column.className ?? ""}`}
+              className={`h-10 px-4 text-[0.78rem] font-semibold text-[#7a6d70] ${column.className ?? ""}`}
             >
               {column.header}
             </TableHead>
@@ -53,14 +53,14 @@ export function DataTable<T extends { id: string }>({
             }}
             className={
               onRowClick
-                ? "cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7b0a2b]"
-                : ""
+                ? "cursor-pointer transition-colors hover:bg-[#fcf7f5] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#7b0a2b]"
+                : "hover:bg-[#fdfaf9]"
             }
           >
             {columns.map((column) => (
               <TableCell
                 key={column.key}
-                className={`px-3 py-3 text-[0.9rem] ${column.className ?? ""}`}
+                className={`px-4 py-3 text-[0.9rem] ${column.className ?? ""}`}
               >
                 {column.render(row)}
               </TableCell>

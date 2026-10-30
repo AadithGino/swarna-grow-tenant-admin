@@ -29,7 +29,10 @@ import { MOCK_OWNER_SESSION } from "@/src/config/mock-session";
 import { portalSessionFromLogin } from "@/src/lib/auth-session";
 import { safeAuthReturnPath } from "@/src/lib/auth-return-path";
 import { getOrCreateDeviceId } from "@/src/lib/device-id";
-import { realmHasStoredSession } from "@/src/lib/auth-token-storage";
+import {
+  persistTenantTokens,
+  realmHasStoredSession,
+} from "@/src/lib/auth-token-storage";
 import { useClientMounted } from "@/src/hooks/use-client-mounted";
 import {
   adminApi,
@@ -233,6 +236,12 @@ export function LoginPage() {
                 if (env.useMocks) {
                   await new Promise((resolve) => setTimeout(resolve, 650));
                   dispatch(setSession(MOCK_OWNER_SESSION));
+                  // The admin shell requires stored tokens; without them the
+                  // offline demo bounced straight back to /login.
+                  persistTenantTokens(
+                    MOCK_OWNER_SESSION.accessToken ?? "mock-access-token",
+                    "mock-refresh-token",
+                  );
                   router.push(postLoginPath);
                   return;
                 }

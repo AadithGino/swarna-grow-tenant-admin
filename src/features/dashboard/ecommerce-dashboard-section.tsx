@@ -160,7 +160,7 @@ export function EcommerceDashboardSection({
       <EcommerceSectionShell periodLabel={periodLabel} action={manageOrdersAction}>
         <p className="px-5 pb-5 text-sm text-muted-foreground">
           No storefront activity in this period yet. Publish products in{" "}
-          <Link href="/ecommerce" className="font-semibold text-[#730321]">
+          <Link href="/ecommerce/catalog" className="font-semibold text-[#730321]">
             Catalog
           </Link>
           , turn on the customer store in Settings if needed, and share your shop link with

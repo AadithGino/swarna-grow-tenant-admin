@@ -1,5 +1,7 @@
 import { env } from "@/src/config/env";
 import { mockAgentAnswer } from "@/src/mocks/assistant-agent-mock";
+import { commerceDemoMock } from "./commerce-demo-mocks";
+import { counterTradeMock } from "./counter-trade-mocks";
 import { mockDb } from "./mock-db";
 import {
   amountWithinPayableQuote,
@@ -49,6 +51,8 @@ export interface MockRequest {
   mockKey: string;
   params?: Record<string, unknown>;
   body?: Record<string, unknown>;
+  /** Request path (mock-only helpers read ids that live in the path). */
+  url?: string;
 }
 const wait = () =>
   new Promise((resolve) => setTimeout(resolve, env.mockDelayMs));
@@ -328,8 +332,13 @@ export async function mockRequest<T>({
   mockKey,
   params = {},
   body = {},
+  url,
 }: MockRequest): Promise<T> {
   await wait();
+  const counter = counterTradeMock(mockKey, params, body, url);
+  if (counter !== undefined) return structuredClone(counter) as T;
+  const demo = commerceDemoMock(mockKey, params, body, url);
+  if (demo !== undefined) return demo as T;
   const q = String(params.q ?? "").trim();
   switch (mockKey) {
     case "dashboard":
@@ -351,53 +360,22 @@ export async function mockRequest<T>({
             "collection-by-mode",
             "scheme-status-distribution",
           ],
-          widgets: [
-            {
-              key: "COLLECTION",
-              label: "Collection",
-              valueType: "currency",
-              value: {
-                amountPaise: 24850000,
-                amountDisplay: "₹2,48,500",
-              },
-              secondary: { label: "184 payments", value: 184 },
-              change: { percent: 12.4, direction: "up", isGood: true },
-              actionPath: "/payments",
-            },
-            {
-              key: "DUE_TODAY",
-              label: "Due today",
-              valueType: "currency",
-              value: {
-                amountPaise: 11200000,
-                amountDisplay: "₹1,12,000",
-              },
-              secondary: { label: "47 installments", value: 47 },
-              actionPath: "/dues?preset=TODAY",
-            },
-            {
-              key: "OVERDUE",
-              label: "Overdue",
-              valueType: "currency",
-              value: { amountPaise: 8650000, amountDisplay: "₹86,500" },
-              severity: "WARNING",
-              actionPath: "/overdues",
-            },
-            {
-              key: "MATURING_THIS_MONTH",
-              label: "Maturing this month",
-              valueType: "count",
-              value: 24,
-              actionPath: "/maturities?preset=THIS_MONTH",
-            },
-            {
-              key: "ACTIVE_CUSTOMERS",
-              label: "Active customers",
-              valueType: "count",
-              value: 846,
-              actionPath: "/customers",
-            },
-          ],
+          // Same shape as GET /admin/dashboard/summary (backend reporting.service#dashboard).
+          today: {
+            amountPaise: 1845000,
+            grossAmountPaise: 1845000,
+            refundOutflowPaise: 0,
+            count: 14,
+          },
+          periodCollection: {
+            amountPaise: 24850000,
+            grossAmountPaise: 25010000,
+            refundOutflowPaise: 160000,
+            count: 184,
+          },
+          customers: { active: 846 },
+          schemes: { open: 612, activeAndLocked: 571, overdue: 23, matured: 9 },
+          attention: { pendingCashHandovers: 3, openGrievances: 2, openRedemptions: 4 },
           redemptions: {
             count: 6,
             settlementPaise: 8420000,

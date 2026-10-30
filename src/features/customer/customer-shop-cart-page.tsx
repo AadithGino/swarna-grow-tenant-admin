@@ -2,32 +2,119 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { Minus, Plus, Trash2 } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { ArrowLeft, Banknote, CreditCard, Loader2, MapPin, Plus, ShoppingBag, Store, Trash2, Truck } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { PageHeader, Surface } from "@/src/components/common/page-parts";
+import { cn } from "@/lib/utils";
 import { PageSkeleton, QueryError } from "@/src/components/common/query-state";
-import { useRouter } from "next/navigation";
-import { toast } from "sonner";
 import {
+  customerApi,
   useCreateShopAddressMutation,
   useCreateShopQuoteMutation,
   useGetShopAddressesQuery,
   useGetShopAvailabilityQuery,
   useGetShopCartQuery,
   useGetShopFulfilmentOptionsQuery,
+  useGetShopProductQuery,
   usePutShopCartMutation,
 } from "@/src/store/api/customer-api";
+import { useAppSelector } from "@/src/store/hooks";
 import { parseApiError, toastApiError } from "@/src/lib/api-error";
 import { formatCheckoutNotReadyMessage } from "@/src/features/ecommerce/ecommerce-checkout-blockers";
 import { newIdempotencyKey } from "@/src/lib/idempotency";
 import { useCustomerTenant } from "@/src/components/customer/customer-tenant-context";
 import { customerPath } from "@/src/lib/customer-tenant";
 import { customerShopOrdersPath, customerShopQuotePath } from "@/src/lib/customer-shop-paths";
+import { customerBrandStyle } from "@/src/lib/customer-brand-styles";
 import { CustomerShopPoliciesLinks } from "@/src/features/customer/customer-shop-policies";
+import {
+  ChoiceCard,
+  formatShopInr,
+  productMeta,
+  productPricePaise,
+  productStock,
+  QuantityStepper,
+  SHOP_HAIRLINE,
+  SHOP_INK,
+  SHOP_MUTED,
+  ShopCheckoutSteps,
+  ShopPanel,
+  ShopProductArt,
+  StockDot,
+} from "@/src/features/customer/customer-shop-ui";
 
 type FulfilmentChoice = "BRANCH_PICKUP" | "DELIVERY";
+
+function CartLineRow({
+  line,
+  tenantSlug,
+  busy,
+  onQuantity,
+}: {
+  line: Record<string, unknown>;
+  tenantSlug: string | null;
+  busy: boolean;
+  onQuantity: (quantity: number) => void;
+}) {
+  const summary = line.product as { name?: string; slug?: string } | null;
+  const slug = summary?.slug ? String(summary.slug) : String(line.productId);
+  const detail = useGetShopProductQuery(slug);
+  const product = detail.data;
+  const quantity = Number(line.quantity ?? 1);
+  const unit = productPricePaise(product);
+  const stock = productStock({ availability: line.availability ?? product?.availability });
+  const maxQty =
+    (line.availability as { stockPolicy?: string; availableQuantity?: number | null } | null)?.stockPolicy === "QUANTITY_TRACKED"
+      ? Math.max(1, Number((line.availability as { availableQuantity?: number }).availableQuantity ?? 99))
+      : 99;
+  const name = summary?.name ?? String(product?.name ?? "Product");
+  const href = customerPath(tenantSlug, "shop", encodeURIComponent(slug));
+  const meta = product ? productMeta(product) : "";
+
+  return (
+    <li className="flex gap-4 py-5 first:pt-0 last:pb-0">
+      <Link href={href} className="shrink-0" aria-label={name}>
+        <ShopProductArt
+          uploadId={(product?.imageUploadIds as string[] | undefined)?.[0]}
+          viewUrl={(product?.imageUrls as { viewUrl?: string }[] | undefined)?.[0]?.viewUrl}
+          alt=""
+          className="size-24 sm:size-28"
+        />
+      </Link>
+      <div className="flex min-w-0 flex-1 flex-col">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <Link href={href} className={cn("line-clamp-2 font-serif text-base leading-snug hover:underline", SHOP_INK)}>
+              {name}
+            </Link>
+            {meta ? <p className={cn("mt-0.5 text-xs", SHOP_MUTED)}>{meta}</p> : null}
+            <StockDot stock={stock} className="mt-1" />
+          </div>
+          <div className="shrink-0 text-right">
+            <p className={cn("font-semibold tabular-nums", SHOP_INK)}>{unit != null ? formatShopInr(unit * quantity) : "—"}</p>
+            {unit != null && quantity > 1 ? <p className={cn("text-xs tabular-nums", SHOP_MUTED)}>{formatShopInr(unit)} each</p> : null}
+          </div>
+        </div>
+        <div className="mt-auto flex items-center justify-between gap-3 pt-3">
+          <QuantityStepper value={quantity} max={maxQty} disabled={busy} onChange={onQuantity} label={`Quantity for ${name}`} />
+          <button
+            type="button"
+            className="inline-flex items-center gap-1.5 rounded-full px-2 py-1.5 text-xs font-medium text-[#8a7d80] transition hover:bg-red-50 hover:text-red-700 disabled:opacity-40"
+            aria-label={`Remove ${name}`}
+            disabled={busy}
+            onClick={() => onQuantity(0)}
+          >
+            <Trash2 className="size-3.5" />
+            Remove
+          </button>
+        </div>
+      </div>
+    </li>
+  );
+}
 
 export function CustomerShopCartPage() {
   const router = useRouter();
@@ -76,22 +163,48 @@ export function CustomerShopCartPage() {
     [addresses.data?.items],
   );
 
+  const lineSlugs = useMemo(
+    () =>
+      ((cart.data?.lines as Record<string, unknown>[] | undefined) ?? []).map((line) => ({
+        slug: String((line.product as { slug?: string } | null)?.slug ?? line.productId),
+        quantity: Number(line.quantity ?? 1),
+      })),
+    [cart.data?.lines],
+  );
+  /** Sum of today's estimated prices; -1 while any line is still loading or unpriced. */
+  const estimatePaise = useAppSelector((state) => {
+    let sum = 0;
+    for (const { slug, quantity } of lineSlugs) {
+      const unit = productPricePaise(customerApi.endpoints.getShopProduct.select(slug)(state).data);
+      if (unit == null) return -1;
+      sum += unit * quantity;
+    }
+    return sum;
+  });
+
   if (availability.isLoading || cart.isLoading) return <PageSkeleton cards={2} />;
   if (!availability.data?.available) {
     return (
-      <Surface title="Shop unavailable">
-        <div className="space-y-3 p-6 text-sm">
-          <p className="text-muted-foreground">The online store is closed right now. Your previous orders remain available.</p>
-          {availability.data?.hasOrderHistory ? <Link href={customerShopOrdersPath(tenantSlug)} className="font-semibold text-[var(--customer-primary,#730321)] underline-offset-2 hover:underline">View your orders</Link> : null}
-        </div>
-      </Surface>
+      <div className={cn("mx-auto max-w-lg rounded-[1.75rem] border bg-white px-8 py-12 text-center", SHOP_HAIRLINE)}>
+        <h1 className={cn("font-serif text-2xl", SHOP_INK)}>The store is closed right now</h1>
+        <p className={cn("mt-2 text-sm", SHOP_MUTED)}>Your previous orders are still available.</p>
+        {availability.data?.hasOrderHistory ? (
+          <Link href={customerShopOrdersPath(tenantSlug)} className="mt-5 inline-flex rounded-full px-5 py-3 text-sm font-semibold text-white" style={customerBrandStyle.primaryBg}>
+            View your orders
+          </Link>
+        ) : null}
+      </div>
     );
   }
   if (cart.isError) return <QueryError error={cart.error} onRetry={cart.refetch} />;
 
   const lines = (cart.data?.lines as Record<string, unknown>[]) ?? [];
+  const pieceCount = lines.reduce((s, l) => s + Number(l.quantity ?? 0), 0);
   const pickupEnabled = pickup?.enabled === true && (pickup.branches?.length ?? 0) > 0;
   const deliveryEnabled = delivery?.enabled === true;
+  const selectedBranch = pickupBranchId || String(pickup?.branches?.[0]?.id ?? "");
+  const selectedAddress = addressId || String(addressItems.find((a) => a.isDefault)?.id ?? "");
+  const deliveryCharge = Number(delivery?.deliveryChargePaise ?? 0);
 
   async function updateLine(productId: string, quantity: number) {
     const nextLines = lines
@@ -212,218 +325,239 @@ export function CustomerShopCartPage() {
     }
   }
 
+  const shopHref = customerPath(tenantSlug, "shop");
+
   return (
-    <>
-      <PageHeader
-        eyebrow="Shop"
-        title="Cart"
-        description="Review your pieces, choose pickup or delivery, then see the final price before ordering."
-        actions={
-          <Link href={customerPath(tenantSlug, "shop")}>
-            <Button type="button" variant="outline">
-              Continue shopping
-            </Button>
+    <div className="pb-8">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <Link href={shopHref} className="inline-flex items-center gap-1.5 text-sm font-medium text-[var(--customer-primary,#730321)] underline-offset-4 hover:underline">
+            <ArrowLeft className="size-4" /> Continue shopping
           </Link>
-        }
-      />
-      <div className="mb-5 rounded-2xl border border-[#eee1d9] bg-white px-4 py-3 text-xs font-semibold text-[#66595b]">
-        <span className="text-[var(--customer-primary,#730321)]">1. Your cart</span> <span className="mx-2 text-[#aaa]">→</span> 2. Price preview <span className="mx-2 text-[#aaa]">→</span> 3. Place order
+          <h1 className={cn("mt-3 font-serif text-[2rem] leading-tight", SHOP_INK)}>Your cart</h1>
+          {lines.length ? <p className={cn("mt-1 text-sm", SHOP_MUTED)}>{pieceCount} {pieceCount === 1 ? "piece" : "pieces"} · choose pickup or delivery, then see your final price.</p> : null}
+        </div>
+        <ShopCheckoutSteps current={0} />
       </div>
+
       {!lines.length ? (
-        <Surface title="Your cart is empty">
-          <div className="p-6"><p className="text-sm text-muted-foreground">Browse the collection and add pieces to continue.</p><Link href={customerPath(tenantSlug, "shop")} className="mt-4 inline-flex text-sm font-semibold text-[var(--customer-primary,#730321)] underline-offset-2 hover:underline">Browse jewellery</Link></div>
-        </Surface>
+        <div className={cn("mt-8 rounded-[1.75rem] border bg-white px-6 py-16 text-center", SHOP_HAIRLINE)}>
+          <span className="mx-auto grid size-16 place-items-center rounded-full customer-accent-tint-surface">
+            <ShoppingBag className="size-7 customer-gold-copy" />
+          </span>
+          <h2 className={cn("mt-5 font-serif text-2xl", SHOP_INK)}>Your cart is empty</h2>
+          <p className={cn("mx-auto mt-2 max-w-sm text-sm leading-6", SHOP_MUTED)}>Pieces you add from the store will wait here while you decide.</p>
+          <Link href={shopHref} className="mt-6 inline-flex rounded-full px-6 py-3 text-sm font-semibold text-white" style={customerBrandStyle.primaryBg}>
+            Browse the collection
+          </Link>
+        </div>
       ) : (
-        <Surface title="Items">
-          <ul className="divide-y p-4 text-sm">
-            {lines.map((line) => {
-              const product = line.product as { name?: string } | null;
-              const avail = line.availability as {
-                label?: string;
-                availableQuantity?: number | null;
-                stockPolicy?: string;
-              } | null;
-              return (
-                <li key={String(line.productId)} className="flex flex-wrap items-center justify-between gap-4 py-4">
-                  <div>
-                    <div className="font-medium">{product?.name ?? "Product"}</div>
-                    {avail ? (
-                      <div className="text-xs text-amber-900">{avail.label ?? avail.stockPolicy}</div>
-                    ) : null}
-                  </div>
-                  <div className="flex items-center gap-1" role="group" aria-label={`Quantity for ${product?.name ?? "product"}`}>
-                    <Button type="button" size="icon" variant="outline" aria-label="Decrease quantity" disabled={putCartState.isLoading} onClick={() => void updateLine(String(line.productId), Number(line.quantity) - 1)}><Minus className="size-4" /></Button>
-                    <span className="w-10 text-center text-sm font-semibold tabular-nums" aria-live="polite">{String(line.quantity)}</span>
-                    <Button type="button" size="icon" variant="outline" aria-label="Increase quantity" disabled={putCartState.isLoading || Number(line.quantity) >= 99} onClick={() => void updateLine(String(line.productId), Number(line.quantity) + 1)}><Plus className="size-4" /></Button>
-                    <Button type="button" size="icon" variant="ghost" className="ml-2 text-red-700" aria-label={`Remove ${product?.name ?? "product"}`} disabled={putCartState.isLoading} onClick={() => void updateLine(String(line.productId), 0)}><Trash2 className="size-4" /></Button>
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-        </Surface>
-      )}
-      {lines.length > 0 ? <Surface title="Fulfilment & payment">
-        <div className="space-y-4 p-6 text-sm">
-          <div className="flex flex-wrap gap-2">
-            <Button
-              type="button"
-              size="sm"
-              variant={mode === "BRANCH_PICKUP" ? "default" : "outline"}
-              disabled={!pickupEnabled}
-              onClick={() => setMode("BRANCH_PICKUP")}
-            >
-              Branch pickup
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant={mode === "DELIVERY" ? "default" : "outline"}
-              disabled={!deliveryEnabled}
-              onClick={() => setMode("DELIVERY")}
-            >
-              Delivery
-            </Button>
-          </div>
-          {mode === "BRANCH_PICKUP" ? (
-            pickupEnabled ? (
-              <div className="space-y-2">
-                <Label htmlFor="pickup-branch">Pickup branch</Label>
-                <select
-                  id="pickup-branch"
-                  className="w-full rounded-md border bg-background px-3 py-2 text-sm"
-                  value={pickupBranchId || String(pickup?.branches?.[0]?.id ?? "")}
-                  onChange={(e) => setPickupBranchId(e.target.value)}
-                >
-                  {(pickup?.branches ?? []).map((b) => (
-                    <option key={String(b.id)} value={String(b.id)}>
-                      {b.name ?? b.id}
-                    </option>
-                  ))}
-                </select>
+        <div className="mt-8 grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_22rem] lg:gap-8">
+          <div className="space-y-6">
+            <ShopPanel title="Items" action={putCartState.isLoading ? <Loader2 className="size-4 animate-spin text-[#9a8d90]" aria-label="Updating cart" /> : null}>
+              <ul className={cn("divide-y", "divide-[#f0e6e0]")}>
+                {lines.map((line) => (
+                  <CartLineRow
+                    key={String(line.productId)}
+                    line={line}
+                    tenantSlug={tenantSlug}
+                    busy={putCartState.isLoading}
+                    onQuantity={(q) => void updateLine(String(line.productId), q)}
+                  />
+                ))}
+              </ul>
+            </ShopPanel>
+
+            <ShopPanel title="How would you like to receive it?">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <ChoiceCard
+                  name="fulfilment"
+                  selected={mode === "BRANCH_PICKUP"}
+                  disabled={!pickupEnabled}
+                  onSelect={() => setMode("BRANCH_PICKUP")}
+                  icon={<Store className="size-5" />}
+                  title="Collect from a branch"
+                  detail={pickupEnabled ? "Free · ready when the store confirms" : "Not offered by this store"}
+                />
+                <ChoiceCard
+                  name="fulfilment"
+                  selected={mode === "DELIVERY"}
+                  disabled={!deliveryEnabled}
+                  onSelect={() => setMode("DELIVERY")}
+                  icon={<Truck className="size-5" />}
+                  title="Deliver to me"
+                  detail={
+                    deliveryEnabled
+                      ? deliveryCharge
+                        ? `${formatShopInr(deliveryCharge)} delivery · insured`
+                        : "Delivery charge shown in your price preview"
+                      : "Not offered by this store"
+                  }
+                />
               </div>
-            ) : (
-              <p className="text-muted-foreground">Pickup is not configured for this store.</p>
-            )
-          ) : deliveryEnabled ? (
-            <div className="space-y-3">
-              {addressItems.length > 0 ? (
-                <div className="space-y-2">
-                  <Label htmlFor="delivery-address">Saved address</Label>
-                  <select
-                    id="delivery-address"
-                    className="w-full rounded-md border bg-background px-3 py-2 text-sm"
-                    value={addressId || String(addressItems.find((a) => a.isDefault)?.id ?? "")}
-                    onChange={(e) => setAddressId(e.target.value)}
-                  >
-                    {addressItems.map((a) => (
-                      <option key={String(a.id)} value={String(a.id)}>
-                        {String(a.label ?? "Address")} — {String(a.line1)}, {String(a.city)},{" "}
-                        {String(a.state)} {String(a.pincode)}
-                      </option>
-                    ))}
-                  </select>
+
+              {mode === "BRANCH_PICKUP" ? (
+                pickupEnabled ? (
+                  <fieldset className="mt-6">
+                    <legend className={cn("mb-3 text-sm font-semibold", SHOP_INK)}>Pickup branch</legend>
+                    <div className="space-y-2.5">
+                      {(pickup?.branches ?? []).map((b) => (
+                        <ChoiceCard
+                          key={String(b.id)}
+                          name="pickup-branch"
+                          selected={selectedBranch === String(b.id)}
+                          onSelect={() => setPickupBranchId(String(b.id))}
+                          icon={<MapPin className="size-5" />}
+                          title={b.name ?? String(b.id)}
+                        />
+                      ))}
+                    </div>
+                  </fieldset>
+                ) : (
+                  <p className={cn("mt-4 text-sm", SHOP_MUTED)}>Pickup is not set up for this store.</p>
+                )
+              ) : deliveryEnabled ? (
+                <div className="mt-6 space-y-6">
+                  <fieldset>
+                    <legend className={cn("mb-3 text-sm font-semibold", SHOP_INK)}>Deliver to</legend>
+                    {addressItems.length > 0 ? (
+                      <div className="space-y-2.5">
+                        {addressItems.map((a) => (
+                          <ChoiceCard
+                            key={String(a.id)}
+                            name="delivery-address"
+                            selected={selectedAddress === String(a.id)}
+                            onSelect={() => setAddressId(String(a.id))}
+                            icon={<MapPin className="size-5" />}
+                            title={
+                              <span className="flex items-center gap-2">
+                                {String(a.label ?? "Address")}
+                                {a.isDefault ? <span className="rounded-full bg-[#f3ebe7] px-2 py-0.5 text-[10px] font-semibold text-[#6d5f62]">Default</span> : null}
+                              </span>
+                            }
+                            detail={[a.recipientName, a.line1, a.line2, [a.city, a.state, a.pincode].filter(Boolean).join(", ")].filter(Boolean).map(String).join(" · ")}
+                          />
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="max-w-xs space-y-2">
+                        <Label htmlFor="pincode">Delivery pincode</Label>
+                        <Input id="pincode" inputMode="numeric" value={pincode} onChange={(e) => setPincode(e.target.value)} className="h-11 rounded-xl" placeholder="e.g. 682036" />
+                        <p className={cn("text-xs", SHOP_MUTED)}>We check this against the store&apos;s delivery area.</p>
+                      </div>
+                    )}
+                    <button
+                      type="button"
+                      className="mt-3 inline-flex items-center gap-1.5 text-sm font-semibold text-[var(--customer-primary,#730321)] underline-offset-4 hover:underline"
+                      onClick={() => setShowAddressForm((v) => !v)}
+                      aria-expanded={showAddressForm}
+                    >
+                      <Plus className="size-4" />
+                      {showAddressForm ? "Close new address" : "Add a new address"}
+                    </button>
+                    {showAddressForm ? (
+                      <div className={cn("mt-3 grid gap-3 rounded-2xl border bg-[#fcfaf8] p-4 sm:grid-cols-2", SHOP_HAIRLINE)}>
+                        <div className="space-y-1.5 sm:col-span-2">
+                          <Label htmlFor="addr-line1">House, street and area</Label>
+                          <Input id="addr-line1" value={addressForm.line1} onChange={(e) => setAddressForm((f) => ({ ...f, line1: e.target.value }))} className="h-11 rounded-xl bg-white" />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label htmlFor="addr-name">Recipient name</Label>
+                          <Input id="addr-name" value={addressForm.recipientName} onChange={(e) => setAddressForm((f) => ({ ...f, recipientName: e.target.value }))} className="h-11 rounded-xl bg-white" />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label htmlFor="addr-mobile">Mobile</Label>
+                          <Input id="addr-mobile" inputMode="tel" value={addressForm.mobile} onChange={(e) => setAddressForm((f) => ({ ...f, mobile: e.target.value }))} className="h-11 rounded-xl bg-white" />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label htmlFor="addr-city">City</Label>
+                          <Input id="addr-city" value={addressForm.city} onChange={(e) => setAddressForm((f) => ({ ...f, city: e.target.value }))} className="h-11 rounded-xl bg-white" />
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="space-y-1.5">
+                            <Label htmlFor="addr-state">State</Label>
+                            <Input id="addr-state" value={addressForm.state} onChange={(e) => setAddressForm((f) => ({ ...f, state: e.target.value }))} className="h-11 rounded-xl bg-white" />
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label htmlFor="addr-pin">Pincode</Label>
+                            <Input id="addr-pin" inputMode="numeric" value={addressForm.pincode} onChange={(e) => setAddressForm((f) => ({ ...f, pincode: e.target.value }))} className="h-11 rounded-xl bg-white" />
+                          </div>
+                        </div>
+                        <div className="sm:col-span-2">
+                          <Button type="button" className="h-10 rounded-full px-5 text-white" style={customerBrandStyle.primaryBg} disabled={createAddressState.isLoading} onClick={() => void onSaveAddress()}>
+                            {createAddressState.isLoading ? "Saving…" : "Save address"}
+                          </Button>
+                        </div>
+                      </div>
+                    ) : null}
+                    {supportedStates.length > 0 ? (
+                      <p className={cn("mt-3 text-xs", SHOP_MUTED)}>This store delivers to addresses in {supportedStates.join(", ")}.</p>
+                    ) : null}
+                  </fieldset>
+
+                  <fieldset>
+                    <legend className={cn("mb-3 text-sm font-semibold", SHOP_INK)}>Pay with</legend>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <ChoiceCard
+                        name="payment"
+                        selected={paymentMethod === "ONLINE"}
+                        onSelect={() => setPaymentMethod("ONLINE")}
+                        icon={<CreditCard className="size-5" />}
+                        title="Pay online"
+                        detail="UPI, cards or net banking after you place the order"
+                      />
+                      <ChoiceCard
+                        name="payment"
+                        selected={paymentMethod === "COD"}
+                        disabled={delivery?.codEnabled !== true}
+                        onSelect={() => setPaymentMethod("COD")}
+                        icon={<Banknote className="size-5" />}
+                        title="Cash on delivery"
+                        detail={delivery?.codEnabled === true ? "Available in selected pincodes only" : "Not offered by this store"}
+                      />
+                    </div>
+                  </fieldset>
                 </div>
               ) : (
-                <p className="text-muted-foreground">Add a delivery address or enter a serviceable pincode.</p>
+                <p className={cn("mt-4 text-sm", SHOP_MUTED)}>Delivery isn&apos;t available until the store sets it up.</p>
               )}
-              {!addressItems.length ? (
-                <div className="space-y-2">
-                  <Label htmlFor="pincode">Pincode (server checks serviceability)</Label>
-                  <Input id="pincode" value={pincode} onChange={(e) => setPincode(e.target.value)} />
+            </ShopPanel>
+          </div>
+
+          <aside className="lg:sticky lg:top-28">
+            <ShopPanel title="Summary">
+              <dl className="space-y-3 text-sm">
+                <div className="flex justify-between gap-4">
+                  <dt className={SHOP_MUTED}>Items ({pieceCount})</dt>
+                  <dd className={cn("font-medium tabular-nums", SHOP_INK)}>{estimatePaise >= 0 ? formatShopInr(estimatePaise) : "Calculating…"}</dd>
                 </div>
-              ) : null}
-              <Button type="button" size="sm" variant="outline" onClick={() => setShowAddressForm((v) => !v)}>
-                {showAddressForm ? "Hide address form" : "Add new address"}
-              </Button>
-              {showAddressForm ? (
-                <div className="grid gap-2 sm:grid-cols-2">
-                  <Input
-                    placeholder="Line 1"
-                    value={addressForm.line1}
-                    onChange={(e) => setAddressForm((f) => ({ ...f, line1: e.target.value }))}
-                  />
-                  <Input
-                    placeholder="City"
-                    value={addressForm.city}
-                    onChange={(e) => setAddressForm((f) => ({ ...f, city: e.target.value }))}
-                  />
-                  <Input
-                    placeholder="State"
-                    value={addressForm.state}
-                    onChange={(e) => setAddressForm((f) => ({ ...f, state: e.target.value }))}
-                  />
-                  <Input
-                    placeholder="Pincode"
-                    value={addressForm.pincode}
-                    onChange={(e) => setAddressForm((f) => ({ ...f, pincode: e.target.value }))}
-                  />
-                  <Button
-                    type="button"
-                    size="sm"
-                    disabled={createAddressState.isLoading}
-                    onClick={() => void onSaveAddress()}
-                  >
-                    Save address
-                  </Button>
+                <div className="flex justify-between gap-4">
+                  <dt className={SHOP_MUTED}>{mode === "DELIVERY" ? "Delivery" : "Pickup"}</dt>
+                  <dd className={cn("font-medium tabular-nums", SHOP_INK)}>{mode === "DELIVERY" ? (deliveryCharge ? formatShopInr(deliveryCharge) : "In preview") : "Free"}</dd>
                 </div>
-              ) : null}
-              {delivery?.serviceablePincodes?.length ? (
-                <p className="text-xs text-muted-foreground">
-                  Delivery charge (if applicable): ₹
-                  {((delivery.deliveryChargePaise ?? 0) / 100).toFixed(2)} — set by the jeweller
-                </p>
-              ) : null}
-              {supportedStates.length > 0 ? (
-                <p className="text-xs text-muted-foreground">
-                  Delivery address <strong>state</strong> must be: {supportedStates.join(", ")} (for
-                  checkout tax).
-                </p>
-              ) : null}
-              <div className="space-y-2 border-t pt-3">
-                <Label>Payment when ordering</Label>
-                <div className="flex flex-wrap gap-2">
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant={paymentMethod === "ONLINE" ? "default" : "outline"}
-                    onClick={() => setPaymentMethod("ONLINE")}
-                  >
-                    Pay online
-                  </Button>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant={paymentMethod === "COD" ? "default" : "outline"}
-                    disabled={delivery?.codEnabled !== true}
-                    onClick={() => setPaymentMethod("COD")}
-                  >
-                    Cash on delivery
-                  </Button>
-                </div>
-                {delivery?.codEnabled !== true ? (
-                  <p className="text-xs text-muted-foreground">COD is not enabled for this store.</p>
-                ) : (
-                  <p className="text-xs text-muted-foreground">
-                    COD pincodes are a subset of delivery coverage. Delivery can work where COD does not.
-                  </p>
-                )}
+              </dl>
+              <div className={cn("mt-4 flex items-baseline justify-between gap-4 border-t pt-4", SHOP_HAIRLINE)}>
+                <span className={cn("font-semibold", SHOP_INK)}>Estimated total</span>
+                <span className="text-xl font-bold tabular-nums text-[var(--customer-primary,#730321)]">
+                  {estimatePaise >= 0 ? formatShopInr(estimatePaise + (mode === "DELIVERY" ? deliveryCharge : 0)) : "—"}
+                </span>
               </div>
-            </div>
-          ) : (
-            <p className="text-muted-foreground">Delivery is not available until the store configures it.</p>
-          )}
-          <Button
-            type="button"
-            variant="default"
-            disabled={!lines.length || createState.isLoading}
-            onClick={() => void onCreateQuote()}
-          >
-            {createState.isLoading ? "Preparing your price…" : "Review final price"}
-          </Button>
-          <CustomerShopPoliciesLinks className="mt-6 border-t pt-4" />
+              <p className={cn("mt-2 text-xs leading-5", SHOP_MUTED)}>Includes estimated GST at today&apos;s rate. The next step locks your exact price for a few minutes.</p>
+              <Button
+                type="button"
+                className="mt-5 h-12 w-full rounded-full text-[15px] text-white"
+                style={customerBrandStyle.primaryBg}
+                disabled={!lines.length || createState.isLoading}
+                onClick={() => void onCreateQuote()}
+              >
+                {createState.isLoading ? "Preparing your price…" : "Review final price"}
+              </Button>
+              <p className={cn("mt-3 text-center text-xs", SHOP_MUTED)}>You won&apos;t be charged yet.</p>
+            </ShopPanel>
+            <CustomerShopPoliciesLinks className="mt-5 px-1" />
+          </aside>
         </div>
-      </Surface> : null}
-    </>
+      )}
+    </div>
   );
 }

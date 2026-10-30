@@ -168,7 +168,8 @@ export function CollectionsPage() {
   if (query.isLoading) return <PageSkeleton />;
   if (query.isError || !query.data)
     return <QueryError error={query.error} onRetry={query.refetch} />;
-  const s = query.data.summary ?? {};
+  // KPI cards always describe the whole period; the tab only filters the table.
+  const s = modeMixQuery.data?.summary ?? query.data.summary ?? {};
   const rows = query.data.items;
   const showGoldLedger = rows.some((r: Payment) => paymentHasGoldAccrual(r));
   const page = query.data.page ?? emptyPageMeta();
@@ -524,41 +525,38 @@ export function CollectionsPage() {
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
         <StatCard
           icon={IndianRupee}
-          label="Collected"
+          label="Collected (net)"
           value={money(s.collected ?? 0)}
-          detail={
-            tab === "all"
-              ? `${s.successfulCount ?? 0} successful · ${s.count ?? rows.length} in period`
-              : `${s.count ?? rows.length} payments in "${tab}" view`
-          }
+          detail={`${s.successfulCount ?? 0} successful of ${s.count ?? 0} payments in period`}
+          tone="green"
         />
         <StatCard
           icon={HandCoins}
           label="Cash"
           value={money(s.cash ?? 0)}
-          detail={`${cashShare}% of successful`}
+          detail={`${cashShare}% of collected`}
           tone="cream"
         />
         <StatCard
           icon={CreditCard}
           label="Non-cash"
           value={money(s.digital ?? 0)}
-          detail={`Card ${money(s.card ?? 0)} · UPI ${money(s.upi ?? 0)}`}
+          detail={`UPI ${money(s.upi ?? 0)} · Card ${money(s.card ?? 0)}${(s.online ?? 0) > 0 ? ` · Online ${money(s.online ?? 0)}` : ""}`}
           tone="gold"
         />
         <StatCard
           icon={AlertTriangle}
-          label="Pending"
+          label="Awaiting gateway"
           value={money(s.pending ?? 0)}
-          detail="Gateway confirmation"
-          tone="red"
+          detail={`${s.pendingCount ?? 0} pending · ${s.failed ?? 0} failed`}
+          tone={(s.pending ?? 0) > 0 ? "red" : "cream"}
         />
         <StatCard
           icon={RotateCcw}
           label="Reversed"
           value={money(s.reversed ?? 0)}
-          detail={`${money(s.refunded ?? 0)} refunded · ${s.failed ?? 0} failed`}
-          tone="red"
+          detail={`${s.reversedCount ?? 0} reversed · ${money(s.refunded ?? 0)} partly refunded`}
+          tone={(s.reversed ?? 0) > 0 ? "red" : "cream"}
         />
       </div>
       {section === "payments" ? <><div className="grid gap-5 xl:grid-cols-[1.5fr_.8fr]">

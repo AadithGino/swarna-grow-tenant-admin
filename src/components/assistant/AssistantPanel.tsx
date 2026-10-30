@@ -1,30 +1,41 @@
 "use client";
 
+import { cn } from "@/lib/utils";
 import { AssistantFloatingWindow } from "@/src/components/assistant/AssistantFloatingWindow";
-import { ASSISTANT_NAME, SidekickOrb } from "@/src/components/assistant/sidekick-primitives";
 
-export function AssistantPanel({ open, onOpenChange }: {
+/**
+ * Right-hand Sidekick column. Desktop: a sticky column in the shell's flex row,
+ * so the page narrows beside it and nothing is hidden underneath. Phones and
+ * tablets: a full-screen sheet. Opened from the "Ask Sidekick" button in the
+ * top bar — there is no floating launcher covering page content.
+ */
+export function AssistantPanel({
+  open,
+  onOpenChange,
+  wide,
+  onToggleWide,
+}: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  wide: boolean;
+  onToggleWide: () => void;
 }) {
+  if (!open) return null;
   return (
-    <>
-      {!open && (
-        <button
-          type="button"
-          onClick={() => onOpenChange(true)}
-          aria-label={`Open ${ASSISTANT_NAME} AI assistant`}
-          className="sidekick group fixed bottom-6 right-6 z-50 hidden items-center gap-3 rounded-2xl bg-gradient-to-br from-[var(--sk-maroon-2)] to-[var(--sk-maroon)] py-2.5 pl-2.5 pr-5 text-left text-white shadow-[0_18px_40px_-16px_rgba(115,3,33,0.75)] transition hover:-translate-y-0.5 md:flex"
-        >
-          <SidekickOrb size={36} />
-          <span>
-            <span className="block text-[14px] font-bold leading-tight">Ask {ASSISTANT_NAME}</span>
-            <span className="block text-[11px] font-normal text-white/75">Anything about your business</span>
-          </span>
-        </button>
+    <aside
+      aria-label="Sidekick assistant"
+      className={cn(
+        "fixed inset-0 z-[60] bg-white",
+        "lg:sticky lg:inset-auto lg:top-0 lg:z-30 lg:h-screen lg:shrink-0 lg:border-l lg:border-[#e8dcd7] lg:shadow-[-12px_0_32px_-24px_rgb(61_12_21/35%)]",
+        wide ? "lg:w-[min(40rem,42vw)]" : "lg:w-[24rem] 2xl:w-[27rem]",
       )}
-
-      <AssistantFloatingWindow open={open} onOpenChange={onOpenChange} />
-    </>
+    >
+      <AssistantFloatingWindow
+        open={open}
+        onOpenChange={onOpenChange}
+        wide={wide}
+        onToggleWide={onToggleWide}
+      />
+    </aside>
   );
 }

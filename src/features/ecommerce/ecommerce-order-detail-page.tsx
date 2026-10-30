@@ -16,7 +16,6 @@ import {
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
-  DetailRecordTabsHeader,
   detailRecordTabContentClass,
   detailRecordTabsChromeClass,
   PageHeader,
@@ -26,12 +25,16 @@ import { PageSkeleton, QueryError } from "@/src/components/common/query-state";
 import { EcommerceOrderFinancialReviewDialog } from "@/src/features/ecommerce/ecommerce-order-financial-review-dialog";
 import {
   formatOrderInr,
+  formatOrderWhen,
   OrderAmountsGrid,
-  OrderDetailHero,
   OrderEventTimeline,
   OrderLineItemsTable,
   OrderPaymentAttemptsList,
+  OrderProgress,
+  OrderSideCards,
 } from "@/src/features/ecommerce/ecommerce-order-ui";
+import { StatusBadge } from "@/src/components/common/status-badge";
+import { Download } from "lucide-react";
 import {
   useGetEcommerceOrderEventsQuery,
   useGetEcommerceOrderPaymentAttemptEventsQuery,
@@ -278,53 +281,58 @@ export function EcommerceOrderDetailPage({ orderId }: { orderId: string }) {
   }
 
   return (
-    <>
+    <div className="space-y-6">
       <PageHeader
-        eyebrow="Store operations"
-        title={String(o.orderNumber ?? "Order")}
-        description="Order detail, fulfilment, payments, and staff actions."
+        back={{ href: listBackHref, label: "Orders" }}
+        eyebrow="Online store"
+        title={`Order ${String(o.orderNumber ?? o.id ?? "")}`}
+        meta={
+          <>
+            <StatusBadge status={String(order.status ?? "")} label={order.status === "COD_PENDING_ACCEPTANCE" ? "COD to accept" : undefined} />
+            <span className="rounded-full bg-[#f6efec] px-2.5 py-0.5 text-xs font-semibold text-[#5c4a4e]">
+              {order.paymentMethod === "COD" ? "Cash on delivery" : "Paid online"}
+            </span>
+            {order.paymentExceptionStatus ? (
+              <StatusBadge status="FAILED" label={String(order.paymentExceptionStatus).replaceAll("_", " ").toLowerCase()} />
+            ) : null}
+            <span>Placed {formatOrderWhen(order.createdAt)}</span>
+          </>
+        }
         actions={
-          <Link href={listBackHref} className="text-sm font-medium text-[#730321] underline-offset-4 hover:underline">
-            Back to orders
-          </Link>
+          <>
+            {primaryAction.label !== "Open" ? (
+              <span className="inline-flex h-10 items-center gap-2 rounded-xl border border-[#ecd3d9] bg-[#fbf1f3] px-3 text-sm font-semibold text-[#5e0a20]">
+                Next: {primaryAction.label}
+              </span>
+            ) : null}
+            {o.invoiceAvailable === true ? (
+              <Button
+                type="button"
+                variant="outline"
+                className="h-10 rounded-xl"
+                disabled={fetchInvoiceState.isFetching}
+                onClick={() => void onDownloadInvoice()}
+              >
+                <Download /> {fetchInvoiceState.isFetching ? "Preparing…" : "Invoice"}
+              </Button>
+            ) : null}
+          </>
         }
       />
-      <OrderDetailHero
-        order={order}
-        primaryAction={
-          <span className="rounded-lg border border-[#e4d7d2] bg-[#faf7f5] px-3 py-1.5 text-sm font-medium text-[#28161a]">
-            Suggested: {primaryAction.label}
-          </span>
-        }
-        actions={
-          o.invoiceAvailable === true ? (
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              disabled={fetchInvoiceState.isFetching}
-              onClick={() => void onDownloadInvoice()}
-            >
-              {fetchInvoiceState.isFetching ? "Preparing…" : "Download invoice"}
-            </Button>
-          ) : null
-        }
-      />
-      <div className="mb-8 grid gap-5 lg:grid-cols-2">
-        <Surface title="Line items">
-          <div className="p-4 sm:p-5">
-            <OrderLineItemsTable lines={lineItems} />
-          </div>
+      <OrderProgress order={order} />
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]">
+      <div className="min-w-0 space-y-6">
+      <div className="grid gap-6 2xl:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
+        <Surface title={`Items (${lineItems.length})`}>
+          <OrderLineItemsTable lines={lineItems} />
         </Surface>
         <Surface title="Amounts">
-          <div className="p-4 sm:p-5">
-            <OrderAmountsGrid order={order} />
-          </div>
+          <OrderAmountsGrid order={order} />
         </Surface>
       </div>
 
-      <DetailRecordTabsHeader label="Staff tools & audit" />
-      <Tabs defaultValue="fulfilment" className="mb-8">
+      <Surface title="Staff actions" description="Fulfil, handle cancellations and returns, fix payments, and see the full history.">
+      <Tabs defaultValue="fulfilment">
         <TabsList variant="detail" className={detailRecordTabsChromeClass}>
           <TabsTrigger value="fulfilment">Fulfilment</TabsTrigger>
           <TabsTrigger value="returns">Returns & cancel</TabsTrigger>
@@ -336,7 +344,7 @@ export function EcommerceOrderDetailPage({ orderId }: { orderId: string }) {
           <div className="space-y-5">
       {o.paymentMethod === "COD" && canFulfilmentOperate ? (
         <Surface title="Cash on delivery">
-          <div className="flex flex-wrap gap-2 p-6">
+          <div className="flex flex-wrap gap-2 p-5">
             {o.status === "COD_PENDING_ACCEPTANCE" ? (
               <>
                 <Button
@@ -392,7 +400,7 @@ export function EcommerceOrderDetailPage({ orderId }: { orderId: string }) {
       ) : null}
       {fulfilmentMode === "DELIVERY" ? (
         <Surface title="Delivery tracking">
-          <div className="space-y-3 p-6 text-sm">
+          <div className="space-y-3 p-5 text-sm">
             {deliveryTracking?.trackingNumber || deliveryTracking?.carrierName ? (
               <p className="text-muted-foreground">
                 {String(deliveryTracking.carrierName ?? "")}{" "}
@@ -452,12 +460,12 @@ export function EcommerceOrderDetailPage({ orderId }: { orderId: string }) {
       ) : null}
       {fulfilmentTargets.length > 0 && canFulfilmentOperate && !o.paymentExceptionStatus ? (
         <Surface title="Fulfilment actions">
-          <div className="flex flex-wrap gap-2 p-6">
+          <div className="flex flex-wrap gap-2 p-5">
             {fulfilmentTargets.map((target) => (
               <Button
                 key={target}
                 type="button"
-                variant="secondary"
+                className="rounded-xl"
                 disabled={transitionState.isLoading}
                 onClick={() => void onFulfilment(target)}
               >
@@ -465,7 +473,7 @@ export function EcommerceOrderDetailPage({ orderId }: { orderId: string }) {
               </Button>
             ))}
           </div>
-          <p className="px-6 pb-4 text-xs text-muted-foreground">
+          <p className="px-5 pb-4 text-xs text-muted-foreground">
             Uses expectedVersion {String(o.version ?? 1)} — refresh if the server reports a conflict.
           </p>
         </Surface>
@@ -476,7 +484,7 @@ export function EcommerceOrderDetailPage({ orderId }: { orderId: string }) {
         <TabsContent value="returns" className={detailRecordTabContentClass}>
           <div className="space-y-5">
       <Surface title="Cancellation">
-        <div className="space-y-3 p-6 text-sm">
+        <div className="space-y-3 p-5 text-sm">
           <div className="flex flex-wrap items-center gap-3 rounded-lg border border-dashed p-3">
             <Label htmlFor="cancel-stock-disposition" className="shrink-0 text-muted-foreground">
               Stock when approving cancel
@@ -673,7 +681,7 @@ export function EcommerceOrderDetailPage({ orderId }: { orderId: string }) {
       </Surface>
       {orderReturn ? (
         <Surface title="Return / exchange request">
-          <div className="space-y-3 p-6 text-sm">
+          <div className="space-y-3 p-5 text-sm">
             <p>
               Status: <strong>{String(orderReturn.status ?? "")}</strong> ·{" "}
               {String(orderReturn.kind ?? "RETURN")}
@@ -940,7 +948,7 @@ export function EcommerceOrderDetailPage({ orderId }: { orderId: string }) {
           <div className="space-y-5">
       {(o.paymentExceptionStatus || refundRow) && (
         <Surface title="Payment exception refund">
-          <div className="space-y-3 p-6 text-sm">
+          <div className="space-y-3 p-5 text-sm">
             {refundRow ? (
               <>
                 <div>
@@ -1019,7 +1027,7 @@ export function EcommerceOrderDetailPage({ orderId }: { orderId: string }) {
       )}
       {stuckAttempt && canPaymentOperate ? (
         <Surface title="Operator reconcile">
-          <div className="space-y-3 p-6 text-sm">
+          <div className="space-y-3 p-5 text-sm">
             <p>
               Attempt {String(stuckAttempt.id ?? stuckAttempt._id)} ·{" "}
               {String(stuckAttempt.operationalStatus ?? "")}
@@ -1066,6 +1074,12 @@ export function EcommerceOrderDetailPage({ orderId }: { orderId: string }) {
           </Surface>
         </TabsContent>
       </Tabs>
-    </>
+      </Surface>
+      </div>
+      <aside className="min-w-0 space-y-6 xl:sticky xl:top-[6.5rem] xl:self-start">
+        <OrderSideCards order={order} />
+      </aside>
+      </div>
+    </div>
   );
 }

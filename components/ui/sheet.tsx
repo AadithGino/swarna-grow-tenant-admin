@@ -6,6 +6,28 @@ import { Dialog as SheetPrimitive } from "radix-ui";
 
 import { cn } from "@/lib/utils";
 
+/**
+ * Clicks on the guided-tour card must not close the dialog it is pointing into.
+ * Radix reports the outside click after React has re-rendered the card, so the
+ * clicked button may already be detached — the tour marks its own pointer-downs
+ * on <html data-tour-pointer="1"> (see TourProvider).
+ */
+function keepOpenForTourUi<E extends Event>(
+  handler: ((event: E) => void) | undefined,
+) {
+  return (event: E) => {
+    const target = event.target;
+    const onTourUi =
+      (target instanceof Element && target.closest("[data-tour-ui]")) ||
+      document.documentElement.dataset.tourPointer === "1";
+    if (onTourUi) {
+      event.preventDefault();
+      return;
+    }
+    handler?.(event);
+  };
+}
+
 function Sheet({ ...props }: React.ComponentProps<typeof SheetPrimitive.Root>) {
   return <SheetPrimitive.Root data-slot="sheet" {...props} />;
 }
@@ -49,6 +71,7 @@ function SheetContent({
   children,
   side = "right",
   showCloseButton = true,
+  onInteractOutside,
   ...props
 }: React.ComponentProps<typeof SheetPrimitive.Content> & {
   side?: "top" | "right" | "bottom" | "left";
@@ -59,6 +82,7 @@ function SheetContent({
       <SheetOverlay />
       <SheetPrimitive.Content
         data-slot="sheet-content"
+        onInteractOutside={keepOpenForTourUi(onInteractOutside)}
         className={cn(
           "fixed z-50 flex flex-col gap-4 bg-background shadow-lg transition ease-in-out data-[state=closed]:animate-out data-[state=closed]:duration-300 data-[state=open]:animate-in data-[state=open]:duration-500",
           side === "right" &&

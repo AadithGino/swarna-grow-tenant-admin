@@ -7,12 +7,14 @@ import {
   Circle,
   CircleAlert,
   ExternalLink,
+  Percent,
+  Scale,
+  Truck,
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import { StatusBadge } from "@/src/components/common/status-badge";
-import type { WorkspaceNavStep } from "@/src/components/common/workspace-nav-cards";
-import { WorkspaceNavCards } from "@/src/components/common/workspace-nav-cards";
+import { SectionTabs, type SectionTab } from "@/src/components/admin-ui/detail-parts";
 import type { CheckoutBlocker } from "@/src/features/ecommerce/ecommerce-checkout-blockers";
 
 export function gstPercentFromBps(bps: number): string {
@@ -61,62 +63,21 @@ export function EcommerceSettingsToggle({
   );
 }
 
-const SETUP_STEPS = [
-  {
-    key: "tax",
-    label: "Product GST & HSN",
-    href: "/ecommerce/tax",
-    hint: "Rates on catalog + statutory codes",
-  },
-  {
-    key: "fulfilment",
-    label: "Delivery & checkout",
-    href: "/ecommerce/fulfilment",
-    hint: "Pickup, delivery, policies, bill GST",
-  },
-] as const;
+const STORE_SETTINGS_TABS: SectionTab[] = [
+  { href: "/ecommerce/gold-rates", label: "Gold rates", icon: Scale },
+  { href: "/ecommerce/tax", label: "GST & HSN", icon: Percent },
+  { href: "/ecommerce/fulfilment", label: "Delivery & checkout", icon: Truck },
+];
 
+/** Tabs shared by the three store-settings pages (one "Store settings" item in the sidebar). */
+export function EcommerceStoreSettingsTabs({ className }: { className?: string }) {
+  return <SectionTabs tabs={STORE_SETTINGS_TABS} ariaLabel="Store settings" className={className} />;
+}
+
+/** Kept for existing callers: the tax → fulfilment setup flow is now the settings tabs. */
 export function EcommerceSetupSteps({ active }: { active: "tax" | "fulfilment" }) {
-  return (
-    <div className="mb-6 grid gap-3 sm:grid-cols-2">
-      {SETUP_STEPS.map((step, index) => {
-        const isActive = step.key === active;
-        const done = active === "fulfilment" && step.key === "tax";
-        return (
-          <Link
-            key={step.key}
-            href={step.href}
-            className={cn(
-              "flex gap-3 rounded-2xl border p-4 transition-colors",
-              isActive
-                ? "border-[#730321]/30 bg-[#fff9f5] shadow-[0_2px_5px_rgb(67_15_25/4%)]"
-                : "border-[#e4d7d2] bg-white hover:border-[#dcc9c0]",
-            )}
-          >
-            <span
-              className={cn(
-                "grid size-9 shrink-0 place-items-center rounded-xl text-sm font-bold",
-                isActive && "bg-[#730321] text-white",
-                done && !isActive && "bg-emerald-100 text-emerald-800",
-                !isActive && !done && "bg-[#f7ecee] text-[#7b0a2b]",
-              )}
-            >
-              {done && !isActive ? <CheckCircle2 className="size-5" /> : index + 1}
-            </span>
-            <span className="min-w-0">
-              <span className="flex items-center gap-2 text-sm font-bold text-[#28161a]">
-                {step.label}
-                {isActive ? (
-                  <StatusBadge status="IN_PROGRESS" label="You are here" />
-                ) : null}
-              </span>
-              <span className="mt-0.5 block text-sm text-muted-foreground">{step.hint}</span>
-            </span>
-          </Link>
-        );
-      })}
-    </div>
-  );
+  void active;
+  return <EcommerceStoreSettingsTabs />;
 }
 
 export function EcommerceReadinessPanel({
@@ -140,7 +101,7 @@ export function EcommerceReadinessPanel({
   return (
     <div
       className={cn(
-        "mb-6 rounded-2xl border p-5 sm:p-6",
+        "mb-6 rounded-[1.15rem] border p-5 sm:p-6",
         ready
           ? "border-emerald-200 bg-gradient-to-br from-emerald-50/80 to-white"
           : "border-amber-200 bg-gradient-to-br from-amber-50/90 to-white",
@@ -158,9 +119,7 @@ export function EcommerceReadinessPanel({
       </div>
       <dl className="mt-4 grid gap-3 sm:grid-cols-2">
         <div className="rounded-xl border border-white/80 bg-white/70 px-4 py-3">
-          <dt className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
-            GST on final bill
-          </dt>
+          <dt className="text-xs font-semibold text-muted-foreground">GST on final bill</dt>
           <dd className="mt-1 flex items-center gap-2 text-sm font-semibold text-[#28161a]">
             {checkoutTaxReady ? (
               <>
@@ -176,9 +135,7 @@ export function EcommerceReadinessPanel({
           </dd>
         </div>
         <div className="rounded-xl border border-white/80 bg-white/70 px-4 py-3">
-          <dt className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
-            Online payment
-          </dt>
+          <dt className="text-xs font-semibold text-muted-foreground">Online payment</dt>
           <dd className="mt-1 flex items-center gap-2 text-sm font-semibold text-[#28161a]">
             {checkoutUsable ? (
               <>
@@ -244,8 +201,10 @@ export function EcommerceSettingsHint({
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex gap-3 rounded-xl border border-[#e4d7d2] bg-[#faf7f5] px-4 py-3.5 text-sm leading-relaxed text-[#5c4a50]">
-      <Icon className="mt-0.5 size-5 shrink-0 text-[#9a6f2a]" aria-hidden />
+    <div className="flex gap-3 rounded-2xl border border-[#efe2d0] bg-gradient-to-r from-[#fdf8ef] to-white px-4 py-3.5 text-sm leading-relaxed text-[#5c4a50]">
+      <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-[#f7ead0] text-[#8a5c12]">
+        <Icon className="size-4" aria-hidden />
+      </span>
       <div>
         <p className="font-semibold text-[#362a2e]">{title}</p>
         <div className="mt-1">{children}</div>
@@ -275,38 +234,42 @@ export function EcommerceRelatedLink({
 /** Same toggle chrome as ecommerce setup — reuse in tenant Settings → Operations. */
 export const SettingsToggleRow = EcommerceSettingsToggle;
 
-const OPERATIONS_NAV: WorkspaceNavStep[] = [
-  { href: "/ecommerce/orders", label: "Orders", hint: "Queue, fulfil, open detail" },
-  { href: "/ecommerce/courier-cod", label: "Courier COD", hint: "POD & bank remittance" },
-  {
-    href: "/ecommerce/payment-exceptions",
-    label: "Payment exceptions",
-    hint: "Refunds & stuck payments",
-  },
-];
-
-const CATALOG_NAV: WorkspaceNavStep[] = [
-  { href: "/ecommerce", label: "Catalog", hint: "Products & publish" },
-  { href: "/ecommerce/categories", label: "Categories", hint: "Shop collections" },
-  { href: "/ecommerce/banners", label: "Banners", hint: "Offers rail — home & store" },
-  { href: "/ecommerce/campaigns", label: "Push campaigns", hint: "FCM promotion history" },
-  { href: "/ecommerce/inventory", label: "Inventory", hint: "Stock per SKU" },
-  { href: "/ecommerce/gold-rates", label: "Gold rates", hint: "Store pricing" },
-  { href: "/ecommerce/tax", label: "Tax", hint: "GST & HSN" },
-  { href: "/ecommerce/fulfilment", label: "Fulfilment", hint: "Delivery & checkout" },
-];
-
+/**
+ * The big section nav cards were replaced by the grouped sidebar ("Online store").
+ * These stay as no-ops so existing pages keep compiling.
+ */
 export function EcommerceOperationsNav() {
-  return (
-    <WorkspaceNavCards steps={OPERATIONS_NAV} columnsClass="sm:grid-cols-3" />
-  );
+  return null;
 }
 
 export function EcommerceCatalogNav() {
+  return null;
+}
+
+const QUICK_LINKS: { href: string; label: string }[] = [
+  { href: "/ecommerce", label: "Store overview" },
+  { href: "/ecommerce/catalog", label: "Products" },
+  { href: "/ecommerce/categories", label: "Categories" },
+  { href: "/ecommerce/inventory", label: "Inventory" },
+  { href: "/ecommerce/banners", label: "Banners" },
+  { href: "/ecommerce/gold-rates", label: "Gold rates" },
+  { href: "/ecommerce/tax", label: "GST & HSN" },
+  { href: "/ecommerce/fulfilment", label: "Delivery & checkout" },
+];
+
+/** Compact link chips into the online store (used from Settings). */
+export function EcommerceQuickLinks() {
   return (
-    <WorkspaceNavCards
-      steps={CATALOG_NAV}
-      columnsClass="sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6"
-    />
+    <nav aria-label="Online store pages" className="flex flex-wrap gap-2">
+      {QUICK_LINKS.map((l) => (
+        <Link
+          key={l.href}
+          href={l.href}
+          className="inline-flex h-8 items-center rounded-full border border-[#e6dad6] bg-white px-3 text-sm font-medium text-[#5c4a4e] transition-colors hover:border-[#d7b2bc] hover:bg-[#fbf1f3] hover:text-[#5e0a20]"
+        >
+          {l.label}
+        </Link>
+      ))}
+    </nav>
   );
 }

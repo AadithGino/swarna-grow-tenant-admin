@@ -290,8 +290,8 @@ export function DigitalMetalsSettingsEditor({ canWrite }: { canWrite: boolean })
   }
 
   return (
-    <Surface title="Asset settings (versioned)">
-      <div className="space-y-4 p-6">
+    <Surface title="Asset settings" description="Fees, tax lines and holding period for each metal. Every publish creates a new version.">
+      <div className="space-y-5 p-5">
         <FieldLabel>Asset</FieldLabel>
         <DigitalMetalsAssetPicker
           value={assetSel}
@@ -323,7 +323,7 @@ export function DigitalMetalsSettingsEditor({ canWrite }: { canWrite: boolean })
         <div className="space-y-2">
           <FieldLabel>Tax lines (explicit — empty list clears only when you remove all rows and save)</FieldLabel>
           {taxLines.map((line, idx) => (
-            <div key={idx} className="flex flex-wrap items-end gap-2 rounded border p-2">
+            <div key={idx} className="flex flex-wrap items-end gap-2 rounded-xl border border-[#efe5e1] bg-[#fcf9f8] p-3">
               <Input
                 placeholder="Code"
                 value={line.code}
@@ -416,7 +416,7 @@ export function DigitalMetalsSettingsEditor({ canWrite }: { canWrite: boolean })
           )}
         </div>
 
-        <div className="border-t pt-4">
+        <div className="rounded-xl border border-[#efe5e1] p-4">
           <FieldLabel>Quote preview (buy, budget INR)</FieldLabel>
           <div className="flex flex-wrap gap-2">
             <Input value={previewBudget} onChange={(e) => setPreviewBudget(e.target.value)} className="max-w-xs" />
@@ -462,7 +462,7 @@ function FeeEditor({
   disabled: boolean;
 }) {
   return (
-    <div className="space-y-2 rounded border p-3">
+    <div className="space-y-2 rounded-xl border border-[#efe5e1] bg-[#fcf9f8] p-4">
       <p className="text-sm font-medium">{label}</p>
       <Select
         value={value.type}

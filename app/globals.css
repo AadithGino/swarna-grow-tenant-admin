@@ -1,4 +1,5 @@
-@import "tailwindcss";
+/* Explicit /index.css avoids Vite SSR ENOENT on bare package @import (needed for Nitro/Vercel). */
+@import "tailwindcss/index.css";
 @import "tw-animate-css";
 @import "../vendor/shadcn-tailwind-4.13.0.css";
 
@@ -261,6 +262,10 @@ button {
 
 /* ───────────────────────── Sidekick (AI assistant) ─────────────────────────
    Maroon + gold "vault" look shared with the swarnagrow.com landing page.     */
+/* Layered so Tailwind utilities (e.g. text-white on the launcher) win over the
+   default ink colour. Unlayered, `.sidekick { color }` beat every utility and
+   rendered dark maroon text on maroon buttons. */
+@layer components {
 .sidekick {
   --sk-maroon: #730321;
   --sk-maroon-2: #8e1a36;
@@ -335,6 +340,8 @@ button {
 .sk-live-dot { animation: sk-blink 1.6s infinite; }
 .sk-sweep { animation: sk-sweep 1.2s ease-in-out infinite; }
 
+}
+
 @keyframes sk-spin { to { transform: rotate(360deg); } }
 @keyframes sk-shimmer { from { background-position: 100% 0; } to { background-position: -100% 0; } }
 @keyframes sk-pop { from { opacity: 0; transform: translateY(8px) scale(0.97); } to { opacity: 1; transform: none; } }
@@ -354,4 +361,98 @@ button {
     animation-iteration-count: 1 !important;
     transition-duration: 0.001ms !important;
   }
+}
+
+/* ───────────────────────── Guided tours (spotlight walkthroughs) ─────────────────────────
+   Positions are written to transform/width/height every frame by TourOverlay; transitions
+   only run while [data-glide] is set (moving to a new target), so scrolling stays glued. */
+.tour-spot {
+  --tour-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 90;
+  width: 0;
+  height: 0;
+  border-radius: 12px;
+  outline: 2px solid #c3a264;
+  outline-offset: 0;
+  transform: translate3d(50vw, 50vh, 0);
+  will-change: transform, width, height;
+  backface-visibility: hidden;
+  animation: tour-fade-in 0.35s ease both;
+}
+.tour-spot[data-glide] {
+  transition:
+    transform 520ms var(--tour-ease),
+    width 520ms var(--tour-ease),
+    height 520ms var(--tour-ease),
+    box-shadow 380ms ease,
+    outline-color 300ms ease;
+}
+.tour-ring {
+  position: absolute;
+  inset: -2px;
+  border-radius: inherit;
+  box-shadow: 0 0 0 3px rgba(243, 217, 164, 0.55);
+}
+.tour-ring-pulse { animation: tour-pulse 1.6s cubic-bezier(0.2, 0.8, 0.25, 1) infinite; }
+
+.tour-card {
+  --tour-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 91;
+  overflow: hidden;
+  border-radius: 16px;
+  border: 1px solid var(--sk-line-2);
+  background: #fff;
+  color: var(--sk-ink);
+  box-shadow: 0 30px 60px -24px rgba(62, 12, 21, 0.55), 0 2px 6px rgba(34, 18, 25, 0.08);
+  will-change: transform, height;
+  backface-visibility: hidden;
+  transition: height 320ms var(--tour-ease);
+  animation: tour-card-in 0.42s var(--tour-ease) backwards;
+}
+.tour-card[data-glide] {
+  transition:
+    transform 520ms var(--tour-ease),
+    height 320ms var(--tour-ease);
+}
+.tour-card[data-mobile] {
+  animation-name: tour-card-up;
+  left: 12px;
+  right: 12px;
+  top: auto;
+  bottom: max(12px, env(safe-area-inset-bottom));
+  transform: none;
+}
+.tour-card[data-mobile][data-dock="top"] {
+  top: 12px;
+  bottom: auto;
+}
+.tour-step-in { animation: tour-step-in 0.36s cubic-bezier(0.22, 1, 0.36, 1) both; }
+/* Still looking for the element: only show the new text if the search takes a moment. */
+.tour-step-wait { animation: tour-step-in 0.3s ease 0.28s both; }
+
+@keyframes tour-fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes tour-card-in {
+  from { opacity: 0; transform: translate3d(50vw, 60vh, 0) scale(0.96); }
+}
+@keyframes tour-card-up {
+  from { opacity: 0; transform: translateY(16px); }
+}
+@keyframes tour-step-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes tour-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(195, 162, 100, 0.75); }
+  70% { box-shadow: 0 0 0 12px rgba(195, 162, 100, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(195, 162, 100, 0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tour-spot, .tour-spot[data-glide], .tour-card, .tour-card[data-glide] { transition: none; animation: none; }
+  .tour-ring-pulse, .tour-step-in, .tour-step-wait { animation: none; }
 }

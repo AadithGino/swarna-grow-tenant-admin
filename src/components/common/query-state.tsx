@@ -1,4 +1,5 @@
-import { AlertCircle, Inbox, RefreshCcw } from "lucide-react";
+import { AlertCircle, Inbox, RefreshCcw, type LucideIcon } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { apiErrorDetailLines } from "@/src/lib/api-error";
@@ -39,9 +40,9 @@ export function QueryError({
   const secondary = detail ? fromApi.slice(1) : fromApi.slice(1);
 
   return (
-    <div className="grid min-h-72 place-items-center rounded-2xl border bg-white p-8 text-center">
+    <div className="grid min-h-72 place-items-center rounded-[1.15rem] border border-[#e8dcd7] bg-white p-8 text-center">
       <div>
-        <AlertCircle className="mx-auto mb-3 size-9 text-red-600" />
+        <span className="mx-auto mb-3 grid size-14 place-items-center rounded-2xl bg-red-50 text-red-600 ring-1 ring-red-100"><AlertCircle className="size-6" /></span>
         <h3 className="text-lg font-bold">{title}</h3>
         <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
           {primary}
@@ -64,16 +65,25 @@ export function QueryError({
 export function EmptyState({
   title = "No records found",
   detail = "Try changing the filters or search terms.",
+  icon: Icon = Inbox,
+  action,
+  className,
 }: {
   title?: string;
-  detail?: string;
+  detail?: React.ReactNode;
+  icon?: LucideIcon;
+  action?: React.ReactNode;
+  className?: string;
 }) {
   return (
-    <div className="grid min-h-56 place-items-center p-8 text-center">
-      <div>
-        <Inbox className="mx-auto mb-3 size-9 text-[#9a6f2a]" />
-        <h3 className="font-bold">{title}</h3>
-        <p className="mt-1 text-sm text-muted-foreground">{detail}</p>
+    <div className={cn("grid min-h-56 place-items-center p-8 text-center", className)}>
+      <div className="max-w-sm">
+        <span className="mx-auto mb-4 grid size-14 place-items-center rounded-2xl bg-gradient-to-br from-[#fbf3e3] to-[#f3e2c0] text-[#94661b] ring-1 ring-[#ead6ae]">
+          <Icon className="size-6" aria-hidden />
+        </span>
+        <h3 className="font-bold text-[#2d191d]">{title}</h3>
+        {detail ? <p className="mt-1 text-sm leading-5 text-muted-foreground">{detail}</p> : null}
+        {action ? <div className="mt-4 flex justify-center gap-2">{action}</div> : null}
       </div>
     </div>
   );

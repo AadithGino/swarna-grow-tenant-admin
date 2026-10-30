@@ -1,3 +1,4 @@
+import { istBusinessDateToday } from "@/src/lib/ist-business-date";
 import type {
   Customer,
   CashHandoverDetail,
@@ -402,6 +403,17 @@ export function adaptEnrollmentList(
         Math.max(0, Number(row.amountPaise ?? 0) - Number(row.paidPaise ?? 0))
       );
     }, 0);
+    // Unpaid on instalments whose due date has arrived (IST) — what the customer owes today.
+    const todayIstYmd = istBusinessDateToday();
+    const dueNowPaise = installments.reduce((sum: number, row: any) => {
+      if (["PAID", "WAIVED"].includes(String(row.status ?? ""))) return sum;
+      const due = String(row.dueDate ?? "").slice(0, 10);
+      if (!due || due > todayIstYmd) return sum;
+      return (
+        sum +
+        Math.max(0, Number(row.amountPaise ?? 0) - Number(row.paidPaise ?? 0))
+      );
+    }, 0);
     const installmentPaise =
       item.installmentAmountPaise ??
       nextDueRow?.amountPaise ??
@@ -434,7 +446,10 @@ export function adaptEnrollmentList(
         0,
       paid: fromPaise(paidPaise),
       installment: fromPaise(installmentPaise),
+      /** Every unpaid instalment, including ones not due yet. */
       outstanding: fromPaise(outstandingPaise),
+      /** Unpaid instalments already due (today or earlier). */
+      dueNow: fromPaise(dueNowPaise),
       nextDue: date(
         nextDueRow?.date ?? nextDueRow?.dueDate ?? item.nextDueDate,
       ),
@@ -1261,14 +1276,19 @@ export function adaptPayments(raw: any) {
       digital,
       pending:
         rupees(
-          (meta.byStatus ?? []).find((x: any) => x.status === "PENDING")
-            ?.amount,
+          meta.pendingAmount ??
+            (meta.byStatus ?? []).find((x: any) => x.status === "PENDING")
+              ?.amount,
         ) || derived.pending,
+      pendingCount: Number(meta.pendingCount ?? 0),
       failed: meta.failedCount ?? derived.failed,
       reversed: rupees(meta.reversedAmount) || derived.reversed,
+      reversedCount: Number(meta.reversedCount ?? 0),
+      /** Partial refunds on payments that still count as collected (excludes full reversals). */
       refunded:
-        rupees(meta.totalRefundedAmount ?? meta.refundedAmount) ||
+        rupees(meta.refundedAmount) ||
         derived.refunded,
+      grossCollected: rupees(meta.grossSuccessfulAmount),
       lateSuccess: derived.lateSuccess,
     },
   };
@@ -2159,6 +2179,10 @@ export type DashboardWidget = {
   actionPath?: string;
   severity?: string;
   valueType?: string;
+  /** "kpi" = headline numbers; "attention" = queues someone should clear. */
+  group?: "kpi" | "attention";
+  /** Raw count/amount, used to quiet attention cards that are at zero. */
+  rawValue?: number;
 };
 
 const DEFAULT_DASHBOARD_CHARTS = [
@@ -2322,6 +2346,9 @@ function adaptDashboardAttentionRows(summary: any, extrasAttention?: any[]) {
   const attention = summary?.attention;
   if (!attention || typeof attention !== "object") return [];
 
+  // The live summary only carries counts — those render as attention cards
+  // (see adaptDashboard), so no synthetic ₹0 / "—" table rows are produced.
+  if (summary?.today != null && summary?.schemes != null) return [];
   const rows: any[] = [];
   const cash = Number(attention.pendingCashHandovers ?? 0);
   if (cash > 0) {
@@ -2332,7 +2359,7 @@ function adaptDashboardAttentionRows(summary: any, extrasAttention?: any[]) {
       amount: 0,
       age: "—",
       status: `${cash} pending`,
-      actionPath: "/cash",
+      actionPath: "/cash-control",
       actionLabel: "Review",
     });
   }
@@ -2345,7 +2372,7 @@ function adaptDashboardAttentionRows(summary: any, extrasAttention?: any[]) {
       amount: 0,
       age: "—",
       status: `${grievances} open`,
-      actionPath: "/grievances",
+      actionPath: "/support",
       actionLabel: "Open",
     });
   }
@@ -2398,7 +2425,12 @@ export function adaptDashboard(
     label: w.label,
     displayValue: formatDashboardWidgetValue(w.value, w.valueType),
     secondaryLabel: w.secondary?.label
-      ? `${w.secondary.label}${w.secondary.value != null ? `: ${typeof w.secondary.value === "object" ? formatDashboardWidgetValue(w.secondary.value, "currency") : w.secondary.value}` : ""}`
+      ? `${w.secondary.label}${
+          w.secondary.value != null &&
+          !String(w.secondary.label).includes(String(w.secondary.value))
+            ? `: ${typeof w.secondary.value === "object" ? formatDashboardWidgetValue(w.secondary.value, "currency") : w.secondary.value}`
+            : ""
+        }`
       : undefined,
     actionPath: w.actionPath,
     severity: w.severity,
@@ -2406,55 +2438,106 @@ export function adaptDashboard(
   }));
 
   if (backendSummaryShape && widgets.length === 0) {
+    // Each card states exactly what GET /admin/dashboard/summary counts
+    // (backend/src/services/reporting.service.js#dashboard).
     const attention = summary.attention ?? {};
+    const plural = (n: number, one: string, many = `${one}s`) =>
+      `${n} ${n === 1 ? one : many}`;
+    const periodLabel = String(summary.period?.label ?? "This month");
+    const pc = summary.periodCollection;
+    const todayCount = Number(summary.today?.count ?? 0);
+    const count = (v: unknown) => Number(v ?? 0);
     widgets = [
+      ...(pc
+        ? [
+            {
+              key: "PERIOD_COLLECTION",
+              label: `Collected · ${periodLabel}`,
+              displayValue: money((pc.amountPaise ?? 0) / 100),
+              secondaryLabel:
+                (pc.refundOutflowPaise ?? 0) > 0
+                  ? `${plural(count(pc.count), "payment")} · net of ${money(pc.refundOutflowPaise / 100)} refunds`
+                  : `${plural(count(pc.count), "payment")} · net of refunds`,
+              valueType: "currency",
+              actionPath: "/collections",
+              group: "kpi" as const,
+              rawValue: (pc.amountPaise ?? 0) / 100,
+            },
+          ]
+        : []),
       {
         key: "COLLECTION",
-        label: "Today's collection",
+        label: "Collected today",
         displayValue: money((summary.today?.amountPaise ?? 0) / 100),
-        secondaryLabel: `${summary.today?.count ?? 0} payment${summary.today?.count === 1 ? "" : "s"} today`,
+        secondaryLabel: `${plural(todayCount, "payment")} today`,
         valueType: "currency",
+        actionPath: "/collections",
+        group: "kpi",
+        rawValue: (summary.today?.amountPaise ?? 0) / 100,
       },
       {
         key: "ACTIVE_CUSTOMERS",
         label: "Active customers",
-        displayValue: String(summary.customers?.active ?? 0),
+        displayValue: String(count(summary.customers?.active)),
+        secondaryLabel: "Accounts marked active",
+        actionPath: "/customers",
+        group: "kpi",
+        rawValue: count(summary.customers?.active),
       },
       {
         key: "ACTIVE_SCHEMES",
         label: "Open enrollments",
-        displayValue: String(
-          summary.schemes?.open ?? summary.schemes?.active ?? 0,
-        ),
-        secondaryLabel: "Active, capped, and defaulted",
+        displayValue: String(count(summary.schemes?.open ?? summary.schemes?.active)),
+        secondaryLabel: `${count(summary.schemes?.activeAndLocked)} paying · rest awaiting first payment or defaulted`,
+        actionPath: "/enrollments",
+        group: "kpi",
+        rawValue: count(summary.schemes?.open ?? summary.schemes?.active),
       },
       {
         key: "OVERDUE",
-        label: "Overdue schemes",
-        displayValue: String(summary.schemes?.overdue ?? 0),
+        label: "Overdue enrollments",
+        displayValue: String(count(summary.schemes?.overdue)),
+        secondaryLabel: "Grace period ended, instalment unpaid",
+        actionPath: "/dues",
+        severity: count(summary.schemes?.overdue) > 0 ? "WARNING" : undefined,
+        group: "attention",
+        rawValue: count(summary.schemes?.overdue),
       },
       {
         key: "MATURING_THIS_MONTH",
-        label: "Matured schemes",
-        displayValue: String(summary.schemes?.matured ?? 0),
-      },
-      {
-        key: "PENDING_CASH",
-        label: "Pending cash handovers",
-        displayValue: String(attention.pendingCashHandovers ?? 0),
-        actionPath: "/cash",
-      },
-      {
-        key: "OPEN_GRIEVANCES",
-        label: "Open grievances",
-        displayValue: String(attention.openGrievances ?? 0),
-        actionPath: "/grievances",
+        label: "Matured, not redeemed",
+        displayValue: String(count(summary.schemes?.matured)),
+        secondaryLabel: "Ready to hand over",
+        actionPath: "/maturity",
+        group: "attention",
+        rawValue: count(summary.schemes?.matured),
       },
       {
         key: "OPEN_REDEMPTIONS",
-        label: "Open redemptions",
-        displayValue: String(attention.openRedemptions ?? 0),
+        label: "Redemption requests",
+        displayValue: String(count(attention.openRedemptions)),
+        secondaryLabel: "Requested or approved, not yet settled",
         actionPath: "/maturity",
+        group: "attention",
+        rawValue: count(attention.openRedemptions),
+      },
+      {
+        key: "PENDING_CASH",
+        label: "Cash handovers to accept",
+        displayValue: String(count(attention.pendingCashHandovers)),
+        secondaryLabel: "Submitted by collectors",
+        actionPath: "/cash-control",
+        group: "attention",
+        rawValue: count(attention.pendingCashHandovers),
+      },
+      {
+        key: "OPEN_GRIEVANCES",
+        label: "Open support tickets",
+        displayValue: String(count(attention.openGrievances)),
+        secondaryLabel: "Open or in progress",
+        actionPath: "/support",
+        group: "attention",
+        rawValue: count(attention.openGrievances),
       },
     ];
   }
@@ -2610,6 +2693,13 @@ export function adaptDashboard(
           ),
           maturityCount: Number(
             summary.redemptions.maturityRedemptions?.count ?? 0,
+          ),
+          maturityHandedOut:
+            summary.redemptions.maturityRedemptions?.settlementPaise != null
+              ? fromPaise(summary.redemptions.maturityRedemptions.settlementPaise)
+              : undefined,
+          purchaseCredit: fromPaise(
+            summary.redemptions.purchaseAdjustmentSettlementPaise ?? 0,
           ),
           prematureCount: Number(
             summary.redemptions.prematureClosures?.count ?? 0,
@@ -2905,6 +2995,10 @@ function mapDueWorkboardRow(
     paymentPattern?: string;
     flexiblePhase?: string;
     targetCycle?: string;
+    /** Backend-classified workboard state (DUE | GRACE | OVERDUE | DEFAULTED). */
+    state?: string;
+    openInstalments?: number;
+    openRemainingPaise?: number;
   },
   context: {
     schemeId: string;
@@ -2925,7 +3019,8 @@ function mapDueWorkboardRow(
     ((inst.amountPaise ?? 0) - (inst.paidPaise ?? 0)) / 100 ||
     Number(inst.amount ?? 0);
   let status = String(inst.status ?? "DUE");
-  if (context.schemeStatus === "DEFAULTED") status = "DEFAULTED";
+  if (inst.state) status = String(inst.state);
+  else if (context.schemeStatus === "DEFAULTED") status = "DEFAULTED";
   else if (status === "OVERDUE") status = "OVERDUE";
   else if (
     dueDateRaw &&
@@ -2948,6 +3043,10 @@ function mapDueWorkboardRow(
     branch: context.branch,
     dueDate: date(dueDateRaw) !== "—" ? date(dueDateRaw) : dueDateRaw || "—",
     amount,
+    /** Total unpaid across every visible instalment of this enrollment (arrears). */
+    totalOpenAmount:
+      inst.openRemainingPaise != null ? inst.openRemainingPaise / 100 : amount,
+    openInstalments: Number(inst.openInstalments ?? 1),
     overdueDays: daysPastDue(dueDateRaw),
     status,
     paymentPattern: inst.paymentPattern === "FLEXIBLE" ? "FLEXIBLE" : "FIXED",
@@ -2999,6 +3098,10 @@ function flattenDueInstallments(schemes: any[]): any[] {
             amountPaise: dp.amountPaise,
             paidPaise: dp.paidPaise ?? 0,
             status: dp.status,
+            state: dp.state,
+            openInstalments: dp.openInstalments,
+            openRemainingPaise: dp.openRemainingPaise,
+            graceEndsAt: dp.graceEndsAt,
             paymentPattern: dp.paymentPattern,
             flexiblePhase: dp.flexiblePhase,
             targetCycle: dp.targetCycle,
@@ -3143,6 +3246,9 @@ export function adaptDueList(raw: any): {
       raw?.summary?.defaulted ?? meta?.summary?.defaulted ?? derived.defaulted,
     customers:
       raw?.summary?.customers ?? meta?.summary?.customers ?? derived.customers,
+    customersByState:
+      raw?.summary?.customersByState ?? meta?.summary?.customersByState,
+    total: raw?.summary?.total ?? meta?.summary?.total,
     chart: raw?.summary?.chart ?? meta?.summary?.chart,
   };
 
@@ -3755,14 +3861,18 @@ function normalizeMaturitySummaryFromApi(
         Number(apiSummary.maturedTodayLiabilityPaise ?? 0) / 100,
       incompleteLiability:
         Number(apiSummary.incompleteLiabilityPaise ?? 0) / 100,
+      upcomingLiability: Number(apiSummary.upcomingLiabilityPaise ?? 0) / 100,
+      notRedeemedLiability:
+        Number(apiSummary.notRedeemedLiabilityPaise ?? 0) / 100,
+      periodCount: Number(apiSummary.periodCount ?? 0),
     };
   }
   return deriveMaturitySummary(items);
 }
 
 function deriveMaturitySummary(items: any[]): Record<string, number> {
-  const today = new Date().toISOString().slice(0, 10);
-  const in30 = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10);
+  const today = istBusinessDateToday();
+  const in30 = istBusinessDateToday(new Date(Date.now() + 30 * 86400000));
   let upcoming = 0;
   let maturedToday = 0;
   let incomplete = 0;
@@ -3803,6 +3913,8 @@ export type CashOverviewSummary = {
   submitted: number;
   pendingHandovers: number;
   discrepancy: number;
+  /** Staff currently holding any cash (from GET /admin/cash/overview totals). */
+  staffHoldingCash?: number;
 };
 
 export type CashStaffBalanceRow = {
@@ -4034,6 +4146,7 @@ export function adaptCashOverview(raw: any): {
       submitted: rupees(t.pendingAcceptance),
       pendingHandovers: Number(t.pendingHandoverCount ?? 0),
       discrepancy: rupees(t.discrepancyTotal),
+      staffHoldingCash: Number(t.staffHoldingCash ?? 0),
     },
     chart: data?.chart,
     alerts: data?.alerts,

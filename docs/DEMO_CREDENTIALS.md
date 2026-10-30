@@ -132,14 +132,42 @@ npm run seed:noble-jewellery   # replaces tenant NOBLE if it exists
 
 ---
 
+## EVO LUXE (cash scheme + ecommerce + digital metals)
+
+Full jeweller demo with fixed cash 11+1 (₹5,000), online shop, and Digital Gold & Silver:
+
+```bash
+cd swarnagrow-backend
+npm run seed:evo-luxe   # replaces tenant EVOLUXE if it exists
+```
+
+| Field | Value |
+|--------|--------|
+| **Tenant code** | `EVOLUXE` |
+| **Password (all staff below)** | `2026` |
+| **Admin URL** | `/login` |
+| **Customer URL** | `/customer/evoluxe/login` |
+
+| Role | Name | Mobile |
+|------|------|--------|
+| Tenant owner | Arjun Evo | `9847030100` |
+| Branch manager | Neha Luxe | `9847030101` |
+| Branch staff | Ravi Counter | `9847030102` |
+
+**Hero customer (OTP `123456` in mock):** Meera Evo · `9847030200` · passbook `EVO-PB-0001`
+
+Includes: active cash scheme (5/11 paid), matured + redeemed scheme, shop orders (PAID / DELIVERED / COD), digital gold+silver wallets, buy CREDITED, sell PENDING_APPROVAL, redemption CHARGE_PAID.
+
+---
+
 ## Quick reference
 
 | Portal | Login URL | Identifier | Secret |
 |--------|-----------|------------|--------|
 | Platform | `/platform/login` | `ops@platform.com` | `1234` |
-| Tenant | `/login` | Tenant `KAIRALI` + mobile | `2026` |
+| Tenant | `/login` | Tenant `KAIRALI` or `EVOLUXE` + mobile | `2026` |
 | Agent | `/agent/login` | `9847012352` | `2026` |
-| Customer | `/customer/kairali/login` | Mobile (see table) | OTP `123456` |
+| Customer | `/customer/kairali/login` or `/customer/evoluxe/login` | Mobile (see tables) | OTP `123456` |
 
 ---
 
@@ -147,8 +175,10 @@ npm run seed:noble-jewellery   # replaces tenant NOBLE if it exists
 
 | Service | Default |
 |---------|---------|
-| Backend API | `http://localhost:4000/api/v1` |
-| Frontend | `http://localhost:3000` (or your dev server port) |
+| Backend API | `http://localhost:4050/api/v1` (local) · `https://swarnagrow-backend.vercel.app/api/v1` (Vercel) |
+| Frontend | `http://localhost:5173` (local vinext) · `https://swarnagrow-tenant-admin.vercel.app` (Vercel) |
+
+**Vercel frontend redeploy tip:** this app uses vinext + Nitro. Prefer local `pnpm run build:vercel` then `vercel deploy --prebuilt --prod` if a remote Vercel build returns 500.
 
 ## Notes
 

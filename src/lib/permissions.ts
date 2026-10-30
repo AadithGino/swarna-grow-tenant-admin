@@ -52,6 +52,8 @@ export const NAV_PERMISSIONS: Record<string, string[]> = {
   "/audit": ["audit.read"],
   "/settings": ["settings.read", "settings.write"],
   "/ecommerce": ["ecommerce.read"],
+  "/ecommerce/catalog": ["ecommerce.read"],
+  "/ecommerce/campaigns": ["ecommerce.read"],
   "/ecommerce/categories": ["ecommerce.read"],
   "/ecommerce/banners": ["ecommerce.read"],
   "/ecommerce/gold-rates": ["ecommerce.read"],
@@ -62,6 +64,18 @@ export const NAV_PERMISSIONS: Record<string, string[]> = {
   "/ecommerce/payment-exceptions": ["ecommerce.read"],
   "/ecommerce/courier-cod": ["ecommerce.read"],
   "/digital-metals": ["digital-metals.read"],
+  "/digital-metals/purchases": ["digital-metals.read"],
+  "/digital-metals/sells": ["digital-metals.read"],
+  "/digital-metals/payouts": ["digital-metals.read"],
+  "/digital-metals/bank-verification": ["digital-metals.read"],
+  "/digital-metals/redemption/orders": ["digital-metals.read"],
+  "/digital-metals/redemption/fulfilment": ["digital-metals.read"],
+  "/digital-metals/redemption/catalogue": ["digital-metals.read"],
+  "/digital-metals/procurement": ["digital-metals.read"],
+  "/digital-metals/hedge": ["digital-metals.read"],
+  "/digital-metals/payment-exceptions": ["digital-metals.read"],
+  "/digital-metals/settings": ["digital-metals.read"],
+  "/digital-metals/rates": ["digital-metals.read"],
 };
 
 export function canAccessRoute(

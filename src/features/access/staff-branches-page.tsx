@@ -6,7 +6,7 @@ import { useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
 import {
   Building2,
-  IndianRupee,
+  UserX,
   MonitorSmartphone,
   Plus,
   ShieldCheck,
@@ -477,11 +477,12 @@ export function StaffBranchesPage() {
             <PermissionGate permission="staff.write">
               <ActionDialog
                 trigger={
-                  <Button>
+                  <Button data-tour="staff-create">
                     <Plus />
                     Create staff
                   </Button>
                 }
+                tourId="staff-create"
                 title="Create staff member"
                 description="Created directly with mobile and a temporary password. They sign in on the staff app — no invite email."
                 actionLabel="Create staff"
@@ -724,11 +725,11 @@ export function StaffBranchesPage() {
         <StatCard
           icon={UsersRound}
           label="Active staff"
-          value={`${s.activeStaff} / ${s.staffLimit || "—"}`}
+          value={s.staffLimit ? `${s.staffUsed} / ${s.staffLimit}` : s.activeStaff}
           detail={
             s.staffLimit
-              ? `${staffSeatsFree} seat${staffSeatsFree === 1 ? "" : "s"} available`
-              : "Tenant-wide active staff"
+              ? `${staffSeatsFree} seat${staffSeatsFree === 1 ? "" : "s"} free on your plan${s.staffUsed !== s.activeStaff ? ` · ${s.activeStaff} in this branch` : ""}`
+              : "Active staff accounts"
           }
         />
         <StatCard
@@ -749,15 +750,15 @@ export function StaffBranchesPage() {
           icon={MonitorSmartphone}
           label="Active sessions"
           value={s.sessions}
-          detail="Across web and mobile"
+          detail="Staff signed in on web or the staff app"
           tone="gold"
         />
         <StatCard
-          icon={IndianRupee}
+          icon={UserX}
           label="Suspended"
           value={s.suspended}
-          detail="Access blocked"
-          tone="red"
+          detail="Staff accounts with sign-in blocked"
+          tone={s.suspended > 0 ? "red" : "cream"}
         />
       </div>
       <Surface className="overflow-visible">

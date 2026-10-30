@@ -265,12 +265,13 @@ function PaymentDialogInner({
       className="sm:max-w-lg"
       trigger={
         trigger ?? (
-          <Button disabled={disabled}>
+          <Button disabled={disabled} data-tour="payment-open">
             <HandCoins />
             Collect payment
           </Button>
         )
       }
+      tourId="payment"
       title="Collect payment"
       description={
         customerId

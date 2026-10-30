@@ -1,14 +1,17 @@
 "use client";
 
 import { useState } from "react";
-import { FolderOpen, Plus } from "lucide-react";
+import { Archive, BellRing, FolderOpen, Layers3, Pencil, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ActionDialog } from "@/src/components/common/action-dialog";
 import { FormFieldError } from "@/src/components/common/form-field-error";
-import { FieldLabel, PageHeader, Surface } from "@/src/components/common/page-parts";
-import { PageSkeleton, QueryError } from "@/src/components/common/query-state";
+import { FieldLabel, PageHeader } from "@/src/components/common/page-parts";
+import { EmptyState, PageSkeleton, QueryError } from "@/src/components/common/query-state";
+import { ListPanel } from "@/src/components/admin-ui/admin-table";
+import { FilterBar, FilterSearch, QuickViews } from "@/src/components/admin-ui/filter-bar";
+import { Notice } from "@/src/components/admin-ui/detail-parts";
 import { StatusBadge } from "@/src/components/common/status-badge";
 import { toastApiError } from "@/src/lib/api-error";
 import { uploadFileViaPresign } from "@/src/lib/upload-via-presign";
@@ -22,10 +25,6 @@ import {
 } from "@/src/store/api/admin-api";
 import { useEcommerceCatalogWrite } from "@/src/features/ecommerce/ecommerce-admin-shared";
 import { EcommerceCatalogImage } from "@/src/features/ecommerce/ecommerce-catalog-image";
-import {
-  EcommerceCatalogNav,
-  EcommerceSettingsHint,
-} from "@/src/features/ecommerce/ecommerce-settings-ui";
 import { EcommercePromotionComposerDialog } from "@/src/features/ecommerce/ecommerce-promotion-composer-dialog";
 type CategoryRow = {
   id: string;
@@ -55,6 +54,8 @@ export function EcommerceCategoriesPage() {
   const [displayOrder, setDisplayOrder] = useState("0");
   const [imageUploadId, setImageUploadId] = useState<string | null>(null);
   const [error, setError] = useState<string | undefined>();
+  const [search, setSearch] = useState("");
+  const [statusView, setStatusView] = useState("ALL");
   const [notifyTarget, setNotifyTarget] = useState<{
     kind: "category";
     categoryId: string;
@@ -150,77 +151,114 @@ export function EcommerceCategoriesPage() {
     }
   }
 
+  const needle = search.trim().toLowerCase();
+  const visible = items
+    .filter(
+      (c) =>
+        (statusView === "ALL" || (statusView === "ACTIVE" ? c.active : !c.active)) &&
+        (!needle || `${c.name} ${c.slug}`.toLowerCase().includes(needle)),
+    )
+    .sort((a, b) => Number(a.displayOrder ?? 0) - Number(b.displayOrder ?? 0));
+  const activeCount = items.filter((c) => c.active).length;
+
   return (
-    <>
+    <div className="space-y-6">
       <PageHeader
         eyebrow="Online store"
-        title="Collections & categories"
-        description="Archiving a category hides its published products from the shop until they are recategorised."
+        icon={Layers3}
+        title="Categories"
+        description="Collections customers browse in your shop. Archiving one hides its published products until they're moved."
         actions={
-          <Button type="button" disabled={!entitled} onClick={openCreate}>
-            <Plus className="mr-2 size-4" /> New category
+          <Button type="button" className="rounded-xl" disabled={!entitled} onClick={openCreate}>
+            <Plus /> New category
           </Button>
         }
       />
-      {!entitled ? (
-        <p className="mb-4 text-sm text-amber-800">{disabledMessage}</p>
-      ) : null}
-      <EcommerceCatalogNav />
-      <EcommerceSettingsHint icon={FolderOpen} title="Organise your storefront">
-        Only active categories appear in the customer shop. Archiving a category hides its published
-        products until you move them or reactivate the category.
-      </EcommerceSettingsHint>
-      <Surface title={`Categories (${items.length})`} className="mt-5">
-        <ul className="grid gap-4 p-4 sm:grid-cols-2 xl:grid-cols-3">
-          {items.map((c) => (
-            <li key={c.id} className="overflow-hidden rounded-[1.25rem] border border-[#ede4dc] bg-white text-sm shadow-sm">
-              <div className="relative aspect-[16/9] bg-[#f8f2eb]">
-                    <EcommerceCatalogImage
-                      uploadId={c.imageUploadId ?? undefined}
-                      channel="admin"
-                      alt={c.name}
-                      fill
-                    />
-              </div>
-              <div className="space-y-3 p-4"><div className="flex items-start justify-between gap-3"><div><p className="font-semibold text-[#33262a]">{c.name}</p><p className="mt-1 text-xs text-muted-foreground">/{c.slug}</p></div>
-                <StatusBadge status={c.active ? "ACTIVE" : "INACTIVE"} />
-              </div>
-              {c.description ? <p className="line-clamp-2 min-h-9 text-xs leading-5 text-[#71686a]">{c.description}</p> : null}
-              <div className="flex items-center gap-2 border-t border-[#f1eae4] pt-3">
-                <Button type="button" size="sm" variant="outline" disabled={!entitled} onClick={() => openEdit(c)}>
-                  Edit category
-                </Button>
-                {c.active ? (
-                  <>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="secondary"
-                      disabled={!entitled}
-                      onClick={() =>
-                        setNotifyTarget({
-                          kind: "category",
-                          categoryId: c.id,
-                          label: c.name,
-                        })
-                      }
-                    >
-                      Notify
+      {!entitled ? <Notice tone="amber">{disabledMessage}</Notice> : null}
+      <ListPanel
+        toolbar={
+          <FilterBar
+            quickViews={
+              <QuickViews
+                value={statusView}
+                onChange={setStatusView}
+                options={[
+                  { value: "ALL", label: "All", count: items.length },
+                  { value: "ACTIVE", label: "In shop", count: activeCount },
+                  { value: "ARCHIVED", label: "Archived", count: items.length - activeCount },
+                ]}
+                ariaLabel="Category status"
+              />
+            }
+            search={<FilterSearch value={search} onChange={setSearch} placeholder="Search name or slug" />}
+            resultLabel={`${visible.length} categories · sorted by display order`}
+          />
+        }
+      >
+        {visible.length === 0 ? (
+          <EmptyState
+            icon={FolderOpen}
+            title={items.length ? "No categories match" : "No categories yet"}
+            detail={items.length ? "Try another filter." : "Create one to organise your jewellery — e.g. Rings, Necklaces, Coins."}
+            action={!items.length ? <Button disabled={!entitled} onClick={openCreate}>New category</Button> : undefined}
+          />
+        ) : (
+          <ul className="grid gap-4 p-5 sm:grid-cols-2 xl:grid-cols-3">
+            {visible.map((c) => (
+              <li
+                key={c.id}
+                className={`group overflow-hidden rounded-[1.15rem] border bg-white text-sm transition-shadow hover:shadow-[0_14px_30px_-22px_rgb(67_15_25/45%)] ${c.active ? "border-[#ebe1dc]" : "border-dashed border-[#e0d3cf]"}`}
+              >
+                <div className="relative aspect-[16/9] overflow-hidden bg-[#f8f2eb]">
+                  <EcommerceCatalogImage
+                    uploadId={c.imageUploadId ?? undefined}
+                    channel="admin"
+                    alt={c.name}
+                    fill
+                    className={`transition-transform duration-500 group-hover:scale-[1.03] ${c.active ? "" : "grayscale"}`}
+                  />
+                  <span className="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-black/45 to-transparent" aria-hidden />
+                  <div className="absolute bottom-3 left-4 right-4 flex items-end justify-between gap-2 text-white">
+                    <div className="min-w-0">
+                      <p className="truncate text-lg font-bold drop-shadow">{c.name}</p>
+                      <p className="text-xs text-white/80">/{c.slug}</p>
+                    </div>
+                    <span className="rounded-full bg-white/20 px-2 py-0.5 text-xs font-semibold backdrop-blur">#{c.displayOrder ?? 0}</span>
+                  </div>
+                  <div className="absolute left-3 top-3">
+                    <StatusBadge status={c.active ? "ACTIVE" : "ARCHIVED"} label={c.active ? "In shop" : "Archived"} />
+                  </div>
+                </div>
+                <div className="space-y-3 p-4">
+                  <p className="line-clamp-2 min-h-10 text-[0.84rem] leading-5 text-[#71686a]">{c.description || "No description yet."}</p>
+                  <div className="flex items-center gap-2 border-t border-[#f3eae7] pt-3">
+                    <Button type="button" size="sm" variant="outline" className="rounded-lg" disabled={!entitled} onClick={() => openEdit(c)}>
+                      <Pencil /> Edit
                     </Button>
-                    <Button type="button" size="sm" variant="secondary" disabled={!entitled} onClick={() => archive(c)}>
-                      Archive
-                    </Button>
-                  </>
-                ) : null}
-              </div>
-              </div>
-            </li>
-          ))}
-          {items.length === 0 ? (
-            <li className="col-span-full px-6 py-12 text-center text-muted-foreground"><FolderOpen className="mx-auto mb-3 size-9 text-[#b99466]" />No categories yet. Create one to organise your jewellery.</li>
-          ) : null}
-        </ul>
-      </Surface>
+                    {c.active ? (
+                      <>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          className="rounded-lg"
+                          disabled={!entitled}
+                          onClick={() => setNotifyTarget({ kind: "category", categoryId: c.id, label: c.name })}
+                        >
+                          <BellRing /> Notify
+                        </Button>
+                        <Button type="button" size="sm" variant="ghost" className="ml-auto rounded-lg text-[#8a7c80]" disabled={!entitled} onClick={() => archive(c)}>
+                          <Archive /> Archive
+                        </Button>
+                      </>
+                    ) : null}
+                  </div>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </ListPanel>
 
       <ActionDialog
         open={dialogOpen}
@@ -281,6 +319,6 @@ export function EcommerceCategoriesPage() {
         }}
         onSent={() => query.refetch()}
       />
-    </>
+    </div>
   );
 }

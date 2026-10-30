@@ -7,10 +7,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PageHeader, StatCard, Surface } from "@/src/components/common/page-parts";
-import { PageSkeleton, QueryError } from "@/src/components/common/query-state";
+import { EmptyState, PageSkeleton, QueryError } from "@/src/components/common/query-state";
+import { FilterBar, QuickViews } from "@/src/components/admin-ui/filter-bar";
+import { Notice } from "@/src/components/admin-ui/detail-parts";
 import { AlertTriangle, Banknote, Package, Truck } from "lucide-react";
 import { useEcommerceAdminAccess } from "@/src/features/ecommerce/ecommerce-admin-shared";
-import { EcommerceOperationsNav } from "@/src/features/ecommerce/ecommerce-settings-ui";
 import { formatOrderInr } from "@/src/features/ecommerce/ecommerce-order-ui";
 import { newIdempotencyKey } from "@/src/lib/idempotency";
 import { toastApiError } from "@/src/lib/api-error";
@@ -167,15 +168,15 @@ export function EcommerceCourierCodWorkspacePage() {
   const isDiscrepancy = batch?.status === "DISCREPANCY";
 
   return (
-    <div>
+    <div className="space-y-6">
       <PageHeader
-        eyebrow="Store operations"
+        eyebrow="Online store"
+        icon={Truck}
         title="Courier COD"
-        description="Confirm courier collection, build remittance batches, and reconcile bank credits."
+        description="Confirm what couriers collected, group it into remittance batches, and match the bank credit."
+        meta={summary.data?.courierIntegrationLabel ? <span>{summary.data.courierIntegrationLabel}</span> : undefined}
       />
-      <EcommerceOperationsNav />
-      <p className="mb-4 text-sm text-muted-foreground">{summary.data?.courierIntegrationLabel}</p>
-      <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {queues.map((q, i) => {
           const icons = [Truck, Package, Banknote, Package];
           const tones = ["gold", "cream", "wine", "green"] as const;
@@ -193,94 +194,82 @@ export function EcommerceCourierCodWorkspacePage() {
         })}
       </div>
       {summary.data ? (
-        <p className="mb-4 rounded-xl border border-[#eaded9] bg-[#faf7f5] px-4 py-3 text-sm">
-          Outstanding courier remittance (owed):{" "}
-          <strong className="tabular-nums">{formatOrderInr(summary.data.remittanceOwedPaise)}</strong>
-        </p>
+        <Notice tone="wine" icon={Banknote}>
+          Courier still owes you <strong className="tabular-nums">{formatOrderInr(summary.data.remittanceOwedPaise)}</strong> for confirmed COD collections.
+        </Notice>
       ) : null}
 
-      <Surface title="Order queues" className="mb-6">
-        <div className="space-y-4 p-6 text-sm">
-          <div className="flex flex-wrap gap-2">
-            {QUEUE_TABS.map((tab) => (
-              <Button
-                key={tab.id}
-                type="button"
-                size="sm"
-                variant={queue === tab.id ? "default" : "outline"}
-                onClick={() => selectQueue(tab.id)}
-              >
-                {tab.label}
-              </Button>
-            ))}
-          </div>
+      <section className="overflow-hidden rounded-[1.15rem] border border-[#e8dcd7] bg-white">
+        <FilterBar
+          quickViews={<QuickViews value={queue} onChange={(v) => selectQueue(v as CourierQueue)} options={QUEUE_TABS.map((t) => ({ value: t.id, label: t.label }))} ariaLabel="COD queue" />}
+          resultLabel={`${orderItems.length}${ordersPage.data?.meta.hasMore ? "+" : ""} orders · pick one to add it to a batch`}
+        />
+        <div className="text-sm">
           {ordersPage.isLoading && !orderItems.length ? (
-            <p className="text-muted-foreground">Loading orders…</p>
+            <p className="px-5 py-6 text-muted-foreground">Loading orders…</p>
           ) : ordersPage.isError ? (
             <QueryError error={ordersPage.error} onRetry={ordersPage.refetch} />
           ) : !orderItems.length ? (
-            <p className="text-muted-foreground">No orders in this queue.</p>
+            <EmptyState icon={Truck} title="Nothing in this queue" detail="Orders move here as couriers collect cash and remittances arrive." />
           ) : (
-            <ul className="divide-y rounded-lg border">
+            <ul className="divide-y divide-[#f3eae7]">
               {orderItems.map((row) => {
                 const cc = row.courierCod ?? {};
                 const tracking = cc.trackingReference ? String(cc.trackingReference) : "—";
                 const batchId = cc.activeRemittanceBatchId ? String(cc.activeRemittanceBatchId) : null;
+                const selected = selectedOrderId === row.orderId;
                 return (
-                  <li key={row.orderId} className="flex flex-wrap items-center gap-2 px-3 py-2">
+                  <li
+                    key={row.orderId}
+                    className={`grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-1 px-5 py-3 sm:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)_7rem_8rem_auto] ${selected ? "bg-[#fbf1f3]" : "hover:bg-[#fcf6f4]"}`}
+                  >
                     <button
                       type="button"
-                      className={`min-w-0 flex-1 text-left hover:underline ${selectedOrderId === row.orderId ? "font-semibold text-[#730321]" : ""}`}
+                      aria-pressed={selected}
+                      className="min-w-0 text-left"
                       onClick={() => {
                         setSelectedOrderId(row.orderId);
                         setLineGrossPaise(String(row.expectedCodPaise));
                         setLineFeePaise("0");
                       }}
                     >
-                      <span className="font-medium">{row.orderNumber}</span>
-                      <span className="ml-2 text-xs text-muted-foreground">{row.status.replaceAll("_", " ").toLowerCase()}</span>
+                      <span className={`block font-semibold ${selected ? "text-[#5e0a20]" : "text-[#28161a]"}`}>{row.orderNumber}</span>
+                      <span className="block text-xs text-[#857a7d]">{row.status.replaceAll("_", " ").toLowerCase()}</span>
                     </button>
-                    <span className="text-xs tabular-nums">{formatOrderInr(row.expectedCodPaise)}</span>
-                    <span className="text-xs text-muted-foreground">Tracking {tracking}</span>
-                    <span className="text-xs text-muted-foreground">{courierEvidenceLabel(cc)}</span>
-                    <span className="text-xs text-muted-foreground">Age {formatAge(row.updatedAt)}</span>
-                    {batchId ? (
-                      <button
-                        type="button"
-                        className="text-xs text-[#730321] underline"
-                        onClick={() => setActiveBatchId(batchId)}
-                      >
-                        Batch
-                      </button>
-                    ) : null}
-                    <Link
-                      href={`/ecommerce/orders/${encodeURIComponent(row.orderId)}`}
-                      className="text-xs text-[#730321] underline"
-                    >
-                      Open
-                    </Link>
+                    <span className="hidden min-w-0 text-xs text-[#6f6265] sm:block">
+                      <span className="block truncate">Tracking {tracking}</span>
+                      <span className="block truncate">{courierEvidenceLabel(cc)}</span>
+                    </span>
+                    <span className="hidden text-xs text-[#857a7d] sm:block">{formatAge(row.updatedAt)}</span>
+                    <span className="text-right font-bold tabular-nums">{formatOrderInr(row.expectedCodPaise)}</span>
+                    <span className="col-span-2 flex justify-end gap-3 text-xs sm:col-span-1">
+                      {batchId ? (
+                        <button type="button" className="font-semibold text-[#7b0a2b] hover:underline" onClick={() => setActiveBatchId(batchId)}>
+                          Batch
+                        </button>
+                      ) : null}
+                      <Link href={`/ecommerce/orders/${encodeURIComponent(row.orderId)}`} className="font-semibold text-[#7b0a2b] hover:underline">
+                        Open
+                      </Link>
+                    </span>
                   </li>
                 );
               })}
             </ul>
           )}
           {ordersPage.data?.meta.hasMore ? (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              disabled={ordersPage.isFetching}
-              onClick={loadMoreOrders}
-            >
-              Load more orders
-            </Button>
+            <div className="border-t border-[#efe5e1] bg-[#fbf8f6] px-5 py-3">
+              <Button type="button" variant="outline" size="sm" className="rounded-lg" disabled={ordersPage.isFetching} onClick={loadMoreOrders}>
+                Load more orders
+              </Button>
+            </div>
           ) : null}
         </div>
-      </Surface>
+      </section>
 
       <div className="grid gap-6 lg:grid-cols-2">
         <Surface title="Remittance batches">
-          <div className="space-y-3 p-6 text-sm">
+          <div className="space-y-3 p-5 text-sm">
             {canFulfilmentOperate ? (
               <div className="flex flex-wrap items-end gap-2 border-b pb-4">
                 <div className="space-y-1">
@@ -345,7 +334,7 @@ export function EcommerceCourierCodWorkspacePage() {
         </Surface>
 
         <Surface title={activeBatchId ? "Batch detail" : "Select a batch"}>
-          <div className="space-y-3 p-6 text-sm">
+          <div className="space-y-3 p-5 text-sm">
             {!activeBatchId ? (
               <p className="text-muted-foreground">Choose a batch to add order lines or reconcile bank credit.</p>
             ) : batchDetail.isLoading ? (

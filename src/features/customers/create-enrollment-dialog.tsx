@@ -180,6 +180,7 @@ function CreateEnrollmentDialogInner({
       open={open}
       onOpenChange={handleOpenChange}
       className="max-h-[min(90vh,880px)] w-[calc(100vw-1.5rem)] sm:max-w-[920px]"
+      tourId="enrol"
       title="Create enrollment"
       description={`Enrol ${customer.name} (${customer.customerNo}) into a scheme plan.`}
       actionLabel="Confirm enrolment"

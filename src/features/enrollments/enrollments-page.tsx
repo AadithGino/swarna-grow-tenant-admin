@@ -6,22 +6,24 @@ import {
   PageTabsBar,
   PageTabsPanel,
 } from "@/src/components/common/page-tabs";
-import { Clock3, Gift, IndianRupee, Layers3, Plus } from "lucide-react";
+import { Layers3, Plus } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { Button } from "@/components/ui/button";
-import { PaginatedDataTable } from "@/src/components/common/paginated-data-table";
 import {
   filterLabelFor,
-  ListToolbar,
-  SearchFilterBar,
   type FilterOption,
 } from "@/src/components/common/search-filter-bar";
+import { CursorPagination } from "@/src/components/common/cursor-pagination";
+import { HeroStat, SectionHero, heroPrimaryButtonClass } from "@/src/components/admin-ui/section-hero";
 import {
-  PageHeader,
-  StatCard,
-  Surface,
-} from "@/src/components/common/page-parts";
+  AdminTable,
+  CellStack,
+  InitialsAvatar,
+  ListPanel,
+  type AdminColumn,
+} from "@/src/components/admin-ui/admin-table";
+import { FilterBar, FilterSearch, QuickViews } from "@/src/components/admin-ui/filter-bar";
+import { CycleProgress } from "@/src/features/enrollments/cycle-progress";
 import { PageSkeleton, QueryError } from "@/src/components/common/query-state";
 import { StatusBadge } from "@/src/components/common/status-badge";
 import { money } from "@/src/lib/format";
@@ -148,63 +150,137 @@ export function EnrollmentsPage() {
     asCount(summary.redeemed),
   );
 
+  const rows = query.data.items as any[];
+  const statusLabel = filterLabelFor(ENROLLMENT_STATUS_FILTERS, status);
+  const columns: AdminColumn<any>[] = [
+    {
+      key: "no",
+      header: "Enrollment",
+      primary: true,
+      cell: (r) => (
+        <CellStack
+          primary={
+            <EnrollmentLink schemeId={r.id}>
+              <span className="font-semibold">{r.enrollmentNo}</span>
+            </EnrollmentLink>
+          }
+          secondary={`${r.plan} · ${r.paymentPattern === "FLEXIBLE" ? "Flexible" : "Fixed date"}`}
+        />
+      ),
+      sortValue: (r) => String(r.enrollmentNo ?? ""),
+    },
+    {
+      key: "customer",
+      header: "Customer",
+      primary: true,
+      cell: (r) => (
+        <CellStack
+          leading={<InitialsAvatar name={r.customer} className="size-8" />}
+          primary={<CustomerLink customerId={r.customerId}>{r.customer}</CustomerLink>}
+          secondary={r.branch}
+        />
+      ),
+      sortValue: (r) => String(r.customer ?? ""),
+    },
+    {
+      key: "progress",
+      header: "Instalments",
+      cell: (r) => (
+        <CycleProgress
+          progress={Number(r.progress ?? 0)}
+          tenure={Number(r.tenure ?? 0)}
+          tone={r.status === "DEFAULTED" ? "red" : r.status === "MATURED" ? "gold" : "wine"}
+        />
+      ),
+      sortValue: (r) => Number(r.progress ?? 0) / Math.max(1, Number(r.tenure ?? 1)),
+    },
+    {
+      key: "paid",
+      header: "Paid",
+      align: "right",
+      cell: (r) => <span className="font-semibold tabular-nums">{money(r.paid)}</span>,
+      sortValue: (r) => Number(r.paid ?? 0),
+    },
+    {
+      key: "next",
+      header: "Next due",
+      cell: (r) =>
+        r.nextDue ? (
+          <CellStack primary={money(r.nextDueAmount ?? r.installment)} secondary={r.nextDue} />
+        ) : (
+          <span className="text-[#a2969a]">—</span>
+        ),
+      hideOnMobile: true,
+    },
+    {
+      key: "maturity",
+      header: "Maturity",
+      cell: (r) => <span className="text-sm text-[#5c4a4e]">{r.maturity ?? "—"}</span>,
+      hideOnMobile: true,
+    },
+    {
+      key: "status",
+      header: "Status",
+      cell: (r) => <StatusBadge status={r.status} />,
+      sortValue: (r) => String(r.status ?? ""),
+    },
+  ];
+
   return (
     <>
-      <PageHeader
-        eyebrow="Customer operations"
+      <SectionHero
+        icon={Layers3}
+        eyebrow="Gold schemes"
         title="Enrollments"
-        description="Lifecycle-driven scheme accounts with cycles, payments, maturity and state-specific actions."
+        description="Every customer's scheme account — instalments paid, what's due next and when it matures."
         actions={
           <EnrollmentsCreateDialog
             trigger={
-              <Button>
-                <Plus />
+              <button type="button" className={heroPrimaryButtonClass}>
+                <Plus className="size-4" aria-hidden />
                 Create enrollment
-              </Button>
+              </button>
             }
           />
         }
-      />
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-        <StatCard
-          icon={Layers3}
+      >
+        <HeroStat
           label="Active & capped"
           value={activeAndLockedCount}
-          detail={
-            analyticsQuery.isFetching
-              ? "Updating tenant totals…"
-              : `${openEnrollmentCount} open on dashboard (incl. defaulted)`
-          }
+          loading={analyticsQuery.isLoading}
+          detail={`${openEnrollmentCount} open incl. defaulted`}
+          active={status === "ACTIVE"}
+          onClick={() => setStatus("ACTIVE")}
         />
-        <StatCard
-          icon={IndianRupee}
-          label="Locked / capped"
+        <HeroStat
+          label="Capped"
           value={lockedCount}
-          detail="Current snapshot"
-          tone="gold"
+          detail="Flexible plans that hit the limit"
+          active={status === "LOCKED"}
+          onClick={() => setStatus("LOCKED")}
         />
-        <StatCard
-          icon={Clock3}
+        <HeroStat
           label="Defaulted"
           value={defaultedCount}
-          detail="Current snapshot"
-          tone="red"
+          detail="Missed instalments beyond grace"
+          active={status === "DEFAULTED"}
+          onClick={() => setStatus("DEFAULTED")}
         />
-        <StatCard
-          icon={Gift}
+        <HeroStat
           label="Matured"
           value={maturedCount}
-          detail="Current snapshot"
-          tone="cream"
+          detail="Waiting to be redeemed"
+          active={status === "MATURED"}
+          onClick={() => setStatus("MATURED")}
         />
-        <StatCard
-          icon={Gift}
+        <HeroStat
           label="Redeemed / closed"
           value={redeemedCount}
-          detail="Current snapshot"
-          tone="wine"
+          detail="Completed accounts"
+          active={status === "PAST"}
+          onClick={() => setStatus("PAST")}
         />
-      </div>
+      </SectionHero>
       <PageTabs defaultValue="directory">
         <PageTabsBar sectionLabel="Enrollments">
           <PageTab value="directory">Directory</PageTab>
@@ -214,103 +290,56 @@ export function EnrollmentsPage() {
           <EnrollmentsAnalyticsTab />
         </PageTabsPanel>
         <PageTabsPanel value="directory">
-          <ListToolbar>
-            <SearchFilterBar
-              searchValue={q}
-              onSearchChange={setQ}
-              searchPlaceholder="Enrollment number, customer, phone…"
-              filterValue={status}
-              onFilterChange={setStatus}
-              filterOptions={ENROLLMENT_STATUS_FILTERS}
-              filterLabel="Status"
-            />
-          </ListToolbar>
-          <Surface
-            title={`${filterLabelFor(ENROLLMENT_STATUS_FILTERS, status)} enrollments`}
-            description="Select a row to open the complete scheme account"
+          <ListPanel
+            className="rounded-none border-0 shadow-none"
+            toolbar={
+              <FilterBar
+                quickViews={
+                  <QuickViews
+                    value={status}
+                    onChange={setStatus}
+                    options={ENROLLMENT_STATUS_FILTERS.map((f) => ({
+                      value: f.value,
+                      label: f.label.replace(" (status)", ""),
+                    }))}
+                    ariaLabel="Enrollment status"
+                  />
+                }
+                search={
+                  <FilterSearch
+                    value={q}
+                    onChange={setQ}
+                    placeholder="Enrollment number, customer or phone"
+                  />
+                }
+                activeFilters={q.trim() ? [{ key: "q", label: `“${q.trim()}”`, onClear: () => setQ("") }] : []}
+                resultLabel={`${statusLabel.replace(" (status)", "")} · ${rows.length}${page.hasMore ? "+" : ""} shown`}
+              />
+            }
           >
-            <PaginatedDataTable
-              rows={query.data.items}
+            <AdminTable
+              columns={columns}
+              rows={rows}
+              getRowId={(r) => String(r.id)}
+              onRowClick={(r) => router.push(`/enrollments/${r.id}`)}
+              fetching={query.isFetching}
+              caption="Enrollments"
+              empty={
+                <p className="px-5 py-10 text-center text-sm text-[#857a7d]">
+                  No {statusLabel.replace(" (status)", "").toLowerCase()} enrollments
+                  {q.trim() ? ` match “${q.trim()}”` : ""}.
+                </p>
+              }
+            />
+            <CursorPagination
               page={page}
               pageIndex={pager.pageIndex}
+              rowCount={rows.length}
               onNext={() => pager.goNext(page.nextCursor)}
               onPrevious={pager.goPrevious}
               canPrevious={pager.canPrevious}
-              onRowClick={(row: any) => router.push(`/enrollments/${row.id}`)}
-              columns={[
-                {
-                  key: "no",
-                  header: "Enrollment",
-                  render: (r: any) => (
-                    <EnrollmentLink schemeId={r.id}>
-                      <strong>{r.enrollmentNo}</strong>
-                    </EnrollmentLink>
-                  ),
-                },
-                {
-                  key: "customer",
-                  header: "Customer",
-                  render: (r: any) => (
-                    <CustomerLink customerId={r.customerId}>
-                      {r.customer}
-                    </CustomerLink>
-                  ),
-                },
-                { key: "scheme", header: "Scheme", render: (r: any) => r.plan },
-                {
-                  key: "type",
-                  header: "Type",
-                  render: (r: any) =>
-                    r.paymentPattern === "FLEXIBLE" ? "Flexible" : "Fixed",
-                },
-                { key: "branch", header: "Branch", render: (r: any) => r.branch },
-                {
-                  key: "progress",
-                  header: "Progress",
-                  render: (r: any) => `${r.progress} / ${r.tenure}`,
-                },
-                {
-                  key: "paid",
-                  header: "Paid",
-                  render: (r: any) => money(r.paid),
-                },
-                {
-                  key: "next",
-                  header: "Next due",
-                  render: (r: any) =>
-                    r.nextDue
-                      ? `${money(r.nextDueAmount ?? r.installment)} · ${r.nextDue}`
-                      : "—",
-                },
-                {
-                  key: "maturity",
-                  header: "Maturity",
-                  render: (r: any) => r.maturity ?? "—",
-                },
-                {
-                  key: "status",
-                  header: "Status",
-                  render: (r: any) => <StatusBadge status={r.status} />,
-                },
-                {
-                  key: "view",
-                  header: "",
-                  render: (r: any) => (
-                    <Button
-                      variant="link"
-                      className="h-auto p-0"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        router.push(`/enrollments/${r.id}`);
-                      }}
-                    >
-                      View
-                    </Button>
-                  ),
-                },
-              ]}
             />
-          </Surface>
+          </ListPanel>
         </PageTabsPanel>
       </PageTabs>
     </>

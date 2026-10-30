@@ -5,18 +5,14 @@ import { ImageIcon, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
   EcommerceBannerEditorDialog,
   type BannerPickerUiState,
 } from "@/src/features/ecommerce/ecommerce-banner-editor-dialog";
-import { FieldLabel, PageHeader, Surface } from "@/src/components/common/page-parts";
-import { PageSkeleton, QueryError } from "@/src/components/common/query-state";
+import { PageHeader, Surface } from "@/src/components/common/page-parts";
+import { EmptyState, PageSkeleton, QueryError } from "@/src/components/common/query-state";
+import { ListPanel } from "@/src/components/admin-ui/admin-table";
+import { FilterBar, FilterSearch, FilterSelect, QuickViews } from "@/src/components/admin-ui/filter-bar";
+import { Notice } from "@/src/components/admin-ui/detail-parts";
 import { StatusBadge } from "@/src/components/common/status-badge";
 import { parseApiError, toastApiError } from "@/src/lib/api-error";
 import { uploadFileViaPresign } from "@/src/lib/upload-via-presign";
@@ -59,7 +55,6 @@ import {
 import type { PickerRow } from "@/src/lib/banner-destination-picker";
 import { useEcommerceAdminAccess, useEcommerceCatalogWrite } from "@/src/features/ecommerce/ecommerce-admin-shared";
 import { EcommerceCatalogImage } from "@/src/features/ecommerce/ecommerce-catalog-image";
-import { EcommerceCatalogNav, EcommerceSettingsHint } from "@/src/features/ecommerce/ecommerce-settings-ui";
 import { cn } from "@/lib/utils";
 import {
   BANNER_IMAGE_ARTWORK_HINT,
@@ -172,6 +167,7 @@ export function EcommerceBannersPage() {
   const [completeUpload] = useCompleteEcommerceUploadMutation();
 
   const [open, setOpen] = useState(false);
+  const [bannerSearch, setBannerSearch] = useState("");
   const [editing, setEditing] = useState<BannerRow | null>(null);
   const [title, setTitle] = useState("");
   const [subtitle, setSubtitle] = useState("");
@@ -549,249 +545,181 @@ export function EcommerceBannersPage() {
 
   const canWrite = access.canWrite && entitled;
 
+  const bannerNeedle = bannerSearch.trim().toLowerCase();
+  const visibleBanners = bannerNeedle
+    ? items.filter((row) => `${row.title ?? ""} ${row.subtitle ?? ""}`.toLowerCase().includes(bannerNeedle))
+    : items;
+
   return (
-    <>
+    <div className="space-y-6">
       <PageHeader
+        eyebrow="Online store"
+        icon={ImageIcon}
         title="Banners"
-        description={`Manage the customer “${CUSTOMER_PROMO_SECTION_TITLE}” promo rail on the home app and in the online store catalog.`}
+        description={`The “${CUSTOMER_PROMO_SECTION_TITLE}” promo rail customers see on the app home and in your shop.`}
         actions={
           canWrite ? (
-            <Button type="button" onClick={() => { resetForm(null); setOpen(true); }}>
-              <Plus className="mr-2 size-4" /> New banner
+            <Button type="button" className="rounded-xl" onClick={() => { resetForm(null); setOpen(true); }}>
+              <Plus /> New banner
             </Button>
           ) : null
         }
       />
-      <EcommerceCatalogNav />
-      {!entitled ? (
-        <p className="mb-4 text-sm text-amber-800">{disabledMessage}</p>
-      ) : null}
-      <EcommerceSettingsHint icon={ImageIcon} title="Where customers see banners">
-        <ul className="mt-2 list-disc space-y-1.5 pl-5 text-sm leading-relaxed text-muted-foreground">
+      {!entitled ? <Notice tone="amber">{disabledMessage}</Notice> : null}
+      <details className="group rounded-2xl border border-[#efe2d0] bg-gradient-to-r from-[#fdf8ef] to-white px-4 py-3 text-sm">
+        <summary className="flex cursor-pointer list-none items-center gap-2 font-semibold text-[#3c2a2e]">
+          <ImageIcon className="size-4 text-[#9a6f2a]" aria-hidden />
+          Where customers see banners
+          <span className="ml-auto text-xs font-medium text-[#9a6f2a] group-open:hidden">Show</span>
+          <span className="ml-auto hidden text-xs font-medium text-[#9a6f2a] group-open:inline">Hide</span>
+        </summary>
+        <ul className="mt-3 list-disc space-y-1.5 pl-5 leading-relaxed text-[#6f6265]">
           <li>
-            <strong className="font-semibold text-[#28161a]">Customer home</strong> —{" "}
-            {ECOMMERCE_BANNER_PLACEMENTS[0].customerLocation}. Placement{" "}
-            <span className="font-mono text-xs">HOME</span> or{" "}
-            <span className="font-mono text-xs">BOTH</span>. Needs ecommerce plan.
+            <strong className="font-semibold text-[#28161a]">App home</strong> — {ECOMMERCE_BANNER_PLACEMENTS[0].customerLocation}. Placement “Home” or “Both”. Needs the ecommerce plan.
           </li>
           <li>
-            <strong className="font-semibold text-[#28161a]">Online store</strong> —{" "}
-            {ECOMMERCE_BANNER_PLACEMENTS[1].customerLocation}. Placement{" "}
-            <span className="font-mono text-xs">SHOP</span> or{" "}
-            <span className="font-mono text-xs">BOTH</span>. Store must be active; hidden while
-            customers search or filter.
+            <strong className="font-semibold text-[#28161a]">Online store</strong> — {ECOMMERCE_BANNER_PLACEMENTS[1].customerLocation}. Placement “Shop” or “Both”. The store must be live; banners hide while customers search or filter.
           </li>
           <li>{BANNER_IMAGE_ARTWORK_HINT}</li>
           <li>{BANNER_SIGNED_URL_REVOCATION_HINT}</li>
         </ul>
-      </EcommerceSettingsHint>
+      </details>
 
-      <div className="mb-4 grid gap-3 sm:grid-cols-2">
-        {(
-          [
-            { surface: "home" as const, title: "Customer home preview" },
-            { surface: "shop" as const, title: "Online store preview" },
-          ] as const
-        ).map(({ surface, title }) => (
-          <div
-            key={surface}
-            className="rounded-xl border border-[#eaded9] bg-[#faf7f5] px-4 py-3.5"
-          >
-            <p className="text-xs font-bold uppercase tracking-wide text-[#8b7774]">{title}</p>
-            <p className="mt-1 text-sm font-semibold text-[#28161a]">{CUSTOMER_PROMO_SECTION_TITLE}</p>
-            <div className={cn(CUSTOMER_PROMO_RAIL_FRAME, "mt-2 w-full")}>
-              <div className="absolute inset-0 grid place-items-center bg-[#e8e2dc] text-[10px] font-medium uppercase tracking-wide text-[#8a8580]">
-                Rail matches customer app
-              </div>
-            </div>
-            <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-              {surface === "home"
-                ? ECOMMERCE_BANNER_PLACEMENTS[0].customerLocation
-                : ECOMMERCE_BANNER_PLACEMENTS[1].customerLocation}
-            </p>
-          </div>
-        ))}
-      </div>
-
-      <div className="mb-4 flex flex-wrap gap-3">
-        <div className="min-w-[140px]">
-          <FieldLabel>Status</FieldLabel>
-          <Select
-            value={listStatusFilter}
-            onValueChange={(value) => {
-              setListStatusFilter(value);
-              resetBannerPagination();
-            }}
-          >
-            <SelectTrigger><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="ALL">All statuses</SelectItem>
-              <SelectItem value="DRAFT">Draft</SelectItem>
-              <SelectItem value="PUBLISHED">Published</SelectItem>
-              <SelectItem value="ARCHIVED">Archived</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="min-w-[140px]">
-          <FieldLabel>Placement</FieldLabel>
-          <Select
-            value={listPlacementFilter}
-            onValueChange={(value) => {
-              setListPlacementFilter(value);
-              resetBannerPagination();
-            }}
-          >
-            <SelectTrigger><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="ALL">All placements</SelectItem>
-              {ECOMMERCE_BANNER_PLACEMENTS.map((p) => (
-                <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
-
-      {!items.length ? (
-        <Surface title="No banners yet">
-          <p className="text-sm text-muted-foreground">
-            Create a draft banner, upload an image, then publish when ready.
-          </p>
-        </Surface>
-      ) : (
-        <div className="space-y-3">
-          {items.map((row) => {
-            const placement = placementMeta(row.placement);
-            const surfaces = bannerCustomerSurfaces(row.placement);
-            const destLabel = formatBannerDestinationLabel(row.destinationType, {
-              categoryName: row.targetCategoryId
-                ? categoryNameById.get(row.targetCategoryId)
-                : null,
-              productName: row.targetProductId
-                ? productNameById.get(row.targetProductId)
-                : null,
-            });
-            return (
-            <Surface key={row.id} title={row.title} className="overflow-hidden">
-              <div className="flex flex-col gap-4 sm:flex-row">
-                <div className="w-full shrink-0 sm:max-w-[280px]">
-                  <div className={cn(CUSTOMER_PROMO_RAIL_FRAME, "w-full")}>
+      <ListPanel
+        toolbar={
+          <FilterBar
+            quickViews={
+              <QuickViews
+                value={listStatusFilter}
+                onChange={(value) => {
+                  setListStatusFilter(value);
+                  resetBannerPagination();
+                }}
+                options={[
+                  { value: "ALL", label: "All" },
+                  { value: "PUBLISHED", label: "Published" },
+                  { value: "DRAFT", label: "Drafts" },
+                  { value: "ARCHIVED", label: "Archived" },
+                ]}
+                ariaLabel="Banner status"
+              />
+            }
+            search={<FilterSearch value={bannerSearch} onChange={setBannerSearch} placeholder="Search banner title" />}
+            filters={
+              <FilterSelect
+                label="Placement"
+                value={listPlacementFilter}
+                onChange={(value) => {
+                  setListPlacementFilter(value);
+                  resetBannerPagination();
+                }}
+                options={[{ value: "ALL", label: "All" }, ...ECOMMERCE_BANNER_PLACEMENTS.map((pl) => ({ value: pl.value, label: pl.label }))]}
+                widthClass="min-w-[12rem]"
+              />
+            }
+            resultLabel={`${visibleBanners.length} banners`}
+          />
+        }
+      >
+        {!visibleBanners.length ? (
+          <EmptyState
+            icon={ImageIcon}
+            title={items.length ? "No banners match" : "No banners yet"}
+            detail={items.length ? "Try another filter." : "Create a draft banner, add artwork, then publish when it's ready."}
+            action={!items.length && canWrite ? <Button onClick={() => { resetForm(null); setOpen(true); }}>New banner</Button> : undefined}
+          />
+        ) : (
+          <div className="grid gap-5 p-5 lg:grid-cols-2">
+            {visibleBanners.map((row) => {
+              const placementInfo = placementMeta(row.placement);
+              const surfaces = bannerCustomerSurfaces(row.placement);
+              const destLabel = formatBannerDestinationLabel(row.destinationType, {
+                categoryName: row.targetCategoryId ? categoryNameById.get(row.targetCategoryId) : null,
+                productName: row.targetProductId ? productNameById.get(row.targetProductId) : null,
+              });
+              const effective = bannerEffectiveStatus(row);
+              const hint = bannerCustomerVisibilityHint(row);
+              return (
+                <article key={row.id} className="overflow-hidden rounded-[1.15rem] border border-[#ebe1dc] bg-white">
+                  <div className={cn(CUSTOMER_PROMO_RAIL_FRAME, "w-full rounded-none")}>
                     {row.imageUploadId ? (
                       <EcommerceCatalogImage uploadId={row.imageUploadId} channel="admin" alt="" fill className="object-cover" />
                     ) : (
-                      <div className="grid h-full place-items-center text-muted-foreground">
-                        <ImageIcon className="size-6" />
+                      <div className="grid h-full place-items-center bg-[#f5efea] text-[#b9a9ad]">
+                        <ImageIcon className="size-7" />
                       </div>
                     )}
+                    <div className="absolute left-3 top-3 flex flex-wrap gap-1.5">
+                      <StatusBadge status={row.status} />
+                      {effective !== row.status ? <StatusBadge status={effective} label={bannerEffectiveStatusLabel(effective)} /> : null}
+                    </div>
                   </div>
-                  <p className="mt-1 text-[10px] text-muted-foreground">{BANNER_PLACEMENT_PREVIEW_CAPTION}</p>
-                </div>
-                <div className="min-w-0 flex-1 space-y-2">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <StatusBadge status={row.status} />
-                    <StatusBadge
-                      status={bannerEffectiveStatus(row)}
-                      label={bannerEffectiveStatusLabel(bannerEffectiveStatus(row))}
-                    />
-                    <StatusBadge status={row.placement} label={placement.shortLabel} />
-                    <span className="text-xs text-muted-foreground">Order {row.displayOrder ?? 0}</span>
+                  <div className="space-y-3 p-4">
+                    <div>
+                      <h3 className="font-bold text-[#28161a]">{row.title}</h3>
+                      {row.subtitle ? <p className="text-sm text-[#6f6265]">{row.subtitle}</p> : null}
+                    </div>
+                    <dl className="grid grid-cols-2 gap-2 text-xs">
+                      <div className="rounded-lg bg-[#fbf8f6] px-2.5 py-2">
+                        <dt className="text-[#9a8d90]">Shows on</dt>
+                        <dd className="mt-0.5 font-semibold text-[#3c2a2e]">
+                          {surfaces.map((x) => (x === "home" ? "App home" : "Shop")).join(" + ") || placementInfo.shortLabel}
+                        </dd>
+                      </div>
+                      <div className="rounded-lg bg-[#fbf8f6] px-2.5 py-2">
+                        <dt className="text-[#9a8d90]">Opens</dt>
+                        <dd className="mt-0.5 truncate font-semibold text-[#3c2a2e]">{destLabel}</dd>
+                      </div>
+                      <div className="col-span-2 rounded-lg bg-[#fbf8f6] px-2.5 py-2">
+                        <dt className="text-[#9a8d90]">Schedule · order #{row.displayOrder ?? 0}</dt>
+                        <dd className="mt-0.5 font-semibold text-[#3c2a2e]">
+                          {row.startsAt || row.endsAt
+                            ? `${row.startsAt ? formatUtcIsoForDisplay(row.startsAt) : "Now"} → ${row.endsAt ? formatUtcIsoForDisplay(row.endsAt) : "No end"}`
+                            : "Always on once published"}
+                        </dd>
+                      </div>
+                    </dl>
+                    {hint ? <p className="text-xs text-[#857a7d]">{hint}</p> : null}
+                    <div className="flex flex-wrap gap-2 border-t border-[#f3eae7] pt-3">
+                      {row.status === "ARCHIVED" ? (
+                        <Button type="button" size="sm" variant="outline" className="rounded-lg" onClick={() => { resetForm(row); setOpen(true); }}>
+                          View
+                        </Button>
+                      ) : (
+                        <Button type="button" size="sm" variant="outline" className="rounded-lg" disabled={!canWrite} onClick={() => { resetForm(row); setOpen(true); }}>
+                          Edit
+                        </Button>
+                      )}
+                      {canWrite && row.status === "DRAFT" ? (
+                        <Button type="button" size="sm" className="rounded-lg" disabled={statusPendingId === row.id} onClick={() => void runStatus("publish", row)}>
+                          Publish
+                        </Button>
+                      ) : null}
+                      {canWrite && row.status === "PUBLISHED" ? (
+                        <Button type="button" size="sm" variant="outline" className="rounded-lg" disabled={statusPendingId === row.id} onClick={() => void runStatus("unpublish", row)}>
+                          Unpublish
+                        </Button>
+                      ) : null}
+                      {canWrite && row.status !== "ARCHIVED" ? (
+                        <Button type="button" size="sm" variant="ghost" className="ml-auto rounded-lg text-[#8a7c80]" disabled={statusPendingId === row.id} onClick={() => void runStatus("archive", row)}>
+                          Archive
+                        </Button>
+                      ) : null}
+                    </div>
                   </div>
-                  {row.startsAt || row.endsAt ? (
-                    <p className="text-xs text-muted-foreground">
-                      Schedule:{" "}
-                      {row.startsAt ? formatUtcIsoForDisplay(row.startsAt) : "—"} →{" "}
-                      {row.endsAt ? formatUtcIsoForDisplay(row.endsAt) : "—"}
-                    </p>
-                  ) : null}
-                  {bannerCustomerVisibilityHint(row) ? (
-                    <p className="text-xs text-muted-foreground">{bannerCustomerVisibilityHint(row)}</p>
-                  ) : null}
-                  <div className="flex flex-wrap gap-1.5">
-                    {surfaces.map((s) => (
-                      <span
-                        key={s}
-                        className="rounded-full bg-[#f0ebe6] px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[#5c5763]"
-                      >
-                        {s === "home" ? "Customer home" : "Online store"}
-                      </span>
-                    ))}
-                  </div>
-                  {row.subtitle ? <p className="text-sm text-muted-foreground">{row.subtitle}</p> : null}
-                  <p className="text-xs text-muted-foreground">{placement.customerLocation}</p>
-                  <p className="text-xs text-muted-foreground">Tap destination: {destLabel}</p>
-                  <div className="flex flex-wrap gap-2 pt-1">
-                    {row.status === "ARCHIVED" ? (
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        onClick={() => { resetForm(row); setOpen(true); }}
-                      >
-                        View
-                      </Button>
-                    ) : (
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        disabled={!canWrite}
-                        onClick={() => { resetForm(row); setOpen(true); }}
-                      >
-                        Edit
-                      </Button>
-                    )}
-                    {canWrite && row.status === "DRAFT" ? (
-                      <Button
-                        type="button"
-                        size="sm"
-                        disabled={statusPendingId === row.id}
-                        onClick={() => void runStatus("publish", row)}
-                      >
-                        Publish
-                      </Button>
-                    ) : null}
-                    {canWrite && row.status === "PUBLISHED" ? (
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        disabled={statusPendingId === row.id}
-                        onClick={() => void runStatus("unpublish", row)}
-                      >
-                        Unpublish
-                      </Button>
-                    ) : null}
-                    {canWrite && row.status !== "ARCHIVED" ? (
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="ghost"
-                        disabled={statusPendingId === row.id}
-                        onClick={() => void runStatus("archive", row)}
-                      >
-                        Archive
-                      </Button>
-                    ) : null}
-                  </div>
-                </div>
-              </div>
-            </Surface>
-            );
-          })}
-          {nextBannerCursor ? (
-            <div className="flex justify-center pt-2">
-              <Button
-                type="button"
-                variant="outline"
-                disabled={fetchMoreBannersState.isFetching}
-                onClick={() => void loadMoreBanners()}
-              >
-                {fetchMoreBannersState.isFetching ? "Loading…" : "Load more banners"}
-              </Button>
-            </div>
-          ) : null}
-        </div>
-      )}
+                </article>
+              );
+            })}
+          </div>
+        )}
+        {nextBannerCursor ? (
+          <div className="flex justify-center border-t border-[#efe5e1] bg-[#fbf8f6] px-5 py-3">
+            <Button type="button" variant="outline" className="rounded-lg" disabled={fetchMoreBannersState.isFetching} onClick={() => void loadMoreBanners()}>
+              {fetchMoreBannersState.isFetching ? "Loading…" : "Load more banners"}
+            </Button>
+          </div>
+        ) : null}
+      </ListPanel>
 
       <EcommerceBannerEditorDialog
         open={open}
@@ -853,6 +781,6 @@ export function EcommerceBannersPage() {
         submitDisabled={!canWrite || !title.trim() || imageUpload.uploading}
         onSubmit={saveDraft}
       />
-    </>
+    </div>
   );
 }

@@ -2,8 +2,13 @@ node_modules
 .next
 .vinext
 .sites-runtime
+.wrangler
+dist
+netlify-dist
+graphify-out
 coverage
 .git
 *.zip
 docs/**/*.md
 !docs/CUSTOMER_PORTAL.md
+

@@ -36,16 +36,20 @@ import {
   useGetCustomerDigitalMetalsRedemptionOrderQuery,
   useGetCustomerDigitalMetalsRedemptionPickupInstructionsQuery,
 } from "@/src/store/api/customer-api";
-import { formatAssetLabel } from "@/src/lib/digital-metals-asset-ui";
 import { formatDeliveryAddressSnapshot, formatInrFromPaise, ugToGramsDisplay } from "@/src/lib/digital-metals-display";
 import { DigitalMetalsRedemptionChargeBreakdown } from "@/src/lib/digital-metals-redemption-charge-breakdown";
 import {
   CustomerDmPageShell,
   CustomerDmSurface,
   CustomerDmTimeline,
-  customerDmMetalAccent,
+  dmAssetName,
+  DmCoinArt,
+  dmFinish,
   redemptionOrderStatusLabel,
 } from "@/src/features/customer/customer-digital-metals-shared";
+import { ChoiceCard } from "@/src/features/customer/customer-shop-ui";
+import { EcommerceCatalogImage } from "@/src/features/ecommerce/ecommerce-catalog-image";
+import { MapPin, Plus, Store, Truck } from "lucide-react";
 
 const QUOTE_KEY = "dm_redemption_quote_v1";
 
@@ -66,8 +70,8 @@ export function readRedemptionQuote(quoteId: string): Record<string, unknown> | 
 }
 
 function formatCatalogueCharge(paise: number) {
-  if (paise === 0) return "No INR charges";
-  return `${formatInrFromPaise(paise)} charges`;
+  if (paise === 0) return "No extra charges";
+  return `${formatInrFromPaise(paise)} minting & packing`;
 }
 
 export function CustomerDigitalMetalsRedeemCatalogPage() {
@@ -104,56 +108,69 @@ export function CustomerDigitalMetalsRedeemCatalogPage() {
 
   return (
     <CustomerDmPageShell
-      title="Redeem physical metal"
-      subtitle="Choose coins or bars from your jeweller's catalogue. Metal is reserved; minting and delivery are paid in rupees."
+      title="Turn grams into coins & bars"
+      subtitle="Pick a coin or bar from your jeweller. The metal comes from your wallet; minting, packing and delivery are paid in rupees."
       backHref={portfolioBack}
+      backLabel="Wallet"
       testId="customer-dm-redeem-catalogue"
     >
       {items.length === 0 ? (
-        <CustomerDmSurface>
-          <p className="text-sm text-[#5c3d42]">No redemption items are listed right now. Check back later.</p>
+        <CustomerDmSurface className="text-center">
+          <p className="text-sm text-[#5c4f52]">No coins or bars are listed right now. Check back later.</p>
         </CustomerDmSurface>
       ) : (
-        <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <ul className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
           {items.map((item) => {
             const metal = String(item.metal);
-            const accent = customerDmMetalAccent(metal);
+            const finish = dmFinish(metal);
             const charge = Number(item.chargeTotalPaise ?? item.mintingChargePaise ?? 0);
             const grams = item.unitQuantityUg ? ugToGramsDisplay(String(item.unitQuantityUg)) : null;
+            const gramsShort = item.unitQuantityUg ? `${Number((Number(item.unitQuantityUg) / 1_000_000).toFixed(3))}g` : undefined;
+            const isBar = /bar/i.test(String(item.label ?? ""));
             return (
-              <li
-                key={String(item.id)}
-                className={`flex flex-col rounded-2xl border ${accent.border} bg-white p-4 shadow-sm`}
-              >
-                {item.imageUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={String(item.imageUrl)}
-                    alt=""
-                    className="mb-3 h-32 w-full rounded-xl object-cover"
-                  />
-                ) : (
-                  <div className={`mb-3 flex h-32 items-center justify-center rounded-xl ${accent.iconBg} text-sm font-medium`}>
-                    {grams ?? "Physical item"}
+              <li key={String(item.id)} className="group flex flex-col overflow-hidden rounded-[1.4rem] border border-[#ecdfd8] bg-white transition hover:border-[#d9c6bd] hover:shadow-[0_12px_30px_rgba(60,30,35,0.07)]">
+                <div className="relative grid aspect-[4/3] place-items-center" style={{ background: `radial-gradient(circle at 50% 40%, #ffffff 0%, ${finish.soft} 70%)` }}>
+                  {item.imageUploadId ? (
+                    <EcommerceCatalogImage uploadId={String(item.imageUploadId)} channel="customer" alt="" fill className="object-cover" />
+                  ) : item.imageUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={String(item.imageUrl)} alt="" className="absolute inset-0 h-full w-full object-cover" />
+                  ) : isBar ? (
+                    <span
+                      className="grid h-16 w-32 place-items-center rounded-md font-serif text-sm font-semibold shadow-[0_12px_24px_rgba(60,40,10,.18)]"
+                      style={{ background: finish.face, color: finish.ink, clipPath: "polygon(10% 0, 90% 0, 100% 100%, 0 100%)" }}
+                    >
+                      {gramsShort}
+                    </span>
+                  ) : (
+                    <DmCoinArt metal={metal} size={112} label={gramsShort} />
+                  )}
+                  <span className="absolute left-3 top-3 rounded-full bg-white/90 px-2.5 py-1 text-[11px] font-semibold text-[#3a2f33] shadow-sm">
+                    {dmAssetName(metal, Number(item.finenessPpm))}
+                  </span>
+                </div>
+                <div className="flex flex-1 flex-col p-5">
+                  <p className="font-serif text-lg leading-snug text-[#221a1d]">{String(item.label)}</p>
+                  <p className="mt-1 text-xs text-[#7a6f72]">
+                    Uses {grams ?? "metal"} from your wallet
+                  </p>
+                  <p className="mt-3 text-sm font-semibold text-[#221a1d]">{formatCatalogueCharge(charge)}</p>
+                  <div className="mt-2 flex flex-wrap gap-1.5 text-[11px] font-medium text-[#5c4f52]">
+                    {item.pickupEnabled !== false ? <span className="rounded-full bg-[#f5eee9] px-2 py-0.5">Branch pickup</span> : null}
+                    {item.deliveryEnabled !== false ? <span className="rounded-full bg-[#f5eee9] px-2 py-0.5">Home delivery</span> : null}
+                    {item.leadTimeDays != null ? <span className="rounded-full bg-[#f5eee9] px-2 py-0.5">Ready in ~{String(item.leadTimeDays)} days</span> : null}
                   </div>
-                )}
-                <p className="font-semibold text-[#28161a]">{String(item.label)}</p>
-                <p className="mt-1 text-xs text-[#8a6a70]">
-                  {formatAssetLabel(metal, Number(item.finenessPpm))}
-                  {grams ? ` · ${grams}` : null}
-                </p>
-                <p className="mt-2 text-sm text-[#5c3d42]">{formatCatalogueCharge(charge)}</p>
-                {item.leadTimeDays != null ? (
-                  <p className="text-xs text-[#8a6a70]">Typical lead time: {String(item.leadTimeDays)} days</p>
-                ) : null}
-                <Button
-                  type="button"
-                  size="sm"
-                  className="mt-4 min-h-10 w-full"
-                  onClick={() => startRedeem(item)}
-                >
-                  Select
-                </Button>
+                  <div className="mt-auto pt-5">
+                    <Button
+                      type="button"
+                      className="h-11 w-full rounded-full text-white"
+                      style={{ background: "var(--customer-primary, #730321)" }}
+                      onClick={() => startRedeem(item)}
+                    >
+                      Choose this
+                    </Button>
+                  </div>
+                </div>
               </li>
             );
           })}
@@ -278,132 +295,136 @@ export function CustomerDigitalMetalsRedeemSetupPage({ catalogueItemId }: { cata
 
   return (
     <CustomerDmPageShell
+      narrow
       title={String(item.label)}
-      subtitle="Choose branch pickup or home delivery before we price minting and delivery charges."
+      subtitle="Choose branch pickup or home delivery. We'll price minting and delivery on the next screen."
       backHref={backHref}
       testId="customer-dm-redeem-setup"
     >
       <CustomerDmSurface>
-        <p className="text-sm font-medium text-[#28161a]">How should we fulfil this order?</p>
-        <div className="mt-3 flex flex-wrap gap-2">
-          {pickupEnabled ? (
-            <Button
-              type="button"
-              variant={mode === "PICKUP" ? "default" : "outline"}
-              className="min-h-10"
-              onClick={() => setMode("PICKUP")}
-            >
-              Branch pickup
-            </Button>
-          ) : null}
-          {deliveryEnabled ? (
-            <Button
-              type="button"
-              variant={mode === "DELIVERY" ? "default" : "outline"}
-              className="min-h-10"
-              onClick={() => setMode("DELIVERY")}
-            >
-              Home delivery
-            </Button>
-          ) : null}
-        </div>
+        <fieldset>
+          <legend className="text-[15px] font-semibold text-[#221a1d]">How would you like to receive it?</legend>
+          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            {pickupEnabled ? (
+              <ChoiceCard
+                name="dm-redeem-mode"
+                selected={mode === "PICKUP"}
+                onSelect={() => setMode("PICKUP")}
+                icon={<Store className="size-5" />}
+                title="Collect from a branch"
+                detail="Bring your pickup code and photo ID"
+              />
+            ) : null}
+            {deliveryEnabled ? (
+              <ChoiceCard
+                name="dm-redeem-mode"
+                selected={mode === "DELIVERY"}
+                onSelect={() => setMode("DELIVERY")}
+                icon={<Truck className="size-5" />}
+                title="Deliver to my address"
+                detail="Insured courier; delivery charge shown on review"
+              />
+            ) : null}
+          </div>
+        </fieldset>
 
         {mode === "PICKUP" ? (
-          <div className="mt-4 space-y-2">
-            <Label htmlFor="dm-redeem-branch">Pickup branch</Label>
-            <select
-              id="dm-redeem-branch"
-              className="w-full rounded-md border border-[#eaded9] bg-white px-3 py-2 text-sm"
-              value={effectiveBranchId}
-              onChange={(e) => setPickupBranchId(e.target.value)}
-            >
-              {branchRows.length === 0 ? (
-                <option value="">No branches listed</option>
-              ) : (
-                branchRows.map((b) => (
-                  <option key={String(b.id)} value={String(b.id)}>
-                    {String(b.name ?? b.code ?? b.id)}
-                  </option>
-                ))
-              )}
-            </select>
-          </div>
-        ) : (
-          <div className="mt-4 space-y-3">
-            <Label>Delivery address</Label>
-            {addressItems.length > 0 ? (
-              <select
-                className="w-full rounded-md border border-[#eaded9] bg-white px-3 py-2 text-sm"
-                value={deliveryAddressId}
-                onChange={(e) => setDeliveryAddressId(e.target.value)}
-              >
-                {addressItems.map((a) => (
-                  <option key={String(a.id)} value={String(a.id)}>
-                    {String(a.label ?? "Address")} — {String(a.line1)}, {String(a.pincode)}
-                  </option>
-                ))}
-              </select>
+          <fieldset className="mt-6">
+            <legend className="mb-3 text-sm font-semibold text-[#221a1d]">Pickup branch</legend>
+            {branchRows.length === 0 ? (
+              <p className="text-sm text-[#7a6f72]">No branches are listed for pickup.</p>
             ) : (
-              <p className="text-xs text-[#8a6a70]">Add an address for courier delivery.</p>
+              <div className="space-y-2.5" id="dm-redeem-branch">
+                {branchRows.map((b) => (
+                  <ChoiceCard
+                    key={String(b.id)}
+                    name="dm-redeem-branch"
+                    selected={effectiveBranchId === String(b.id)}
+                    onSelect={() => setPickupBranchId(String(b.id))}
+                    icon={<MapPin className="size-5" />}
+                    title={String(b.name ?? b.code ?? b.id)}
+                    detail={(b as { address?: string }).address ? String((b as { address?: string }).address) : undefined}
+                  />
+                ))}
+              </div>
+            )}
+          </fieldset>
+        ) : (
+          <fieldset className="mt-6">
+            <legend className="mb-3 text-sm font-semibold text-[#221a1d]">Delivery address</legend>
+            {addressItems.length > 0 ? (
+              <div className="space-y-2.5">
+                {addressItems.map((a) => (
+                  <ChoiceCard
+                    key={String(a.id)}
+                    name="dm-redeem-address"
+                    selected={deliveryAddressId === String(a.id)}
+                    onSelect={() => setDeliveryAddressId(String(a.id))}
+                    icon={<MapPin className="size-5" />}
+                    title={String(a.label ?? "Address")}
+                    detail={[a.recipientName, a.line1, a.city, a.pincode].filter(Boolean).map(String).join(" · ")}
+                  />
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-[#7a6f72]">Add an address for courier delivery.</p>
             )}
             {showAddressForm ? (
-              <div className="grid gap-2 rounded-xl border border-[#eaded9] bg-white p-3">
-                <Input
-                  placeholder="Recipient name"
-                  value={addressForm.recipientName}
-                  onChange={(e) => setAddressForm((f) => ({ ...f, recipientName: e.target.value }))}
-                />
-                <Input
-                  placeholder="Mobile"
-                  value={addressForm.mobile}
-                  onChange={(e) => setAddressForm((f) => ({ ...f, mobile: e.target.value }))}
-                />
-                <Input
-                  placeholder="Address line 1"
-                  value={addressForm.line1}
-                  onChange={(e) => setAddressForm((f) => ({ ...f, line1: e.target.value }))}
-                />
-                <Input
-                  placeholder="City"
-                  value={addressForm.city}
-                  onChange={(e) => setAddressForm((f) => ({ ...f, city: e.target.value }))}
-                />
-                <Input
-                  placeholder="State"
-                  value={addressForm.state}
-                  onChange={(e) => setAddressForm((f) => ({ ...f, state: e.target.value }))}
-                />
-                <Input
-                  placeholder="Pincode"
-                  value={addressForm.pincode}
-                  onChange={(e) => setAddressForm((f) => ({ ...f, pincode: e.target.value }))}
-                />
-                <div className="flex gap-2">
-                  <Button type="button" size="sm" disabled={createAddressState.isLoading} onClick={() => void onSaveAddress()}>
+              <div className="mt-3 grid gap-3 rounded-2xl border border-[#ecdfd8] bg-[#fcfaf8] p-4 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <Label htmlFor="dm-addr-name">Recipient name</Label>
+                  <Input id="dm-addr-name" value={addressForm.recipientName} onChange={(e) => setAddressForm((f) => ({ ...f, recipientName: e.target.value }))} className="h-11 rounded-xl bg-white" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="dm-addr-mobile">Mobile</Label>
+                  <Input id="dm-addr-mobile" inputMode="tel" value={addressForm.mobile} onChange={(e) => setAddressForm((f) => ({ ...f, mobile: e.target.value }))} className="h-11 rounded-xl bg-white" />
+                </div>
+                <div className="space-y-1.5 sm:col-span-2">
+                  <Label htmlFor="dm-addr-line1">House, street and area</Label>
+                  <Input id="dm-addr-line1" value={addressForm.line1} onChange={(e) => setAddressForm((f) => ({ ...f, line1: e.target.value }))} className="h-11 rounded-xl bg-white" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="dm-addr-city">City</Label>
+                  <Input id="dm-addr-city" value={addressForm.city} onChange={(e) => setAddressForm((f) => ({ ...f, city: e.target.value }))} className="h-11 rounded-xl bg-white" />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="dm-addr-state">State</Label>
+                    <Input id="dm-addr-state" value={addressForm.state} onChange={(e) => setAddressForm((f) => ({ ...f, state: e.target.value }))} className="h-11 rounded-xl bg-white" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="dm-addr-pin">Pincode</Label>
+                    <Input id="dm-addr-pin" inputMode="numeric" value={addressForm.pincode} onChange={(e) => setAddressForm((f) => ({ ...f, pincode: e.target.value }))} className="h-11 rounded-xl bg-white" />
+                  </div>
+                </div>
+                <div className="flex gap-2 sm:col-span-2">
+                  <Button type="button" className="h-10 rounded-full px-5 text-white" style={{ background: "var(--customer-primary, #730321)" }} disabled={createAddressState.isLoading} onClick={() => void onSaveAddress()}>
                     Save address
                   </Button>
-                  <Button type="button" size="sm" variant="ghost" onClick={() => setShowAddressForm(false)}>
+                  <Button type="button" variant="ghost" className="h-10 rounded-full" onClick={() => setShowAddressForm(false)}>
                     Cancel
                   </Button>
                 </div>
               </div>
             ) : (
-              <Button type="button" variant="outline" size="sm" onClick={() => setShowAddressForm(true)}>
-                Add new address
-              </Button>
+              <button
+                type="button"
+                className="mt-3 inline-flex items-center gap-1.5 text-sm font-semibold text-[var(--customer-primary,#730321)] underline-offset-4 hover:underline"
+                onClick={() => setShowAddressForm(true)}
+              >
+                <Plus className="size-4" /> Add a new address
+              </button>
             )}
-            <p className="text-xs text-[#8a6a70]">
-              Same address book as the online shop — saved once, reused for physical redemption.
-            </p>
-          </div>
+            <p className="mt-3 text-xs text-[#7a6f72]">Same address book as the online store — saved once, used for both.</p>
+          </fieldset>
         )}
       </CustomerDmSurface>
 
       <div className="mt-6 flex flex-col gap-2 sm:flex-row">
-        <Button type="button" className="min-h-11" disabled={quoteState.isLoading} onClick={() => void continueToQuote()}>
-          Continue to review
+        <Button type="button" className="h-12 rounded-full px-7 text-[15px] text-white" style={{ background: "var(--customer-primary, #730321)" }} disabled={quoteState.isLoading} onClick={() => void continueToQuote()}>
+          {quoteState.isLoading ? "Pricing your order…" : "Continue to review"}
         </Button>
-        <Button type="button" variant="outline" className="min-h-11" asChild>
+        <Button type="button" variant="ghost" className="h-12 rounded-full" asChild>
           <Link href={backHref}>Back</Link>
         </Button>
       </div>
@@ -468,6 +489,7 @@ export function CustomerDigitalMetalsRedeemReviewPage({ quoteId }: { quoteId: st
 
   return (
     <CustomerDmPageShell
+      narrow
       title="Review redemption"
       subtitle="Confirm metal reservation and INR charges before placing the order."
       backHref={customerPath(tenantSlug, "digital-metals", "redeem")}
@@ -476,7 +498,7 @@ export function CustomerDigitalMetalsRedeemReviewPage({ quoteId }: { quoteId: st
       <DigitalMetalsRedemptionChargeBreakdown quote={quote} />
       <RedemptionFulfilmentSummary quote={quote} />
       <div className="mt-6 flex flex-col gap-2 sm:flex-row">
-        <Button type="button" className="min-h-11" disabled={orderState.isLoading} onClick={() => void confirm()}>
+        <Button type="button" className="h-12 rounded-full px-7 text-[15px] text-white" style={{ background: "var(--customer-primary, #730321)" }} disabled={orderState.isLoading} onClick={() => void confirm()}>
           Place redemption order
         </Button>
         <Button type="button" variant="outline" className="min-h-11" asChild>
@@ -674,9 +696,11 @@ export function CustomerDigitalMetalsRedeemOrderPage({ orderId }: { orderId: str
 
   return (
     <CustomerDmPageShell
+      narrow
       title={statusCopy.title}
       subtitle={statusCopy.detail}
       backHref={customerPath(tenantSlug, "digital-metals")}
+      backLabel="Wallet"
       testId="customer-dm-redeem-order"
     >
       <CustomerDmSurface>
@@ -757,7 +781,8 @@ export function CustomerDigitalMetalsRedeemOrderPage({ orderId }: { orderId: str
       {status === "CHARGE_PENDING" && chargePaise > 0 ? (
         <Button
           type="button"
-          className="mt-4 min-h-11 w-full sm:w-auto"
+          className="mt-4 h-12 w-full rounded-full px-7 text-[15px] text-white sm:w-auto"
+          style={{ background: "var(--customer-primary, #730321)" }}
           disabled={payState.isLoading || harnessState.isLoading || submittingPay}
           onClick={() => void payCharges()}
         >
