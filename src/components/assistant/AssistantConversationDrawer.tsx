@@ -65,7 +65,7 @@ export function AssistantConversationDrawer({
 
   useEffect(() => {
     if (!open) return;
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- fetch list when drawer opens
+     
     void loadPage(null, true);
   }, [open, loadPage]);
 

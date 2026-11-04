@@ -178,7 +178,7 @@ export function SettlementPreviewDialog({
   description?: string;
   mode?: string;
   redemptionWizard?: boolean;
-  initialWizardStep?: "preview" | "submit";
+  initialWizardStep?: "preview" | "method" | "submit";
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -216,12 +216,12 @@ function SettlementPreviewDialogBody({
   description?: string;
   mode?: string;
   redemptionWizard: boolean;
-  initialWizardStep: "preview" | "submit";
+  initialWizardStep: "preview" | "method" | "submit";
 }) {
   const enrollmentQuery = useGetEnrollmentQuery(schemeId);
   const [redeem, redeemState] = useRedeemEnrollmentMutation();
   const isMaturity = type === "MATURITY_REDEMPTION";
-  const [wizardStep, setWizardStep] = useState<"preview" | "submit">(
+  const [wizardStep, setWizardStep] = useState<"preview" | "method" | "submit">(
     initialWizardStep,
   );
   const [modeOverride, setModeOverride] = useState<string | null>(null);
@@ -256,13 +256,15 @@ function SettlementPreviewDialogBody({
   const preview = previewQuery.data;
   const expectedVersion = enrollmentQuery.data?.version ?? 1;
   const showWizard = isMaturity && redemptionWizard;
+  const onMethodStep = showWizard && wizardStep === "method";
   const onSubmitStep = showWizard && wizardStep === "submit";
+  const onPreviewStep = showWizard && wizardStep === "preview";
 
   const remarksDisplayError = liveSettlementRemarksError(remarks, {
     required: false,
   });
 
-  const modeSelect = isMaturity ? (
+  const modeSelect = isMaturity && (onMethodStep || onSubmitStep) ? (
     <RedemptionMethodSelect
       modeChoices={modeChoices}
       selectedMode={selectedMode}
@@ -315,13 +317,15 @@ function SettlementPreviewDialogBody({
           </DialogTitle>
           <DialogDescription className="max-w-2xl text-sm leading-6 text-[#776a6d]">
             {onSubmitStep
-              ? "Step 2 of 2 — verify settlement type and submit when blockers are cleared."
-              : description ??
-                "Step 1 of 2 — pick settlement type and review the computation before submitting."}
+              ? "Step 3 of 3 — confirm settlement method, deductions and any forfeiture acknowledgements, then submit."
+              : onMethodStep
+                ? "Step 2 of 3 — choose settlement method; lines refresh for that method."
+                : description ??
+                  "Step 1 of 3 — review entitlement (lines, deductions, blockers)."}
           </DialogDescription>
         </DialogHeader>
 
-        {modeSelect}
+        {onMethodStep ? modeSelect : null}
 
         {onSubmitStep && preview && !preview.eligible ? (
           <p className="text-sm text-[#776a6d]">
@@ -332,7 +336,8 @@ function SettlementPreviewDialogBody({
           </p>
         ) : null}
 
-        {previewPanel}
+        {!onMethodStep ? previewPanel : null}
+        {onSubmitStep ? modeSelect : null}
 
         {onSubmitStep && preview?.eligible ? (
           <div className="space-y-4 border-t border-[#efe6ea] pt-4">
@@ -376,10 +381,15 @@ function SettlementPreviewDialogBody({
           <Button
             variant="outline"
             className="gap-2"
-            onClick={() => setWizardStep("preview")}
+            onClick={() => setWizardStep("method")}
           >
             <ArrowLeft className="size-4" />
-            Back to preview
+            Back to method
+          </Button>
+        ) : onMethodStep ? (
+          <Button variant="outline" className="gap-2" onClick={() => setWizardStep("preview")}>
+            <ArrowLeft className="size-4" />
+            Back to entitlement
           </Button>
         ) : (
           <Button variant="outline" onClick={() => onOpenChange(false)}>
@@ -395,12 +405,15 @@ function SettlementPreviewDialogBody({
               <Link href="/gold-rates">Set today&apos;s gold rate</Link>
             </Button>
           ) : null}
-          {showWizard && !onSubmitStep && preview && selectedMode ? (
-            <Button
-              className="gap-2"
-              onClick={() => setWizardStep("submit")}
-            >
-              Continue to redeem
+          {showWizard && onPreviewStep && preview ? (
+            <Button className="gap-2" onClick={() => setWizardStep("method")}>
+              Choose settlement method
+              <ArrowRight className="size-4" />
+            </Button>
+          ) : null}
+          {showWizard && onMethodStep && preview && selectedMode ? (
+            <Button className="gap-2" onClick={() => setWizardStep("submit")}>
+              Review & confirm
               <ArrowRight className="size-4" />
             </Button>
           ) : null}
@@ -579,8 +592,7 @@ function PrematureClosureDialogBody({
             Close scheme prematurely
           </DialogTitle>
           <DialogDescription>
-            Penalty and forfeited benefits must be acknowledged before
-            closure.
+            Review entitlement and deductions, choose closure payout method, then confirm — penalty and forfeited benefits must be acknowledged before submit.
           </DialogDescription>
         </DialogHeader>
         {previewQuery.isLoading && !preview ? (

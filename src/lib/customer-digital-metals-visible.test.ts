@@ -7,7 +7,7 @@ vi.mock("@/src/components/customer/customer-tenant-context", () => ({
   useCustomerTenant: () => ({ tenantSlug: "kairali" }),
 }));
 
-const capabilityQuery = vi.fn((_arg?: void) => ({
+const capabilityQuery = vi.fn(() => ({
   data: { canViewHoldings: true },
   isLoading: false,
   isFetching: false,
@@ -15,7 +15,7 @@ const capabilityQuery = vi.fn((_arg?: void) => ({
 }));
 
 vi.mock("@/src/store/api/customer-api", () => ({
-  useGetCustomerDigitalMetalsCapabilityQuery: (arg?: void) => capabilityQuery(arg),
+  useGetCustomerDigitalMetalsCapabilityQuery: () => capabilityQuery(),
 }));
 
 describe("useCustomerDigitalMetalsVisible", () => {

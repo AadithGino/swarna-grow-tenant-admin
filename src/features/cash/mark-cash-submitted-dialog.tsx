@@ -246,10 +246,9 @@ function MarkCashSubmittedDialogInner({
       <DialogContent className={dialogScrollShellClass}>
         <DialogBody className="pb-2">
           <DialogHeader>
-            <DialogTitle>Receive cash from staff</DialogTitle>
+            <DialogTitle>Submit cash handover</DialogTitle>
             <DialogDescription>
-              Review itemised cash collections, then record the handover to update
-              branch balances.
+              Step 1 — submitting staff declares cash handed over. A recipient records receipt on the handover (Step 2); if amounts differ, resolve the discrepancy before closing.
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-2">

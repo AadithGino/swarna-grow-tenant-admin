@@ -19,11 +19,6 @@ export type PlatformDashboardSummary = {
     activeCustomersTotal: number;
     activeSchemesTotal: number;
   };
-  whatsapp: {
-    sentThisMonth: number;
-    failedThisMonth: number;
-    deliveryRatePercent: number;
-  };
   alerts: {
     severity: "HIGH" | "MEDIUM" | "LOW" | string;
     key: string;
@@ -74,17 +69,13 @@ export type PlatformTenantRow = {
     features?: Record<string, boolean>;
   };
   provisioning: {
-    whatsappConfigured: boolean;
     paymentGatewayConfigured: boolean;
-    templatesConfigured: number;
-    templatesRequired: number;
     readyToGoLive: boolean;
   };
   usage: {
     activeCustomers: number;
     branches: number;
     staff: number;
-    whatsappUsedThisMonth: number;
     limits?: Record<string, number | null>;
     activeCustomersPercent?: number | null;
   };
@@ -122,6 +113,18 @@ export type PaymentGatewayIntegration = {
   lastVerifiedAt?: string | null;
 };
 
+export type MessageCentralIntegration = {
+  configured: boolean;
+  provider: string;
+  customerIdMasked?: string | null;
+  email?: string | null;
+  countryCode?: string;
+  flowType?: string;
+  otpLength?: number;
+  verificationStatus: string;
+  lastVerifiedAt?: string | null;
+};
+
 export type PlatformTenantDetail = PlatformTenantRow & {
   ownerEmail?: string | null;
   gstin: string;
@@ -131,10 +134,10 @@ export type PlatformTenantDetail = PlatformTenantRow & {
   branding: { logoUrl: string | null; primaryColor: string; accentColor: string; displayName: string };
   settings: Record<string, boolean>;
   integrations: {
-    whatsapp: Record<string, unknown> & { configured: boolean; verificationStatus: string };
     paymentGateway: PaymentGatewayIntegration;
+    messageCentral?: MessageCentralIntegration;
+    fcm?: Record<string, unknown>;
   };
-  templates: { configured: number; required: number; missing: string[] };
   usageDetail: Record<string, UsageMetric>;
   branches: { id: string; name: string; code: string; status: string }[];
   owner: { id: string; name: string; mobile: string; email: string };
@@ -199,7 +202,7 @@ export type AuditLog = {
 };
 
 export type WebhookFailure = {
-  id: string; tenantId: string | null; provider: "PHONEPE" | "WHATSAPP"; providerEventId: string;
+  id: string; tenantId: string | null; provider: "PHONEPE"; providerEventId: string;
   status: "FAILED" | "SIGNATURE_FAILED" | "DEAD_LETTER"; attempts: number; lastError: string | null;
   traceId: string | null; retryEligible: boolean; createdAt: string; processedAt: string | null;
 };

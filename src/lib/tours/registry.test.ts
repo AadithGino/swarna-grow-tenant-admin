@@ -51,7 +51,7 @@ describe("tour registry", () => {
   });
 
   it("Sidekick's guide catalogue is up to date (run `pnpm guides:export`)", () => {
-    const file = resolve(__dirname, "../../../../backend/src/services/assistant/agent/guide-catalog.js");
+    const file = resolve(__dirname, "../../../../swarnagrow-backend/src/services/assistant/agent/guide-catalog.js");
     if (!existsSync(file)) return; // admin checked out on its own
     const text = readFileSync(file, "utf8");
     const json = text.slice(text.indexOf("Object.freeze(") + "Object.freeze(".length, text.lastIndexOf(");"));

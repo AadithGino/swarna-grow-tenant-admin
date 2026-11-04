@@ -14,7 +14,6 @@ import { apiErrorMessage } from "@/src/lib/api-error";
 import { newIdempotencyKey } from "@/src/lib/idempotency";
 import type { CustomerDigitalMetalsSummary, DmCounterQuote, DmMetal, DmRateRow } from "@/src/lib/counter-trade-types";
 import {
-  useApproveDigitalMetalsSellOrderMutation,
   useCreateDigitalMetalsCounterSellQuoteMutation,
   useGetDigitalMetalsCustomerBankDestinationsQuery,
   usePlaceDigitalMetalsCounterSellMutation,
@@ -50,7 +49,6 @@ export function CounterSellMetalDialog({
   customerName,
   rates,
   holdings,
-  canApprove,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -58,7 +56,6 @@ export function CounterSellMetalDialog({
   customerName: string;
   rates: DmRateRow[];
   holdings: CustomerDigitalMetalsSummary["holdings"];
-  canApprove: boolean;
 }) {
   const availableUg = (m: DmMetal) => Number(holdings.find((h) => h.metal === m)?.availableUg ?? 0);
   const firstMetal: DmMetal = availableUg("GOLD") > 0 || availableUg("SILVER") === 0 ? "GOLD" : "SILVER";
@@ -72,12 +69,11 @@ export function CounterSellMetalDialog({
   const [consent, setConsent] = useState(false);
   const [placeKey, setPlaceKey] = useState("");
   const [orderId, setOrderId] = useState<string | null>(null);
-  const [stage, setStage] = useState<"pending" | "approved" | "paid">("pending");
+  const [stage, setStage] = useState<"pending" | "accepted" | "paid">("pending");
   const [error, setError] = useState<string | null>(null);
   const banks = useGetDigitalMetalsCustomerBankDestinationsQuery(customerId, { skip: !open });
   const [getQuote, quoteState] = useCreateDigitalMetalsCounterSellQuoteMutation();
   const [placeSell, placeState] = usePlaceDigitalMetalsCounterSellMutation();
-  const [approve, approveState] = useApproveDigitalMetalsSellOrderMutation();
   const [payCash, payState] = useRecordDigitalMetalsSellCashPayoutMutation();
   const secondsLeft = useSecondsLeft(quote?.expiresAt);
 
@@ -133,24 +129,15 @@ export function CounterSellMetalDialog({
         bankDestinationId: payout === "BANK" ? bankId : undefined,
         note: note.trim() || undefined,
       }).unwrap();
-      setOrderId(String(res.order.id ?? ""));
-      setStage("pending");
+      if (res.order.status !== "PAYABLE_OPEN" || !res.order.id) {
+        throw new Error("Sale confirmation is incomplete. Refresh the customer before retrying.");
+      }
+      setOrderId(String(res.order.id));
+      setStage("accepted");
       setStep(2);
-      toast.success("Sell sent for approval");
+      toast.success("Sale accepted — payment pending");
     } catch (err) {
       setError(apiErrorMessage(err, "Could not place this sell."));
-    }
-  }
-
-  async function approveNow() {
-    if (!orderId) return;
-    setError(null);
-    try {
-      await approve({ orderId }).unwrap();
-      setStage("approved");
-      toast.success("Sell approved");
-    } catch (err) {
-      setError(apiErrorMessage(err, "Could not approve this sell."));
     }
   }
 
@@ -262,7 +249,7 @@ export function CounterSellMetalDialog({
                   value={payout}
                   onChange={setPayout}
                   options={[
-                    { value: "CASH", label: "Cash at counter", icon: Banknote, hint: "Paid after approval" },
+                    { value: "CASH", label: "Cash at counter", icon: Banknote, hint: "Record cash after confirming the sale" },
                     {
                       value: "BANK",
                       label: "Bank transfer",
@@ -312,7 +299,7 @@ export function CounterSellMetalDialog({
                   )
                 ) : (
                   <p className="text-xs text-[#8a7c80]">
-                    The grams are reserved now. Once the sell is approved, record the cash you hand over and it comes off your cash in hand.
+                    Confirming the sale debits the grams immediately. Record the cash only after you hand it to the customer; it then comes off your cash in hand.
                   </p>
                 )}
               </div>
@@ -333,8 +320,8 @@ export function CounterSellMetalDialog({
                   {dmWeight(quote.quantityUg)} {metal === "GOLD" ? "gold" : "silver"} sold and settled. The amount comes off your cash in hand.
                 </p>
               </CounterDone>
-            ) : stage === "approved" ? (
-              <CounterDone title="Sell approved">
+            ) : stage === "accepted" ? (
+              <CounterDone title="Sale accepted — payment pending">
                 <p>
                   {dmWeight(quote.quantityUg)} {metal === "GOLD" ? "gold" : "silver"} is sold. {customerName} is owed {dmInr(settlement)}.
                 </p>
@@ -343,29 +330,18 @@ export function CounterSellMetalDialog({
                     Count the cash with the customer, then tap Paid in cash.
                   </Notice>
                 ) : (
-                  <Notice tone="blue" title="Create the bank payout">
-                    The transfer goes through the usual two-person check in{" "}
-                    <Link href="/digital-metals/payouts" className="font-semibold underline">
-                      Digi Gold → Payouts
+                  <Notice tone="blue" title="Transfer and record payment">
+                    Transfer the amount externally, then record the payment on the{" "}
+                    <Link href={`/digital-metals/sells/${orderId}`} className="font-semibold underline">
+                      sell order
                     </Link>
                     .
                   </Notice>
                 )}
               </CounterDone>
             ) : (
-              <CounterDone title="Sent for approval" tone="amber">
-                <p>
-                  {dmWeight(quote.quantityUg)} is reserved from {customerName}&apos;s balance. Approve it within 30 minutes or the price lapses and the grams return to the customer.
-                </p>
-                {canApprove ? null : (
-                  <Notice tone="blue">
-                    An admin approves it in{" "}
-                    <Link href="/digital-metals/sells" className="font-semibold underline">
-                      Digi Gold → Sells to approve
-                    </Link>
-                    .
-                  </Notice>
-                )}
+              <CounterDone title="Sale status needs review" tone="amber">
+                <p>Refresh the customer to check this sale before making payment.</p>
               </CounterDone>
             )
           ) : null}
@@ -394,21 +370,11 @@ export function CounterSellMetalDialog({
               ) : (
                 <Button disabled={!consent || !bankReady || placeState.isLoading} onClick={() => void confirm()}>
                   {placeState.isLoading ? <Loader2 className="animate-spin" /> : null}
-                  Send for approval
+                  Confirm sale
                 </Button>
               )}
             </>
-          ) : stage === "pending" && canApprove ? (
-            <>
-              <Button variant="outline" onClick={() => close(false)}>
-                Approve later
-              </Button>
-              <Button onClick={() => void approveNow()} disabled={approveState.isLoading}>
-                {approveState.isLoading ? <Loader2 className="animate-spin" /> : null}
-                Approve now
-              </Button>
-            </>
-          ) : stage === "approved" && payout === "CASH" ? (
+          ) : stage === "accepted" && payout === "CASH" ? (
             <>
               <Button variant="outline" onClick={() => close(false)}>
                 Pay later

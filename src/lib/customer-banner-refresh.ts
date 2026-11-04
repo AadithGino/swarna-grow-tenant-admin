@@ -157,6 +157,6 @@ export function useCustomerBannerScheduleRefetch(
     if (boundaryMs == null || !Number.isFinite(boundaryMs)) return;
     return scheduleRefetchAtBoundary(boundaryMs, refetch, clock);
     // items/meta summarized by itemsScheduleKey, boundaryToken, and meta.serverTime to avoid timer restarts on unrelated rerenders.
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional schedule key deps
+     
   }, [enabled, boundaryToken, itemsScheduleKey, meta?.serverTime, refetch]);
 }

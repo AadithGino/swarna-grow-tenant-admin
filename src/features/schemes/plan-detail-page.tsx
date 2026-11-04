@@ -111,7 +111,7 @@ export function PlanDetailPage({ planId }: { planId: string }) {
           }),
       startDate: istBusinessDateToday(),
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- preview when plan payload loads
+     
   }, [planId, planQuery.data]);
 
   const ruleSections = useMemo(() => {

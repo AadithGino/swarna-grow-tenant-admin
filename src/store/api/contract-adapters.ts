@@ -1884,12 +1884,6 @@ export function adaptSubscription(raw: unknown): Record<string, unknown> {
         percent: 0,
         status: "OK",
       },
-      whatsappMessages: {
-        used: 0,
-        limit: limits.whatsappMessages ?? 0,
-        percent: 0,
-        status: "OK",
-      },
     },
     features: data.features ?? {},
   };

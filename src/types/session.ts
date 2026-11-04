@@ -32,6 +32,8 @@ export type SetupTaskKey =
   | "BRANCH"
   | "STAFF"
   | "GOLD_RATE"
+  | "STORE_GOLD_RATE"
+  | "DM_RATES"
   | "FIRST_PLAN";
 
 export type SetupTask = {

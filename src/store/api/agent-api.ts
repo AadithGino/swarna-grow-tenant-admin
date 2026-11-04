@@ -579,7 +579,6 @@ const mockBaseQuery: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQueryErro
   if (url === "/staff/payment-links" && method === "POST") {
     return ok({ id: "plink_demo", token: "demo-token", url: "/pay/demo-token", status: "ACTIVE", expiresAt: new Date(Date.now() + 30 * 60_000).toISOString() });
   }
-  if (/^\/staff\/payments\/[^/]+\/share-whatsapp$/.test(url) && method === "POST") return ok({ queued: true });
   return ok({});
 };
 
@@ -829,9 +828,6 @@ export const agentApi = createApi({
       query: (body) => ({ url: "/staff/payment-links", method: "POST", body }),
       invalidatesTags: (_r, _e, arg) => [{ type: "AgentScheme", id: arg.schemeId }],
     }),
-    shareAgentPaymentWhatsApp: builder.mutation<{ queued?: boolean; id?: string }, string>({
-      query: (paymentId) => ({ url: `/staff/payments/${paymentId}/share-whatsapp`, method: "POST" }),
-    }),
     getAgentNotifications: builder.query<AgentNotification[], void>({
       query: () => "/staff/notifications",
       transformResponse: (rows: unknown) => asList(rows, (raw) => ({
@@ -949,7 +945,6 @@ export const {
   useGetAgentPassbookQuery,
   useRecordAgentPaymentMutation,
   useCreateAgentPaymentLinkMutation,
-  useShareAgentPaymentWhatsAppMutation,
   useGetAgentNotificationsQuery,
   useGetAgentPaymentsQuery,
   useGetAgentPaymentQuery,

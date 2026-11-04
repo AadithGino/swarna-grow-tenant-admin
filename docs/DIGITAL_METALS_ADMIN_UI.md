@@ -11,9 +11,10 @@ Design aligned with scheme admin: `PageHeader`, `Surface`, `StatCard`, `ListSear
 | Sell approvals | `/digital-metals/sells` | Default `PENDING_APPROVAL` filter; execute sale requires explicit staff attestation checkbox |
 | Payouts | `/digital-metals/payouts` | Payables + payout list; detail requires attestation checkbox for settlement, evidence + reason for unknown/resolve |
 | Settings / rates / quote | `/digital-metals/settings` … | Existing editor + manual rates (unchanged structure, scheme-style chrome) |
-| Redemption | catalogue / fulfilment / orders | Catalogue edit; fulfilment actions; **COMPLETE_DELIVERY** requires attestation checkbox |
-| Procurement | `/digital-metals/procurement` | Gram display; default effective date = IST today |
-| Hedge | `/digital-metals/hedge` | Coverage incomplete banners; gram lines |
+| Redemption | catalogue / fulfilment / orders | **P4:** Paid → Ready for pickup / Ship → Handed over (legacy accept/packing de-emphasized). Pickup: 6-digit customer code + staff attestation checkbox → complete pickup. Delivery: attestation → complete delivery. |
+| Customer portal | `customer-digital-metals-buy-pages.tsx`, `customer-digital-metals-redeem-pages.tsx` | Buy and redeem journeys wired to app APIs; redeem timeline matches P4 simplified fulfilment. |
+| Procurement | `/digital-metals/procurement` | Advanced / historical supplier movements (not daily workflow) |
+| Hedge | `/digital-metals/hedge` | Live coverage + close business day; detail on hedge page (overview shows lightweight customer held totals only — **P5**) |
 
 Shared: `digital-metals-workspace-overview.tsx`, `digital-metals-admin-list-toolbar.tsx`.
 

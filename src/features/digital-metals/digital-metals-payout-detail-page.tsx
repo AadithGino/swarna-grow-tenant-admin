@@ -143,7 +143,7 @@ export function DigitalMetalsPayoutDetailPage({ payoutId }: { payoutId: string }
             <Surface icon={ShieldCheck} title="Next step" description="Only the actions your role can take right now are shown.">
               <div className="space-y-4 px-5 py-4">
                 {actions.includes("APPROVE") ? (
-                  <ActionBlock icon={BadgeCheck} title="Approve payout" description="A second person approves before money leaves your account.">
+                  <ActionBlock icon={BadgeCheck} title="Approve payout" description="Confirm this payout before it is sent to the bank.">
                     <Button type="button" className="rounded-xl" disabled={busy} onClick={() => void run(() => approve(payoutId).unwrap())}>
                       Approve (approver)
                     </Button>

@@ -58,7 +58,6 @@ import { EcommerceCatalogImage } from "@/src/features/ecommerce/ecommerce-catalo
 import { cn } from "@/lib/utils";
 import {
   BANNER_IMAGE_ARTWORK_HINT,
-  BANNER_PLACEMENT_PREVIEW_CAPTION,
   BANNER_SIGNED_URL_REVOCATION_HINT,
   CUSTOMER_PROMO_RAIL_FRAME,
   CUSTOMER_PROMO_SECTION_TITLE,

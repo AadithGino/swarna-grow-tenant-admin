@@ -288,7 +288,7 @@ export function PlatformMonitoringPage() {
       <PageHeader
         eyebrow="Reliability operations"
         title="Monitoring"
-        description="Review gateway and WhatsApp webhook failures, retry eligible events, and correlate application errors by trace ID."
+        description="Review gateway webhook failures, retry eligible events, and correlate application errors by trace ID."
         actions={
           <Button variant="outline" onClick={refreshAll} disabled={isFetching}>
             <RefreshCcw className={isFetching ? "animate-spin" : ""} />
@@ -364,7 +364,6 @@ export function PlatformMonitoringPage() {
                 <SelectContent>
                   <SelectItem value="ALL">All providers</SelectItem>
                   <SelectItem value="PHONEPE">PhonePe</SelectItem>
-                  <SelectItem value="WHATSAPP">WhatsApp</SelectItem>
                 </SelectContent>
               </Select>
             }

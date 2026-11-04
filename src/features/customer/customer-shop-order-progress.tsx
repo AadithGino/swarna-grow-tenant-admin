@@ -29,6 +29,21 @@ function isCod(order: Record<string, unknown>) {
   return String(order.paymentMethod ?? "ONLINE") === "COD";
 }
 
+const PICKUP_HANDOVER_LABEL = "Handed over at store";
+
+function pickupHandoverComplete(order: Record<string, unknown>) {
+  return String(order.status ?? "") === "DELIVERED";
+}
+
+function customerPickupAcknowledged(order: Record<string, unknown>) {
+  const handover = order.fulfilmentHandover as { customerPickupAcknowledgedAt?: string | null } | undefined;
+  return Boolean(handover?.customerPickupAcknowledgedAt);
+}
+
+function markAllStepsComplete(states: StepState[]) {
+  for (let i = 0; i < states.length; i += 1) states[i] = "complete";
+}
+
 function stepStates(count: number, activeIndex: number, failedIndex: number | null, cancelled: boolean): StepState[] {
   return Array.from({ length: count }, (_, i) => {
     if (cancelled) return i === 0 ? "complete" : "cancelled";
@@ -114,7 +129,7 @@ export function buildShopOrderTimeline(order: Record<string, unknown>): OrderTim
   if (cod) {
     const labels = delivery
       ? ["Order placed", "Store confirms", "Preparing", "Out for delivery", "Delivered"]
-      : ["Order placed", "Store confirms", "Preparing", "Ready for pickup", "Collected"];
+      : ["Order placed", "Store confirms", "Preparing", "Ready for pickup", PICKUP_HANDOVER_LABEL];
     let active = 0;
     let headline = String(order.statusLabel ?? "Order placed");
     let tone: OrderTimeline["tone"] = "neutral";
@@ -148,23 +163,38 @@ export function buildShopOrderTimeline(order: Record<string, unknown>): OrderTim
 
     const states = stepStates(labels.length, Math.min(active, labels.length - 1), null, false);
     if (status === "DELIVERED") {
-      for (let i = 0; i < labels.length; i += 1) states[i] = "complete";
+      if (cod && !codCollected) {
+        for (let i = 0; i < labels.length - 1; i += 1) states[i] = "complete";
+        states[labels.length - 1] = "current";
+      } else {
+        markAllStepsComplete(states);
+      }
     }
 
+    const pickupAck = !delivery && customerPickupAcknowledged(order);
+    const steps = labels.map((label, i) => {
+      const state = states[i];
+      const hint =
+        !delivery && i === labels.length - 1 && state === "current" && pickupAck && !pickupHandoverComplete(order)
+          ? "Store staff must confirm handover — your code alone does not complete pickup."
+          : undefined;
+      return { id: `s${i}`, label, state, hint };
+    });
+
     return {
-      steps: labels.map((label, i) => ({ id: `s${i}`, label, state: states[i] })),
+      steps,
       headline,
       subheadline: codCollected ? undefined : "Cash on delivery — do not pay online",
       tone,
       progressRatio: active / labels.length,
-      terminal: status === "DELIVERED" && codCollected,
+      terminal: status === "DELIVERED" && (!cod || codCollected),
     };
   }
 
   // Online payment
   const labels = delivery
     ? ["Order placed", "Payment", "Preparing", "Shipped", "Delivered"]
-    : ["Order placed", "Payment", "Preparing", "Ready for pickup", "Collected"];
+    : ["Order placed", "Payment", "Preparing", "Ready for pickup", PICKUP_HANDOVER_LABEL];
 
   let active = 0;
   let failedIndex: number | null = null;
@@ -199,21 +229,39 @@ export function buildShopOrderTimeline(order: Record<string, unknown>): OrderTim
     tone = "warning";
   } else if (status === "DELIVERED") {
     active = labels.length;
-    headline = "Delivered";
+    headline = delivery ? "Delivered" : "Handed over at store";
     tone = "success";
   }
 
   const states = stepStates(labels.length, Math.min(active, labels.length - 1), failedIndex, false);
-  if (status === "DELIVERED") {
-    for (let i = 0; i < labels.length; i += 1) states[i] = "complete";
+  if (pickupHandoverComplete(order) && delivery) {
+    markAllStepsComplete(states);
+  } else if (pickupHandoverComplete(order) && !delivery) {
+    markAllStepsComplete(states);
+  }
+
+  const pickupAck = !delivery && customerPickupAcknowledged(order);
+  const steps = labels.map((label, i) => {
+    const state = states[i];
+    const hint =
+      !delivery && i === labels.length - 1 && state === "current" && pickupAck && !pickupHandoverComplete(order)
+        ? "Store staff must confirm handover — your code alone does not complete pickup."
+        : undefined;
+    return { id: `s${i}`, label, state, hint };
+  });
+
+  let subheadline: string | undefined;
+  if (!delivery && status === "READY_FOR_PICKUP" && pickupAck) {
+    subheadline = "Code confirmed — waiting for store staff to complete handover.";
   }
 
   return {
-    steps: labels.map((label, i) => ({ id: `s${i}`, label, state: states[i] })),
+    steps,
     headline,
+    subheadline,
     tone,
     progressRatio: Math.min(1, active / labels.length),
-    terminal: status === "DELIVERED",
+    terminal: pickupHandoverComplete(order),
   };
 }
 

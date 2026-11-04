@@ -75,10 +75,13 @@ const ACTION_LABELS: Record<string, string> = {
 };
 
 export function RedemptionPermittedActionChips({ actions }: { actions: string[] | undefined }) {
-  if (!actions?.length) return <span className="text-xs text-muted-foreground">—</span>;
+  const visibleActions = (actions ?? []).filter(
+    (a) => a !== "ACCEPT_FULFILMENT" && a !== "RECORD_PACKING",
+  );
+  if (!visibleActions.length) return <span className="text-xs text-muted-foreground">—</span>;
   return (
     <div className="flex flex-wrap gap-1">
-      {actions.map((a) => (
+      {visibleActions.map((a) => (
         <span
           key={a}
           className="rounded-full border border-[#eaded9] bg-[#faf8f7] px-2 py-0.5 text-[0.7rem] font-semibold text-[#5c3d42]"

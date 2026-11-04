@@ -7,6 +7,7 @@ import { Surface } from "@/src/components/common/page-parts";
 import { useAppSelector } from "@/src/store/hooks";
 import { useTours } from "@/src/components/tour/tour-provider";
 import { tourForSetupTask } from "@/src/lib/tours/registry";
+import { RatesWorkspaceHub } from "@/src/components/dashboard/rates-workspace-hub";
 
 export function SetupChecklist() {
   const session = useAppSelector((s) => s.session.session);
@@ -14,8 +15,11 @@ export function SetupChecklist() {
   const tasks = session?.setupTasks ?? [];
   if (!tasks.length || session?.setupComplete) return null;
   const done = tasks.filter((t) => t.completed).length;
+  const ratesIncomplete = tasks.some(
+    (t) => !t.completed && ["GOLD_RATE", "STORE_GOLD_RATE", "DM_RATES"].includes(String(t.key)),
+  );
   return (
-    <div data-tour="setup-checklist">
+    <div data-tour="setup-checklist" className="space-y-6">
     <Surface
       title="Complete your setup"
       description={`${done} of ${tasks.length} tasks done — finish these before day-to-day operations.`}
@@ -62,6 +66,7 @@ export function SetupChecklist() {
         ))}
       </ul>
     </Surface>
+    {ratesIncomplete ? <RatesWorkspaceHub /> : null}
     </div>
   );
 }

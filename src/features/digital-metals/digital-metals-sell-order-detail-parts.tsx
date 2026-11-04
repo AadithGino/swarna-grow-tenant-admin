@@ -1,9 +1,16 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
+import { toast } from "sonner";
 import { Landmark, Scale, UserRound } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Surface } from "@/src/components/common/page-parts";
 import { StatusBadge } from "@/src/components/common/status-badge";
+import { toastApiError } from "@/src/lib/api-error";
+import { newIdempotencyKey } from "@/src/lib/idempotency";
+import { useVerifyDigitalMetalsBankDestinationMutation } from "@/src/store/api/admin-api";
 import { InitialsAvatar } from "@/src/components/admin-ui/admin-table";
 import { InfoList, InfoRow } from "@/src/components/admin-ui/detail-parts";
 import { formatAssetLabel } from "@/src/lib/digital-metals-asset-ui";
@@ -18,6 +25,7 @@ type CustomerBrief = {
 };
 
 type BankBrief = {
+  id?: string;
   accountHolderName?: string;
   accountLast4?: string;
   ifsc?: string;
@@ -50,7 +58,18 @@ export function DigitalMetalsSellCustomerPanel({ customer }: { customer: Custome
   );
 }
 
-export function DigitalMetalsSellBankPanel({ bank }: { bank: BankBrief | null | undefined }) {
+export function DigitalMetalsSellBankPanel({
+  bank,
+  customerId,
+}: {
+  bank: BankBrief | null | undefined;
+  customerId?: string;
+}) {
+  const [verify, verifyState] = useVerifyDigitalMetalsBankDestinationMutation();
+  const [note, setNote] = useState("");
+  const pending =
+    bank?.status === "PENDING_VERIFICATION" || bank?.status === "PENDING" || String(bank?.status ?? "").includes("PENDING");
+
   if (!bank?.accountHolderName) {
     return (
       <Surface icon={Landmark} title="Payout bank">
@@ -74,6 +93,38 @@ export function DigitalMetalsSellBankPanel({ bank }: { bank: BankBrief | null | 
             <StatusBadge status={String(bank.status)} />
           </InfoRow>
         </InfoList>
+      ) : null}
+      {pending && customerId && bank.id ? (
+        <div className="space-y-2 border-t border-[#f3eae7] px-5 py-4">
+          <p className="text-xs text-[#7a6d70]">Verify this account before payout without leaving the sale.</p>
+          <Input
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            placeholder="Verification note (optional)"
+            className="h-9 rounded-xl text-sm"
+          />
+          <Button
+            type="button"
+            size="sm"
+            className="rounded-lg"
+            disabled={verifyState.isLoading}
+            onClick={async () => {
+              try {
+                await verify({
+                  customerId,
+                  destinationId: String(bank.id),
+                  note: note.trim() || "Verified from sell order screen",
+                  idempotencyKey: newIdempotencyKey(),
+                }).unwrap();
+                toast.success("Bank account verified.");
+              } catch (err) {
+                toastApiError(err);
+              }
+            }}
+          >
+            Verify for payout
+          </Button>
+        </div>
       ) : null}
     </Surface>
   );

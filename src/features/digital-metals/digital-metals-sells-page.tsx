@@ -3,9 +3,10 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Clock3, HandCoins, ShieldCheck, UserRound } from "lucide-react";
+import { Clock3, HandCoins, Landmark, ShieldCheck, UserRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
 import { PageHeader, Surface } from "@/src/components/common/page-parts";
 import { EmptyState, PageSkeleton, QueryError } from "@/src/components/common/query-state";
 import { StatusBadge } from "@/src/components/common/status-badge";
@@ -27,10 +28,17 @@ import { DetailLayout, Fact, FactGrid, Notice, Timeline, type TimelineStep } fro
 import { useLoadMoreList } from "@/src/hooks/use-load-more-list";
 import { toastApiError } from "@/src/lib/api-error";
 import { formatInrPerGramFromPaise } from "@/src/lib/digital-metals-display";
+import { newIdempotencyKey } from "@/src/lib/idempotency";
+import { useAppSelector } from "@/src/store/hooks";
+import { hasPermission } from "@/src/lib/permissions";
+import { SellCashPayoutButton } from "@/src/features/customers/counter/sell-cash-payout-button";
+import { SELL_PAYMENT_DISPLAY } from "@/src/lib/plain-language-labels";
+import { rupeesToPaise } from "@/src/lib/ui-amount-conversion";
 import {
   useApproveDigitalMetalsSellOrderMutation,
   useGetDigitalMetalsSellOrderQuery,
   useGetDigitalMetalsSellOrdersQuery,
+  useRecordDigitalMetalsSellPaymentMutation,
 } from "@/src/store/api/admin-api";
 import { useDigitalMetalsServerEntitlement } from "./digital-metals-admin-shared";
 import { AdminDigitalMetalsDocumentPanel } from "./digital-metals-admin-document-panel";
@@ -53,9 +61,9 @@ import {
 
 const SELL_STATUS_OPTIONS = [
   { value: "ALL", label: "All" },
-  { value: "PENDING_APPROVAL", label: "To approve" },
-  { value: "PAYABLE_OPEN", label: "Payout due" },
-  { value: "SETTLED", label: "Settled" },
+  { value: "PENDING_APPROVAL", label: "Previous requests" },
+  { value: "PAYABLE_OPEN", label: "Payment pending" },
+  { value: "SETTLED", label: "Paid" },
   { value: "CANCELLED", label: "Cancelled" },
   { value: "EXPIRED", label: "Expired" },
 ];
@@ -70,7 +78,7 @@ const rowId = (r: SellAdminRow) => String(r.id);
 
 export function DigitalMetalsSellsPage() {
   const ent = useDigitalMetalsServerEntitlement();
-  const [status, setStatus] = useState("PENDING_APPROVAL");
+  const [status, setStatus] = useState("PAYABLE_OPEN");
   const [metal, setMetal] = useState("ALL");
   const [search, setSearch] = useState("");
   const debounced = useDebouncedValue(search.trim(), 350);
@@ -86,7 +94,7 @@ export function DigitalMetalsSellsPage() {
     { skip: !ent.workspaceVisible },
   );
   const pendingCount = useGetDigitalMetalsSellOrdersQuery(
-    { status: "PENDING_APPROVAL", limit: 50 },
+    { status: "PAYABLE_OPEN", limit: 50 },
     { skip: !ent.workspaceVisible },
   );
 
@@ -140,9 +148,9 @@ export function DigitalMetalsSellsPage() {
     },
     {
       key: "status",
-      header: "Status",
+      header: "Payment",
       primary: true,
-      cell: (r) => <StatusBadge status={r.status} label={r.status === "PENDING_APPROVAL" ? "To approve" : undefined} />,
+      cell: (r) => sellPaymentBadge(r),
       sortValue: (r) => r.status,
     },
     {
@@ -154,20 +162,20 @@ export function DigitalMetalsSellsPage() {
     },
   ];
 
-  const views = SELL_STATUS_OPTIONS.map((o) => (o.value === "PENDING_APPROVAL" ? { ...o, count: toApprove } : o));
+  const views = SELL_STATUS_OPTIONS.map((o) => (o.value === "PAYABLE_OPEN" ? { ...o, count: toApprove } : o));
   const activeFilters = [
     ...(metal !== "ALL" ? [{ key: "metal", label: metal === "GOLD" ? "Gold" : "Silver", onClear: () => setMetal("ALL") }] : []),
     ...(search.trim() ? [{ key: "q", label: `“${search.trim()}”`, onClear: () => setSearch("") }] : []),
   ];
 
   return (
-    <DmGate loading={ent.loading} visible={ent.workspaceVisible} message={ent.disabledMessage} title="Sell approvals">
+    <DmGate loading={ent.loading} visible={ent.workspaceVisible} message={ent.disabledMessage} title="Sell orders">
       <div className="space-y-6" data-testid="digital-metals-sells-list">
         <PageHeader
           eyebrow={DM_SECTION}
           icon={HandCoins}
-          title="Sell approvals"
-          description="Executing a sale debits the customer's metal. The bank payout is a separate step under Payouts."
+          title="Sell orders"
+          description="Confirmed sales are accepted automatically. Transfer the amount owed, then record payment here."
         />
         <ListPanel
           toolbar={
@@ -206,10 +214,10 @@ export function DigitalMetalsSellsPage() {
               empty={
                 <EmptyState
                   icon={HandCoins}
-                  title={status === "PENDING_APPROVAL" ? "Nothing to approve" : "No sell orders match"}
+                  title={status === "PENDING_APPROVAL" ? "No previous requests" : "No sell orders match"}
                   detail={
                     status === "PENDING_APPROVAL"
-                      ? "When a customer confirms a sale it waits here for you to execute."
+                      ? "New confirmed sales appear under Payment pending. This view is for previous requests only."
                       : "Try another status or clear the search."
                   }
                 />
@@ -231,7 +239,7 @@ export function DigitalMetalsSellsPage() {
   );
 }
 
-function sellTimeline(o: SellAdminRow & { payable?: { status?: string } }): TimelineStep[] {
+function sellTimeline(o: SellAdminRow & { payable?: { status?: string }; payoutMethod?: string }): TimelineStep[] {
   const executed = Boolean(o.executedAt) || ["PAYABLE_OPEN", "SETTLED"].includes(o.status);
   const ended = ["CANCELLED", "EXPIRED"].includes(o.status);
   return [
@@ -242,7 +250,7 @@ function sellTimeline(o: SellAdminRow & { payable?: { status?: string } }): Time
       : {
           key: "exec",
           title: "Sale executed · metal debited",
-          time: o.executedAt ? shortDateTime(o.executedAt) : o.approvalExpiresAt ? `Approve before ${shortDateTime(o.approvalExpiresAt)}` : undefined,
+          time: o.executedAt ? shortDateTime(o.executedAt) : undefined,
           state: executed ? "done" : "current",
         },
     ...(ended
@@ -250,18 +258,46 @@ function sellTimeline(o: SellAdminRow & { payable?: { status?: string } }): Time
       : [
           {
             key: "paid",
-            title: "Bank payout settled",
-            state: (o.status === "SETTLED" ? "done" : executed ? "current" : "upcoming") as TimelineStep["state"],
+            title: o.payoutMethod === "CASH" ? "Cash payment recorded" : "Bank payment recorded",
+            state: (o.paymentDisplayState?.key === "PAID" || o.payable?.status === "SETTLED" ? "done" : executed ? "current" : "upcoming") as TimelineStep["state"],
           },
         ]),
   ];
 }
 
+function sellPaymentBadge(o: {
+  status?: string;
+  paymentDisplayState?: { key?: string; label?: string } | null;
+}) {
+  const key = o.paymentDisplayState?.key;
+  const label =
+    o.paymentDisplayState?.label ??
+    (key ? SELL_PAYMENT_DISPLAY[key] : undefined) ??
+    (o.status === "PENDING_APPROVAL" ? SELL_PAYMENT_DISPLAY.AWAITING_ACCEPTANCE : undefined);
+  if (!label) return <StatusBadge status={o.status} label={o.status === "PENDING_APPROVAL" ? "Previous request needs review" : undefined} />;
+  const tone =
+    key === "PAID"
+      ? "green"
+      : key === "PARTIALLY_PAID" || key === "UNPAID"
+        ? "amber"
+        : key === "PAYMENT_BEING_CHECKED"
+          ? "blue"
+          : undefined;
+  return <StatusBadge status={o.status} label={label} tone={tone} />;
+}
+
 export function DigitalMetalsSellDetailPage({ orderId }: { orderId: string }) {
   const ent = useDigitalMetalsServerEntitlement();
+  const user = useAppSelector((s) => s.session.session?.user);
   const detail = useGetDigitalMetalsSellOrderQuery(orderId, { skip: !ent.workspaceVisible });
   const [approve, approveState] = useApproveDigitalMetalsSellOrderMutation();
+  const [recordPayment, recordPaymentState] = useRecordDigitalMetalsSellPaymentMutation();
   const [executeAttestation, setExecuteAttestation] = useState(false);
+  const [paymentAttestation, setPaymentAttestation] = useState(false);
+  const [amountRupees, setAmountRupees] = useState("");
+  const [settlementDate, setSettlementDate] = useState("");
+  const [bankReference, setBankReference] = useState("");
+  const [evidenceId, setEvidenceId] = useState("");
 
   if (ent.loading || detail.isLoading) return <PageSkeleton cards={2} />;
   if (detail.isError) return <QueryError error={detail.error} onRetry={detail.refetch} />;
@@ -269,7 +305,10 @@ export function DigitalMetalsSellDetailPage({ orderId }: { orderId: string }) {
   const o = detail.data as
     | (SellAdminRow & {
         version?: number;
-        payable?: { outstandingPaise?: number; status?: string };
+        payoutMethod?: string;
+        payable?: { outstandingPaise?: number; amountPaise?: number; status?: string };
+        paymentDisplayState?: { key?: string; label?: string };
+        permittedActions?: string[];
         sellSummary?: { sellRatePerGramPaise?: number | null };
         snapshot?: { rateSnapshot?: { sellRatePerGramPaise?: number } };
       })
@@ -277,7 +316,7 @@ export function DigitalMetalsSellDetailPage({ orderId }: { orderId: string }) {
   if (!o?.id) {
     return (
       <div className="space-y-6">
-        <PageHeader back={{ href: "/digital-metals/sells", label: "Sell approvals" }} eyebrow={DM_SECTION} title={`Sell ${orderId}`} />
+        <PageHeader back={{ href: "/digital-metals/sells", label: "Sell orders" }} eyebrow={DM_SECTION} title={`Sell ${orderId}`} />
         <div className="rounded-[1.15rem] border border-[#e8dcd7] bg-white">
           <EmptyState title="Sell order not found" detail="It may have been removed, or the link is wrong." />
         </div>
@@ -287,9 +326,12 @@ export function DigitalMetalsSellDetailPage({ orderId }: { orderId: string }) {
 
   const sellRate = o.sellSummary?.sellRatePerGramPaise ?? o.snapshot?.rateSnapshot?.sellRatePerGramPaise ?? null;
   const pending = o.status === "PENDING_APPROVAL";
+  const canAccept = hasPermission(user, "digital-metals.sell.approve") && pending;
+  const canRecord = hasPermission(user, "digital-metals.payout.record") && o.payoutMethod !== "CASH" && (o.permittedActions ?? []).includes("RECORD_PAYMENT");
+  const outstandingPaise = Number(o.payable?.outstandingPaise ?? 0);
 
-  const approvalCard = pending ? (
-    <Surface icon={ShieldCheck} title="Execute this sale" description="Debits metal from the customer's wallet and opens an INR payable." className="ring-1 ring-[#ecd3d9]">
+  const approvalCard = canAccept && pending ? (
+    <Surface icon={ShieldCheck} title="Resolve previous request" description="This request predates automatic acceptance. Check its quote and bank before completing it." className="ring-1 ring-[#ecd3d9]">
       <div className="space-y-4 px-5 py-4">
         {o.approvalExpiresAt ? (
           <Notice tone="amber" icon={Clock3}>
@@ -312,21 +354,103 @@ export function DigitalMetalsSellDetailPage({ orderId }: { orderId: string }) {
               .catch((err) => toastApiError(err));
           }}
         >
-          Execute sale · {dmInr(o.settlementPaise)}
+          Complete previous request · {dmInr(o.settlementPaise)}
         </Button>
       </div>
     </Surface>
   ) : null;
 
+  const recordPaymentCard =
+    canRecord && outstandingPaise > 0 ? (
+      <Surface icon={Landmark} title="Record payment" description="Use after you send NEFT/IMPS/RTGS from your bank. Only the amount you enter is cleared.">
+        <div className="space-y-4 px-5 py-4">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="block space-y-1.5 text-sm">
+              <span className="font-medium text-[#4f3d41]">Amount (₹)</span>
+              <Input
+                inputMode="decimal"
+                placeholder={String((outstandingPaise / 100).toFixed(2))}
+                value={amountRupees}
+                onChange={(e) => setAmountRupees(e.target.value)}
+                className="h-10 rounded-xl"
+              />
+              <span className="text-xs text-[#9a8d90]">Outstanding {dmInr(outstandingPaise)}</span>
+            </label>
+            <label className="block space-y-1.5 text-sm">
+              <span className="font-medium text-[#4f3d41]">Settlement date</span>
+              <Input type="date" value={settlementDate} onChange={(e) => setSettlementDate(e.target.value)} className="h-10 rounded-xl" />
+            </label>
+            <label className="block space-y-1.5 text-sm sm:col-span-2">
+              <span className="font-medium text-[#4f3d41]">Bank reference (UTR)</span>
+              <Input value={bankReference} onChange={(e) => setBankReference(e.target.value)} className="h-10 rounded-xl" />
+            </label>
+            <label className="block space-y-1.5 text-sm sm:col-span-2">
+              <span className="font-medium text-[#4f3d41]">Evidence upload ID</span>
+              <Input value={evidenceId} onChange={(e) => setEvidenceId(e.target.value)} className="h-10 rounded-xl" />
+            </label>
+          </div>
+          <label className="flex items-start gap-3 rounded-xl border border-[#efe5e1] bg-[#fcf9f8] p-3 text-sm leading-5 text-[#3c2a2e]">
+            <Checkbox checked={paymentAttestation} onCheckedChange={(v) => setPaymentAttestation(v === true)} className="mt-0.5" />
+            <span>I confirm this amount was transferred to the customer&apos;s bank account outside Swarna Grow.</span>
+          </label>
+          <Button
+            className="h-11 w-full rounded-xl text-[0.95rem]"
+            disabled={
+              recordPaymentState.isLoading ||
+              !paymentAttestation ||
+              !settlementDate.trim() ||
+              !bankReference.trim() ||
+              !evidenceId.trim() ||
+              !amountRupees.trim()
+            }
+            onClick={() => {
+              let amountPaise: number;
+              try {
+                amountPaise = rupeesToPaise(amountRupees);
+              } catch {
+                toast.error("Enter a valid amount in rupees.");
+                return;
+              }
+              if (amountPaise <= 0 || amountPaise > outstandingPaise) {
+                toast.error("Amount must be between ₹0.01 and the outstanding balance.");
+                return;
+              }
+              void recordPayment({
+                orderId,
+                expectedVersion: o.version ?? 1,
+                amountPaise,
+                settlementDate,
+                bankReference: bankReference.trim(),
+                evidenceUploadIds: [evidenceId.trim()],
+                staffAttestation: true,
+                idempotencyKey: newIdempotencyKey(),
+              })
+                .unwrap()
+                .then(() => {
+                  toast.success("Payment recorded.");
+                  setAmountRupees("");
+                  setBankReference("");
+                  setEvidenceId("");
+                  setPaymentAttestation(false);
+                })
+                .catch((err) => toastApiError(err));
+            }}
+          >
+            Record payment
+          </Button>
+        </div>
+      </Surface>
+    ) : null;
+
   return (
     <div className="space-y-6">
       <PageHeader
-        back={{ href: "/digital-metals/sells", label: "Sell approvals" }}
+        back={{ href: "/digital-metals/sells", label: "Sell orders" }}
         eyebrow={DM_SECTION}
         title={o.customer?.name ? `${o.customer.name} is selling ${dmWeight(o.quantityUg)}` : "Sell order"}
         meta={
           <>
-            <StatusBadge status={o.status} label={pending ? "To approve" : undefined} />
+            {sellPaymentBadge(o)}
             <MetalPill metal={o.metal} />
             <IdChip>{orderId}</IdChip>
           </>
@@ -358,7 +482,7 @@ export function DigitalMetalsSellDetailPage({ orderId }: { orderId: string }) {
             </Surface>
             <div className="grid items-start gap-6 lg:grid-cols-2">
               <DigitalMetalsSellCustomerPanel customer={o.customer} />
-              <DigitalMetalsSellBankPanel bank={o.bankDestination} />
+              <DigitalMetalsSellBankPanel bank={o.bankDestination} customerId={o.customer?.id} />
             </div>
             <DigitalMetalsSellQuotePanel
               metal={o.metal ?? null}
@@ -375,12 +499,18 @@ export function DigitalMetalsSellDetailPage({ orderId }: { orderId: string }) {
         aside={
           <>
             {approvalCard}
+            {recordPaymentCard}
+            {o.payoutMethod === "CASH" && outstandingPaise > 0 && hasPermission(user, "digital-metals.assisted.trade") ? (
+              <Surface title="Cash payment pending" description="Hand the cash to the customer before recording it.">
+                <div className="p-5"><SellCashPayoutButton row={o} /></div>
+              </Surface>
+            ) : null}
             <Surface title="Progress">
               <Timeline steps={sellTimeline(o)} />
             </Surface>
-            {o.status === "PAYABLE_OPEN" ? (
+            {(o.permittedActions ?? []).includes("REVIEW_PAYOUT") ? (
               <Button asChild variant="outline" className="h-11 w-full rounded-xl">
-                <Link href="/digital-metals/payouts">Go to payouts</Link>
+                <Link href="/digital-metals/payouts">Review payout in queue</Link>
               </Button>
             ) : null}
           </>

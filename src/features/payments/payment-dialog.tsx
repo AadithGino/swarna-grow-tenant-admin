@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { HandCoins } from "lucide-react";
+import { HandCoins, Link2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,6 +19,7 @@ import { FieldLabel } from "@/src/components/common/page-parts";
 import { handleFormApiError } from "@/src/lib/form-api-error";
 import { apiErrorCode, toastApiError } from "@/src/lib/api-error";
 import { idempotencyKey, money } from "@/src/lib/format";
+import { shareOrCopyPaymentLink } from "@/src/lib/payment-link-share";
 import {
   livePayableAmountError,
   livePaymentReferenceError,
@@ -340,7 +341,6 @@ function PaymentDialogInner({
                 displayMode === "FIXED"
                   ? "Allocated to oldest pending installment"
                   : quote?.helperText || "Applied to current enrollment balance",
-              whatsappStatus: "QUEUED",
               passbookImageStatus: "GENERATING",
             }),
           );
@@ -625,13 +625,14 @@ function PaymentDialogInner({
                     : undefined,
                   idempotencyKey: idempotencyKey(),
                 }).unwrap();
-                toast.success(`Payment link sent · expires ${link.expiresAt}`);
+                await shareOrCopyPaymentLink(link);
               } catch (err) {
                 toastApiError(err, "Could not create payment link");
               }
             }}
           >
-            Send payment link (WhatsApp)
+            <Link2 />
+            Create online payment link
           </Button>
         ) : null}
       </div>

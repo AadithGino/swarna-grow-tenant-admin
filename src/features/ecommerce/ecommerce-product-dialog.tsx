@@ -92,15 +92,6 @@ function EcommerceProductDialogBody({
     "DRAFT";
   const editingProductId = editorProduct?.id ?? product?.id ?? null;
 
-  useEffect(() => {
-    setEditorProduct(product ?? null);
-    setForm(productRowToFormInput(product, defaultTax));
-    setScheduleOrigins(productScheduleOriginsFromRow(product));
-    setRecordVersion(product?.version ?? 1);
-    setConflictDraft(null);
-    setConflictOpen(false);
-    setFieldError(undefined);
-  }, [product?.id]);
   const [createProduct] = useCreateEcommerceProductMutation();
   const [patchProduct] = usePatchEcommerceProductMutation();
   const [publishProduct] = usePublishEcommerceProductMutation();
@@ -123,6 +114,16 @@ function EcommerceProductDialogBody({
   const [conflictDraft, setConflictDraft] = useState<ProductFormInput | null>(null);
   const [discardDraftOpen, setDiscardDraftOpen] = useState(false);
   const [fetchProduct] = useLazyGetEcommerceProductQuery();
+
+  useEffect(() => {
+    setEditorProduct(product ?? null);
+    setForm(productRowToFormInput(product, defaultTax));
+    setScheduleOrigins(productScheduleOriginsFromRow(product));
+    setRecordVersion(product?.version ?? 1);
+    setConflictDraft(null);
+    setConflictOpen(false);
+    setFieldError(undefined);
+  }, [defaultTax, product?.id, product]);
 
   function describePromotion(promo: Record<string, unknown> | undefined) {
     if (!promo) return;

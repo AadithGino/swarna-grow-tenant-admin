@@ -65,15 +65,15 @@ export function formatOrderWhen(iso: unknown) {
   });
 }
 
-const PROGRESS_STEPS_DELIVERY = ["PLACED", "CONFIRMED", "PROCESSING", "SHIPPED", "DELIVERED"] as const;
-const PROGRESS_STEPS_PICKUP = ["PLACED", "CONFIRMED", "PROCESSING", "READY_FOR_PICKUP", "DELIVERED"] as const;
+const PROGRESS_STEPS_DELIVERY = ["PLACED", "CONFIRMED", "SHIPPED", "DELIVERED"] as const;
+const PROGRESS_STEPS_PICKUP = ["PLACED", "CONFIRMED", "READY_FOR_PICKUP", "COLLECTED"] as const;
 const PROGRESS_LABELS: Record<string, string> = {
   PLACED: "Placed",
   CONFIRMED: "Paid / accepted",
-  PROCESSING: "Packing",
   SHIPPED: "Shipped",
-  READY_FOR_PICKUP: "Ready at branch",
-  DELIVERED: "Handed over",
+  READY_FOR_PICKUP: "Ready for pickup",
+  DELIVERED: "Delivered",
+  COLLECTED: "Collected",
 };
 
 function progressIndex(status: string) {
@@ -82,14 +82,13 @@ function progressIndex(status: string) {
     case "COD_PENDING_ACCEPTANCE":
       return 0;
     case "PAID":
-      return 1;
     case "PROCESSING":
-      return 2;
+      return 1;
     case "SHIPPED":
     case "READY_FOR_PICKUP":
-      return 3;
+      return 2;
     case "DELIVERED":
-      return 4;
+      return 3;
     default:
       return -1;
   }
@@ -98,7 +97,8 @@ function progressIndex(status: string) {
 /** Horizontal lifecycle stepper for a store order. */
 export function OrderProgress({ order }: { order: EcommerceOrderDetail }) {
   const status = String(order.status ?? "");
-  const steps = String(order.fulfilmentMode ?? "") === "DELIVERY" ? PROGRESS_STEPS_DELIVERY : PROGRESS_STEPS_PICKUP;
+  const mode = String(order.fulfilmentMode ?? "");
+  const steps = mode === "DELIVERY" ? PROGRESS_STEPS_DELIVERY : PROGRESS_STEPS_PICKUP;
   const at = progressIndex(status);
   const ended = at < 0;
   return (
@@ -109,7 +109,7 @@ export function OrderProgress({ order }: { order: EcommerceOrderDetail }) {
           <p className="text-sm text-[#6f6265]">{order.statusLabel ?? "This order is closed."}</p>
         </div>
       ) : (
-        <ol className="grid grid-cols-5 gap-1" aria-label="Order progress">
+        <ol className="grid grid-cols-4 gap-1" aria-label="Order progress">
           {steps.map((step, i) => {
             const done = i < at || (i === at && step === "DELIVERED");
             const current = i === at && step !== "DELIVERED";

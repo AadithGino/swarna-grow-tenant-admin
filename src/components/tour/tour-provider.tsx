@@ -353,7 +353,7 @@ export function TourProvider({
       cancelled = true;
       window.clearInterval(timer);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed by step + pathname
+     
   }, [stepKey, pathname]);
 
   /* ---------------- keep the target alive (re-render, dialog closed) ---------------- */

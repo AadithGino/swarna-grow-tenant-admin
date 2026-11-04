@@ -19,6 +19,7 @@ import {
   customerApi,
   useGetCustomerPaymentQuery,
   useLazyPollCustomerPaymentIntentQuery,
+  useLazyPollCustomerPaymentLinkQuery,
   useLazyPollPublicPaymentLinkQuery,
 } from "@/src/store/api/customer-api";
 import { customerPath } from "@/src/lib/customer-tenant";
@@ -107,6 +108,7 @@ export function CustomerPaymentStatusPage() {
   const dispatch = useDispatch();
   const { tenantSlug } = useCustomerTenant();
   const [pollIntent] = useLazyPollCustomerPaymentIntentQuery();
+  const [pollCustomerLink] = useLazyPollCustomerPaymentLinkQuery();
   const [pollLink] = useLazyPollPublicPaymentLinkQuery();
   const [stage, setStage] = useState<"PROCESSING" | "PAID" | "FAILED" | "UNKNOWN">("PROCESSING");
   const [detail, setDetail] = useState("PhonePe is confirming your payment…");
@@ -157,9 +159,11 @@ export function CustomerPaymentStatusPage() {
         const result =
           session.kind === "intent" && session.intentId
             ? await pollIntent(session.intentId).unwrap()
-            : session.linkToken
-              ? await pollLink(session.linkToken).unwrap()
-              : null;
+            : session.linkId
+              ? await pollCustomerLink(session.linkId).unwrap()
+              : session.linkToken
+                ? await pollLink(session.linkToken).unwrap()
+                : null;
         if (!result) {
           finish("UNKNOWN", "Payment status is unavailable. Please check your schemes list.");
           return true;
@@ -202,7 +206,7 @@ export function CustomerPaymentStatusPage() {
       cancelled = true;
       if (timer) window.clearTimeout(timer);
     };
-  }, [dispatch, pollIntent, pollLink, retryKey]);
+  }, [dispatch, pollCustomerLink, pollIntent, pollLink, retryKey]);
 
   const amountPaise =
     sessionSnapshot?.amountPaise ??

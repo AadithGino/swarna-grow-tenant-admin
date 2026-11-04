@@ -115,11 +115,15 @@ function taxLinesToApi(lines: CatalogueTaxLine[]) {
     }));
 }
 
+// Separate mandatory acceptance / packing steps were removed from normal use.
+// The backend folds these into CHARGE_PAID; we never surface them as actions.
+const LEGACY_REDEMPTION_ACTIONS = ["ACCEPT_FULFILMENT", "RECORD_PACKING"];
+
 const ACTION_LABELS: Record<string, string> = {
-  ACCEPT_FULFILMENT: "Accept fulfilment",
-  RECORD_PACKING: "Mark packing",
-  MARK_PICKUP_READY: "Pickup ready",
-  DISPATCH: "Dispatch (manual tracking)",
+  ACCEPT_FULFILMENT: "Accept fulfilment (legacy)",
+  RECORD_PACKING: "Mark packing (legacy)",
+  MARK_PICKUP_READY: "Ready for pickup",
+  DISPATCH: "Ship order",
   ISSUE_PICKUP_CODE: "Issue pickup code",
   COMPLETE_PICKUP: "Complete pickup",
   COMPLETE_DELIVERY: "Complete delivery",
@@ -894,22 +898,24 @@ export function DigitalMetalsRedemptionOrdersPage() {
   );
 }
 
-const FLOW_PICKUP = ["CHECKOUT_PENDING", "CHARGE_PAID", "FULFILMENT_ACCEPTED", "PACKING", "PICKUP_READY", "COMPLETED"];
-const FLOW_DELIVERY = ["CHECKOUT_PENDING", "CHARGE_PAID", "FULFILMENT_ACCEPTED", "PACKING", "DISPATCHED", "COMPLETED"];
+const FLOW_PICKUP = ["CHECKOUT_PENDING", "CHARGE_PAID", "PICKUP_READY", "COMPLETED"];
+const FLOW_DELIVERY = ["CHECKOUT_PENDING", "CHARGE_PAID", "DISPATCHED", "COMPLETED"];
 const FLOW_LABELS: Record<string, string> = {
   CHECKOUT_PENDING: "Checkout started",
   CHARGE_PAID: "Charges paid",
   FULFILMENT_ACCEPTED: "Accepted for fulfilment",
   PACKING: "Packing",
   PICKUP_READY: "Ready for pickup",
-  DISPATCHED: "Dispatched",
+  DISPATCHED: "Shipped",
   COMPLETED: "Handed over",
 };
 
 function redemptionTimeline(order: RedemptionAdminRow & Record<string, unknown>): TimelineStep[] {
   const flow = String(order.fulfilmentMode) === "DELIVERY" ? FLOW_DELIVERY : FLOW_PICKUP;
   const status = String(order.status ?? "");
-  const at = flow.indexOf(status);
+  const mapped =
+    status === "FULFILMENT_ACCEPTED" || status === "PACKING" ? "CHARGE_PAID" : status;
+  const at = flow.indexOf(mapped);
   if (at < 0) {
     return [
       { key: "paid", title: "Charges paid", time: shortDateTime(order.chargePaidAt as string | undefined), state: order.chargePaidAt ? "done" : "upcoming" },
@@ -937,6 +943,7 @@ export function DigitalMetalsRedemptionOrderDetailPage({ orderId }: { orderId: s
   const [trackingRef, setTrackingRef] = useState("");
   const [actionReason, setActionReason] = useState("");
   const [deliveryAttestation, setDeliveryAttestation] = useState(false);
+  const [pickupHandoverConfirmed, setPickupHandoverConfirmed] = useState(false);
   const shipmentIdemRef = useRef<{
     key: string;
     action: string;
@@ -951,7 +958,9 @@ export function DigitalMetalsRedemptionOrderDetailPage({ orderId }: { orderId: s
   if (detail.isError) return <QueryError error={detail.error} onRetry={detail.refetch} />;
 
   const order = detail.data as (RedemptionAdminRow & Record<string, unknown>) | undefined;
-  const permitted = order?.permittedActions ?? [];
+  const permitted = (order?.permittedActions ?? []).filter(
+    (a) => !LEGACY_REDEMPTION_ACTIONS.includes(a),
+  );
   const version = Number(order?.version ?? 1);
   const customer = order?.customer;
   const status = String(order?.status ?? "");
@@ -963,8 +972,13 @@ export function DigitalMetalsRedemptionOrderDetailPage({ orderId }: { orderId: s
     const body: Record<string, unknown> = { expectedVersion: freshVersion };
     let idempotencyKey = newIdempotencyKey();
     if (action === "COMPLETE_PICKUP") {
+      if (!pickupHandoverConfirmed) {
+        toast.error("Confirm you are handing physical metal to the customer.");
+        return;
+      }
       body.pickupCode = pickupCode;
       body.fulfilmentBranchId = order?.fulfilmentBranchId ?? order?.pickupBranchId;
+      body.staffHandoverConfirmed = true;
     }
     if (action === "DISPATCH" || action === "DISPATCH_REPLACEMENT") {
       const carrier = "Manual";
@@ -1011,6 +1025,8 @@ export function DigitalMetalsRedemptionOrderDetailPage({ orderId }: { orderId: s
   const needsReason = permitted.some((a) => ["OPEN_INVESTIGATION", "RESOLVE_RETURN", "CANCEL_PRE_DISPATCH"].includes(a));
   const primaryActions = permitted.filter((a) => !["CANCEL_PRE_DISPATCH", "OPEN_INVESTIGATION", "RECORD_DELAY"].includes(a));
   const secondaryActions = permitted.filter((a) => ["CANCEL_PRE_DISPATCH", "OPEN_INVESTIGATION", "RECORD_DELAY"].includes(a));
+  const pickupCodeReady = /^\d{6}$/.test(pickupCode.trim());
+  const pickupSubmitReady = pickupHandoverConfirmed && pickupCodeReady;
   const showDocs = ["CHARGE_PAID", "FULFILMENT_ACCEPTED", "PACKING", "COMPLETED", "DISPATCHED", "PICKUP_READY", "INVESTIGATION"].includes(status);
 
   return (
@@ -1097,9 +1113,15 @@ export function DigitalMetalsRedemptionOrderDetailPage({ orderId }: { orderId: s
               <Surface title="Next step" description="Actions available at this stage" className="ring-1 ring-[#ecd3d9]">
                 <div className="space-y-3 px-5 py-4">
                   {permitted.includes("COMPLETE_PICKUP") ? (
-                    <FormField label="Pickup code from the customer">
-                      <Input placeholder="6-digit code" value={pickupCode} onChange={(e) => setPickupCode(e.target.value)} className="h-10 rounded-xl tracking-[0.3em]" />
-                    </FormField>
+                    <>
+                      <FormField label="Pickup code from the customer">
+                        <Input placeholder="6-digit code" value={pickupCode} onChange={(e) => setPickupCode(e.target.value)} className="h-10 rounded-xl tracking-[0.3em]" />
+                      </FormField>
+                      <label className="flex items-start gap-3 rounded-xl border border-[#efe5e1] bg-[#fcf9f8] p-3 text-sm leading-5">
+                        <Checkbox checked={pickupHandoverConfirmed} onCheckedChange={(v) => setPickupHandoverConfirmed(v === true)} className="mt-0.5" />
+                        <span>I verified the customer&apos;s pickup code and am handing over the physical metal now.</span>
+                      </label>
+                    </>
                   ) : null}
                   {permitted.includes("DISPATCH") || permitted.includes("DISPATCH_REPLACEMENT") ? (
                     <FormField label="Courier tracking reference">
@@ -1114,7 +1136,17 @@ export function DigitalMetalsRedemptionOrderDetailPage({ orderId }: { orderId: s
                   ) : null}
                   <div className="flex flex-col gap-2">
                     {primaryActions.map((action) => (
-                      <Button key={action} type="button" className="h-10 rounded-xl" disabled={postState.isLoading} onClick={() => void runAction(action)}>
+                      <Button
+                        key={action}
+                        type="button"
+                        className="h-10 rounded-xl"
+                        disabled={
+                          postState.isLoading
+                          || (action === "COMPLETE_PICKUP" && !pickupSubmitReady)
+                          || (action === "COMPLETE_DELIVERY" && !deliveryAttestation)
+                        }
+                        onClick={() => void runAction(action)}
+                      >
                         {ACTION_LABELS[action] ?? action}
                       </Button>
                     ))}

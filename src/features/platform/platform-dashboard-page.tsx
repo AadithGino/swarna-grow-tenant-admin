@@ -10,7 +10,6 @@ import {
   CircleDashed,
   CircleDollarSign,
   Gauge,
-  MessageCircleMore,
   RefreshCcw,
   ShieldCheck,
   Tags,
@@ -167,13 +166,6 @@ export function PlatformDashboardPage() {
           tone="cream"
         />
         <StatCard
-          icon={MessageCircleMore}
-          label="WhatsApp delivery"
-          value={`${d.whatsapp.deliveryRatePercent}%`}
-          detail={`${d.whatsapp.sentThisMonth.toLocaleString("en-IN")} sent · ${d.whatsapp.failedThisMonth.toLocaleString("en-IN")} failed`}
-          tone="green"
-        />
-        <StatCard
           icon={AlertTriangle}
           label="Needs attention"
           value={attentionTotal(d)}
@@ -289,32 +281,6 @@ export function PlatformDashboardPage() {
         )}
       </DashboardSection>
 
-      <DashboardSection title="WhatsApp this month" description="Delivery performance across all tenants">
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          <StatCard
-            icon={MessageCircleMore}
-            label="Sent / delivered / read"
-            value={d.whatsapp.sentThisMonth.toLocaleString("en-IN")}
-            detail="Successful message outcomes"
-            tone="green"
-          />
-          <StatCard
-            icon={AlertTriangle}
-            label="Failed"
-            value={d.whatsapp.failedThisMonth.toLocaleString("en-IN")}
-            detail="Requires investigation"
-            tone="red"
-          />
-          <StatCard
-            icon={TrendingUp}
-            label="Delivery rate"
-            value={`${d.whatsapp.deliveryRatePercent}%`}
-            detail={`${(d.whatsapp.sentThisMonth + d.whatsapp.failedThisMonth).toLocaleString("en-IN")} total attempts`}
-            tone="wine"
-          />
-        </div>
-      </DashboardSection>
-
       <div className="grid gap-5 xl:grid-cols-2">
         <PlatformChart chartKey="tenant-growth" />
         <PlatformChart chartKey="tier-distribution" />
@@ -323,7 +289,6 @@ export function PlatformDashboardPage() {
       <div className="grid gap-5 xl:grid-cols-2">
         <PlatformChart chartKey="mrr-trend" />
         <PlatformChart chartKey="platform-collection-volume" />
-        <PlatformChart chartKey="whatsapp-volume" />
       </div>
 
       <div className="grid gap-5 xl:grid-cols-[1.35fr_1fr]">
@@ -383,11 +348,10 @@ export function PlatformDashboardPage() {
                       ) : (
                         <CircleDashed className="size-3.5 text-amber-600" />
                       )}
-                      Templates {row.provisioning.templatesConfigured}/{row.provisioning.templatesRequired}
-                      {row.provisioning.whatsappConfigured ? " · WhatsApp ok" : " · WhatsApp pending"}
+                      {row.provisioning.paymentGatewayConfigured ? "Payment gateway ready" : "Payment gateway pending"}
                       {row.provisioning.paymentGatewayConfigured ? " · Payments ok" : " · Payments pending"}
                       · {row.usage.activeCustomers} customers · {row.usage.branches} branches · {row.usage.staff} staff
-                      · WhatsApp {row.usage.whatsappUsedThisMonth} this month
+                      · {row.usage.activeCustomers} active customers
                     </p>
                     <p className="mt-1 text-xs text-muted-foreground">
                       Onboarded {new Date(row.createdAt).toLocaleDateString("en-IN")}

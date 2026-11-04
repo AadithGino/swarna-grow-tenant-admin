@@ -231,7 +231,7 @@ export function DigitalMetalsDashboardSection({
         </div>
         <div className="space-y-2">
           <p className="text-sm font-bold text-[#2d191d]">Needs you</p>
-          <QueueLink href="/digital-metals/sells" label="Sells to approve" value={q.sellsToApprove} urgent={q.sellsToApprove > 0} />
+          <QueueLink href="/digital-metals/sells" label="Sell payments pending" value={q.openPayables} urgent={q.openPayables > 0} />
           <QueueLink href="/digital-metals/payouts" label="Bank payouts to make" value={Math.max(0, q.openPayables - q.cashPayoutsDue)} urgent={q.openPayables - q.cashPayoutsDue > 0} />
           <QueueLink href="/digital-metals/sells" label="Cash to hand over" value={q.cashPayoutsDue} urgent={q.cashPayoutsDue > 0} />
         </div>

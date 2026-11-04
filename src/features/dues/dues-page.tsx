@@ -2,7 +2,6 @@
 
 import { useMemo, useState } from "react";
 import {
-  Bell,
   CalendarClock,
   Download,
   Link2,
@@ -30,10 +29,6 @@ import {
 } from "@/src/components/common/query-state";
 import { StatusBadge } from "@/src/components/common/status-badge";
 import { ChartSeriesView } from "@/src/components/common/chart-series-view";
-import {
-  BulkJobResultSheet,
-  type BulkJobResult,
-} from "@/src/features/dues/bulk-job-result-sheet";
 import { PaymentDialog } from "@/src/features/payments/payment-dialog";
 import { downloadCsv } from "@/src/lib/download";
 import { idempotencyKey, money } from "@/src/lib/format";
@@ -56,8 +51,6 @@ import {
   PageTabsBar,
 } from "@/src/components/common/page-tabs";
 import {
-  useBulkSendDueLinksMutation,
-  useBulkSendOverdueRemindersMutation,
   useCreatePaymentLinkMutation,
   useGetDefaultersQuery,
   useGetDuesQuery,
@@ -86,8 +79,6 @@ export function DuesPage() {
   const [rangeMode, setRangeMode] = useState<WorkboardDatePreset>("CUSTOM");
   const preset = rangeMode === "CUSTOM" ? undefined : rangeMode;
   const [kind, setKind] = useState("ALL");
-  const [bulkResult, setBulkResult] = useState<BulkJobResult | null>(null);
-  const [bulkSheetOpen, setBulkSheetOpen] = useState(false);
   const caps = useAppSelector((s) => s.session.session?.capabilities);
   const [createPaymentLink] = useCreatePaymentLinkMutation();
   const [q, setQ] = useState("");
@@ -153,8 +144,6 @@ export function DuesPage() {
       : board === "defaulters"
         ? defaultersQuery
         : duesQuery;
-  const [bulkReminders] = useBulkSendOverdueRemindersMutation();
-  const [bulkLinks] = useBulkSendDueLinksMutation();
   const invalidCustomRange = rangeMode === "CUSTOM" && skipForBadDates;
   if (invalidCustomRange) {
     return (
@@ -187,16 +176,11 @@ export function DuesPage() {
   const page = query.data.page ?? emptyPageMeta();
   return (
     <>
-      <BulkJobResultSheet
-        result={bulkResult}
-        open={bulkSheetOpen}
-        onOpenChange={setBulkSheetOpen}
-      />
       <SectionHero
         icon={CalendarClock}
         eyebrow="Gold schemes"
         title="Dues & overdue"
-        description="Who owes an instalment, who is in grace, and who has slipped into default. Collect at the counter, send a pay link or a reminder from each row."
+        description="Who owes an instalment, who is in grace, and who has slipped into default. Collect at the counter or copy a pay link from each row."
         actions={
           <button
             type="button"
@@ -336,7 +320,7 @@ export function DuesPage() {
             resultLabel={
               board === "defaulters"
                 ? "Every scheme in default — open one for recovery actions"
-                : "Collect at the counter · Link sends an online pay URL · Bell queues a WhatsApp reminder"
+                : "Collect at the counter · Link creates an online pay URL to copy and share"
             }
           />
         }
@@ -490,37 +474,6 @@ export function DuesPage() {
                         Link
                       </Button>
                     ) : null}
-                    <Button
-                      size="icon"
-                      variant="outline"
-                      className="size-8 shrink-0"
-                      title={
-                        r.status === "OVERDUE" || r.status === "DEFAULTED"
-                          ? "Queue overdue WhatsApp reminder"
-                          : "Queue due payment link on WhatsApp"
-                      }
-                      onClick={async () => {
-                        try {
-                          const res =
-                            r.status === "OVERDUE" || r.status === "DEFAULTED"
-                              ? await bulkReminders({
-                                  installmentIds: [r.id],
-                                }).unwrap()
-                              : await bulkLinks({
-                                  installmentIds: [r.id],
-                                }).unwrap();
-                          setBulkResult(res);
-                          setBulkSheetOpen(true);
-                        } catch (err) {
-                          toastApiError(
-                            err,
-                            "Could not queue WhatsApp message",
-                          );
-                        }
-                      }}
-                    >
-                      <Bell className="size-4" />
-                    </Button>
                     <Button
                       size="icon"
                       variant="ghost"

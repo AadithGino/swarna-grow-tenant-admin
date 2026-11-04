@@ -1,4 +1,5 @@
 import type { EcommerceOrderListItem } from "@/src/types/ecommerce-order";
+import { plainLanguageStatusLabel } from "@/src/lib/plain-language-labels";
 
 export type OrderPaymentPresentation = {
   methodLabel: string;
@@ -28,6 +29,22 @@ export function formatOrderInr(paise: number) {
   return `₹${(paise / 100).toLocaleString("en-IN", { minimumFractionDigits: 2 })}`;
 }
 
+/** COD home delivery after mark-delivered — payment evidence from courier collection. */
+export function codDeliveredFulfilmentLabel(order: {
+  status?: string;
+  paymentMethod?: string;
+  courierCod?: { collectionStatus?: string | null } | null;
+  courierCodCollectionStatus?: string | null;
+}): string | undefined {
+  if (String(order.status ?? "") !== "DELIVERED") return undefined;
+  if (String(order.paymentMethod ?? "") !== "COD") return undefined;
+  const collection = String(
+    order.courierCod?.collectionStatus ?? order.courierCodCollectionStatus ?? "",
+  );
+  if (collection === "CONFIRMED") return "Delivered & payment collected";
+  return "Delivered · Payment unconfirmed.";
+}
+
 export function orderPaymentPresentation(order: Pick<
   EcommerceOrderListItem,
   | "paymentMethod"
@@ -48,10 +65,8 @@ export function orderPaymentPresentation(order: Pick<
     };
   }
   if (method === "COD") {
-    const courierConfirmed =
-      order.courierCodCollectionStatus === "CONFIRMED"
-      || order.courierCodCollectionStatus === "BANK_RECONCILED"
-      || order.courierCodCollectionStatus === "REMITTANCE_DISCREPANCY";
+    const collectionConfirmed = order.courierCodCollectionStatus === "CONFIRMED";
+    const needsReview = order.courierCodCollectionStatus === "NEEDS_REVIEW";
     if (order.status === "COD_PENDING_ACCEPTANCE") {
       return {
         methodLabel: "Cash on delivery",
@@ -61,14 +76,19 @@ export function orderPaymentPresentation(order: Pick<
         helper: "Courier collects at delivery; bank remittance is reconciled separately.",
       };
     }
+    const stateLabel = collectionConfirmed
+      ? "Customer paid"
+      : needsReview
+        ? "Payment being checked"
+        : "Payment unconfirmed";
     return {
       methodLabel: "Cash on delivery",
-      stateLabel: courierConfirmed ? "Courier collection confirmed" : "Due on delivery",
-      collected: courierConfirmed,
-      tone: courierConfirmed ? "success" : "warning",
-      helper: courierConfirmed
-        ? "Confirmed from courier evidence — not the same as bank receipt."
-        : undefined,
+      stateLabel,
+      collected: collectionConfirmed,
+      tone: collectionConfirmed ? "success" : needsReview ? "warning" : "warning",
+      helper: collectionConfirmed
+        ? "Courier payment may still be pending until bank receipt is recorded."
+        : "Based on courier collection evidence — not inferred from shipment status.",
     };
   }
   const paid = Boolean(order.paidAt) || order.paymentCompleted === true;
@@ -104,9 +124,10 @@ export function orderFulfilmentPresentation(order: Pick<
   "fulfilmentMode" | "status"
 >): OrderFulfilmentPresentation {
   const mode = String(order.fulfilmentMode ?? "BRANCH_PICKUP");
+  const status = String(order.status ?? "");
   return {
     modeLabel: FULFILMENT_LABEL[mode] ?? mode.replaceAll("_", " ").toLowerCase(),
-    stateLabel: String(order.status ?? "").replaceAll("_", " ").toLowerCase(),
+    stateLabel: plainLanguageStatusLabel(status) ?? status.replaceAll("_", " ").toLowerCase(),
   };
 }
 
@@ -133,10 +154,9 @@ export function orderListPrimaryAction(order: EcommerceOrderListItem): OrderList
 }
 
 export function nextFulfilmentTargets(status: string, fulfilmentMode: string) {
-  if (status === "PAID") return ["PROCESSING"];
-  if (status === "PROCESSING") {
+  if (status === "PAID" || status === "PROCESSING") {
     return fulfilmentMode === "DELIVERY" ? ["SHIPPED"] : ["READY_FOR_PICKUP"];
   }
-  if (status === "READY_FOR_PICKUP" || status === "SHIPPED") return ["DELIVERED"];
+  if (status === "SHIPPED") return ["DELIVERED"];
   return [];
 }

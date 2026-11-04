@@ -137,9 +137,14 @@ npm run seed:noble-jewellery   # replaces tenant NOBLE if it exists
 Full jeweller demo with fixed cash 11+1 (₹5,000), online shop, and Digital Gold & Silver:
 
 ```bash
-cd swarnagrow-backend
-npm run seed:evo-luxe   # replaces tenant EVOLUXE if it exists
+cd swarnagrow-backend-prod-verify-2026-11-03
+npm run configure:evoluxe-phonepe   # PhonePe sandbox keys → tenant EVOLUXE in MongoDB
+npm run patch:evoluxe-rates         # today's scheme + shop + digital gold/silver rates
 ```
+
+**PhonePe (local):** Keys live on the tenant (`integrationSecrets.phonepe`), not `.env`. Backend needs `PROVIDER_MODE=live`, `PHONEPE_ENV=SANDBOX`. Frontend `.env.local`: `NEXT_PUBLIC_USE_MOCKS=false`, API `http://localhost:4050/api/v1`. If PhonePe returns `401 Unauthorized`, regenerate **Test credentials** in the PhonePe developer dashboard and re-run configure with:
+
+`PHONEPE_BOOTSTRAP_CLIENT_ID=... PHONEPE_BOOTSTRAP_CLIENT_SECRET=... npm run configure:evoluxe-phonepe`
 
 | Field | Value |
 |--------|--------|

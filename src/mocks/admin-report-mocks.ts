@@ -635,46 +635,6 @@ const BUILDERS: Record<
     exportFormats: ["CSV", "XLSX", "PDF"],
   }),
 
-  WHATSAPP_USAGE: () => ({
-    reportKey: "WHATSAPP_USAGE",
-    title: "WhatsApp usage",
-    summary: [
-      { key: "QUOTA", label: "Quota used", value: 86, valueType: "percent" },
-      { key: "CONVERSATIONS", label: "Conversations", value: 1724, valueType: "count" },
-      { key: "COST", label: "Estimated cost", value: amt(8420), valueType: "currency" },
-    ],
-    charts: {
-      byType: {
-        chartType: "donut",
-        title: "By message type",
-        yAxis: { type: "count", label: "Messages" },
-        series: [
-          {
-            key: "type",
-            name: "Messages",
-            data: [
-              { x: "Utility", y: 620 },
-              { x: "Marketing", y: 180 },
-              { x: "Authentication", y: 42 },
-            ],
-          },
-        ],
-      },
-    },
-    columns: [
-      { key: "label", label: "Period", type: "text", sticky: true },
-      { key: "utility", label: "Utility", type: "count", align: "right" },
-      { key: "marketing", label: "Marketing", type: "count", align: "right" },
-      { key: "authentication", label: "Authentication", type: "count", align: "right" },
-      { key: "total", label: "Total", type: "count", align: "right", emphasis: true },
-    ],
-    rows: [
-      { key: "w1", label: "Sep 1 – 7", utility: 142, marketing: 38, authentication: 12, total: 192 },
-      { key: "w2", label: "Sep 8 – 14", utility: 156, marketing: 44, authentication: 14, total: 214 },
-    ],
-    exportFormats: ["CSV", "XLSX", "PDF"],
-  }),
-
   SCHEME_REGISTER: () => ({
     reportKey: "SCHEME_REGISTER",
     title: "Scheme register",

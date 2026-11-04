@@ -17,8 +17,12 @@ import { env } from "@/src/config/env";
 import {
   isPhonePeMockSdkToken,
   openCustomerPaymentTarget,
-  phonePeSdkGatewayUrl,
+  pickPhonePeGatewayUrl,
 } from "@/src/lib/customer-payment-redirect";
+import {
+  customerPollIntervalMs,
+  DM_REDEEM_ORDER_POLL_TERMINAL,
+} from "@/src/lib/customer-payment-polling";
 import {
   useCancelCustomerDigitalMetalsRedemptionOrderMutation,
   useCompleteCustomerDigitalMetalsRedemptionTestHarnessPaymentMutation,
@@ -537,18 +541,17 @@ function fulfilmentTimelineSteps(status: string) {
   const idx = redemptionProgressIndex(status);
   const labels: Record<string, string> = {
     CHARGE_PENDING: "Pay INR charges",
-    CHARGE_PAID: "Waiting for jeweller to accept",
-    FULFILMENT_ACCEPTED: "Order accepted",
-    PACKING: "Packing your item",
-    DISPATCHED: "Dispatched",
-    PICKUP_READY: "Ready for pickup",
+    CHARGE_PAID: "Jeweller preparing your order",
+    FULFILMENT_ACCEPTED: "Jeweller preparing your order",
+    PACKING: "Jeweller preparing your order",
+    DISPATCHED: "On the way — track shipment below",
+    PICKUP_READY: "Ready for branch pickup — show your code",
     COMPLETED: "Handed over",
   };
   const mapped = [
-    { id: "accepted", label: "Accepted", match: ["CHARGE_PAID", "FULFILMENT_ACCEPTED"] },
-    { id: "packing", label: "Packing", match: ["PACKING"] },
-    { id: "dispatch", label: "Dispatch / pickup ready", match: ["DISPATCHED", "PICKUP_READY"] },
-    { id: "handover", label: "Handover complete", match: ["COMPLETED"] },
+    { id: "paid", label: "Charges paid", match: ["CHARGE_PAID", "FULFILMENT_ACCEPTED", "PACKING"] },
+    { id: "ready", label: "Shipped or ready for pickup", match: ["DISPATCHED", "PICKUP_READY"] },
+    { id: "handover", label: "Handed over", match: ["COMPLETED"] },
   ];
   return mapped.map((step) => {
     const milestones = step.match.map((m) => redemptionProgressIndex(m)).filter((n) => n >= 0);
@@ -569,7 +572,14 @@ function fulfilmentTimelineSteps(status: string) {
 export function CustomerDigitalMetalsRedeemOrderPage({ orderId }: { orderId: string }) {
   const { tenantSlug } = useCustomerTenant();
   const router = useRouter();
-  const orderQuery = useGetCustomerDigitalMetalsRedemptionOrderQuery(orderId, { pollingInterval: 5_000 });
+  const [redeemOrderPollMs, setRedeemOrderPollMs] = useState(5_000);
+  const orderQuery = useGetCustomerDigitalMetalsRedemptionOrderQuery(orderId, {
+    pollingInterval: redeemOrderPollMs,
+  });
+  useEffect(() => {
+    const next = customerPollIntervalMs(orderQuery.data?.status, DM_REDEEM_ORDER_POLL_TERMINAL, 5_000);
+    if (next !== redeemOrderPollMs) setRedeemOrderPollMs(next);
+  }, [orderQuery.data?.status, redeemOrderPollMs]);
   const fulfilmentQuery = useGetCustomerDigitalMetalsRedemptionFulfilmentQuery(orderId, {
     skip: !orderId,
   });
@@ -616,6 +626,7 @@ export function CustomerDigitalMetalsRedeemOrderPage({ orderId }: { orderId: str
       const orderReturnPath = customerPath(tenantSlug, "digital-metals", "redeem-order", orderId);
       const redirectReturn =
         typeof window !== "undefined" ? `${window.location.origin}${orderReturnPath}` : orderReturnPath;
+      payIdempotencyRef.current = newIdempotencyKey();
       sessionStorage.setItem(`dm-redeem-pay-idem-${orderId}`, payIdempotencyRef.current);
       const intent = await payIntent({
         orderId,
@@ -626,7 +637,8 @@ export function CustomerDigitalMetalsRedeemOrderPage({ orderId }: { orderId: str
       const attemptId = String(paymentIntent.id ?? intent.id ?? "");
       const tokenRaw = paymentIntent.token ?? intent.token;
       const token = tokenRaw ? String(tokenRaw) : undefined;
-      const gatewayUrl = phonePeSdkGatewayUrl(token);
+      const gatewayUrl =
+        pickPhonePeGatewayUrl(paymentIntent) || pickPhonePeGatewayUrl(intent as Record<string, unknown>);
 
       async function pollUntilPaid() {
         if (!attemptId) return false;

@@ -185,6 +185,15 @@ export function DigitalMetalsConfigPage({ section }: { section: "settings" | "ra
                     >
                       Publish rate
                     </Button>
+                    {!(buyNum > 0) || !(sellNum > 0) ? (
+                      <p className="text-sm text-[#8a7579]">
+                        Enter both buy and sell rates above ₹0 to enable Publish.
+                      </p>
+                    ) : stale ? (
+                      <p className="text-sm text-[#8a7579]">
+                        Current rate is stale (older than 24h). Publishing refreshes it so this metal becomes quote-ready.
+                      </p>
+                    ) : null}
                   </div>
                 )}
               </Surface>

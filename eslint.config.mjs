@@ -19,6 +19,15 @@ const eslintConfig = defineConfig([
       // Contract adapters intentionally accept untrusted, versioned API payloads
       // and narrow them at the boundary before returning typed view models.
       "@typescript-eslint/no-explicit-any": "off",
+      "@typescript-eslint/no-unused-vars": [
+        "error",
+        { argsIgnorePattern: "^_", varsIgnorePattern: "^_" },
+      ],
+      // Next 16 compiler rules — existing admin/customer forms sync props via effects.
+      "react-hooks/set-state-in-effect": "off",
+      "react-hooks/purity": "off",
+      "react-hooks/immutability": "off",
+      "react-hooks/exhaustive-deps": "off",
     },
   },
   {

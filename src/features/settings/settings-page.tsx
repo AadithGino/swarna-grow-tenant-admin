@@ -9,7 +9,6 @@ import {
   Palette,
   Save,
   Settings2,
-  Sparkles,
   Store,
   Coins,
   UsersRound,
@@ -33,6 +32,7 @@ import {
   PageTabsPanel,
 } from "@/src/components/common/page-tabs";
 import { PageSkeleton, QueryError } from "@/src/components/common/query-state";
+import { ManualPushPanel } from "@/src/features/reminders/manual-push-panel";
 import { StatusBadge } from "@/src/components/common/status-badge";
 import { ACTION } from "@/src/lib/action-permissions";
 import { FormFieldError } from "@/src/components/common/form-field-error";
@@ -578,17 +578,6 @@ export function SettingsPage({
               : "Showroom capacity"
           }
           tone="wine"
-        />
-        <StatCard
-          icon={Sparkles}
-          label="WhatsApp"
-          value={`${Math.round(usage.whatsappMessages?.percent ?? 0)}%`}
-          detail={
-            usage.whatsappMessages?.resetsOn
-              ? `Resets ${usage.whatsappMessages.resetsOn}`
-              : "Monthly quota"
-          }
-          tone="gold"
         />
       </div>
 
@@ -1312,6 +1301,9 @@ export function SettingsPage({
               </PermissionGate>
             }
           />
+          <div className="mt-5">
+            <ManualPushPanel />
+          </div>
         </PageTabsPanel>
 
         <PageTabsPanel value="subscription">
@@ -1368,17 +1360,6 @@ export function SettingsPage({
                 ) : null}
                 {usage.schemePlans ? (
                   <UsageCard label="Scheme plans" meter={usage.schemePlans} />
-                ) : null}
-                {usage.whatsappMessages ? (
-                  <UsageCard
-                    label="WhatsApp messages"
-                    meter={usage.whatsappMessages}
-                    hint={
-                      usage.whatsappMessages.resetsOn
-                        ? `Resets ${usage.whatsappMessages.resetsOn}`
-                        : undefined
-                    }
-                  />
                 ) : null}
               </div>
               <div className="flex flex-wrap gap-2 border-t border-[#eaded9] px-6 py-4">

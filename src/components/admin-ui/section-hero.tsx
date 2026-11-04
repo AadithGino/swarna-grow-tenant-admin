@@ -4,8 +4,8 @@ import { ArrowDownRight, ArrowUpRight, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 /**
- * Deep-wine band used at the top of a section's overview page (Online store, Digital Gold).
- * Keeps the brand's maroon/gold identity; everything below it stays quiet and white.
+ * Quiet page header for section overview pages (Enrollments, Online store, Digital Gold…).
+ * Light surface + maroon accent — no stripe textures or full-bleed wine gradients.
  */
 export function SectionHero({
   icon: Icon,
@@ -31,43 +31,37 @@ export function SectionHero({
   return (
     <section
       className={cn(
-        "relative isolate overflow-hidden rounded-[1.5rem] bg-[#3d0c15] text-white shadow-[0_24px_48px_-28px_rgb(61_12_21/85%)]",
+        "overflow-hidden rounded-[1.25rem] border border-[#eadfdb] bg-white shadow-[0_12px_32px_-24px_rgb(61_12_21/28%)]",
         className,
       )}
     >
-      <div
-        aria-hidden
-        className="absolute inset-0 -z-10 bg-[radial-gradient(120%_140%_at_0%_0%,#8e1a36_0%,#5e0a20_45%,#3d0c15_100%)]"
-      />
-      <div
-        aria-hidden
-        className="absolute -right-24 -top-28 -z-10 size-[26rem] rounded-full bg-[radial-gradient(circle,rgba(226,200,143,0.30),rgba(226,200,143,0)_65%)]"
-      />
-      <div
-        aria-hidden
-        className="absolute inset-0 -z-10 opacity-[0.07] [background-image:repeating-linear-gradient(135deg,#e2c88f_0,#e2c88f_1px,transparent_1px,transparent_14px)]"
-      />
-      <div className="flex flex-col gap-5 px-5 pb-5 pt-6 sm:px-7 sm:pt-7 lg:flex-row lg:items-start lg:justify-between">
+      <div className="flex flex-col gap-5 border-b border-[#eadfdb] px-5 py-5 sm:px-6 sm:py-6 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0">
-          {eyebrow ? <p className="text-[0.82rem] font-semibold text-[#e2c88f]">{eyebrow}</p> : null}
-          <div className="mt-1 flex flex-wrap items-center gap-3">
+          {eyebrow ? (
+            <p className="text-[0.72rem] font-semibold uppercase tracking-[0.08em] text-[#9a6f2a]">
+              {eyebrow}
+            </p>
+          ) : null}
+          <div className="mt-1.5 flex flex-wrap items-center gap-3">
             {Icon ? (
-              <span className="grid size-11 place-items-center rounded-2xl bg-gradient-to-br from-[#f3dca6] to-[#c3a264] text-[#4a0e1c] shadow-[0_8px_18px_-8px_rgba(226,200,143,0.7)]">
-                <Icon className="size-5" aria-hidden />
+              <span className="grid size-10 place-items-center rounded-xl bg-[#730321] text-[#f3d9a4]">
+                <Icon className="size-[1.15rem]" aria-hidden />
               </span>
             ) : null}
-            <h1 className="text-[1.9rem] font-extrabold leading-tight tracking-[-0.03em] sm:text-[2.2rem]">{title}</h1>
+            <h1 className="text-[1.65rem] font-extrabold leading-tight tracking-[-0.03em] text-[#28161a] sm:text-[1.85rem]">
+              {title}
+            </h1>
             {status}
           </div>
           {description ? (
-            <p className="mt-2 max-w-2xl text-[0.95rem] leading-6 text-[#f1dfe2]/85">{description}</p>
+            <p className="mt-2 max-w-2xl text-[0.92rem] leading-6 text-[#6f5c60]">{description}</p>
           ) : null}
         </div>
         {actions ? <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div> : null}
       </div>
       {children ? (
-        <div className="overflow-hidden border-t border-[#e2c88f]/20 bg-black/10">
-          <div className="-ml-px grid grid-cols-2 sm:grid-cols-[repeat(auto-fit,minmax(11rem,1fr))]">{children}</div>
+        <div className="-ml-px grid grid-cols-2 bg-[#fcfaf8] sm:grid-cols-[repeat(auto-fit,minmax(11rem,1fr))]">
+          {children}
         </div>
       ) : null}
     </section>
@@ -97,18 +91,20 @@ export function HeroStat({
 }) {
   const body = (
     <>
-      <p className="text-[0.8rem] font-medium text-[#e2c88f]/90">{label}</p>
+      <p className="text-[0.78rem] font-medium text-[#8a7579]">{label}</p>
       <div className="mt-1 flex items-baseline gap-2">
         {loading ? (
-          <span className="h-7 w-20 animate-pulse rounded-md bg-white/15" />
+          <span className="h-7 w-20 animate-pulse rounded-md bg-[#eadfdb]" />
         ) : (
-          <span className="truncate text-[1.45rem] font-extrabold tabular-nums tracking-tight">{value}</span>
+          <span className="truncate text-[1.4rem] font-extrabold tabular-nums tracking-tight text-[#28161a]">
+            {value}
+          </span>
         )}
         {trend != null && !loading ? (
           <span
             className={cn(
               "inline-flex items-center text-xs font-bold tabular-nums",
-              trend >= 0 ? "text-emerald-300" : "text-rose-300",
+              trend >= 0 ? "text-emerald-700" : "text-rose-700",
             )}
           >
             {trend >= 0 ? <ArrowUpRight className="size-3" aria-hidden /> : <ArrowDownRight className="size-3" aria-hidden />}
@@ -116,12 +112,12 @@ export function HeroStat({
           </span>
         ) : null}
       </div>
-      {detail ? <p className="mt-0.5 truncate text-xs text-white/60">{detail}</p> : null}
+      {detail ? <p className="mt-0.5 truncate text-xs text-[#9a8d90]">{detail}</p> : null}
     </>
   );
   const cls = cn(
-    "block min-w-0 border-l border-[#e2c88f]/15 px-5 py-4 text-left sm:px-7",
-    active && "bg-white/10 shadow-[inset_0_-3px_0_#e2c88f]",
+    "block min-w-0 border-l border-[#eadfdb] px-5 py-4 text-left sm:px-6",
+    active && "bg-white shadow-[inset_0_-3px_0_#730321]",
   );
   if (onClick) {
     return (
@@ -129,7 +125,10 @@ export function HeroStat({
         type="button"
         onClick={onClick}
         aria-pressed={active}
-        className={cn(cls, "w-full transition-colors hover:bg-white/5 focus-visible:bg-white/10 focus-visible:outline-none")}
+        className={cn(
+          cls,
+          "w-full transition-colors hover:bg-white focus-visible:bg-white focus-visible:outline-none",
+        )}
       >
         {body}
       </button>
@@ -137,7 +136,13 @@ export function HeroStat({
   }
   if (href) {
     return (
-      <Link href={href} className={cn(cls, "transition-colors hover:bg-white/5 focus-visible:bg-white/10 focus-visible:outline-none")}>
+      <Link
+        href={href}
+        className={cn(
+          cls,
+          "transition-colors hover:bg-white focus-visible:bg-white focus-visible:outline-none",
+        )}
+      >
         {body}
       </Link>
     );
@@ -151,18 +156,18 @@ export function HeroStatusPill({ tone, children }: { tone: "live" | "paused" | "
     <span
       className={cn(
         "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-bold",
-        tone === "live" && "bg-emerald-400/15 text-emerald-200 ring-1 ring-emerald-300/30",
-        tone === "paused" && "bg-amber-400/15 text-amber-200 ring-1 ring-amber-300/30",
-        tone === "off" && "bg-white/10 text-white/75 ring-1 ring-white/20",
+        tone === "live" && "bg-emerald-50 text-emerald-800 ring-1 ring-emerald-200",
+        tone === "paused" && "bg-amber-50 text-amber-900 ring-1 ring-amber-200",
+        tone === "off" && "bg-[#f4eeeb] text-[#6f5c60] ring-1 ring-[#e3d5d0]",
       )}
     >
       <span
         aria-hidden
         className={cn(
           "size-1.5 rounded-full",
-          tone === "live" && "animate-pulse bg-emerald-300",
-          tone === "paused" && "bg-amber-300",
-          tone === "off" && "bg-white/60",
+          tone === "live" && "animate-pulse bg-emerald-500",
+          tone === "paused" && "bg-amber-500",
+          tone === "off" && "bg-[#a2969a]",
         )}
       />
       {children}
@@ -170,9 +175,9 @@ export function HeroStatusPill({ tone, children }: { tone: "live" | "paused" | "
   );
 }
 
-/** Light/ghost button for use on the dark hero. */
+/** Secondary action on the light hero. */
 export const heroButtonClass =
-  "inline-flex h-10 items-center gap-2 rounded-xl border border-white/20 bg-white/10 px-4 text-sm font-semibold text-white backdrop-blur transition-colors hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#e2c88f]/60";
+  "inline-flex h-10 items-center gap-2 rounded-xl border border-[#e3d5d0] bg-white px-4 text-sm font-semibold text-[#28161a] transition-colors hover:border-[#d9b6c0] hover:bg-[#fff6f8] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#730321]/35";
 
 export const heroPrimaryButtonClass =
-  "inline-flex h-10 items-center gap-2 rounded-xl bg-gradient-to-b from-[#f3dca6] to-[#d6b46e] px-4 text-sm font-bold text-[#3d0c15] shadow-[0_8px_20px_-10px_rgba(226,200,143,0.9)] transition-[filter] hover:brightness-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70";
+  "inline-flex h-10 items-center gap-2 rounded-xl bg-[#730321] px-4 text-sm font-bold text-white shadow-sm transition-colors hover:bg-[#5e0a20] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#730321]/40";

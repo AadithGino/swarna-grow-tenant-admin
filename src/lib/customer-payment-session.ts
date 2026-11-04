@@ -5,6 +5,8 @@ export type CustomerPaymentSessionKind = "intent" | "link";
 export type CustomerPaymentSession = {
   kind: CustomerPaymentSessionKind;
   intentId?: string;
+  /** Authenticated poll for fixed-scheme app checkout (`GET /app/payments/:linkId/status`). */
+  linkId?: string;
   linkToken?: string;
   schemeId?: string;
   schemeName?: string;
@@ -38,23 +40,49 @@ export function clearCustomerPaymentSession() {
   window.sessionStorage.removeItem(STORAGE_KEY);
 }
 
+function pollTargetFromStatusUrl(
+  statusPollUrl: string,
+): Pick<CustomerPaymentSession, "kind" | "intentId" | "linkId"> | null {
+  const appLink = statusPollUrl.match(/^\/app\/payments\/([^/]+)\/status$/);
+  if (appLink?.[1]) {
+    return { kind: "link", linkId: appLink[1] };
+  }
+  const intent = statusPollUrl.match(/^\/app\/payment-intents\/([^/]+)$/);
+  if (intent?.[1]) {
+    return { kind: "intent", intentId: intent[1] };
+  }
+  return null;
+}
+
 /** Derive poll context from payment initiation responses (fixed link or flexible intent). */
 export function pollSessionFromInitResponse(
   response: Record<string, unknown>,
   schemeId?: string,
 ): Omit<CustomerPaymentSession, "startedAt"> | null {
-  const intentId =
-    typeof response.id === "string" && (response.paymentUrl || response.statusPollUrl)
-      ? response.id
-      : typeof response.intentId === "string"
-        ? response.intentId
-        : undefined;
-  const linkToken = typeof response.token === "string" ? response.token : undefined;
-  if (intentId) {
-    return { kind: "intent", intentId, schemeId };
+  const statusPollUrl =
+    typeof response.statusPollUrl === "string" ? response.statusPollUrl.trim() : "";
+  if (statusPollUrl) {
+    const fromUrl = pollTargetFromStatusUrl(statusPollUrl);
+    if (fromUrl) {
+      const linkToken = typeof response.token === "string" ? response.token : undefined;
+      return { ...fromUrl, linkToken, schemeId };
+    }
   }
+
+  const linkToken = typeof response.token === "string" ? response.token : undefined;
   if (linkToken) {
     return { kind: "link", linkToken, schemeId };
   }
+
+  const intentId =
+    typeof response.intentId === "string"
+      ? response.intentId
+      : typeof response.id === "string" && String(response.id).startsWith("pmi_")
+        ? response.id
+        : undefined;
+  if (intentId) {
+    return { kind: "intent", intentId, schemeId };
+  }
+
   return null;
 }

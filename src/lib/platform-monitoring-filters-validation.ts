@@ -1,6 +1,6 @@
 import { LIST_SEARCH_QUERY_MAX, validateListSearchQuery } from "@/src/lib/list-date-range";
 
-export const WEBHOOK_PROVIDER_FILTERS = ["ALL", "PHONEPE", "WHATSAPP"] as const;
+export const WEBHOOK_PROVIDER_FILTERS = ["ALL", "PHONEPE"] as const;
 export type WebhookProviderFilter = (typeof WEBHOOK_PROVIDER_FILTERS)[number];
 
 export const MONITORING_TENANT_ID_MAX = 80;

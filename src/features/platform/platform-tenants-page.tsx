@@ -110,7 +110,7 @@ export function PlatformTenantsPage() {
               <CircleDashed className="size-4 text-amber-600" />
             )}
             <span className="text-sm">
-              {row.provisioning.templatesConfigured}/{row.provisioning.templatesRequired} templates
+              {row.provisioning.paymentGatewayConfigured ? "Gateway ready" : "Gateway pending"}
             </span>
           </div>
         ),

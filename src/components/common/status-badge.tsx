@@ -1,5 +1,6 @@
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { generalStatusLabel } from "@/src/lib/plain-language-labels";
 
 type Tone = "green" | "teal" | "amber" | "red" | "stone" | "blue" | "indigo" | "purple" | "orange" | "wine";
 
@@ -137,7 +138,7 @@ export function StatusBadge({
       )}
     >
       <span aria-hidden className={cn("size-1.5 shrink-0 rounded-full", t.dot)} />
-      {label ?? formatStatusLabel(key)}
+      {label ?? generalStatusLabel(String(key)) ?? formatStatusLabel(String(key))}
     </Badge>
   );
 }

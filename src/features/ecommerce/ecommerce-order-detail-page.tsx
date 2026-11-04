@@ -1,19 +1,11 @@
 "use client";
 
-import Link from "next/link";
 import { useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   detailRecordTabContentClass,
@@ -22,14 +14,11 @@ import {
   Surface,
 } from "@/src/components/common/page-parts";
 import { PageSkeleton, QueryError } from "@/src/components/common/query-state";
-import { EcommerceOrderFinancialReviewDialog } from "@/src/features/ecommerce/ecommerce-order-financial-review-dialog";
 import {
-  formatOrderInr,
   formatOrderWhen,
   OrderAmountsGrid,
   OrderEventTimeline,
   OrderLineItemsTable,
-  OrderPaymentAttemptsList,
   OrderProgress,
   OrderSideCards,
 } from "@/src/features/ecommerce/ecommerce-order-ui";
@@ -46,6 +35,11 @@ import {
   useRecordEcommerceOrderPaymentExceptionRefundManualMutation,
   useRetryEcommerceOrderPaymentAttemptReconcileMutation,
   useTransitionEcommerceOrderFulfilmentMutation,
+  useShipEcommerceOrderMutation,
+  useConfirmEcommerceOrderDeliveryMutation,
+  useReadyEcommerceOrderForPickupMutation,
+  useConfirmEcommercePickupCollectionMutation,
+  useReissueEcommercePickupCodeMutation,
   useAcceptEcommerceCodOrderMutation,
   useRejectEcommerceCodOrderMutation,
   useLazyDownloadEcommerceOrderInvoiceQuery,
@@ -64,8 +58,8 @@ import {
 import { newIdempotencyKey } from "@/src/lib/idempotency";
 import { useEcommerceAdminAccess } from "@/src/features/ecommerce/ecommerce-admin-shared";
 import { downloadBlobUrl } from "@/src/lib/download";
-import { Textarea } from "@/components/ui/textarea";
 import {
+  codDeliveredFulfilmentLabel,
   nextFulfilmentTargets,
   orderListPrimaryAction,
 } from "@/src/lib/ecommerce-order-presenters";
@@ -73,11 +67,6 @@ import {
   ordersListBackHref,
   parseOrdersListFiltersFromSearchParams,
 } from "@/src/lib/ecommerce-orders-url-state";
-import {
-  cancelStockDispositionError,
-  cancelStockDispositionRequired,
-  type EcommerceCancelStockDispositionChoice,
-} from "@/src/lib/ecommerce-order-stock-disposition";
 import { toastEcommerceOrderMutationError } from "@/src/lib/ecommerce-order-mutation-error";
 import type {
   EcommerceOrderDetail,
@@ -86,6 +75,10 @@ import type {
 } from "@/src/types/ecommerce-order";
 import { toastApiError } from "@/src/lib/api-error";
 import { EcommerceCourierCodOrderPanel } from "@/src/features/ecommerce/ecommerce-courier-cod-order-panel";
+import { EcommercePickupCollectionPanel } from "@/src/features/ecommerce/ecommerce-pickup-collection-panel";
+import { EcommerceOrderCancellationJourney } from "@/src/features/ecommerce/ecommerce-order-cancellation-journey";
+import { EcommerceOrderReturnJourney } from "@/src/features/ecommerce/ecommerce-order-return-journey";
+import { EcommerceOrderRefundsPanel } from "@/src/features/ecommerce/ecommerce-order-refunds-panel";
 
 export function EcommerceOrderDetailPage({ orderId }: { orderId: string }) {
   const searchParams = useSearchParams();
@@ -112,6 +105,11 @@ export function EcommerceOrderDetailPage({ orderId }: { orderId: string }) {
     skip: !canRead,
   });
   const [transitionFulfilment, transitionState] = useTransitionEcommerceOrderFulfilmentMutation();
+  const [shipOrder, shipOrderState] = useShipEcommerceOrderMutation();
+  const [confirmDelivery, confirmDeliveryState] = useConfirmEcommerceOrderDeliveryMutation();
+  const [readyPickup, readyPickupState] = useReadyEcommerceOrderForPickupMutation();
+  const [reissuePickup, reissuePickupState] = useReissueEcommercePickupCodeMutation();
+  const [confirmPickup, confirmPickupState] = useConfirmEcommercePickupCollectionMutation();
   const [acceptCod, acceptCodState] = useAcceptEcommerceCodOrderMutation();
   const [rejectCod, rejectCodState] = useRejectEcommerceCodOrderMutation();
   const [initiateRefund, initiateRefundState] =
@@ -129,9 +127,6 @@ export function EcommerceOrderDetailPage({ orderId }: { orderId: string }) {
   const [decideCancellation, decideState] = useDecideEcommerceOrderCancellationMutation();
   const [initiateCancellation, initiateCancelState] = useInitiateEcommerceOrderCancellationMutation();
   const [recordCodRefund, recordCodRefundState] = useRecordEcommerceCodCancellationManualRefundMutation();
-  const [adminCancelReason, setAdminCancelReason] = useState("");
-  const [stockDisposition, setStockDisposition] = useState<EcommerceCancelStockDispositionChoice>("");
-  const [rejectDecisionReason, setRejectDecisionReason] = useState("");
   const [codRefundRecipient, setCodRefundRecipient] = useState("");
   const [codRefundMethod, setCodRefundMethod] = useState("");
   const [codRefundReference, setCodRefundReference] = useState("");
@@ -145,7 +140,6 @@ export function EcommerceOrderDetailPage({ orderId }: { orderId: string }) {
   };
   const onMutationError = (err: unknown) =>
     toastEcommerceOrderMutationError(err, { onVersionConflict: refreshOrder });
-  const [codCancelRefundReviewOpen, setCodCancelRefundReviewOpen] = useState(false);
   const [manualRefundReviewOpen, setManualRefundReviewOpen] = useState(false);
   const [decideReturn] = useDecideEcommerceReturnRequestMutation();
   const [recordReturnReceived] = useRecordEcommerceReturnReceivedMutation();
@@ -158,6 +152,11 @@ export function EcommerceOrderDetailPage({ orderId }: { orderId: string }) {
   const [carrierName, setCarrierName] = useState("");
   const [trackingNumber, setTrackingNumber] = useState("");
   const [trackingUrl, setTrackingUrl] = useState("");
+  const [deliveryProofReference, setDeliveryProofReference] = useState("");
+  const [deliveryRecipientName, setDeliveryRecipientName] = useState("");
+  const [codCollectOnDelivery, setCodCollectOnDelivery] = useState(false);
+  const [courierCollectionReference, setCourierCollectionReference] = useState("");
+  const [courierCollectionNote, setCourierCollectionNote] = useState("");
   const [returnDecisionReason, setReturnDecisionReason] = useState("");
   const [inspectionNote, setInspectionNote] = useState("");
   const [resolutionNote, setResolutionNote] = useState("");
@@ -177,16 +176,6 @@ export function EcommerceOrderDetailPage({ orderId }: { orderId: string }) {
   const lineItems = order.lines ?? [];
   const refundRow = (exceptionRefund.data as { refund?: EcommerceOrderPaymentExceptionRefund } | undefined)
     ?.refund ?? null;
-  const activeCancellation = cancellation.data?.activeRequest ?? null;
-  const cancelCapabilities = cancellation.data?.capabilities;
-  const codRefundAmountPaise = Number(order.totalPaise ?? 0);
-  const codRefundFormValid =
-    codRefundRecipient.trim().length >= 2
-    && codRefundMethod.trim().length >= 2
-    && codRefundReference.trim().length >= 2
-    && codRefundProofNote.trim().length >= 8;
-  const stockDispositionValid = cancelStockDispositionRequired(stockDisposition);
-  const stockDispositionHint = cancelStockDispositionError(stockDisposition);
 
   const deliveryTracking =
     order.deliveryTracking && typeof order.deliveryTracking === "object"
@@ -205,18 +194,68 @@ export function EcommerceOrderDetailPage({ orderId }: { orderId: string }) {
   ) as Record<string, unknown> | undefined;
 
   async function onFulfilment(targetStatus: string) {
+    const version = Number(order.version ?? 1);
     try {
-      await transitionFulfilment({
-        orderId,
-        targetStatus,
-        expectedVersion: Number(order.version ?? 1),
-      }).unwrap();
-      toast.success(`Order moved to ${targetStatus}`);
+      if (targetStatus === "SHIPPED" && fulfilmentMode === "DELIVERY") {
+        await shipOrder({
+          orderId,
+          expectedVersion: version,
+          carrierName: carrierName.trim(),
+          trackingNumber: trackingNumber.trim(),
+          trackingUrl: trackingUrl.trim() || undefined,
+          idempotencyKey: newIdempotencyKey(),
+        }).unwrap();
+        toast.success("Order shipped with tracking saved.");
+      } else if (targetStatus === "DELIVERED" && String(order.status) === "SHIPPED") {
+        const cod = order.paymentMethod === "COD";
+        if (cod && codCollectOnDelivery && courierCollectionReference.trim().length < 2) {
+          toast.error("Enter the courier collection reference to confirm payment with delivery.");
+          return;
+        }
+        await confirmDelivery({
+          orderId,
+          expectedVersion: version,
+          proofReference: deliveryProofReference.trim(),
+          recipientName: deliveryRecipientName.trim(),
+          courierCollectionReference:
+            cod && codCollectOnDelivery ? courierCollectionReference.trim() : undefined,
+          courierCollectionEvidenceNote:
+            cod && codCollectOnDelivery && courierCollectionNote.trim()
+              ? courierCollectionNote.trim()
+              : undefined,
+          idempotencyKey: newIdempotencyKey(),
+        }).unwrap();
+        toast.success(
+          cod
+            ? codCollectOnDelivery
+              ? "Delivered & payment collected"
+              : "Delivered · Payment unconfirmed."
+            : "Delivery confirmed with proof recorded.",
+        );
+      } else if (targetStatus === "READY_FOR_PICKUP") {
+        await readyPickup({
+          orderId,
+          expectedVersion: version,
+          idempotencyKey: newIdempotencyKey(),
+        }).unwrap();
+        toast.success("Ready for pickup — the customer can see their code in the shop app.");
+      } else {
+        await transitionFulfilment({ orderId, targetStatus, expectedVersion: version }).unwrap();
+        toast.success(`Order moved to ${targetStatus}`);
+      }
       query.refetch();
       orderEvents.refetch();
     } catch (err) {
       onMutationError(err);
     }
+  }
+
+  function fulfilmentActionLabel(target: string) {
+    if (target === "SHIPPED") return "Ship order";
+    if (target === "DELIVERED" && String(order.status) === "SHIPPED") return "Confirm delivery";
+    if (target === "READY_FOR_PICKUP") return "Ready for pickup";
+    if (target === "DELIVERED") return "Mark collected";
+    return `Mark ${target.replaceAll("_", " ").toLowerCase()}`;
   }
 
   async function onInitiateRefund() {
@@ -288,7 +327,14 @@ export function EcommerceOrderDetailPage({ orderId }: { orderId: string }) {
         title={`Order ${String(o.orderNumber ?? o.id ?? "")}`}
         meta={
           <>
-            <StatusBadge status={String(order.status ?? "")} label={order.status === "COD_PENDING_ACCEPTANCE" ? "COD to accept" : undefined} />
+            <StatusBadge
+              status={String(order.status ?? "")}
+              label={
+                order.status === "COD_PENDING_ACCEPTANCE"
+                  ? "COD to accept"
+                  : codDeliveredFulfilmentLabel(order)
+              }
+            />
             <span className="rounded-full bg-[#f6efec] px-2.5 py-0.5 text-xs font-semibold text-[#5c4a4e]">
               {order.paymentMethod === "COD" ? "Cash on delivery" : "Paid online"}
             </span>
@@ -409,6 +455,62 @@ export function EcommerceOrderDetailPage({ orderId }: { orderId: string }) {
             ) : (
               <p className="text-muted-foreground">No courier details yet.</p>
             )}
+            {String(order.status) === "SHIPPED" && canFulfilmentOperate ? (
+              <div className="mt-3 grid gap-2 sm:grid-cols-2 border-t border-dashed pt-3">
+                <div>
+                  <Label htmlFor="delivery-proof">Delivery proof reference</Label>
+                  <Input
+                    id="delivery-proof"
+                    value={deliveryProofReference}
+                    onChange={(e) => setDeliveryProofReference(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="delivery-recipient">Recipient name</Label>
+                  <Input
+                    id="delivery-recipient"
+                    value={deliveryRecipientName}
+                    onChange={(e) => setDeliveryRecipientName(e.target.value)}
+                  />
+                </div>
+                {order.paymentMethod === "COD" ? (
+                  <>
+                    <label className="sm:col-span-2 flex cursor-pointer items-start gap-2 rounded-lg border border-dashed p-3">
+                      <input
+                        type="checkbox"
+                        className="mt-1"
+                        checked={codCollectOnDelivery}
+                        onChange={(e) => setCodCollectOnDelivery(e.target.checked)}
+                      />
+                      <span className="text-sm">
+                        Courier collected payment — record collection in the same step as delivery.
+                      </span>
+                    </label>
+                    {codCollectOnDelivery ? (
+                      <>
+                        <div>
+                          <Label htmlFor="courier-collect-ref">Courier collection reference</Label>
+                          <Input
+                            id="courier-collect-ref"
+                            value={courierCollectionReference}
+                            onChange={(e) => setCourierCollectionReference(e.target.value)}
+                            placeholder="POD / courier receipt id"
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="courier-collect-note">Collection evidence note (optional)</Label>
+                          <Input
+                            id="courier-collect-note"
+                            value={courierCollectionNote}
+                            onChange={(e) => setCourierCollectionNote(e.target.value)}
+                          />
+                        </div>
+                      </>
+                    ) : null}
+                  </>
+                ) : null}
+              </div>
+            ) : null}
             {canFulfilmentOperate ? (
               <div className="grid gap-2 sm:grid-cols-2">
                 <div>
@@ -458,6 +560,18 @@ export function EcommerceOrderDetailPage({ orderId }: { orderId: string }) {
           </div>
         </Surface>
       ) : null}
+      {fulfilmentMode === "BRANCH_PICKUP" ? (
+        <EcommercePickupCollectionPanel
+          order={order}
+          canOperate={canFulfilmentOperate}
+          isConfirming={confirmPickupState.isLoading}
+          isReissuing={reissuePickupState.isLoading}
+          reissueCode={() => reissuePickup({ orderId: order.id, expectedVersion: Number(order.version ?? 1), idempotencyKey: newIdempotencyKey() }).unwrap()}
+          confirmCollection={(args) => confirmPickup(args).unwrap()}
+          onSuccess={refreshOrder}
+          onError={() => {}}
+        />
+      ) : null}
       {fulfilmentTargets.length > 0 && canFulfilmentOperate && !o.paymentExceptionStatus ? (
         <Surface title="Fulfilment actions">
           <div className="flex flex-wrap gap-2 p-5">
@@ -466,10 +580,15 @@ export function EcommerceOrderDetailPage({ orderId }: { orderId: string }) {
                 key={target}
                 type="button"
                 className="rounded-xl"
-                disabled={transitionState.isLoading}
+                disabled={
+                  transitionState.isLoading
+                  || shipOrderState.isLoading
+                  || confirmDeliveryState.isLoading
+                  || readyPickupState.isLoading
+                }
                 onClick={() => void onFulfilment(target)}
               >
-                Mark {target.replaceAll("_", " ").toLowerCase()}
+                {fulfilmentActionLabel(target)}
               </Button>
             ))}
           </div>
@@ -484,461 +603,77 @@ export function EcommerceOrderDetailPage({ orderId }: { orderId: string }) {
         <TabsContent value="returns" className={detailRecordTabContentClass}>
           <div className="space-y-5">
       <Surface title="Cancellation">
-        <div className="space-y-3 p-5 text-sm">
-          <div className="flex flex-wrap items-center gap-3 rounded-lg border border-dashed p-3">
-            <Label htmlFor="cancel-stock-disposition" className="shrink-0 text-muted-foreground">
-              Stock when approving cancel
-            </Label>
-            <Select
-              value={stockDisposition || undefined}
-              onValueChange={(value) =>
-                setStockDisposition(value as EcommerceCancelStockDispositionChoice)
-              }
-            >
-              <SelectTrigger id="cancel-stock-disposition" className="w-[240px]" aria-required>
-                <SelectValue placeholder="Choose stock outcome…" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="RESTOCK_CONFIRMED">Restock confirmed</SelectItem>
-                <SelectItem value="STOCK_EXCEPTION">Stock exception (no restock)</SelectItem>
-              </SelectContent>
-            </Select>
-            {stockDispositionHint ? (
-              <p className="text-xs text-amber-800">{stockDispositionHint}</p>
-            ) : null}
-          </div>
-          {activeCancellation ? (
-            <div className="rounded-lg border bg-muted/30 p-3">
-              <p className="font-semibold">
-                Active request · {String(activeCancellation.status ?? "")}
-              </p>
-              <p className="mt-1 text-muted-foreground">{String(activeCancellation.reason ?? "")}</p>
-              {String(activeCancellation.status) === "PENDING_DECISION" ? (
-                <div className="mt-3 space-y-2">
-                  <div className="flex flex-wrap gap-2">
-                    <Button
-                      type="button"
-                      size="sm"
-                      disabled={decideState.isLoading || !stockDispositionValid}
-                      onClick={() =>
-                        void decideCancellation({
-                          orderId,
-                          decision: "APPROVE",
-                          expectedVersion: Number(activeCancellation.version ?? 1),
-                          stockDisposition: stockDisposition as "RESTOCK_CONFIRMED" | "STOCK_EXCEPTION",
-                        })
-                          .unwrap()
-                          .then(() => {
-                            toast.success("Cancellation approved");
-                            query.refetch();
-                            cancellation.refetch();
-                          })
-                          .catch((err) => toastApiError(err))
-                      }
-                    >
-                      Approve
-                    </Button>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      disabled={decideState.isLoading || rejectDecisionReason.trim().length < 8}
-                      onClick={() =>
-                        void decideCancellation({
-                          orderId,
-                          decision: "REJECT",
-                          expectedVersion: Number(activeCancellation.version ?? 1),
-                          decisionReason: rejectDecisionReason.trim(),
-                        })
-                          .unwrap()
-                          .then(() => {
-                            toast.success("Request rejected");
-                            setRejectDecisionReason("");
-                            cancellation.refetch();
-                          })
-                          .catch((err) => toastApiError(err))
-                      }
-                    >
-                      Reject
-                    </Button>
-                  </div>
-                  <Textarea
-                    placeholder="Rejection reason (required to reject, min 8 characters)"
-                    value={rejectDecisionReason}
-                    onChange={(e) => setRejectDecisionReason(e.target.value)}
-                    rows={2}
-                    className="max-w-md text-xs"
-                  />
-                </div>
-              ) : null}
-              {o.paymentMethod === "COD"
-              && ["APPROVED_PROCESSING", "COMPLETED"].includes(String(activeCancellation.status ?? ""))
-              && !activeCancellation.codManualRefund ? (
-                <div className="mt-3 space-y-2 rounded-md border border-dashed p-3">
-                  <p className="text-xs text-muted-foreground">
-                    Record customer refund execution evidence once ({formatOrderInr(codRefundAmountPaise)}).
-                    Approval alone does not complete a refund; courier remittance may still be pending.
-                  </p>
-                  <div className="grid gap-2 sm:grid-cols-2">
-                    <Input
-                      placeholder="Recipient"
-                      value={codRefundRecipient}
-                      onChange={(e) => setCodRefundRecipient(e.target.value)}
-                    />
-                    <Input
-                      placeholder="Method (NEFT/UPI)"
-                      value={codRefundMethod}
-                      onChange={(e) => setCodRefundMethod(e.target.value)}
-                    />
-                    <Input
-                      placeholder="Reference / UTR"
-                      value={codRefundReference}
-                      onChange={(e) => setCodRefundReference(e.target.value)}
-                    />
-                    <Input
-                      placeholder="Proof note (min 8 chars)"
-                      value={codRefundProofNote}
-                      onChange={(e) => setCodRefundProofNote(e.target.value)}
-                    />
-                  </div>
-                  <Button
-                    type="button"
-                    size="sm"
-                    disabled={recordCodRefundState.isLoading || !codRefundFormValid}
-                    onClick={() => setCodCancelRefundReviewOpen(true)}
-                  >
-                    Record COD cancellation refund…
-                  </Button>
-                  <EcommerceOrderFinancialReviewDialog
-                    open={codCancelRefundReviewOpen}
-                    onOpenChange={setCodCancelRefundReviewOpen}
-                    title="Record COD cancellation refund"
-                    amountPaise={codRefundAmountPaise}
-                    recipient={codRefundRecipient.trim()}
-                    consequence="Records actual refund paid to the customer (UTR/proof). Does not assume staff hold courier cash or bank remittance."
-                    permissionNote="Requires ecommerce refund permission."
-                    actionLabel="Record refund"
-                    submitDisabled={!codRefundFormValid}
-                    onConfirm={async () => {
-                      await recordCodRefund({
-                        orderId,
-                        idempotencyKey: newIdempotencyKey(),
-                        amountPaise: codRefundAmountPaise,
-                        recipient: codRefundRecipient.trim(),
-                        method: codRefundMethod.trim(),
-                        reference: codRefundReference.trim(),
-                        proofNote: codRefundProofNote.trim(),
-                      }).unwrap();
-                      toast.success("COD cancellation refund recorded");
-                      cancellation.refetch();
-                      refreshOrder();
-                      setCodCancelRefundReviewOpen(false);
-                    }}
-                  />
-                </div>
-              ) : activeCancellation.codManualRefund ? (
-                <p className="mt-2 text-xs text-muted-foreground">COD cancellation refund already recorded.</p>
-              ) : null}
-            </div>
-          ) : (
-            <p className="text-muted-foreground">No open cancellation request.</p>
-          )}
-          {cancelCapabilities?.adminCancelAllowed ? (
-            <div className="space-y-2">
-              <Textarea
-                value={adminCancelReason}
-                onChange={(e) => setAdminCancelReason(e.target.value)}
-                placeholder="Staff cancellation reason (min 8 chars)"
-                rows={3}
-              />
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                disabled={initiateCancelState.isLoading || !stockDispositionValid}
-                onClick={() =>
-                  void initiateCancellation({
-                    orderId,
-                    reason: adminCancelReason.trim(),
-                    expectedVersion: Number(order.version ?? 1),
-                    idempotencyKey: newIdempotencyKey(),
-                    stockDisposition: stockDisposition as "RESTOCK_CONFIRMED" | "STOCK_EXCEPTION",
-                  })
-                    .unwrap()
-                    .then(() => {
-                      toast.success("Cancellation initiated");
-                      query.refetch();
-                      cancellation.refetch();
-                    })
-                    .catch(toastApiError)
-                }
-              >
-                Staff-initiated cancellation
-              </Button>
-            </div>
-          ) : null}
-        </div>
+        <EcommerceOrderCancellationJourney
+          order={order}
+          cancellationView={cancellation.data}
+          canOperate={canFulfilmentOperate}
+          onRefresh={() => {
+            query.refetch();
+            cancellation.refetch();
+          }}
+          decideCancellation={decideCancellation}
+          decideLoading={decideState.isLoading}
+          initiateCancellation={initiateCancellation}
+          initiateLoading={initiateCancelState.isLoading}
+          recordCodRefund={recordCodRefund}
+          recordCodLoading={recordCodRefundState.isLoading}
+        />
       </Surface>
       {orderReturn ? (
         <Surface title="Return / exchange request">
-          <div className="space-y-3 p-5 text-sm">
-            <p>
-              Status: <strong>{String(orderReturn.status ?? "")}</strong> ·{" "}
-              {String(orderReturn.kind ?? "RETURN")}
-            </p>
-            <p className="text-muted-foreground">{String(orderReturn.reason ?? "")}</p>
-            {canFulfilmentOperate && orderReturn.status === "PENDING_REVIEW" ? (
-              <div className="flex flex-wrap gap-2">
+          <EcommerceOrderReturnJourney
+            order={order}
+            orderReturn={orderReturn}
+            canFulfilmentOperate={canFulfilmentOperate}
+            canRefundOperate={canRefundOperate}
+            onRefresh={() => orderReturns.refetch()}
+            decideReturn={decideReturn}
+            recordReturnReceived={recordReturnReceived}
+            recordReturnInspection={recordReturnInspection}
+            createReturnRefundCase={createReturnRefundCase}
+            createReturnRefundCaseLoading={createReturnRefundCaseState.isLoading}
+            resolveReturn={resolveReturn}
+            returnDecisionReason={returnDecisionReason}
+            setReturnDecisionReason={setReturnDecisionReason}
+            inspectionNote={inspectionNote}
+            setInspectionNote={setInspectionNote}
+            resolutionNote={resolutionNote}
+            setResolutionNote={setResolutionNote}
+            replacementOrderId={replacementOrderId}
+            setReplacementOrderId={setReplacementOrderId}
+            codRefundFields={
+              <div className="grid gap-2 sm:grid-cols-2">
+                <Input placeholder="Recipient" value={codRefundRecipient} onChange={(e) => setCodRefundRecipient(e.target.value)} />
+                <Input placeholder="Method (NEFT/UPI)" value={codRefundMethod} onChange={(e) => setCodRefundMethod(e.target.value)} />
+                <Input placeholder="Reference / UTR" value={codRefundReference} onChange={(e) => setCodRefundReference(e.target.value)} />
+                <Input placeholder="Proof note" value={codRefundProofNote} onChange={(e) => setCodRefundProofNote(e.target.value)} />
                 <Button
                   type="button"
                   size="sm"
+                  disabled={recordReturnManualRefundState.isLoading}
                   onClick={() =>
-                    void decideReturn({
+                    void recordReturnManualRefund({
                       returnRequestId: String(orderReturn.id),
-                      decision: "APPROVE",
                       expectedVersion: Number(orderReturn.version ?? 1),
-                      decisionReason: returnDecisionReason.trim() || undefined,
+                      amountPaise: Number(o.totalPaise ?? 0),
+                      recipient: codRefundRecipient.trim(),
+                      method: codRefundMethod.trim(),
+                      reference: codRefundReference.trim(),
+                      proofNote: codRefundProofNote.trim(),
                     })
                       .unwrap()
                       .then(() => {
-                        toast.success("Return approved");
+                        toast.success("Manual return refund recorded");
                         orderReturns.refetch();
                       })
                       .catch(toastApiError)
                   }
                 >
-                  Approve
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  onClick={() =>
-                    void decideReturn({
-                      returnRequestId: String(orderReturn.id),
-                      decision: "REJECT",
-                      expectedVersion: Number(orderReturn.version ?? 1),
-                      decisionReason: returnDecisionReason.trim() || undefined,
-                    })
-                      .unwrap()
-                      .then(() => {
-                        toast.success("Return rejected");
-                        orderReturns.refetch();
-                      })
-                      .catch(toastApiError)
-                  }
-                >
-                  Reject
-                </Button>
-                <Input
-                  className="max-w-md"
-                  placeholder="Decision note (optional)"
-                  value={returnDecisionReason}
-                  onChange={(e) => setReturnDecisionReason(e.target.value)}
-                />
-              </div>
-            ) : null}
-            {canFulfilmentOperate && orderReturn.status === "APPROVED" ? (
-              <Button
-                type="button"
-                size="sm"
-                onClick={() =>
-                  void recordReturnReceived({
-                    returnRequestId: String(orderReturn.id),
-                    expectedVersion: Number(orderReturn.version ?? 1),
-                  })
-                    .unwrap()
-                    .then(() => {
-                      toast.success("Return parcel receipt recorded (no restock yet)");
-                      orderReturns.refetch();
-                    })
-                    .catch(toastApiError)
-                }
-              >
-                Confirm physical return received
-              </Button>
-            ) : null}
-            {canFulfilmentOperate && orderReturn.status === "RECEIVED" ? (
-              <div className="flex flex-col gap-2 border-t pt-3">
-                <p className="text-xs text-muted-foreground">
-                  Restock only after inspection approves the item for resale. Receipt alone does not restock.
-                </p>
-                <Textarea
-                  rows={2}
-                  className="max-w-md"
-                  placeholder="Inspection note"
-                  value={inspectionNote}
-                  onChange={(e) => setInspectionNote(e.target.value)}
-                />
-                <div className="flex flex-wrap gap-2">
-                  <Button
-                    type="button"
-                    size="sm"
-                    onClick={() =>
-                      void recordReturnInspection({
-                        returnRequestId: String(orderReturn.id),
-                        expectedVersion: Number(orderReturn.version ?? 1),
-                        inspectionNote: inspectionNote.trim(),
-                        inspectionOutcome: "APPROVED_FOR_RESALE",
-                        confirmRestockInventory: true,
-                      })
-                        .unwrap()
-                        .then(() => {
-                          toast.success("Approved for resale; inventory restocked once if evidence allows");
-                          orderReturns.refetch();
-                        })
-                        .catch(toastApiError)
-                    }
-                  >
-                    Approve for resale + restock
-                  </Button>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    onClick={() =>
-                      void recordReturnInspection({
-                        returnRequestId: String(orderReturn.id),
-                        expectedVersion: Number(orderReturn.version ?? 1),
-                        inspectionNote: inspectionNote.trim(),
-                        inspectionOutcome: "REJECTED_NOT_RESALABLE",
-                      })
-                        .unwrap()
-                        .then(() => {
-                          toast.success("Inspection recorded — not restocked");
-                          orderReturns.refetch();
-                        })
-                        .catch(toastApiError)
-                    }
-                  >
-                    Reject for resale (no restock)
-                  </Button>
-                </div>
-              </div>
-            ) : null}
-            {canFulfilmentOperate && orderReturn.status === "INSPECTED" ? (
-              <div className="space-y-2 border-t pt-3">
-                {orderReturn.kind === "RETURN" && canRefundOperate ? (
-                  <div className="space-y-2 rounded-md border border-dashed p-3">
-                    <p className="text-xs text-muted-foreground">
-                      Refunds are separate from resolution. Online orders open an ORDER_RETURN refund case;
-                      COD uses auditable manual proof (exactly once).
-                    </p>
-                    {orderReturn.onlineRefundId ? (
-                      <p className="text-xs font-mono">
-                        Refund case: {String(orderReturn.onlineRefundId)}
-                      </p>
-                    ) : orderReturn.manualRefundRecordedAt ? (
-                      <p className="text-xs text-muted-foreground">Manual return refund recorded.</p>
-                    ) : o.paymentMethod === "COD" ? (
-                      <div className="grid gap-2 sm:grid-cols-2">
-                        <Input
-                          placeholder="Recipient"
-                          value={codRefundRecipient}
-                          onChange={(e) => setCodRefundRecipient(e.target.value)}
-                        />
-                        <Input
-                          placeholder="Method (NEFT/UPI)"
-                          value={codRefundMethod}
-                          onChange={(e) => setCodRefundMethod(e.target.value)}
-                        />
-                        <Input
-                          placeholder="Reference / UTR"
-                          value={codRefundReference}
-                          onChange={(e) => setCodRefundReference(e.target.value)}
-                        />
-                        <Input
-                          placeholder="Proof note"
-                          value={codRefundProofNote}
-                          onChange={(e) => setCodRefundProofNote(e.target.value)}
-                        />
-                        <Button
-                          type="button"
-                          size="sm"
-                          disabled={recordReturnManualRefundState.isLoading}
-                          onClick={() =>
-                            void recordReturnManualRefund({
-                              returnRequestId: String(orderReturn.id),
-                              expectedVersion: Number(orderReturn.version ?? 1),
-                              amountPaise: Number(o.totalPaise ?? 0),
-                              recipient: codRefundRecipient.trim(),
-                              method: codRefundMethod.trim(),
-                              reference: codRefundReference.trim(),
-                              proofNote: codRefundProofNote.trim(),
-                            })
-                              .unwrap()
-                              .then(() => {
-                                toast.success("Manual return refund recorded");
-                                orderReturns.refetch();
-                              })
-                              .catch(toastApiError)
-                          }
-                        >
-                          Record manual return refund
-                        </Button>
-                      </div>
-                    ) : (
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="secondary"
-                        disabled={createReturnRefundCaseState.isLoading}
-                        onClick={() =>
-                          void createReturnRefundCase({
-                            returnRequestId: String(orderReturn.id),
-                            expectedVersion: Number(orderReturn.version ?? 1),
-                          })
-                            .unwrap()
-                            .then((res) => {
-                              toast.success(
-                                (res as { created?: boolean }).created === false
-                                  ? "Refund case already exists"
-                                  : "Return refund case created — initiate provider refund from payment tools",
-                              );
-                              orderReturns.refetch();
-                            })
-                            .catch(toastApiError)
-                        }
-                      >
-                        Open return refund case
-                      </Button>
-                    )}
-                  </div>
-                ) : null}
-                <Textarea
-                  rows={2}
-                  placeholder="Resolution summary"
-                  value={resolutionNote}
-                  onChange={(e) => setResolutionNote(e.target.value)}
-                />
-                <Input
-                  placeholder="Linked replacement order ID (exchange, optional)"
-                  value={replacementOrderId}
-                  onChange={(e) => setReplacementOrderId(e.target.value)}
-                />
-                <Button
-                  type="button"
-                  size="sm"
-                  onClick={() =>
-                    void resolveReturn({
-                      returnRequestId: String(orderReturn.id),
-                      expectedVersion: Number(orderReturn.version ?? 1),
-                      resolutionNote: resolutionNote.trim(),
-                      replacementOrderId: replacementOrderId.trim() || undefined,
-                    })
-                      .unwrap()
-                      .then(() => {
-                        toast.success("Return resolved");
-                        orderReturns.refetch();
-                      })
-                      .catch(toastApiError)
-                  }
-                >
-                  Mark resolved
+                  Record manual return refund
                 </Button>
               </div>
-            ) : null}
-          </div>
+            }
+          />
         </Surface>
       ) : null}
           </div>
@@ -946,120 +681,46 @@ export function EcommerceOrderDetailPage({ orderId }: { orderId: string }) {
 
         <TabsContent value="payments" className={detailRecordTabContentClass}>
           <div className="space-y-5">
-      {(o.paymentExceptionStatus || refundRow) && (
-        <Surface title="Payment exception refund">
-          <div className="space-y-3 p-5 text-sm">
-            {refundRow ? (
-              <>
-                <div>
-                  Case status: <strong>{String(refundRow.status ?? "")}</strong>
-                </div>
-                {refundRow.providerRefundId ? (
-                  <div className="font-mono text-xs">Provider ref: {String(refundRow.providerRefundId)}</div>
-                ) : null}
-              </>
-            ) : (
-              <p className="text-muted-foreground">No refund case row yet.</p>
-            )}
-            {canRefundOperate ? (
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  type="button"
-                  size="sm"
-                  disabled={initiateRefundState.isLoading}
-                  onClick={() => void onInitiateRefund()}
-                >
-                  Initiate provider refund
-                </Button>
-              </div>
-            ) : null}
-            {canRefundOperate ? (
-              <div className="mt-4 space-y-2 border-t pt-4">
-                <p className="text-xs font-medium text-muted-foreground">Record manual resolution</p>
-                <div className="grid gap-2 sm:grid-cols-2">
-                  <div>
-                    <Label htmlFor="manual-ref">Provider reference</Label>
-                    <Input id="manual-ref" value={manualRef} onChange={(e) => setManualRef(e.target.value)} />
-                  </div>
-                  <div>
-                    <Label htmlFor="manual-reason">Reason</Label>
-                    <Input
-                      id="manual-reason"
-                      value={manualReason}
-                      onChange={(e) => setManualReason(e.target.value)}
-                    />
-                  </div>
-                </div>
-                <div>
-                  <Label htmlFor="manual-evidence">Evidence note</Label>
-                  <Input
-                    id="manual-evidence"
-                    value={manualEvidence}
-                    onChange={(e) => setManualEvidence(e.target.value)}
-                  />
-                </div>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  disabled={recordManualState.isLoading}
-                  onClick={() => setManualRefundReviewOpen(true)}
-                >
-                  Record manual refund…
-                </Button>
-                <EcommerceOrderFinancialReviewDialog
-                  open={manualRefundReviewOpen}
-                  onOpenChange={setManualRefundReviewOpen}
-                  title="Record manual payment exception refund"
-                  amountPaise={Number(order.totalPaise ?? 0)}
-                  consequence="Closes the exception with manual proof. Do not use if provider refund already succeeded."
-                  permissionNote="Requires ecommerce refund permission."
-                  actionLabel="Record manual refund"
-                  onConfirm={async () => {
-                    await onRecordManual();
-                    setManualRefundReviewOpen(false);
-                  }}
-                />
-              </div>
-            ) : null}
-          </div>
-        </Surface>
-      )}
-      {stuckAttempt && canPaymentOperate ? (
-        <Surface title="Operator reconcile">
-          <div className="space-y-3 p-5 text-sm">
-            <p>
-              Attempt {String(stuckAttempt.id ?? stuckAttempt._id)} ·{" "}
-              {String(stuckAttempt.operationalStatus ?? "")}
-            </p>
-            <div>
-              <Label htmlFor="reconcile-reason">Reason for retry</Label>
-              <Input
-                id="reconcile-reason"
-                value={reconcileReason}
-                onChange={(e) => setReconcileReason(e.target.value)}
-              />
-            </div>
-            <Button
-              type="button"
-              size="sm"
-              disabled={retryReconcileState.isLoading || reconcileReason.trim().length < 8}
-              onClick={() => void onRetryReconcile()}
-            >
-              Safe reconcile retry
-            </Button>
-          </div>
-        </Surface>
-      ) : null}
-      <Surface title="Payment attempts">
+      <Surface title="Refunds & capture obligations">
         <div className="p-4 sm:p-5">
-          <OrderPaymentAttemptsList items={(attempts.data?.items ?? []) as Record<string, unknown>[]} />
+          <EcommerceOrderRefundsPanel
+            order={order}
+            refundRow={refundRow}
+            attempts={(attempts.data?.items ?? []) as Record<string, unknown>[]}
+            paymentExceptionStatus={o.paymentExceptionStatus}
+            canRefundOperate={canRefundOperate}
+            canPaymentOperate={canPaymentOperate}
+            manualRef={manualRef}
+            setManualRef={setManualRef}
+            manualReason={manualReason}
+            setManualReason={setManualReason}
+            manualEvidence={manualEvidence}
+            setManualEvidence={setManualEvidence}
+            manualRefundReviewOpen={manualRefundReviewOpen}
+            setManualRefundReviewOpen={setManualRefundReviewOpen}
+            onInitiateRefund={onInitiateRefund}
+            initiateRefundLoading={initiateRefundState.isLoading}
+            onRecordManual={onRecordManual}
+            recordManualLoading={recordManualState.isLoading}
+            stuckAttempt={stuckAttempt ?? null}
+            reconcileReason={reconcileReason}
+            setReconcileReason={setReconcileReason}
+            onRetryReconcile={onRetryReconcile}
+            retryReconcileLoading={retryReconcileState.isLoading}
+          />
         </div>
       </Surface>
-      <Surface title="Gateway audit (read-only)">
-        <div className="p-4 sm:p-5">
-          <OrderEventTimeline items={(events.data?.items ?? []).slice(0, 40) as Record<string, unknown>[]} />
-        </div>
+      <Surface>
+        <details className="group">
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-2 p-4 text-sm font-semibold text-[#5c4a4e] sm:p-5">
+            <span>Gateway &amp; payment attempts (technical, read-only)</span>
+            <span className="text-xs font-normal text-muted-foreground group-open:hidden">Show</span>
+            <span className="hidden text-xs font-normal text-muted-foreground group-open:inline">Hide</span>
+          </summary>
+          <div className="px-4 pb-4 sm:px-5 sm:pb-5">
+            <OrderEventTimeline items={(events.data?.items ?? []).slice(0, 40) as Record<string, unknown>[]} />
+          </div>
+        </details>
       </Surface>
           </div>
         </TabsContent>

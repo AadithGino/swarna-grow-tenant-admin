@@ -42,4 +42,30 @@ describe("buildShopOrderTimeline", () => {
     expect(t.terminal).toBe(true);
     expect(t.steps.every((s) => s.state === "complete")).toBe(true);
   });
+
+  it("never marks pickup handover complete before DELIVERED", () => {
+    const t = buildShopOrderTimeline({
+      status: "READY_FOR_PICKUP",
+      paymentMethod: "ONLINE",
+      fulfilmentMode: "BRANCH_PICKUP",
+      fulfilmentHandover: { customerPickupAcknowledgedAt: "2026-01-01T10:00:00.000Z" },
+    });
+    const last = t.steps[t.steps.length - 1];
+    expect(last?.label).toMatch(/Handed over/i);
+    expect(last?.label).not.toMatch(/Collected/i);
+    expect(last?.state).toBe("upcoming");
+    expect(t.steps.find((s) => s.label.match(/Ready for pickup/i))?.state).toBe("current");
+    expect(t.subheadline).toMatch(/staff/i);
+  });
+
+  it("does not complete COD pickup timeline when delivered but cash not collected", () => {
+    const t = buildShopOrderTimeline({
+      status: "DELIVERED",
+      paymentMethod: "COD",
+      fulfilmentMode: "BRANCH_PICKUP",
+      courierCodCollectionStatus: "PENDING",
+    });
+    expect(t.steps[t.steps.length - 1]?.state).toBe("current");
+    expect(t.steps[t.steps.length - 1]?.label).not.toMatch(/^Collected$/i);
+  });
 });

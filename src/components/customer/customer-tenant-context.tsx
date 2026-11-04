@@ -32,6 +32,8 @@ type CustomerTenantContextValue = {
     customerSelfEnrol?: boolean;
     multiScheme?: boolean;
     customerLoginMode?: "OTP_ONLY" | "PASSWORD_ONLY";
+    otpLength?: number;
+    authCountryCode?: string;
     customerAppWriteEnabled?: boolean;
     customerAppPaymentsEnabled?: boolean;
     supportNumber?: string;

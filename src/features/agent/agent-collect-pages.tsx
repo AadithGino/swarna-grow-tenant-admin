@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, ArrowRight, Banknote, CheckCircle2, Gem, Info, Link2, PlusCircle, ReceiptText, Search, Share2, ShieldCheck, Smartphone, UserPlus } from "lucide-react";
+import { ArrowLeft, ArrowRight, Banknote, CheckCircle2, Gem, Info, Link2, PlusCircle, ReceiptText, Search, ShieldCheck, Smartphone, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useDebouncedValue } from "@/src/hooks/use-debounced-value";
-import { useCreateAgentPaymentLinkMutation, useGetAgentCustomerQuery, useGetAgentGoldRateQuery, useGetAgentPassbookQuery, useGetAgentPayableRangeQuery, useGetAgentSchemeQuery, useRecordAgentPaymentMutation, useSearchAgentCustomersQuery, useShareAgentPaymentWhatsAppMutation } from "@/src/store/api/agent-api";
+import { useCreateAgentPaymentLinkMutation, useGetAgentCustomerQuery, useGetAgentGoldRateQuery, useGetAgentPassbookQuery, useGetAgentPayableRangeQuery, useGetAgentSchemeQuery, useRecordAgentPaymentMutation, useSearchAgentCustomersQuery } from "@/src/store/api/agent-api";
 import { AgentCard, AgentEmpty, AgentLoadingCards, AgentPageHeader, AgentSchemeCard, AgentStatus, formatAgentDate, formatAgentMoney, formatAgentTime, formatAgentWeight } from "@/src/components/agent/agent-ui";
 import { PortalBackLink } from "@/src/components/common/portal-back-link";
 import { navigateBack } from "@/src/lib/navigate-back";
@@ -132,7 +132,6 @@ export function AgentCollectPaymentPage({ schemeId }: { schemeId: string }) {
   const passbook = useGetAgentPassbookQuery(schemeId);
   const [recordPayment, paymentState] = useRecordAgentPaymentMutation();
   const [createPaymentLink, linkState] = useCreateAgentPaymentLinkMutation();
-  const [sharePaymentWhatsApp, shareState] = useShareAgentPaymentWhatsAppMutation();
   const [amount, setAmount] = useState("");
   const [paymentMode, setPaymentMode] = useState<AgentManualPaymentMode>("CASH");
   const [reference, setReference] = useState("");
@@ -225,7 +224,6 @@ export function AgentCollectPaymentPage({ schemeId }: { schemeId: string }) {
 <div className="mt-5 grid gap-3 sm:grid-cols-2">
 <Button onClick={() => { setReceipt(null); setAmount(""); void range.refetch(); }} variant="outline" className="h-11 rounded-xl">Collect again</Button>
 <Button onClick={() => navigateBack(router, "/agent")} className="h-11 rounded-xl bg-[#730321] hover:bg-[#5c0219]">Back</Button>
-<Button disabled={shareState.isLoading} onClick={() => void sharePaymentWhatsApp(receipt.id).unwrap().then(() => toast.success("Receipt queued for WhatsApp")).catch(() => toast.error("Could not share the receipt"))} variant="outline" className="h-11 rounded-xl sm:col-span-2"><Share2 className="mr-2 size-4" />{shareState.isLoading ? "Sharing…" : "Share receipt on WhatsApp"}</Button>
 </div>
 </div>
 </AgentCard>

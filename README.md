@@ -60,7 +60,7 @@ screens are interactive without a backend.
 ## Run locally
 
 ```bash
-pnpm install
+pnpm install --frozen-lockfile
 cp .env.example .env.local
 pnpm dev
 ```
@@ -109,3 +109,13 @@ pnpm build
 ```
 
 Mutations that can create financial duplicates generate an idempotency key, and RTK Query invalidates the affected dashboard, customer, enrollment, payment and cash caches after success.
+
+
+## Portable source verification
+
+Use the packageManager-pinned pnpm version (11.25.0) with the included pnpm-lock.yaml;
+this export does not contain an npm package-lock and must not use npm ci.
+Run `pnpm install --frozen-lockfile`, then `pnpm lint`, `pnpm typecheck`,
+`pnpm test`, and `pnpm build`. Preview-only Sites files are optional for portable
+builds; managed previews still require their local plugin. Set real API URL and
+`NEXT_PUBLIC_USE_MOCKS=false` before building a deployment artifact.

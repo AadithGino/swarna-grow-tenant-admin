@@ -4,9 +4,6 @@ const USAGE_AND_LIMIT_LABELS: Record<string, string> = {
   staff: "Staff",
   staffSeats: "Staff seats",
   schemePlans: "Scheme plan templates",
-  whatsappMessages: "WhatsApp messages",
-  whatsappMessagesPerMonth: "WhatsApp messages (monthly)",
-  whatsappUsedThisMonth: "WhatsApp used this month",
 };
 
 const PLATFORM_FLAG_LABELS: Record<string, string> = {

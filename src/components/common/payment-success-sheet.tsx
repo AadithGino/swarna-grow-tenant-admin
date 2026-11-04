@@ -7,9 +7,7 @@ import {
   Copy,
   Download,
   Loader2,
-  MessageCircle,
   Printer,
-  Share2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -26,7 +24,6 @@ import {
 import {
   useLazyGetPaymentPassbookImageQuery,
   useLazyGetPaymentReceiptQuery,
-  useSharePaymentWhatsappMutation,
 } from "@/src/store/api/admin-api";
 import { useAppSelector } from "@/src/store/hooks";
 import { downloadBlobUrl, printBlobUrl } from "@/src/lib/download";
@@ -45,7 +42,6 @@ export type PaymentSuccessPayload = {
   goldWeightDisplay?: string;
   goldRateDisplay?: string;
   goldBookedAt?: string;
-  whatsappStatus?: "SENT" | "FAILED" | "QUEUED";
   passbookImageStatus?: "READY" | "GENERATING" | "FAILED";
   passbookImageUrl?: string;
 };
@@ -53,13 +49,6 @@ export type PaymentSuccessPayload = {
 function modeLabel(mode?: string) {
   if (!mode) return "—";
   return mode.replaceAll("_", " ");
-}
-
-function whatsappStatusLabel(status?: PaymentSuccessPayload["whatsappStatus"]) {
-  if (status === "SENT") return "Confirmation sent on WhatsApp";
-  if (status === "FAILED") return "WhatsApp delivery failed";
-  if (status === "QUEUED") return "WhatsApp confirmation queued";
-  return null;
 }
 
 export function PaymentSuccessSheet({
@@ -77,8 +66,6 @@ export function PaymentSuccessSheet({
         s.session.session?.tenant?.displayName ??
         s.session.session?.tenant?.name,
     ) ?? "Your jeweller";
-  const [shareWhatsapp, { isLoading: sharing }] =
-    useSharePaymentWhatsappMutation();
 
   const [passbookFetch, passbookFetchState] = useLazyGetPaymentPassbookImageQuery();
   const [receiptFetch, receiptFetchState] = useLazyGetPaymentReceiptQuery();
@@ -105,7 +92,7 @@ export function PaymentSuccessSheet({
       (receiptFetchState.data.kind !== "blob" ||
         !receiptFetchState.data.contentType.includes("pdf")));
 
-  const whatsappPreviewText = useMemo(() => {
+  const receiptPreviewText = useMemo(() => {
     if (!result) return "";
     const lines = [
       `Payment received — ${tenantName}`,
@@ -180,16 +167,6 @@ export function PaymentSuccessSheet({
     downloadBlobUrl(`${result.receiptNo}-passbook.png`, passbookImageUrl);
   }
 
-  async function handleShareWhatsapp() {
-    if (!result?.paymentId) return;
-    try {
-      await shareWhatsapp(result.paymentId).unwrap();
-      toast.success("WhatsApp receipt queued again");
-    } catch {
-      toast.error("Could not queue WhatsApp message");
-    }
-  }
-
   async function copyReceiptNo() {
     if (!result?.receiptNo) return;
     try {
@@ -201,8 +178,6 @@ export function PaymentSuccessSheet({
   }
 
   if (!result) return null;
-
-  const whatsappLine = whatsappStatusLabel(result.whatsappStatus);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -218,8 +193,8 @@ export function PaymentSuccessSheet({
               <div className="min-w-0 flex-1">
                 <DialogTitle className="text-xl">Payment collected</DialogTitle>
                 <DialogDescription className="text-pretty">
-                  Collection posted successfully. Share or print the receipt
-                  below — previews match what the customer gets on WhatsApp.
+                  Collection posted successfully. Preview or print the receipt
+                  below.
                 </DialogDescription>
               </div>
             </div>
@@ -273,26 +248,20 @@ export function PaymentSuccessSheet({
                   <strong>{money(result.cashInHand)}</strong>
                 </p>
               ) : null}
-              {whatsappLine ? (
-                <p className="mt-3 flex items-center gap-2 text-sm">
-                  <MessageCircle className="size-4 text-emerald-700" />
-                  <strong>{whatsappLine}</strong>
-                </p>
-              ) : null}
             </div>
           </DialogHeader>
 
           <div className="mt-4 grid gap-4 md:grid-cols-2">
             <section className="rounded-xl border p-4">
               <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
-                WhatsApp preview
+                Passbook preview
               </p>
               <p className="mt-1 text-xs text-muted-foreground">
-                Message + passbook image the customer receives
+                Summary text and passbook image for the customer record
               </p>
               <div className="mt-3 rounded-2xl border border-emerald-900/10 bg-[#e7f5ec] p-3">
                 <pre className="whitespace-pre-wrap font-sans text-[13px] leading-snug text-[#111]">
-                  {whatsappPreviewText}
+                  {receiptPreviewText}
                 </pre>
                 <div className="mt-3 rounded-xl border border-emerald-900/10 bg-white p-2">
                   {passbookImageStatus === "GENERATING" ? (
@@ -302,7 +271,7 @@ export function PaymentSuccessSheet({
                     </div>
                   ) : passbookImageStatus === "FAILED" ? (
                     <p className="py-4 text-sm text-amber-900">
-                      Image unavailable — customer may get text-only receipt.
+                      Image unavailable — use PDF receipt below.
                     </p>
                   ) : passbookImageUrl ? (
                     <Image
@@ -385,16 +354,6 @@ export function PaymentSuccessSheet({
           >
             <Download />
             Passbook image
-          </Button>
-          <Button
-            type="button"
-            variant="secondary"
-            className="w-full sm:w-auto"
-            disabled={!result.paymentId || sharing}
-            onClick={() => void handleShareWhatsapp()}
-          >
-            {sharing ? <Loader2 className="animate-spin" /> : <Share2 />}
-            Resend WhatsApp
           </Button>
           <Button
             type="button"

@@ -1,4 +1,4 @@
-import { auditLogs, chartData, dashboardSummary, errorLogs, platformInvoices, platformPlans, platformTenants, templateDefinitions, tenantTemplates, webhookFailures } from "./platform-data";
+import { auditLogs, chartData, dashboardSummary, errorLogs, platformInvoices, platformPlans, platformTenants, webhookFailures } from "./platform-data";
 
 export type PlatformMockRequest = { mockKey: string; params?: Record<string, unknown>; body?: Record<string, any> };
 const wait = () => new Promise((resolve) => setTimeout(resolve, 360));
@@ -30,12 +30,12 @@ export async function platformMockRequest({ mockKey, params = {}, body = {} }: P
     case "tenant": return tenant;
     case "createTenant": {
       const id = `tnt_${Date.now()}`; const code = String(body.businessName ?? "JEWELLER").replace(/[^a-z0-9]/gi, "").slice(0, 10).toUpperCase();
-      return { tenant: { id, businessName: body.businessName, tenantCode: code, status: "PENDING_SETUP", subscription: { tier: "GROWTH", status: "TRIAL", trialEndsAt: "2026-09-30T00:00:00Z" } }, ownerUser: { id: `${id}_owner`, name: body.ownerName, mobile: body.ownerMobile, role: "TENANT_OWNER", temporaryPassword: "Gd7#kP2wQx", mustChangePassword: true }, defaultBranch: { id: `${id}_br1`, name: body.defaultBranchName || "Main Showroom", code: "MAIN" }, nextSteps: ["WHATSAPP_CREDENTIALS", "PAYMENT_GATEWAY", "WHATSAPP_TEMPLATES", "GO_LIVE"].map((key) => ({ key, done: false })), welcomeMessageQueued: Boolean(body.sendWelcomeMessage) };
+      return { tenant: { id, businessName: body.businessName, tenantCode: code, status: "PENDING_SETUP", subscription: { tier: "GROWTH", status: "TRIAL", trialEndsAt: "2026-09-30T00:00:00Z" } }, ownerUser: { id: `${id}_owner`, name: body.ownerName, mobile: body.ownerMobile, role: "TENANT_OWNER", temporaryPassword: "Gd7#kP2wQx", mustChangePassword: true }, defaultBranch: { id: `${id}_br1`, name: body.defaultBranchName || "Main Showroom", code: "MAIN" }, nextSteps: ["PAYMENT_GATEWAY", "GO_LIVE"].map((key) => ({ key, done: false })), welcomeMessageQueued: Boolean(body.sendWelcomeMessage) };
     }
     case "updateTenant": { if (!tenant) throw new Error("Tenant not found"); Object.assign(tenant, body); tenant.audit.version += 1; return tenant; }
     case "suspendTenant": { if (!tenant) throw new Error("Tenant not found"); tenant.status = "SUSPENDED"; tenant.subscription.status = "SUSPENDED"; return { id: tenant.id, status: tenant.status, suspendedAt: new Date().toISOString(), effects: { tenantWritesBlocked: true, readsAllowed: true, reminderJobsStopped: true, tenantApiErrorCode: "SUBSCRIPTION_INACTIVE" } }; }
     case "reactivateTenant": { if (!tenant) throw new Error("Tenant not found"); tenant.status = "ACTIVE"; tenant.subscription.status = "ACTIVE"; return { id: tenant.id, status: tenant.status, reactivatedAt: new Date().toISOString(), effects: { tenantWritesBlocked: false, reminderJobsStopped: false } }; }
-    case "goLive": { if (!tenant) throw new Error("Tenant not found"); if (!tenant.provisioning.readyToGoLive) throw new Error("Complete integrations and all eight required templates before go-live."); tenant.status = "ACTIVE"; tenant.goLiveAt = new Date().toISOString(); return { ok: true, checklist: ["WHATSAPP_CREDENTIALS", "PAYMENT_GATEWAY", "WHATSAPP_TEMPLATES", "GO_LIVE"].map((key) => ({ key, done: true })), tenant: { id: tenant.id, status: tenant.status, goLiveAt: tenant.goLiveAt } }; }
+    case "goLive": { if (!tenant) throw new Error("Tenant not found"); if (!tenant.provisioning.readyToGoLive) throw new Error("Complete payment gateway setup before go-live."); tenant.status = "ACTIVE"; tenant.goLiveAt = new Date().toISOString(); return { ok: true, checklist: ["PAYMENT_GATEWAY", "GO_LIVE"].map((key) => ({ key, done: true })), tenant: { id: tenant.id, status: tenant.status, goLiveAt: tenant.goLiveAt } }; }
     case "ownerCredentials": return { ownerId: tenant?.owner.id, temporaryPassword: "Rj8#pQ2wLm", mustSetPassword: true, mustChangePassword: true };
     case "usage": return tenant?.usageDetail;
     case "flags": return { flags: tenant?.flags ?? {}, effectiveFlags: tenant?.effectiveFlags ?? {} };
@@ -67,20 +67,43 @@ export async function platformMockRequest({ mockKey, params = {}, body = {} }: P
         digitalMetalsPlatformPauseReason: body.pause ? String(body.reason ?? "Paused by platform") : "",
       };
     }
-    case "saveWhatsapp": { if (!tenant) throw new Error("Tenant not found"); tenant.integrations.whatsapp = { configured: true, provider: "META_CLOUD", phoneNumberDisplay: "+91 98465 43210", accessTokenMasked: "EAA••••xyz", verificationStatus: "PENDING", version: 4 }; return tenant.integrations.whatsapp; }
-    case "verifyWhatsapp": { if (!tenant) throw new Error("Tenant not found"); tenant.integrations.whatsapp.verificationStatus = "VERIFIED"; tenant.provisioning.whatsappConfigured = true; return { verificationStatus: "VERIFIED", messageId: "wamid.test", deliveryStatus: "DELIVERED", verifiedAt: new Date().toISOString(), testMobile: body.testMobile }; }
-    case "saveGateway": { if (!tenant) throw new Error("Tenant not found"); tenant.integrations.paymentGateway = { configured: true, clientCredentialsConfigured: Boolean(body.clientId && body.clientSecret), provider: "PHONEPE", clientIdMasked: body.clientId ? `${String(body.clientId).slice(0, 4)}••••SDK` : null, environment: body.environment || "SANDBOX", verificationStatus: "PENDING", lastVerifiedAt: null }; tenant.provisioning.paymentGatewayConfigured = true; return tenant.integrations.paymentGateway; }
+    case "saveGateway": { if (!tenant) throw new Error("Tenant not found"); tenant.integrations.paymentGateway = { configured: true, clientCredentialsConfigured: Boolean(body.clientId && body.clientSecret), provider: "PHONEPE", clientIdMasked: body.clientId ? `${String(body.clientId).slice(0, 4)}••••SDK` : null, environment: body.environment || "SANDBOX", verificationStatus: "PENDING", lastVerifiedAt: null }; tenant.provisioning.paymentGatewayConfigured = true; tenant.provisioning.readyToGoLive = true; return tenant.integrations.paymentGateway; }
     case "verifyGateway": { if (!tenant) throw new Error("Tenant not found"); tenant.integrations.paymentGateway.verificationStatus = "VERIFIED"; tenant.provisioning.paymentGatewayConfigured = true; return { verified: true, verificationStatus: "VERIFIED", verifiedAt: new Date().toISOString() }; }
-    case "templateDefinitions": return templateDefinitions;
-    case "templates": return tenantTemplates[String(params.tenantId)] ?? [];
-    case "saveTemplate": {
-      const list = tenantTemplates[String(params.tenantId)] ?? (tenantTemplates[String(params.tenantId)] = []); const current = list.find((row) => row.messageType === String(params.messageType));
-      if (current) Object.assign(current, body, { version: current.version + 1, active: true }); else list.push({ id: `tpl_${Date.now()}`, messageType: String(params.messageType), ...body, active: true, version: 1 } as any);
-      if (tenant) { tenant.templates.configured = list.filter((row) => row.active && row.messageType !== "PAYMENT_SUCCESS_TEXT_FALLBACK").length; tenant.templates.missing = templateDefinitions.filter((d) => d.required && !list.some((row) => row.messageType === d.messageType)).map((d) => d.messageType); tenant.provisioning.templatesConfigured = tenant.templates.configured; tenant.provisioning.readyToGoLive = tenant.provisioning.whatsappConfigured && tenant.provisioning.paymentGatewayConfigured && tenant.templates.missing.length === 0; }
-      return list.find((row) => row.messageType === String(params.messageType));
+    case "saveMessageCentral": {
+      if (!tenant) throw new Error("Tenant not found");
+      tenant.integrations.messageCentral = {
+        configured: true,
+        provider: "MESSAGE_CENTRAL",
+        customerIdMasked: body.customerId ? `${String(body.customerId).slice(0, 3)}••••` : null,
+        email: body.email ?? null,
+        countryCode: body.countryCode ?? "91",
+        flowType: body.flowType ?? "SMS",
+        otpLength: body.otpLength ?? 6,
+        verificationStatus: "NOT_VERIFIED",
+        lastVerifiedAt: null,
+      };
+      return tenant.integrations.messageCentral;
     }
-    case "deleteTemplate": { const list = tenantTemplates[String(params.tenantId)] ?? []; const index = list.findIndex((row) => row.messageType === String(params.messageType)); if (index >= 0) list.splice(index, 1); return { deleted: true }; }
-    case "testTemplate": return { queued: true, to: body.testMobile, templateId: "123456789", messageId: "wamid.test" };
+    case "verifyMessageCentral": {
+      if (!tenant) throw new Error("Tenant not found");
+      if (!tenant.integrations.messageCentral) {
+        tenant.integrations.messageCentral = {
+          configured: true,
+          provider: "MESSAGE_CENTRAL",
+          verificationStatus: "VERIFIED",
+          lastVerifiedAt: new Date().toISOString(),
+        };
+      } else {
+        tenant.integrations.messageCentral.verificationStatus = "VERIFIED";
+        tenant.integrations.messageCentral.lastVerifiedAt = new Date().toISOString();
+      }
+      return {
+        verified: true,
+        verificationStatus: "VERIFIED",
+        verifiedAt: new Date().toISOString(),
+        ...(body.testMobile ? { testMobile: body.testMobile, deliveryStatus: "SENT" } : {}),
+      };
+    }
     case "changePlan": { if (!tenant) throw new Error("Tenant not found"); const plan = platformPlans.find((row) => row.id === body.subscriptionPlanId); if (plan) tenant.subscription.tier = plan.tier; tenant.subscription.billingCycle = body.billingCycle ?? tenant.subscription.billingCycle; return tenant.subscription; }
     case "updateLimits": { if (!tenant) throw new Error("Tenant not found"); return { tier: tenant.subscription.tier, limitOverrides: body.limitOverrides ?? {}, featureOverrides: body.featureOverrides ?? {}, version: ++tenant.audit.version }; }
     case "extendSubscription": { if (!tenant) throw new Error("Tenant not found"); return { status: body.extensionType === "GRACE" ? "GRACE" : "ACTIVE", currentPeriodEnd: "2026-10-15", graceEndsAt: body.extensionType === "GRACE" ? "2026-10-15T00:00:00Z" : null, extendedDays: body.days }; }

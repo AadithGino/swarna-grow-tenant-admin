@@ -21,18 +21,14 @@ export function CounterDialogBand({
   current: number;
 }) {
   return (
-    <div className="relative isolate overflow-hidden bg-[#3d0c15] px-6 pb-4 pt-5 text-white">
-      <div
-        aria-hidden
-        className="absolute inset-0 -z-10 bg-[radial-gradient(120%_160%_at_0%_0%,#8e1a36_0%,#5e0a20_50%,#3d0c15_100%)]"
-      />
+    <div className="border-b border-[#eadfdb] bg-[#fcfaf8] px-6 pb-4 pt-5">
       <div className="flex items-center gap-3 pr-8">
-        <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-[#f3dca6] to-[#c3a264] text-[#4a0e1c]">
+        <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-[#730321] text-[#f3d9a4]">
           <Icon className="size-5" aria-hidden />
         </span>
         <div className="min-w-0">
-          <p className="truncate text-[0.8rem] font-medium text-[#e2c88f]">At the counter for {customerName}</p>
-          <h2 className="truncate text-lg font-extrabold tracking-tight">{title}</h2>
+          <p className="truncate text-[0.8rem] font-medium text-[#9a6f2a]">At the counter for {customerName}</p>
+          <h2 className="truncate text-lg font-extrabold tracking-tight text-[#28161a]">{title}</h2>
         </div>
       </div>
       <ol className="mt-4 flex items-center gap-2 text-xs font-semibold" aria-label="Progress">
@@ -45,15 +41,15 @@ export function CounterDialogBand({
                 aria-current={active ? "step" : undefined}
                 className={cn(
                   "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1",
-                  active && "bg-[#e2c88f] text-[#3d0c15]",
-                  done && "bg-white/15 text-white",
-                  !active && !done && "text-white/55",
+                  active && "bg-[#730321] text-white",
+                  done && "bg-[#eadfdb] text-[#28161a]",
+                  !active && !done && "text-[#9a8d90]",
                 )}
               >
                 {done ? <Check className="size-3" aria-hidden /> : <span className="tabular-nums">{i + 1}</span>}
                 {label}
               </span>
-              {i < steps.length - 1 ? <span aria-hidden className="h-px w-4 bg-white/25" /> : null}
+              {i < steps.length - 1 ? <span aria-hidden className="h-px w-4 bg-[#e3d5d0]" /> : null}
             </li>
           );
         })}

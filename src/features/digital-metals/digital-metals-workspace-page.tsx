@@ -16,7 +16,7 @@ import { TrendChart } from "@/src/components/admin-ui/trend-chart";
 import { contractPayload } from "@/src/store/api/contract-adapters";
 import {
   useGetDigitalMetalsCapabilityQuery,
-  useGetDigitalMetalsHedgeLiveQuery,
+  useGetDigitalMetalsWalletTotalsQuery,
   useGetDigitalMetalsRatesCurrentQuery,
   useGetDigitalMetalsRatesHistoryQuery,
   useGetDigitalMetalsWorkspaceQuery,
@@ -51,7 +51,7 @@ export function DigitalMetalsWorkspacePage() {
     { metal: chartMetal, finenessPpm: 999_000, limit: 30 },
     { skip },
   );
-  const hedge = useGetDigitalMetalsHedgeLiveQuery(undefined, { skip });
+  const walletTotals = useGetDigitalMetalsWalletTotalsQuery(undefined, { skip });
 
   const gold = goldRate.data?.rate as RateRow | undefined;
   const silver = silverRate.data?.rate as RateRow | undefined;
@@ -68,13 +68,11 @@ export function DigitalMetalsWorkspacePage() {
     gold?.customerBuyRatePerGramPaise,
     goldHistory.length > 1 ? goldHistory[goldHistory.length - 2]?.customerBuyRatePerGramPaise : undefined,
   );
-  const hedgeLines = ((contractPayload(hedge.data) as { lines?: Record<string, unknown>[] } | undefined)?.lines ?? []) as {
+  const walletLines = ((contractPayload(walletTotals.data) as { lines?: Record<string, unknown>[] } | undefined)?.lines ?? []) as {
     metal?: string;
-    closingObligationUg?: string;
-    uncoveredUg?: string;
+    heldUg?: string;
   }[];
-  const held = (metal: string) => hedgeLines.find((l) => String(l.metal) === metal)?.closingObligationUg;
-  const uncoveredGold = hedgeLines.find((l) => String(l.metal) === "GOLD")?.uncoveredUg;
+  const held = (metal: string) => walletLines.find((l) => String(l.metal) === metal)?.heldUg;
 
   const pause = capability.data?.pause;
   const paused = pause?.tenantPaused || pause?.platformPaused;
@@ -136,15 +134,15 @@ export function DigitalMetalsWorkspacePage() {
           <HeroStat
             label="Customer gold held"
             value={held("GOLD") ? dmWeight(held("GOLD")) : "—"}
-            detail={uncoveredGold && Number(uncoveredGold) > 0 ? `${dmWeight(uncoveredGold)} not yet covered` : "Fully covered"}
-            loading={hedge.isLoading}
+            detail="Total live customer obligation"
+            loading={walletTotals.isLoading}
             href="/digital-metals/hedge"
           />
           <HeroStat
             label="Customer silver held"
             value={held("SILVER") ? dmWeight(held("SILVER")) : "—"}
-            detail="Live obligation"
-            loading={hedge.isLoading}
+            detail="Total live customer obligation"
+            loading={walletTotals.isLoading}
             href="/digital-metals/hedge"
           />
         </SectionHero>

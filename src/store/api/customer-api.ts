@@ -58,6 +58,7 @@ import {
   adaptCustomerPaymentList,
   adaptCustomerSchemeDetail,
   adaptCustomerSettlementPreview,
+  normalizeCustomerSchemeList,
 } from "@/src/lib/customer-payment-adapter";
 import {
   adaptCustomerGrievance,
@@ -69,6 +70,12 @@ import {
 } from "@/src/lib/customer-payment-poll";
 import { readCustomerPaymentSession } from "@/src/lib/customer-payment-session";
 import { normalizeCustomerTenantResolve } from "@/src/lib/customer-tenant-branding";
+import { normalizeShopOrdersListResponse } from "@/src/lib/customer-shop-orders-list";
+import {
+  normalizeCustomerActivityPage,
+  type CustomerActivityListPage,
+  type CustomerRecentActivityItem,
+} from "@/src/lib/customer-recent-activity";
 
 type ApiEnvelope<T> = { success: true; data: T; meta?: { nextCursor: string | null; hasMore: boolean; limit: number; total: number } };
 
@@ -333,11 +340,44 @@ const mockBaseQuery: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQueryErro
     const payNow = typeof body?.payNow === "boolean" ? body.payNow : undefined;
     return ok(buildCustomerEnrolMockResponse(plan, { installmentAmountPaise, payNow }));
   }
+  if (url.endsWith("/pay/sdk-order") && method === "POST") {
+    const id = `pi_${Date.now()}`;
+    return ok({
+      checkoutKind: "SDK_ORDER",
+      provider: "PHONEPE",
+      id,
+      intentId: id,
+      paymentId: `pay_${Date.now()}`,
+      status: "PENDING",
+      token: `mock-token-${id}`,
+      sdkToken: `mock-token-${id}`,
+      merchantOrderId: id,
+      statusPollUrl: `/app/payment-intents/${id}`,
+      expiresAt: new Date(Date.now() + 900000).toISOString(),
+      positionVersion: Number(body?.expectedPositionVersion ?? 1),
+    });
+  }
   if ((url.endsWith("/payment-intents") || url.endsWith("/pay")) && method === "POST") {
     const isIntent = url.endsWith("/payment-intents");
     return ok(isIntent
-      ? { id: `pi_${Date.now()}`, paymentId: `pay_${Date.now()}`, status: "PENDING", paymentUrl: "https://mercury.phonepe.com/transact/pg?token=mock", statusPollUrl: "/app/payment-intents/pi_demo", expiresAt: new Date(Date.now() + 900000).toISOString(), positionVersion: Number(body?.expectedPositionVersion ?? 1) }
-      : { id: `pl_${Date.now()}`, paymentId: `pay_${Date.now()}`, token: "mock_pay_link", gatewayUrl: "/pay/mock_pay_link", expiresAt: new Date(Date.now() + 900000).toISOString() });
+      ? {
+          checkoutKind: "HOSTED_REDIRECT",
+          provider: "PHONEPE",
+          id: `pi_${Date.now()}`,
+          paymentId: `pay_${Date.now()}`,
+          status: "PENDING",
+          paymentUrl: "https://mercury.phonepe.com/transact/pg?token=mock",
+          statusPollUrl: "/app/payment-intents/pi_demo",
+          expiresAt: new Date(Date.now() + 900000).toISOString(),
+          positionVersion: Number(body?.expectedPositionVersion ?? 1),
+        }
+      : {
+          id: `pl_${Date.now()}`,
+          paymentId: `pay_${Date.now()}`,
+          token: "mock_pay_link",
+          gatewayUrl: "/pay/mock_pay_link",
+          expiresAt: new Date(Date.now() + 900000).toISOString(),
+        });
   }
   const publicPayInit = url.match(/^\/public\/pay\/([^/]+)\/initiate$/);
   if (publicPayInit && method === "POST") {
@@ -578,28 +618,30 @@ const mockBaseQuery: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQueryErro
   if (dmSellOrderMatch && method === "GET") {
     return ok({
       id: dmSellOrderMatch[1],
-      status: "PENDING_APPROVAL",
+      status: "PAYABLE_OPEN",
       quantityUg: "1000000",
       settlementPaise: 580_000,
-      approvalExpiresAt: new Date(Date.now() + 1_800_000).toISOString(),
+      executedAt: new Date().toISOString(),
+      payable: { id: "dmpaybl_mock", amountPaise: 580_000, outstandingPaise: 580_000, status: "OPEN" },
     });
   }
   const dmSellConfirm = url.match(/^\/app\/digital-metals\/sell-orders\/([^/]+)\/confirm$/);
   if (dmSellConfirm && method === "POST") {
     return ok({
       id: dmSellConfirm[1],
-      status: "PENDING_APPROVAL",
-      approvalExpiresAt: new Date(Date.now() + 1_800_000).toISOString(),
+      status: "PAYABLE_OPEN",
+      executedAt: new Date().toISOString(),
+      payable: { id: "dmpaybl_mock", amountPaise: 580_000, outstandingPaise: 580_000, status: "OPEN" },
     });
   }
   const dmSellPayout = url.match(/^\/app\/digital-metals\/sell-orders\/([^/]+)\/payout-status$/);
   if (dmSellPayout && method === "GET") {
     return ok({
       orderId: dmSellPayout[1],
-      saleExecuted: false,
+      saleExecuted: true,
       bankPayoutSettled: false,
       payoutDestinationMasked: { accountLast4: "9012", ifsc: "HDFC0001234", accountHolderName: "Mock User" },
-      payable: null,
+      payable: { id: "dmpaybl_mock", amountPaise: 580_000, outstandingPaise: 580_000, status: "OPEN" },
       payouts: [],
     });
   }
@@ -732,6 +774,9 @@ function unwrapCustomerEnvelope(result: {
       error?: { code: string; message: string };
     };
     if (envelope.success) {
+      if (Array.isArray(envelope.data) && envelope.meta && typeof envelope.meta === "object") {
+        return rtkDataResult({ items: envelope.data, meta: envelope.meta }, result.meta);
+      }
       return rtkDataResult(envelope.data, result.meta);
     }
     return rtkErrorResult({
@@ -792,7 +837,7 @@ const dynamicBaseQuery: BaseQueryFn<
 export const customerApi = createApi({
   reducerPath: "customerApi",
   baseQuery: dynamicBaseQuery,
-  tagTypes: ["CustomerHome", "CustomerScheme", "CustomerPayment", "CustomerProfile", "CustomerNotification", "CustomerGrievance", "CustomerDevice", "ShopCart", "ShopAddresses", "DigitalMetalsBuy", "DigitalMetalsSell", "DigitalMetalsRedemption", "DigitalMetalsDeliveryAddresses", "DigitalMetalsPortfolio", "DigitalMetalsPassbook"],
+  tagTypes: ["CustomerHome", "CustomerScheme", "CustomerPayableRange", "CustomerPayment", "CustomerProfile", "CustomerNotification", "CustomerGrievance", "CustomerDevice", "ShopCart", "ShopAddresses", "DigitalMetalsBuy", "DigitalMetalsSell", "DigitalMetalsRedemption", "DigitalMetalsDeliveryAddresses", "DigitalMetalsPortfolio", "DigitalMetalsPassbook"],
   endpoints: (builder) => ({
     resolveTenant: builder.query<
       { tenants: TenantBranding[]; resolvedBy?: string; tenantCode?: string | null },
@@ -857,6 +902,25 @@ export const customerApi = createApi({
         params: { includeTrends: "true", trendMonths: 6 },
       }),
       providesTags: ["CustomerHome"],
+    }),
+    listCustomerActivity: builder.query<
+      CustomerActivityListPage,
+      { limit?: number; cursor?: string }
+    >({
+      query: (params = {}) => ({
+        url: "/app/activity",
+        params: { limit: 20, ...params },
+      }),
+      transformResponse: (raw: unknown) => normalizeCustomerActivityPage(raw),
+      serializeQueryArgs: ({ endpointName }) => endpointName,
+      merge: (current, incoming, { arg }) => {
+        if (!arg?.cursor) return incoming;
+        return {
+          items: [...(current?.items ?? []), ...(incoming.items ?? [])],
+          page: incoming.page,
+        };
+      },
+      forceRefetch: ({ currentArg, previousArg }) => currentArg?.cursor !== previousArg?.cursor,
     }),
     getCustomerProfile: builder.query<CustomerProfile, void>({ query: () => "/app/profile", providesTags: ["CustomerProfile"] }),
     updateCustomerProfile: builder.mutation<CustomerProfile, Partial<CustomerProfile>>({ query: (body) => ({ url: "/app/profile", method: "PATCH", body }), invalidatesTags: ["CustomerProfile", "CustomerHome"] }),
@@ -928,10 +992,12 @@ export const customerApi = createApi({
     }),
     getCustomerSchemes: builder.query<SchemeCard[], void>({
       query: () => "/app/schemes",
+      transformResponse: (raw: unknown) => normalizeCustomerSchemeList<SchemeCard>(raw),
       providesTags: ["CustomerScheme"],
     }),
     getCustomerPastSchemes: builder.query<CustomerPastScheme[], void>({
       query: () => ({ url: "/app/schemes", params: { group: "PAST" } }),
+      transformResponse: (raw: unknown) => normalizeCustomerSchemeList<CustomerPastScheme>(raw),
       providesTags: ["CustomerScheme"],
     }),
     getCustomerScheme: builder.query<CustomerSchemeDetail, string>({
@@ -951,6 +1017,9 @@ export const customerApi = createApi({
         url: `/app/schemes/${schemeId}/payable-range`,
         params: targetCycle ? { targetCycle } : undefined,
       }),
+      providesTags: (_result, _error, { schemeId }) => [
+        { type: "CustomerPayableRange", id: schemeId },
+      ],
     }),
     getCustomerSettlementPreview: builder.query<
       CustomerSettlementPreview,
@@ -975,6 +1044,10 @@ export const customerApi = createApi({
     }),
     pollCustomerPaymentIntent: builder.query<CustomerPaymentPollResult, string>({
       query: (intentId) => `/app/payment-intents/${encodeURIComponent(intentId)}`,
+      transformResponse: (raw: unknown) => adaptCustomerPaymentPoll(raw),
+    }),
+    pollCustomerPaymentLink: builder.query<CustomerPaymentPollResult, string>({
+      query: (linkId) => `/app/payments/${encodeURIComponent(linkId)}/status`,
       transformResponse: (raw: unknown) => adaptCustomerPaymentPoll(raw),
     }),
     pollPublicPaymentLink: builder.query<CustomerPaymentPollResult, string>({
@@ -1012,6 +1085,10 @@ export const customerApi = createApi({
               },
             };
       },
+      invalidatesTags: (_result, _error, { scheme }) => [
+        { type: "CustomerPayableRange", id: scheme.id },
+        { type: "CustomerScheme", id: scheme.id },
+      ],
     }),
     getCustomerPayments: builder.query<PaymentListItem[], void>({
       queryFn: async (_arg, _api, _extra, baseQuery) => {
@@ -1362,29 +1439,7 @@ export const customerApi = createApi({
         params: params ?? {},
         mockKey: "shopOrders",
       }),
-      transformResponse: (raw: unknown) => {
-        if (raw && typeof raw === "object" && "data" in raw) {
-          const envelope = raw as {
-            data: Record<string, unknown>[] | { items?: Record<string, unknown>[] };
-            meta?: { nextCursor?: string | null };
-          };
-          const data = envelope.data;
-          const items = Array.isArray(data)
-            ? data
-            : Array.isArray((data as { items?: unknown[] })?.items)
-              ? ((data as { items: Record<string, unknown>[] }).items ?? [])
-              : [];
-          return {
-            items,
-            page: { nextCursor: envelope.meta?.nextCursor ?? null },
-          };
-        }
-        const legacy = raw as { items?: Record<string, unknown>[]; page?: { nextCursor?: string | null } };
-        return {
-          items: legacy.items ?? [],
-          page: legacy.page ?? { nextCursor: null },
-        };
-      },
+      transformResponse: (raw: unknown) => normalizeShopOrdersListResponse(raw),
       serializeQueryArgs: ({ endpointName }) => endpointName,
       merge: (current, incoming, { arg }) => {
         if (!arg?.cursor) return incoming;
@@ -2158,8 +2213,8 @@ export const {
   useUpdateCustomerNomineeMutation, useRemoveCustomerNomineeMutation,
   useGetCustomerPlansQuery, useGetCustomerPlanQuery, useGetCustomerSchemesQuery, useGetCustomerPastSchemesQuery, useGetCustomerSchemeQuery, useGetCustomerPassbookQuery, useGetCustomerPayableRangeQuery, useLazyGetCustomerPayableRangeQuery, useGetCustomerSettlementPreviewQuery,
   useEnrolCustomerSchemeMutation, useInitiateCustomerPaymentMutation, useInitiatePublicPaymentLinkMutation,
-  useLazyPollCustomerPaymentIntentQuery, useLazyPollPublicPaymentLinkQuery,
-  useGetCustomerPaymentsQuery, useGetCustomerPaymentQuery,
+  useLazyPollCustomerPaymentIntentQuery, useLazyPollCustomerPaymentLinkQuery, useLazyPollPublicPaymentLinkQuery,
+  useGetCustomerPaymentsQuery, useGetCustomerPaymentQuery, useListCustomerActivityQuery,
   useGetCustomerNotificationsQuery, useMarkCustomerNotificationReadMutation, useMarkAllCustomerNotificationsReadMutation,
   useGetCustomerGrievancesQuery, useGetCustomerGrievanceQuery, useCreateCustomerGrievanceMutation,
   useReplyCustomerGrievanceMutation, useGetCustomerDevicesQuery, useRevokeCustomerDeviceMutation,

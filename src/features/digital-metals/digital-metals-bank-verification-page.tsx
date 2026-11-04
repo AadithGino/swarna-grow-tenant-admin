@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { BadgeCheck, Landmark } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/src/components/common/page-parts";
 import { EmptyState, QueryError } from "@/src/components/common/query-state";
 import { StatusBadge } from "@/src/components/common/status-badge";
@@ -17,6 +18,10 @@ import { useLoadMoreList } from "@/src/hooks/use-load-more-list";
 import { useGetDigitalMetalsBankVerificationQueueQuery } from "@/src/store/api/admin-api";
 import { useDigitalMetalsServerEntitlement } from "./digital-metals-admin-shared";
 import { DM_SECTION, DmCustomerCell, DmGate, shortDateTime } from "./digital-metals-admin-ui";
+import {
+  DigitalMetalsBankVerifyDialog,
+  type BankVerifyDialogTarget,
+} from "./digital-metals-bank-verify-dialog";
 
 type BankRow = Record<string, unknown> & { id: string };
 
@@ -33,6 +38,8 @@ export function DigitalMetalsBankVerificationPage() {
   const ent = useDigitalMetalsServerEntitlement();
   const [status, setStatus] = useState("PENDING_VERIFICATION");
   const [search, setSearch] = useState("");
+  const [verifyTarget, setVerifyTarget] = useState<BankVerifyDialogTarget | null>(null);
+  const [verifyOpen, setVerifyOpen] = useState(false);
   const list = useLoadMoreList<BankRow>(status, rowId);
   const queue = useGetDigitalMetalsBankVerificationQueueQuery(
     { status: status === "ALL" ? undefined : status, limit: 25, cursor: list.cursor },
@@ -95,6 +102,38 @@ export function DigitalMetalsBankVerificationPage() {
         />
       ),
     },
+    {
+      key: "actions",
+      header: "",
+      className: "w-[7.5rem]",
+      cell: (r) => {
+        if (r.status !== "PENDING_VERIFICATION") return null;
+        const customerId = String(r.customerId ?? (r.customer as { id?: string } | null)?.id ?? "");
+        if (!customerId) return null;
+        return (
+          <Button
+            type="button"
+            size="sm"
+            data-testid="bank-verification-queue-verify"
+            onClick={(e) => {
+              e.stopPropagation();
+              setVerifyTarget({
+                customerId,
+                destinationId: String(r.id),
+                accountHolderName: String(r.accountHolderName ?? ""),
+                accountLast4: String(r.accountLast4 ?? ""),
+                ifsc: String(r.ifsc ?? ""),
+                bankName: String(r.bankName ?? ""),
+                customerName: String((r.customer as { name?: string } | null)?.name ?? ""),
+              });
+              setVerifyOpen(true);
+            }}
+          >
+            Verify
+          </Button>
+        );
+      },
+    },
   ];
 
   return (
@@ -104,11 +143,11 @@ export function DigitalMetalsBankVerificationPage() {
           eyebrow={DM_SECTION}
           icon={BadgeCheck}
           title="Bank verification"
-          description="Customers add a bank account before their first sale. Verify it from the customer's profile — full account numbers are never shown here."
+          description="Customers add a bank account before their first sale. Verify here or from the customer profile — full account numbers are never shown."
         />
         <Notice tone="blue" icon={BadgeCheck}>
-          Open a row to go to the customer, then verify or disable the account from their Digital Gold tab after checking a
-          cancelled cheque or statement.
+          Use <strong className="font-semibold">Verify</strong> on a row after checking a cancelled cheque or statement, or
+          open the customer for the full Digital Gold tab.
         </Notice>
         <ListPanel
           toolbar={
@@ -152,6 +191,12 @@ export function DigitalMetalsBankVerificationPage() {
             />
           )}
         </ListPanel>
+        <DigitalMetalsBankVerifyDialog
+          open={verifyOpen}
+          onOpenChange={setVerifyOpen}
+          target={verifyTarget}
+          onCompleted={() => void queue.refetch()}
+        />
       </div>
     </DmGate>
   );

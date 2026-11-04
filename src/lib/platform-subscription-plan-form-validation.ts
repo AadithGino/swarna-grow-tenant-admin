@@ -24,7 +24,6 @@ export const DEFAULT_PLAN_LIMIT_KEYS = [
   "branches",
   "staffSeats",
   "schemePlans",
-  "whatsappMessagesPerMonth",
 ] as const;
 
 export type PlanLimitKey = (typeof DEFAULT_PLAN_LIMIT_KEYS)[number];
@@ -81,7 +80,6 @@ export const DEFAULT_PLAN_LIMITS: Record<string, number> = {
   branches: 2,
   staffSeats: 10,
   schemePlans: 10,
-  whatsappMessagesPerMonth: 5000,
 };
 
 export function emptyPlatformSubscriptionPlanForm(): PlatformSubscriptionPlanForm {

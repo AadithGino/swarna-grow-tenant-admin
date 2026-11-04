@@ -1,11 +1,27 @@
 # SwarnaGrow Customer API Guide for Flutter
 
-**Backend source of truth:** `https://github.com/AadithGino/swarna-grow-backend.git`  
-**Verified commit:** `8e014b7e25e1db80814a5a1922734b32d1a80340`  
+**Backend source of truth:** `https://github.com/AadithGino/swarna-grow-backend.git` (branch `ecommerce`)  
+**Verified commit:** `30b3e479bc8731247bdcad30efd363920cb1e8d5`  
 **API prefix:** `/api/v1`  
 **Audience:** Flutter customer application developers  
 
+Canonical copies: `swarnagrow-backend/docs/FLUTTER_CUSTOMER_API_GUIDE.md` and `SwarnaGrow-Tenant-Admin/docs/FLUTTER_CUSTOMER_API_GUIDE.md`.
+
 This guide was derived from the current route registrations, Zod validators, DTO mappers, services, enums, and error middleware in the backend source. It does not use the deprecated v1.2 contract bundle.
+
+### What changed since commit `8e014b7` (Flutter integration impact)
+
+| Area | Summary |
+|------|---------|
+| **PhonePe (Flutter)** | Native checkout via **`checkoutKind: SDK_ORDER`** and backend **`token` / `sdkToken`** — not browser redirect. Fixed **and** flexible schemes: `POST /app/schemes/{id}/pay/sdk-order`. Shop + Digital Gold: payment-intent responses include the same fields + `statusPollUrl`. Jeweller PhonePe credentials live in **tenant MongoDB** (`integrationSecrets.phonepe`), never in the Flutter app. See **§8** and [`docs/FLUTTER_PHONEPE_INTEGRATION.md`](docs/FLUTTER_PHONEPE_INTEGRATION.md). |
+| **Ecommerce shop** | Full customer shop under `/app/shop/*` — availability, catalog, cart, quotes, orders, PhonePe/COD checkout, cancellations, returns. |
+| **Digital Gold & Silver** | Customer flows under `/app/digital-metals/*` — buy (PhonePe), sell (bank payout), physical redemption (charge PhonePe). See **§12C**. |
+| **Banners** | Scheduled promo rails on home and shop: `GET /app/home/banners`, `GET /app/shop/banners` with typed destinations (no arbitrary URLs). |
+| **FCM / inbox** | Ecommerce order lifecycle pushes, product/category/offer promotions, **scheme** and **shop** gold-rate announcements; richer `data` payload (rate metadata, `productId`, `deepLink`). |
+| **Gold rates** | Scheme `/app/gold-rate/*` unchanged for 22K scheme math; shop uses separate ecommerce purity rates inside product pricing (server-computed). |
+| **Deep links** | Route map must handle `/shop`, `/shop/order/{id}`, `/shop/products/{slug}`, `/gold-rate/current`, `/digital-metals`, plus existing `/payments`, `/schemes`. |
+
+**Related backend docs:** [`docs/FLUTTER_CUSTOMER_ECOMMERCE_AND_DIGITAL_METALS_INTEGRATION.md`](docs/FLUTTER_CUSTOMER_ECOMMERCE_AND_DIGITAL_METALS_INTEGRATION.md) (**ecommerce + Digital Gold — every shop/DM route with example JSON**), [`docs/FLUTTER_PHONEPE_INTEGRATION.md`](docs/FLUTTER_PHONEPE_INTEGRATION.md) (**PhonePe SDK checklist**), [`docs/ECOMMERCE_CUSTOMER_APP_GUIDE.md`](docs/ECOMMERCE_CUSTOMER_APP_GUIDE.md) (**shop payloads**), `docs/DIGITAL_METALS_API_CONTRACT.md`, `docs/ECOMMERCE_API_CONTRACT.md`, `docs/FCM_CUSTOMER_APP_INTEGRATION.md`, `docs/ECOMMERCE_PROMOTION_FCM.md`, `docs/PHONEPE_PRODUCTION_ACTIVATION_HANDOFF.md`.
 
 ## 1. Transport conventions
 
@@ -122,7 +138,9 @@ On every launch:
 2. If access token is near expiry, call refresh.
 3. Fetch `/app/auth/me` or `/app/profile`.
 4. Fetch `/app/home`.
-5. Register/update the FCM token.
+5. `GET /app/shop/availability` — decide whether to show shop entry (even when home is visible).
+6. Register/update the FCM token (`POST /app/devices/fcm-token`).
+7. If `meta.nextVisibilityChangeAt` was returned from banner APIs, schedule a refresh at that time.
 
 ## 4. Jewellery discovery and authentication
 
@@ -414,6 +432,15 @@ GET /api/v1/app/home?includeTrends=true&trendMonths=6
 
 Key response sections are `tenant`, `customer`, `greeting`, `summary`, optional `goldRate`, `actionCard`, `activeSchemes`, `recentPayments`, `quickActions`, `unreadNotificationCount`, and optional contribution/gold trends.
 
+Promotional **home banners** are **not** embedded in `/app/home`. Fetch them separately:
+
+```http
+GET /api/v1/app/home/banners
+Authorization: Bearer <accessToken>
+```
+
+Returns `{ items, meta }` when the tenant plan includes ecommerce; otherwise `{ items: [], meta }`. Use `meta.nextVisibilityChangeAt` to refresh when a scheduled promo starts or ends (see §12A).
+
 Partial refunds are netted. A recent payment can include:
 
 ```json
@@ -655,57 +682,214 @@ Rules:
 - Cycles are calendar months. The final maturity-only calendar cycle is not payable.
 - Re-fetch payable range immediately before payment. Send its `expectedPositionVersion`.
 
-## 8. PhonePe payment flows
+## 8. PhonePe payment gateway (Flutter)
 
-### Fixed scheme
+### 8.1 Principles
+
+1. **Never embed PhonePe client secrets in Flutter.** The backend creates orders with the jeweller’s sealed credentials and returns a short-lived **SDK token**.
+2. **Prefer the PhonePe Payment SDK** (Android/iOS) with `token` / `sdkToken` from the backend — do **not** open the system browser for mobile checkout.
+3. **Do not trust redirect URLs, deep links, or SDK callbacks alone for success.** Poll the backend **`statusPollUrl`** until a terminal state; webhooks + reconcile jobs are authoritative.
+4. **Reuse `X-Idempotency-Key`** when retrying the same user action after timeouts (same key + same body).
+
+Platform `.env` controls rollout only (`PROVIDER_MODE`, `PHONEPE_ENV`, ecommerce/digital-metals flags). Per-jeweller credentials are configured in **Platform → Payment gateway** and stored as `tenant.integrationSecrets.phonepe`.
+
+### 8.2 Unified checkout shape (`data` after initiation)
+
+Normalize every payment initiation response (schemes, shop, Digital Gold) into:
+
+| Field | Flutter use |
+|--------|-------------|
+| `checkoutKind` | `SDK_ORDER` → native SDK; `HOSTED_REDIRECT` → **web only** (ignore on Flutter) |
+| `provider` | `PHONEPE` when checkout is live |
+| `token` / `sdkToken` | Pass to PhonePe native SDK |
+| `merchantOrderId` | Logging/support (backend reference) |
+| `providerOrderId` | PhonePe order id when present |
+| `statusPollUrl` | Relative path — prefix with `{API_BASE}/api/v1` |
+| `paymentUrl` / `gatewayUrl` | **Web** hosted checkout — do not load in external browser on mobile |
+
+Example **`SDK_ORDER`** (flexible scheme intent):
+
+```json
+{
+  "success": true,
+  "data": {
+    "checkoutKind": "SDK_ORDER",
+    "provider": "PHONEPE",
+    "intentId": "intent_01",
+    "schemeId": "scheme_02",
+    "targetCycle": "2026-10",
+    "amount": { "amountPaise": 75000, "amountDisplay": "₹750" },
+    "status": "PENDING",
+    "positionVersion": 9,
+    "token": "phonepe-sdk-token",
+    "sdkToken": "phonepe-sdk-token",
+    "merchantOrderId": "intent_01",
+    "providerOrderId": "OMO123456789",
+    "statusPollUrl": "/app/payment-intents/intent_01",
+    "retryAfterSeconds": 3
+  }
+}
+```
+
+Example **`SDK_ORDER`** (fixed scheme link):
+
+```json
+{
+  "success": true,
+  "data": {
+    "checkoutKind": "SDK_ORDER",
+    "provider": "PHONEPE",
+    "paymentLinkId": "link_01",
+    "schemeId": "scheme_01",
+    "amount": { "amountPaise": 100000, "amountDisplay": "₹1,000" },
+    "status": "CREATED",
+    "token": "phonepe-sdk-token",
+    "sdkToken": "phonepe-sdk-token",
+    "merchantOrderId": "link_01",
+    "statusPollUrl": "/app/payments/link_01/status",
+    "retryAfterSeconds": 3
+  }
+}
+```
+
+### 8.3 Scheme payments (recommended Flutter paths)
+
+**Fixed and flexible — use one endpoint:**
 
 ```http
-POST /api/v1/app/schemes/{schemeId}/pay
-X-Idempotency-Key: fixed-pay-01
+POST /api/v1/app/schemes/{schemeId}/pay/sdk-order
+X-Idempotency-Key: scheme-sdk-01
 
 {
-  "amountPaise": 100000,
-  "redirectUrl": "https://app.example/payment-return",
+  "amountPaise": 75000,
+  "targetCycle": "2026-10",
+  "expectedPositionVersion": 9,
+  "redirectUrl": "https://your.app/payment-return",
   "mobile": "+919876543210"
 }
 ```
 
-Open the returned `gatewayUrl` in a secure web view/external browser. Poll:
+- **Flexible:** `targetCycle` and `expectedPositionVersion` required when paying a capped cycle (from payable range).
+- **`redirectUrl`:** must be **https** whose origin is allowed (`CORS_ORIGINS` or tenant `branding.websiteUrl`). Used as PhonePe return URL metadata; success is still determined by polling.
+
+**Poll flexible:**
+
+```http
+GET /api/v1/app/payment-intents/{intentId}
+```
+
+**Poll fixed:**
 
 ```http
 GET /api/v1/app/payments/{paymentLinkId}/status
 ```
 
-### Flexible redirect intent
+**Legacy web-only paths (Next.js customer portal, not Flutter):**
+
+- Fixed hosted: `POST /app/schemes/{schemeId}/pay` with `redirectUrl` → `checkoutKind: HOSTED_REDIRECT`, open `paymentUrl`.
+- Flexible hosted: `POST /app/schemes/{schemeId}/payment-intents` with `redirectUrl`.
+
+### 8.4 Enrolment + first payment
+
+`POST /app/schemes/enrol` with `payNow: true` may return hosted-only checkout. **Flutter pattern:**
+
+1. Enrol with `payNow: false`, then `POST .../pay/sdk-order`, **or**
+2. Enrol with `payNow: true`; if response lacks `SDK_ORDER`, call `POST .../pay/sdk-order` for the new `scheme.id` with the same amount/cycle rules.
+
+### 8.5 Ecommerce shop (PhonePe)
 
 ```http
-POST /api/v1/app/schemes/{schemeId}/payment-intents
-X-Idempotency-Key: flexible-intent-01
+POST /api/v1/app/shop/orders/{orderId}/payment-intents
+X-Idempotency-Key: shop-pay-01
 
 {
-  "amountPaise": 75000,
-  "targetCycle": "2026-10",
-  "expectedPositionVersion": 9,
-  "redirectUrl": "https://app.example/payment-return",
-  "mobile": "+919876543210"
+  "redirectUrl": "https://your.app/shop/payment-return",
+  "idempotencyKey": "shop-pay-01"
 }
 ```
 
-### Flexible native SDK order
+**Response `201` (Flutter — use `token`, ignore hosted URL if present):**
 
-```http
-POST /api/v1/app/schemes/{schemeId}/pay/sdk-order
-X-Idempotency-Key: flexible-sdk-01
-
+```json
 {
-  "amountPaise": 75000,
-  "targetCycle": "2026-10",
-  "expectedPositionVersion": 9,
-  "mobile": "+919876543210"
+  "success": true,
+  "data": {
+    "id": "epay_01",
+    "orderId": "eord_01",
+    "status": "INITIATED",
+    "checkoutKind": "SDK_ORDER",
+    "provider": "PHONEPE",
+    "amountPaise": 3195344,
+    "currency": "INR",
+    "merchantOrderId": "epay_01",
+    "token": "phonepe-sdk-token",
+    "sdkToken": "phonepe-sdk-token",
+    "statusPollUrl": "/app/shop/orders/eord_01/payment-intents/epay_01",
+    "orderStatus": "PENDING_PAYMENT",
+    "paymentCompleted": false,
+    "retryAfterSeconds": 3
+  }
 }
 ```
 
-Use the provider token/order identifiers returned by the backend. Never accept scheme/customer/amount authority from a callback or local app state.
+**Poll:**
+
+```http
+GET /api/v1/app/shop/orders/{orderId}/payment-intents/{paymentAttemptId}
+```
+
+Terminal attempt statuses include `SUCCEEDED` / `FAILED` / `EXPIRED`; order moves to `PAID` when payment completes.
+
+### 8.6 Digital Gold buy & redemption charge (PhonePe)
+
+**Buy:**
+
+```http
+POST /api/v1/app/digital-metals/buy-orders/{orderId}/payment-intents
+X-Idempotency-Key: dm-buy-pay-01
+
+{ "redirectUrl": "https://your.app/digital-gold/payment-return" }
+```
+
+**Redemption making charge:**
+
+```http
+POST /api/v1/app/digital-metals/redemption/orders/{orderId}/payment-intents
+X-Idempotency-Key: dm-red-pay-01
+
+{ "redirectUrl": "https://your.app/digital-gold/redemption-return" }
+```
+
+**Poll** the `statusPollUrl` on the payment attempt (same pattern as shop). Buy merchant ids are prefixed **`DM-BUY-`** for support correlation.
+
+Requires tenant PhonePe + digital-metals checkout rollout (see `docs/PHONEPE_PRODUCTION_ACTIVATION_HANDOFF.md`).
+
+### 8.7 Native SDK flow (Flutter)
+
+1. Add PhonePe’s official Flutter/Android/iOS SDK per [PhonePe Developer Portal](https://developer.phonepe.com/).
+2. On `checkoutKind: SDK_ORDER`, read **`token`** (alias **`sdkToken`**).
+3. Start checkout with the token and the same **`redirectUrl`** you sent to the API.
+4. When the SDK returns (success/failure/cancel), **still poll** `statusPollUrl` until `PAID` / terminal failure.
+
+Do **not** open `https://mercury.phonepe.com/transact/pg?token=...` in an external browser on mobile — that path is for **web** clients only.
+
+### 8.8 Polling and review states
+
+- Honor **`retryAfterSeconds`** (typically `3` while processing).
+- Cap client polling (e.g. 5–10 minutes); backend reconcile continues.
+- Show **“Payment received — verification pending”** for `UNALLOCATED_PENDING_REVIEW` / `AMOUNT_MISMATCH_PENDING_REVIEW` — do not advise paying again.
+
+### 8.9 Payment errors (branch on `error.code`)
+
+| Code | Flutter action |
+|------|----------------|
+| `PAYMENT_GATEWAY_NOT_CONFIGURED` | Jeweller has not saved PhonePe in platform settings |
+| `PAYMENT_POSITION_CHANGED` | Re-fetch payable range / scheme detail; retry with new `expectedPositionVersion` |
+| `PAYMENT_LINK_BUSY` | Wait; retry with **same** idempotency key |
+| Provider `5xx` on initiation | Retry same idempotency key + body |
+| `FLEXIBLE_PAYMENT_INTENT_REQUIRED` | Do not use fixed `/pay` on flexible schemes — use `/pay/sdk-order` |
+
+Use the provider token/order identifiers returned by the backend. Never accept scheme/customer/amount authority from a callback or local app state alone.
 
 ### Poll intent
 
@@ -858,15 +1042,38 @@ Customer flow ends at request. Staff/admin approval and completion occur outside
 
 ## 11. Notifications and FCM
 
+### In-app inbox
+
 ```http
-GET /api/v1/app/notifications?limit=50
+GET /api/v1/app/notifications?limit=50&cursor=<cursor>
 POST /api/v1/app/notifications/{notificationId}/read
 POST /api/v1/app/notifications/read-all
 ```
 
-Both POST routes require `X-Idempotency-Key`. Notifications are deduplicated by event, and marking one item read can mark duplicate channel copies of the same event read.
+Both POST routes require `X-Idempotency-Key`. Rows are **deduplicated by business event** (WhatsApp + push copies collapse to one inbox item). Marking one read can mark sibling channel copies read.
 
-Register FCM:
+Each inbox item (after dedupe) includes:
+
+| Field | Meaning |
+|-------|---------|
+| `id` | Message id |
+| `type` | UI bucket: `PAYMENT`, `SCHEME`, `ECOMMERCE`, `GRIEVANCE`, `GENERAL` |
+| `title`, `body` | Human copy (never show raw `templateKey`) |
+| `createdAt`, `read` | ISO timestamp; `read` from `readAt` |
+| `deepLink` | In-app path when present (preferred navigation target) |
+| `cta` | Optional label hint (`View product`, `Pay now`, …) |
+| `imageUrl` | Optional rich image for campaigns |
+
+**UI `type` mapping (backend `messageType` → inbox `type`):**
+
+- Payments: `PAYMENT_SUCCESS`, `PAYMENT_DUE`, `PAYMENT_OVERDUE` → `PAYMENT`
+- Schemes: `SCHEME_*`, `FLEXI_LOCK_APPLIED`, **`SCHEME_GOLD_RATE_UPDATED`** → `SCHEME`
+- Shop: order lifecycle + promotions + **`ECOMMERCE_GOLD_RATE_UPDATED`** → `ECOMMERCE`
+- Manual jeweller broadcast: `MANUAL_PUSH` → `GENERAL`
+
+### Register / remove FCM token
+
+White-label apps share **one Firebase project**; tenant scope comes from the **login JWT**, not from FCM payload.
 
 ```http
 POST /api/v1/app/devices/fcm-token
@@ -882,7 +1089,20 @@ X-Idempotency-Key: fcm-register-device-01
 }
 ```
 
-Delete with `DELETE /api/v1/app/devices/fcm-token` and body `{ "deviceId": "flutter-device-uuid" }`. Also call it on explicit logout where possible.
+| Field | Required |
+|-------|----------|
+| `fcmToken` | Yes (min 20 chars) |
+| `deviceId` | Yes — **same stable id as login** |
+| `platform` | Yes — `android` or `ios` |
+
+Call after login, on `onTokenRefresh`, and on cold start when the token changed.
+
+```http
+DELETE /api/v1/app/devices/fcm-token
+{ "deviceId": "flutter-device-uuid" }
+```
+
+Recommended logout order: **DELETE FCM token** → `POST /app/auth/logout` → clear secure storage.
 
 Session devices:
 
@@ -890,6 +1110,70 @@ Session devices:
 GET /api/v1/app/auth/devices
 DELETE /api/v1/app/auth/devices/{deviceId}
 ```
+
+Full server-side FCM setup (service account, workers): `docs/FCM_CUSTOMER_APP_INTEGRATION.md`.
+
+### FCM payload shape (all values in `data` are strings)
+
+Sends include both `notification` (title/body for tray) and `data`:
+
+```json
+{
+  "notification": { "title": "...", "body": "..." },
+  "data": {
+    "messageId": "msg_...",
+    "messageType": "PAYMENT_SUCCESS",
+    "schemeId": "sch_...",
+    "paymentId": "pay_...",
+    "productId": "",
+    "categoryId": "",
+    "promotionKind": "",
+    "campaignBusinessKey": "",
+    "deepLink": "/payments/pay_...",
+    "jewellerName": "Kairali Jewellers",
+    "rateId": "",
+    "rateSource": "",
+    "purity": "",
+    "ratePerGramPaise": "",
+    "schemeEffectiveDate": "",
+    "effectiveAt": "",
+    "branchId": ""
+  }
+}
+```
+
+**Flutter routing rules**
+
+1. Prefer **`data.deepLink`** when non-empty (parse as in-app route, not external URL unless you explicitly allowlisted https shop links).
+2. Else branch on **`data.messageType`**.
+3. Parse numeric fields from strings (`ratePerGramPaise`, etc.).
+4. Do **not** expect `tenantCode` in FCM data — the app is already tenant-scoped.
+
+**Default deep links when `templateParams.deepLink` is omitted**
+
+| `messageType` | Default `deepLink` |
+|---------------|-------------------|
+| `PAYMENT_*` | `/payments/{paymentId}` when known |
+| `SCHEME_*` | `/schemes/{schemeId}` |
+| `SCHEME_GOLD_RATE_UPDATED` | `/gold-rate/current` |
+| `ECOMMERCE_GOLD_RATE_UPDATED` | `/shop` |
+| `ECOMMERCE_PRODUCT_PROMOTION`, `ECOMMERCE_CATEGORY_PROMOTION`, `ECOMMERCE_NEW_ARRIVAL`, `ECOMMERCE_OFFER` | `/shop` or product/category path from `productId` / `categoryId` |
+| Order lifecycle (`ECOMMERCE_ORDER_CONFIRMED`, `ECOMMERCE_PAYMENT_FAILED`, `ECOMMERCE_FULFILMENT_UPDATE`, …) | `/shop/order/{orderId}` or `/shop/orders` |
+
+**Gold-rate push metadata** (when jeweller enables optional notify on rate publish):
+
+| `data` key | Example | Notes |
+|------------|---------|--------|
+| `rateSource` | `SCHEME` or `ECOMMERCE` | Which rate table |
+| `purity` | `22K` / `24K` | Scheme notifications are 22K; shop may differ |
+| `ratePerGramPaise` | `725000` | Integer paise per gram as string |
+| `schemeEffectiveDate` | `2026-06-15` | IST business date for scheme daily rate |
+| `effectiveAt` | ISO UTC | Ecommerce rate instant |
+| `branchId` | `branch_01` or empty | Branch-scoped scheme rate when set |
+
+Display tray copy from `notification.title/body`; use metadata only for badges, analytics, or supplemental UI — not to recompute scheme liability or shop prices locally.
+
+**Marketing vs transactional dispatch:** payment and order events are prioritized ahead of promotions in the worker queue; UI should still handle promotions when the app is opened from a notification tap.
 
 ## 12. Branches and gold rate
 
@@ -901,6 +1185,357 @@ GET /api/v1/app/gold-rate/history
 ```
 
 Gold-rate history is capped by the backend. Never use a historical rate to predict the authoritative settlement result; settlement endpoints resolve their required date.
+
+Push notifications for **scheme** rate changes use `SCHEME_GOLD_RATE_UPDATED` and `/gold-rate/current`. **Shop** catalogue pricing uses separate ecommerce purity rates (`ECOMMERCE_GOLD_RATE_UPDATED`, `/shop`); product list/detail DTOs already include server-computed `pricing` — never re-price gold-rate-based SKUs in Flutter.
+
+## 12A. Ecommerce shop (catalog, cart, checkout)
+
+**Full reference with example request/response JSON for every `/app/shop/*` route:** [`docs/ECOMMERCE_CUSTOMER_APP_GUIDE.md`](docs/ECOMMERCE_CUSTOMER_APP_GUIDE.md).
+
+All routes require customer auth. Store must be **operational** (`GET /app/shop/availability` → `available: true`) for catalog/checkout; availability itself is always callable.
+
+### Gate and policies
+
+```http
+GET /api/v1/app/shop/availability
+```
+
+```json
+{
+  "success": true,
+  "data": {
+    "available": true,
+    "ecommerce": { "active": true, "hasOrderHistory": false, "...": "..." },
+    "hasOrderHistory": false,
+    "orderHistoryAvailable": false
+  }
+}
+```
+
+```http
+GET /api/v1/app/shop/store-policies
+```
+
+Checkout is blocked server-side until policies are published. Show `{ published: false }` as “store preparing policies” — do not bypass.
+
+### Browse
+
+```http
+GET /api/v1/app/shop/categories
+GET /api/v1/app/shop/products?limit=20&cursor=&categoryId=&featured=true&q=ring&sort=newest
+GET /api/v1/app/shop/products/{productIdOrSlug}
+GET /api/v1/app/shop/banners
+```
+
+Product list query:
+
+| Param | Behavior |
+|-------|----------|
+| `categoryId` | Filter; inactive category → empty list |
+| `q` | Name search (≥2 chars) |
+| `featured=true` | Featured only |
+| `sort` | `newest` (default) or `name` — **no price sort** (gold-linked prices move with rates) |
+
+Product rows include `pricing`, `priceMode` (`FIXED` | `GOLD_RATE_BASED`), `purity`, `availability`, slug, images. Treat `pricing` as authoritative.
+
+### Cart and checkout pipeline
+
+```mermaid
+flowchart LR
+  A[PUT cart] --> B[Fulfilment options]
+  B --> C[POST quote]
+  C --> D[POST order]
+  D --> E{Payment method}
+  E -->|Online| F[POST payment-intent]
+  E -->|COD| G[Order pending COD flow]
+  F --> H[Poll payment-intent]
+```
+
+1. **Cart** — server-owned cart per customer:
+
+```http
+GET /api/v1/app/shop/cart
+PUT /api/v1/app/shop/cart
+X-Idempotency-Key: cart-sync-01
+
+{ "expectedVersion": 0, "lines": [{ "productId": "eprd_...", "quantity": 1 }] }
+```
+
+2. **Addresses** (delivery):
+
+```http
+GET /api/v1/app/shop/addresses
+POST /api/v1/app/shop/addresses
+PATCH /api/v1/app/shop/addresses/{addressId}
+```
+
+3. **Fulfilment options** — pickup branches vs delivery pincodes, COD eligibility:
+
+```http
+GET /api/v1/app/shop/fulfilment-options
+```
+
+4. **Quote** — priced snapshot + tax/fulfilment validation:
+
+```http
+POST /api/v1/app/shop/quotes
+X-Idempotency-Key: quote-01
+
+{
+  "fulfilmentMode": "BRANCH_PICKUP",
+  "pickupBranchId": "branch_01",
+  "paymentMethod": "ONLINE"
+}
+```
+
+Delivery example adds `addressId` or `pincode`. Modes: `BRANCH_PICKUP`, `DELIVERY`. Payment methods: `ONLINE` (PhonePe when tenant payments enabled) and `COD` when enabled for pincode/mode.
+
+```http
+GET /api/v1/app/shop/quotes/{quoteId}
+POST /api/v1/app/shop/quotes/{quoteId}/cancel
+```
+
+5. **Order** from quote:
+
+```http
+POST /api/v1/app/shop/orders
+X-Idempotency-Key: order-from-quote-01
+
+{ "quoteId": "eqte_..." }
+```
+
+6. **Online payment** (PhonePe — **§8.5**):
+
+```http
+POST /api/v1/app/shop/orders/{orderId}/payment-intents
+X-Idempotency-Key: shop-pay-01
+
+{ "redirectUrl": "https://your.app/shop/payment-return" }
+
+GET /api/v1/app/shop/orders/{orderId}/payment-intents/{paymentAttemptId}
+```
+
+Use `checkoutKind: SDK_ORDER` and `token` with the native PhonePe SDK; poll until terminal status. Order updates also arrive via **FCM** (`ECOMMERCE_ORDER_CONFIRMED`, `ECOMMERCE_PAYMENT_FAILED`, …).
+
+7. **Orders list / detail / invoice**
+
+```http
+GET /api/v1/app/shop/orders?limit=20&cursor=
+GET /api/v1/app/shop/orders/{orderId}
+GET /api/v1/app/shop/orders/{orderId}/invoice.pdf
+POST /api/v1/app/shop/orders/{orderId}/confirm-pickup
+```
+
+8. **Cancel / return** (customer-initiated, idempotent where noted):
+
+```http
+POST /api/v1/app/shop/orders/{orderId}/cancel
+GET /api/v1/app/shop/orders/{orderId}/cancellation
+POST /api/v1/app/shop/orders/{orderId}/cancellation-requests
+GET /api/v1/app/shop/orders/{orderId}/return
+POST /api/v1/app/shop/orders/{orderId}/return-requests
+```
+
+Return body: `{ "reason": "≥8 chars", "kind": "RETURN|EXCHANGE?", "evidenceNote": "..." }`.
+
+**Test harness only** (non-production): `POST /app/shop/orders/{orderId}/test-harness/complete-payment`.
+
+Detailed field-level contract: `docs/ECOMMERCE_API_CONTRACT.md`.
+
+## 12B. Promotional banners (home + shop)
+
+Typed destinations only — **no free-form external URLs** from the API.
+
+| Route | When populated |
+|-------|----------------|
+| `GET /app/home/banners` | Plan has ecommerce feature; **HOME** or **BOTH** placement |
+| `GET /app/shop/banners` | Store operational; **SHOP** or **BOTH** placement |
+
+Response:
+
+```json
+{
+  "success": true,
+  "data": {
+    "items": [
+      {
+        "id": "ebnr_abc",
+        "title": "Festive edit",
+        "subtitle": "22K highlights",
+        "imageUploadId": "upload_xyz",
+        "imageUrl": "/uploads/upload_xyz",
+        "displayOrder": 0,
+        "startsAt": "2026-01-20T04:30:00.000Z",
+        "endsAt": null,
+        "destination": { "type": "PRODUCT", "productId": "eprd_1", "slug": "gold-ring" }
+      }
+    ],
+    "meta": {
+      "nextVisibilityChangeAt": "2026-01-20T04:30:00.000Z",
+      "serverTime": "2026-01-01T12:00:00.000Z"
+    }
+  }
+}
+```
+
+**Destination types**
+
+| `destination.type` | Flutter action |
+|--------------------|----------------|
+| `NONE` | Display only |
+| `HOME` | Stay / scroll home |
+| `SHOP` | Open shop tab |
+| `SCHEMES` | Schemes area |
+| `ORDERS` | Order history (only if customer has orders) |
+| `CATEGORY` | Shop category (`categoryId`) |
+| `PRODUCT` | Product detail (`productId` or `slug`) |
+
+Load banner images via `imageUrl` (authenticated upload view). If a target product/category is unpublished, the banner is omitted from the list.
+
+Schedule refresh: when `meta.nextVisibilityChangeAt` is in the future, refetch banners at that instant so promos appear/disappear without app restart.
+
+## 12C. Digital Gold & Silver (`/app/digital-metals/*`)
+
+**Full request/response JSON for every route:** [`docs/FLUTTER_CUSTOMER_ECOMMERCE_AND_DIGITAL_METALS_INTEGRATION.md`](docs/FLUTTER_CUSTOMER_ECOMMERCE_AND_DIGITAL_METALS_INTEGRATION.md) §3.
+
+**Units:** money in **paise** (integer). Metal quantity in **micrograms** as strings (`"1000000"` = 1 g at 999 fineness scale in API examples). Display holdings from backend DTOs — do not recompute rates locally.
+
+### Capability gate
+
+```http
+GET /api/v1/app/digital-metals/capability
+```
+
+Use `canPlaceNewBuy`, `canPlaceNewSell`, `canPlaceRedemption`, and `blockers[]` for CTAs. Pass `termsVersion` + `termsContentHash` from capability (or quote) when creating orders.
+
+### Holdings and history
+
+```http
+GET /api/v1/app/digital-metals/portfolio
+GET /api/v1/app/digital-metals/passbook?limit=20&cursor=
+GET /api/v1/app/digital-metals/orders/open-summary
+```
+
+### Buy (quote → order → PhonePe → credit)
+
+```http
+POST /api/v1/app/digital-metals/quotes/buy
+X-Idempotency-Key: dm-buy-quote-01
+
+{
+  "metal": "GOLD",
+  "finenessPpm": 999000,
+  "inputMode": "BUDGET_INR",
+  "budgetPaise": 600000,
+  "termsVersionAccepted": "2026-10-01"
+}
+```
+
+```http
+POST /api/v1/app/digital-metals/buy-orders
+X-Idempotency-Key: dm-buy-order-01
+
+{
+  "quoteId": "dmq_01ABC",
+  "termsVersionAccepted": "2026-10-01",
+  "termsContentHashAccepted": "sha256:abc..."
+}
+```
+
+```http
+POST /api/v1/app/digital-metals/buy-orders/{orderId}/payment-intents
+X-Idempotency-Key: dm-buy-pay-01
+
+{ "redirectUrl": "https://your.app/digital-gold/payment-return" }
+```
+
+Poll: `GET /app/digital-metals/buy-orders/{orderId}/payment-intents/{paymentAttemptId}` then `GET /app/digital-metals/buy-orders/{orderId}` until `status: CREDITED`. Invoice: `GET .../buy-orders/{orderId}/invoice` when `invoiceStatus: READY`.
+
+Payment initiation returns the same PhonePe fields as §8 (`checkoutKind`, `token`, `statusPollUrl`).
+
+### Sell (quote → reserve → bank → confirm → payout poll)
+
+```http
+POST /api/v1/app/digital-metals/quotes/sell
+POST /api/v1/app/digital-metals/sell-orders
+POST /api/v1/app/digital-metals/bank-destinations
+POST /api/v1/app/digital-metals/sell-orders/{orderId}/confirm
+GET  /api/v1/app/digital-metals/sell-orders/{orderId}/payout-status
+POST /api/v1/app/digital-metals/sell-orders/{orderId}/cancel
+```
+
+Sell is **bank payout** (no PhonePe). Customer polls `payout-status` after staff executes the sale.
+
+### Physical redemption (quote → order → charge PhonePe → fulfilment)
+
+```http
+GET  /api/v1/app/digital-metals/redemption/catalogue
+POST /api/v1/app/digital-metals/quotes/redemption
+POST /api/v1/app/digital-metals/redemption/orders
+POST /api/v1/app/digital-metals/redemption/orders/{orderId}/payment-intents
+GET  /api/v1/app/digital-metals/redemption/orders/{orderId}/payment-intents/{paymentAttemptId}
+GET  /api/v1/app/digital-metals/redemption/orders/{orderId}/fulfilment
+GET  /api/v1/app/digital-metals/redemption/orders/{orderId}/pickup-instructions
+POST /api/v1/app/digital-metals/redemption/orders/{orderId}/cancel
+```
+
+Delivery addresses: `GET|POST /app/digital-metals/delivery-addresses` (same address body as shop).
+
+### Documents and PDFs
+
+```http
+GET /api/v1/app/digital-metals/statements/metal
+GET /api/v1/app/digital-metals/statements/metal.pdf
+GET /api/v1/app/digital-metals/redemption/orders/{orderId}/charge-receipt.pdf
+GET /api/v1/app/digital-metals/redemption/orders/{orderId}/handover-receipt.pdf
+GET /api/v1/app/digital-metals/sell-orders/{orderId}/acknowledgement.pdf
+POST /api/v1/app/digital-metals/documents/request
+GET /api/v1/app/digital-metals/documents/by-subject
+GET /api/v1/app/digital-metals/documents/{artifactId}
+GET /api/v1/app/digital-metals/documents/{artifactId}/download-url
+POST /api/v1/app/digital-metals/documents/{artifactId}/retry
+```
+
+### Digital Gold endpoint index
+
+| Method | Path |
+|--------|------|
+| GET | `/app/digital-metals/capability` |
+| GET | `/app/digital-metals/portfolio` |
+| GET | `/app/digital-metals/passbook` |
+| GET | `/app/digital-metals/orders/open-summary` |
+| POST | `/app/digital-metals/quotes/buy` |
+| POST | `/app/digital-metals/buy-orders` |
+| GET | `/app/digital-metals/buy-orders` |
+| GET | `/app/digital-metals/buy-orders/{orderId}` |
+| GET | `/app/digital-metals/buy-orders/{orderId}/invoice` |
+| POST | `/app/digital-metals/buy-orders/{orderId}/payment-intents` |
+| GET | `/app/digital-metals/buy-orders/{orderId}/payment-intents/{paymentAttemptId}` |
+| POST | `/app/digital-metals/quotes/sell` |
+| POST | `/app/digital-metals/sell-orders` |
+| GET | `/app/digital-metals/sell-orders` |
+| GET | `/app/digital-metals/sell-orders/{orderId}` |
+| POST | `/app/digital-metals/sell-orders/{orderId}/confirm` |
+| POST | `/app/digital-metals/sell-orders/{orderId}/cancel` |
+| GET | `/app/digital-metals/sell-orders/{orderId}/payout-status` |
+| GET | `/app/digital-metals/bank-destinations` |
+| POST | `/app/digital-metals/bank-destinations` |
+| PATCH | `/app/digital-metals/bank-destinations/{destinationId}` |
+| GET | `/app/digital-metals/redemption/catalogue` |
+| POST | `/app/digital-metals/quotes/redemption` |
+| POST | `/app/digital-metals/redemption/orders` |
+| GET | `/app/digital-metals/redemption/orders` |
+| GET | `/app/digital-metals/redemption/orders/{orderId}` |
+| POST | `/app/digital-metals/redemption/orders/{orderId}/cancel` |
+| POST | `/app/digital-metals/redemption/orders/{orderId}/payment-intents` |
+| GET | `/app/digital-metals/redemption/orders/{orderId}/payment-intents/{paymentAttemptId}` |
+| GET | `/app/digital-metals/redemption/orders/{orderId}/fulfilment` |
+| GET | `/app/digital-metals/redemption/orders/{orderId}/pickup-instructions` |
+| GET\|POST | `/app/digital-metals/delivery-addresses` |
+| GET | `/app/digital-metals/statements/metal` (+ `.pdf`) |
+| POST/GET | `/app/digital-metals/documents/*` |
+
+Non-production test harness only: `POST .../test-harness/complete-payment` on buy and redemption orders.
 
 ## 13. Grievances/support
 
@@ -977,6 +1612,11 @@ Drive UI availability from `tenantCapabilities`, `tenant` capability fields, and
 | Maturity-only final cycle | Never offer payment; wait for lifecycle transition. |
 | Redemption snapshot/rate changed | Refetch preview and require confirmation of new values. |
 | App maintenance | Show full-screen maintenance UI; retain tokens. |
+| Shop unavailable | Hide checkout; `GET /shop/availability` may still show history if `hasOrderHistory`. |
+| Quote expired / cart changed | Refetch cart → new quote; do not reuse stale `quoteId`. |
+| Ecommerce FCM tap | Navigate via `data.deepLink`; refresh order detail if status ambiguous. |
+| Gold-rate promotion tap | Scheme → `/gold-rate/current`; shop rate → `/shop` (verify product prices from API). |
+| Banner `nextVisibilityChangeAt` | Timer/refetch banners; do not poll unpublished admin content. |
 
 ## 16. Complete customer endpoint index
 
@@ -1003,6 +1643,7 @@ Drive UI availability from `tenantCapabilities`, `tenant` capability fields, and
 - `GET /app/auth/devices`
 - `DELETE /app/auth/devices/{deviceId}`
 - `GET /app/home`
+- `GET /app/home/banners`
 - `GET|PATCH /app/profile`
 - `POST /app/profile/complete`
 - `PUT /app/profile/kyc`
@@ -1024,6 +1665,7 @@ Drive UI availability from `tenantCapabilities`, `tenant` capability fields, and
 - `POST /app/schemes/{schemeId}/redemption-request`
 - `GET /app/payment-intents/{intentId}`
 - `POST /app/payment-intents/{intentId}/cancel`
+- `GET /app/activity`
 - `GET /app/payments`
 - `GET /app/payments/{paymentId}`
 - `GET /app/payments/{paymentId}/receipt`
@@ -1035,10 +1677,36 @@ Drive UI availability from `tenantCapabilities`, `tenant` capability fields, and
 - `GET /app/branches`
 - `GET /app/gold-rate/current`
 - `GET /app/gold-rate/history`
+- `GET /app/shop/availability`
+- `GET /app/shop/banners`
+- `GET /app/shop/categories`
+- `GET /app/shop/store-policies`
+- `GET /app/shop/products`
+- `GET /app/shop/products/:productIdOrSlug`
+- `GET|POST /app/shop/addresses`
+- `PATCH /app/shop/addresses/:addressId`
+- `GET|PUT /app/shop/cart`
+- `GET /app/shop/fulfilment-options`
+- `POST /app/shop/quotes`
+- `GET /app/shop/quotes/:quoteId`
+- `POST /app/shop/quotes/:quoteId/cancel`
+- `POST|GET /app/shop/orders`
+- `GET /app/shop/orders/:orderId`
+- `GET /app/shop/orders/:orderId/invoice.pdf`
+- `POST /app/shop/orders/:orderId/confirm-pickup`
+- `POST /app/shop/orders/:orderId/cancel`
+- `GET /app/shop/orders/:orderId/cancellation`
+- `POST /app/shop/orders/:orderId/cancellation-requests`
+- `GET /app/shop/orders/:orderId/return`
+- `POST /app/shop/orders/:orderId/return-requests`
+- `POST /app/shop/orders/:orderId/payment-intents`
+- `GET /app/shop/orders/:orderId/payment-intents/:paymentAttemptId`
+- `POST /app/shop/orders/:orderId/test-harness/complete-payment` (non-prod harness)
 - `POST|GET /app/grievances`
 - `GET /app/grievances/{grievanceId}`
 - `POST /app/grievances/{grievanceId}/messages`
 - `POST /app/grievances/{grievanceId}/reopen`
+- All `/app/digital-metals/*` routes — see **§12C**
 
 ## 17. Flutter implementation rules
 
@@ -1048,8 +1716,12 @@ Drive UI availability from `tenantCapabilities`, `tenant` capability fields, and
 - Keep raw `traceId`, intent ID, payment ID and idempotency key in local diagnostic state.
 - Use one serialized token-refresh interceptor so simultaneous 401s cause one refresh.
 - Never decide payable amount, cap, maturity eligibility, benefit, penalty, rate, or credited gold locally.
-- Refetch authoritative objects after payment, refund, KYC, nominee, grievance, or redemption mutation.
+- Refetch authoritative objects after payment, refund, KYC, nominee, grievance, redemption, **cart, quote, or order** mutation.
+- Implement a single **deep-link router** covering `/home`, `/schemes`, `/payments`, `/gold-rate/current`, `/shop`, `/shop/products/{slug}`, `/shop/order/{orderId}`, `/shop/orders`, `/digital-metals`.
+- Normalize all PhonePe checkouts via **`checkoutKind`** + **`statusPollUrl`** (§8); never treat SDK or redirect alone as payment success.
+- For shop SKUs with `priceMode: GOLD_RATE_BASED`, display backend `pricing` only; refresh product detail when opening from an `ECOMMERCE_GOLD_RATE_UPDATED` notification.
+- Register FCM with the same `deviceId` as login; handle `onTokenRefresh`; remove token on logout.
 - Treat additive response fields as compatible and unknown fields as ignorable.
 - Never send undocumented fields; several request DTOs are strict and return `400 VALIDATION_FAILED`.
 
-This document describes the customer-facing backend at the verified commit. If backend HEAD changes, regenerate/review the guide against routes, validators, DTOs, and services before handing it to the Flutter team.
+This document describes the customer-facing backend at commit **`30b3e479`** (`ecommerce` branch). If backend HEAD changes, regenerate/review the guide against `docs/contract-routes.lock`, validators, DTOs, and services before handing it to the Flutter team.

@@ -184,7 +184,7 @@ export function CustomerStatusDialog({
                   checked={stopReminders}
                   onCheckedChange={(v) => setStopReminders(v === true)}
                 />
-                Stop WhatsApp reminders
+                Stop automated payment reminders
               </label>
             </>
           ) : null}

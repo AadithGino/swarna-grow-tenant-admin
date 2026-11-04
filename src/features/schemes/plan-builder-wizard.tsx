@@ -250,7 +250,7 @@ export function PlanBuilderWizard({
       void onPreview({ silent: true });
     }, 350);
     return () => window.clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed by previewInputKey
+     
   }, [hydrated, previewFetchAllowed, previewInputKey, planId]);
 
   if (loadPlanId && planQuery.isLoading) return <PageSkeleton />;

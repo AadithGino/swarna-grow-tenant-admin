@@ -32,7 +32,6 @@ export type CustomerProfile = {
   email?: string;
   address?: string;
   mobileImmutable: true;
-  whatsappOptIn: boolean;
   memberSince: string;
   profileComplete: boolean;
   branch: { id: string; name: string; code: string; address?: string; mobile?: string };
@@ -84,6 +83,9 @@ export type TenantBranding = {
   customerSelfEnrol?: boolean;
   multiScheme?: boolean;
   customerLoginMode?: "OTP_ONLY" | "PASSWORD_ONLY";
+  /** SMS OTP length configured for Message Central (4–8). */
+  otpLength?: number;
+  authCountryCode?: string;
   customerAppWriteEnabled?: boolean;
   customerAppPaymentsEnabled?: boolean;
 };
@@ -391,6 +393,18 @@ export type CustomerHome = {
   recentPayments?: Array<
     SchemeCardRecentPayment & { schemeId: string; schemeNumber: string; schemeName: string }
   >;
+  recentActivity?: Array<{
+    id: string;
+    kind: string;
+    direction?: "IN" | "OUT";
+    title: string;
+    subtitle?: string;
+    amount: MoneyRef;
+    occurredAt: string;
+    statusLabel?: string;
+    entityId: string;
+    metal?: string;
+  }>;
   greeting: { text: string; subtext: string };
   /** At least one enrolled scheme uses gold-weight accumulation (value basis GOLD_WEIGHT). */
   hasGoldAccumulationScheme?: boolean;

@@ -1,7 +1,7 @@
 "use client";
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { Activity, ArrowLeft, Building2, Check, ClipboardCopy, CreditCard, Edit3, Gauge, KeyRound, MessageCircleMore, Play, Power, Save, Send, Settings2, ShieldCheck, Trash2, Webhook } from "lucide-react";
+import { Activity, ArrowLeft, Building2, Check, ClipboardCopy, CreditCard, Edit3, Gauge, KeyRound, Play, Power, Save, Settings2, ShieldCheck, Smartphone, Webhook } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -14,7 +14,7 @@ import { DataTable, type DataColumn } from "@/src/components/common/data-table";
 import { FieldLabel, PageHeader, StatCard, Surface } from "@/src/components/common/page-parts";
 import { PageSkeleton, QueryError } from "@/src/components/common/query-state";
 import { StatusBadge } from "@/src/components/common/status-badge";
-import { useDeleteTenantTemplateMutation, useGetPlatformTenantQuery, useGetTemplateDefinitionsQuery, useGetTenantTemplatesQuery, useGoLivePlatformTenantMutation, useReactivatePlatformTenantMutation, useResetOwnerCredentialsMutation, useSavePaymentIntegrationMutation, useSaveTenantTemplateMutation, useSaveWhatsappIntegrationMutation, useSuspendPlatformTenantMutation, useTestTenantTemplateMutation, useUpdatePlatformTenantMutation, useVerifyPaymentIntegrationMutation, useVerifyWhatsappIntegrationMutation } from "@/src/store/api/platform-api";
+import { useGetPlatformTenantQuery, useGoLivePlatformTenantMutation, useReactivatePlatformTenantMutation, useResetOwnerCredentialsMutation, useSaveMessageCentralIntegrationMutation, useSavePaymentIntegrationMutation, useSuspendPlatformTenantMutation, useUpdatePlatformTenantMutation, useVerifyMessageCentralIntegrationMutation, useVerifyPaymentIntegrationMutation } from "@/src/store/api/platform-api";
 import {
   TenantSubscription,
   TenantUsage,
@@ -32,17 +32,6 @@ import {
   validatePlatformTenantProfileForm,
   type PlatformTenantProfileForm,
 } from "@/src/lib/platform-tenant-profile-form-validation";
-import {
-  emptyWhatsappIntegrationForm,
-  livePlatformWhatsappIntegrationFieldErrors,
-  platformWhatsappIntegrationFormReady,
-  validatePlatformWhatsappIntegrationForm,
-  validateWhatsappVerifyTestMobile,
-  whatsappIntegrationBodyForApi,
-  whatsappIntegrationFormHasInput,
-  whatsappVerifyTestMobileForApi,
-  type PlatformWhatsappIntegrationForm,
-} from "@/src/lib/platform-whatsapp-integration-form-validation";
 import { apiOrigin } from "@/src/config/env";
 import {
   emptyPhonePeIntegrationForm,
@@ -57,19 +46,17 @@ import {
   type PlatformPhonePeIntegrationForm,
 } from "@/src/lib/platform-phonepe-integration-form-validation";
 import {
-  livePlatformTenantTemplateFieldErrors,
-  platformTenantTemplateFormFromRegistration,
-  platformTenantTemplateFormReady,
-  platformTenantTemplateFormUnchanged,
-  sanitizeMetaTemplateIdInput,
-  sanitizeMetaTemplateNameInput,
-  sanitizeTemplateLanguageInput,
-  tenantTemplateRegistrationBodyForApi,
-  validatePlatformTenantTemplateForm,
-  type PlatformTenantTemplateForm,
-  type TemplateApprovalStatus,
-} from "@/src/lib/platform-tenant-template-form-validation";
-import type { PlatformTenantDetail, TemplateDefinition, TenantTemplate } from "@/src/types/platform";
+  emptyMessageCentralIntegrationForm,
+  livePlatformMessageCentralIntegrationFieldErrors,
+  messageCentralIntegrationBodyForApi,
+  messageCentralIntegrationFormHasInput,
+  messageCentralVerifyTestMobileForApi,
+  platformMessageCentralIntegrationFormReady,
+  validateMessageCentralVerifyTestMobile,
+  validatePlatformMessageCentralIntegrationForm,
+  type PlatformMessageCentralIntegrationForm,
+} from "@/src/lib/platform-message-central-integration-form-validation";
+import type { PlatformTenantDetail } from "@/src/types/platform";
 import { PlatformTenantDigitalMetalsSection } from "@/src/features/platform/platform-tenant-digital-metals-section";
 
 const label = fieldLabel;
@@ -89,8 +76,8 @@ export function PlatformTenantDetailPage({ tenantId, initialTab = "overview" }: 
   const perform = async (fn: () => Promise<any>, success: string) => { try { await fn(); toast.success(success); } catch (e) { toastApiError(e, "Action failed"); throw e; } };
   return <><div><Button variant="ghost" asChild className="-ml-3 mb-3"><Link href="/platform/tenants"><ArrowLeft/>Back to jewellers</Link></Button><PageHeader eyebrow={`${tenant.tenantCode} · Platform tenant`} title={tenant.businessName} description={`${tenant.city} · ${tenant.owner.name} · ${tenant.owner.mobile}`} actions={<><StatusBadge status={tenant.status}/><EditTenantDialog tenant={tenant}/><ActionDialog trigger={<Button variant="outline"><KeyRound/>Owner credentials</Button>} title="Reset owner credentials" description="A new one-time password invalidates the previous temporary credential." actionLabel="Generate password" onSubmit={async () => { const data = await resetCredentials(tenant.id).unwrap(); setCredentials(data); toast.success("New owner password generated"); }}><p className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm">Only generate credentials when the owner cannot complete password setup.</p></ActionDialog>{tenant.status === "SUSPENDED" ? <Button onClick={() => perform(() => reactivate(tenant.id).unwrap(), "Jeweller reactivated")}><Power/>Reactivate</Button> : <ActionDialog trigger={<Button variant="outline" className="text-red-700"><Power/>Suspend</Button>} title="Suspend jeweller" description="Writes and outbound reminder jobs stop. Read-only access remains available." actionLabel="Suspend jeweller" onSubmit={() => perform(() => suspend({ tenantId: tenant.id, reason, notifyOwner: true }).unwrap(), "Jeweller suspended")}><FieldLabel>Reason</FieldLabel><Input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Subscription or compliance reason"/></ActionDialog>}{tenant.status === "PENDING_SETUP" && <Button disabled={!tenant.provisioning.readyToGoLive} onClick={() => perform(() => goLive(tenant.id).unwrap(), "Jeweller is now live")}><Play/>Go live</Button>}</>}/></div>
     {credentials && <Surface className="border-amber-300 bg-amber-50"><div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center"><KeyRound className="size-7 text-amber-700"/><div className="flex-1"><p className="font-bold">New one-time password</p><p className="mt-1 font-mono text-lg">{credentials.temporaryPassword}</p><p className="text-sm text-amber-800">This value is shown once and must be shared securely.</p></div><Button variant="outline" onClick={() => { navigator.clipboard.writeText(credentials.temporaryPassword); toast.success("Password copied"); }}><ClipboardCopy/>Copy</Button><Button variant="ghost" onClick={() => setCredentials(null)}>Dismiss</Button></div></Surface>}
-    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5"><StatCard icon={CreditCard} label="Subscription" value={tenant.subscription.tier} detail={`${tenant.subscription.status} · ${tenant.subscription.billingCycle}`}/><StatCard icon={Gauge} label="Active customers" value={tenant.usage.activeCustomers.toLocaleString("en-IN")} detail={`${(tenant.usageDetail?.activeCustomers?.percentage ?? 0).toFixed(1)}% of limit`} tone="gold"/><StatCard icon={Building2} label="Branches" value={tenant.usage.branches} detail={`${tenant.usageDetail?.branches?.limit ?? "Unlimited"} allowed`} tone="cream"/><StatCard icon={MessageCircleMore} label="Templates" value={`${tenant.templates.configured}/${tenant.templates.required}`} detail={tenant.templates.missing.length ? `${tenant.templates.missing.length} required missing` : "Required set complete"} tone={tenant.templates.missing.length ? "red" : "green"}/><StatCard icon={ShieldCheck} label="Provisioning" value={tenant.provisioning.readyToGoLive ? "Ready" : "Incomplete"} detail={tenant.goLiveAt ? `Live since ${new Date(tenant.goLiveAt).toLocaleDateString("en-IN")}` : "Not live yet"} tone={tenant.provisioning.readyToGoLive ? "green" : "red"}/></div>
-    <Tabs defaultValue={initialTab}><TabsList variant="detail"><TabsTrigger value="overview"><Building2/>Overview</TabsTrigger><TabsTrigger value="setup"><Settings2/>Provisioning</TabsTrigger><TabsTrigger value="templates"><MessageCircleMore/>Templates</TabsTrigger><TabsTrigger value="subscription"><CreditCard/>Subscription & invoices</TabsTrigger><TabsTrigger value="usage"><Gauge/>Usage & flags</TabsTrigger><TabsTrigger value="digital-metals">Digital metals</TabsTrigger></TabsList><TabsContent value="overview"><TenantOverview tenant={tenant}/></TabsContent><TabsContent value="setup"><TenantSetup tenant={tenant}/></TabsContent><TabsContent value="templates"><TenantTemplates tenant={tenant}/></TabsContent><TabsContent value="subscription"><TenantSubscription tenant={tenant}/></TabsContent><TabsContent value="usage"><TenantUsage tenant={tenant}/></TabsContent><TabsContent value="digital-metals"><PlatformTenantDigitalMetalsSection tenantId={tenant.id}/></TabsContent></Tabs>
+    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"><StatCard icon={CreditCard} label="Subscription" value={tenant.subscription.tier} detail={`${tenant.subscription.status} · ${tenant.subscription.billingCycle}`}/><StatCard icon={Gauge} label="Active customers" value={tenant.usage.activeCustomers.toLocaleString("en-IN")} detail={`${(tenant.usageDetail?.activeCustomers?.percentage ?? 0).toFixed(1)}% of limit`} tone="gold"/><StatCard icon={Building2} label="Branches" value={tenant.usage.branches} detail={`${tenant.usageDetail?.branches?.limit ?? "Unlimited"} allowed`} tone="cream"/><StatCard icon={ShieldCheck} label="Provisioning" value={tenant.provisioning.readyToGoLive ? "Ready" : "Incomplete"} detail={tenant.goLiveAt ? `Live since ${new Date(tenant.goLiveAt).toLocaleDateString("en-IN")}` : "Not live yet"} tone={tenant.provisioning.readyToGoLive ? "green" : "red"}/></div>
+    <Tabs defaultValue={initialTab}><TabsList variant="detail"><TabsTrigger value="overview"><Building2/>Overview</TabsTrigger><TabsTrigger value="setup"><Settings2/>Provisioning</TabsTrigger><TabsTrigger value="subscription"><CreditCard/>Subscription & invoices</TabsTrigger><TabsTrigger value="usage"><Gauge/>Usage & flags</TabsTrigger><TabsTrigger value="digital-metals">Digital metals</TabsTrigger></TabsList><TabsContent value="overview"><TenantOverview tenant={tenant}/></TabsContent><TabsContent value="setup"><TenantSetup tenant={tenant}/></TabsContent><TabsContent value="subscription"><TenantSubscription tenant={tenant}/></TabsContent><TabsContent value="usage"><TenantUsage tenant={tenant}/></TabsContent><TabsContent value="digital-metals"><PlatformTenantDigitalMetalsSection tenantId={tenant.id}/></TabsContent></Tabs>
   </>;
 }
 
@@ -384,29 +371,14 @@ function TenantOverview({ tenant }: { tenant: PlatformTenantDetail }) {
         <div className="space-y-5">
           <Surface title="Provisioning checklist">
             <div className="space-y-3 p-4">
-              <CheckRow label="Meta WhatsApp" done={tenant.provisioning.whatsappConfigured} />
               <CheckRow label="PhonePe gateway" done={tenant.provisioning.paymentGatewayConfigured} />
-              <CheckRow label="Required templates" done={!tenant.templates.missing.length} />
               <CheckRow label="Go-live" done={tenant.status === "ACTIVE"} />
             </div>
-            {tenant.templates.missing.length > 0 && (
-              <div className="border-t px-4 pb-4">
-                <p className="mb-2 text-xs font-bold uppercase tracking-wide text-muted-foreground">Missing template types</p>
-                <div className="flex flex-wrap gap-2">
-                  {tenant.templates.missing.map((type) => (
-                    <code key={type} className="rounded bg-amber-50 px-2 py-1 text-xs text-amber-900">
-                      {type}
-                    </code>
-                  ))}
-                </div>
-              </div>
-            )}
           </Surface>
           <Surface title="Tenant footprint">
             <div className="grid grid-cols-2 gap-3 p-4">
               <Info label="Total schemes" value={tenant.stats.totalSchemes.toLocaleString("en-IN")} />
               <Info label="Active schemes" value={tenant.stats.activeSchemes.toLocaleString("en-IN")} />
-              <Info label="WhatsApp (month)" value={tenant.usage.whatsappUsedThisMonth.toLocaleString("en-IN")} />
               <Info label="Staff" value={String(tenant.usage.staff)} />
             </div>
           </Surface>
@@ -443,306 +415,12 @@ function TenantOverview({ tenant }: { tenant: PlatformTenantDetail }) {
 function CheckRow({ label: text, done }: { label: string; done: boolean }) { return <div className="flex items-center gap-3 rounded-xl border p-3"><span className={`grid size-8 place-items-center rounded-full ${done ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>{done ? <Check className="size-4"/> : <Activity className="size-4"/>}</span><span className="flex-1 font-medium">{text}</span><StatusBadge status={done ? "COMPLETED" : "PENDING"}/></div>; }
 function Info({ label: text, value, wide }: { label: string; value: string; wide?: boolean }) { return <div className={wide ? "sm:col-span-2" : ""}><p className="text-xs uppercase tracking-wide text-muted-foreground">{text}</p><p className="mt-1 break-words font-semibold">{value || "—"}</p></div>; }
 
-function TenantSetup({ tenant }: { tenant: PlatformTenantDetail }) { return <div className="grid gap-5 xl:grid-cols-2"><WhatsappCard tenant={tenant}/><PhonePeCard tenant={tenant}/></div>; }
-function whatsappFormFromTenant(
-  tenant: PlatformTenantDetail,
-): PlatformWhatsappIntegrationForm {
-  const wa = tenant.integrations.whatsapp;
-  const form = emptyWhatsappIntegrationForm();
-  if (wa?.configured && wa.phoneNumberDisplay) {
-    form.phoneNumberId = String(wa.phoneNumberDisplay).replace(/\D/g, "");
-  }
-  return form;
-}
-
-function WhatsappCard({ tenant }: { tenant: PlatformTenantDetail }) {
-  const [save, saveState] = useSaveWhatsappIntegrationMutation();
-  const [verify, verifyState] = useVerifyWhatsappIntegrationMutation();
-  const wa = tenant.integrations.whatsapp;
-  const waProvider =
-    typeof wa.provider === "string" ? wa.provider : "META_CLOUD";
-  const waLastVerified =
-    typeof wa.lastVerifiedAt === "string" ? wa.lastVerifiedAt : null;
-  const waPhoneDisplay =
-    typeof wa.phoneNumberDisplay === "string" ? wa.phoneNumberDisplay : null;
-  const waTokenMasked =
-    typeof wa.accessTokenMasked === "string" ? wa.accessTokenMasked : null;
-  const [form, setForm] = useState<PlatformWhatsappIntegrationForm>(() =>
-    whatsappFormFromTenant(tenant),
-  );
-  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
-  const [touched, setTouched] = useState<
-    Partial<Record<keyof PlatformWhatsappIntegrationForm, boolean>>
-  >({});
-  const [testMobile, setTestMobile] = useState(() =>
-    sanitizeIndianPhoneDigits(tenant.owner.mobile),
-  );
-  const [verifyMobileError, setVerifyMobileError] = useState<string | undefined>();
-
-  const whatsappSeed = `${tenant.id}|${tenant.owner.mobile}|${waLastVerified ?? ""}`;
-  const [appliedWhatsappSeed, setAppliedWhatsappSeed] = useState("");
-  if (appliedWhatsappSeed !== whatsappSeed) {
-    setAppliedWhatsappSeed(whatsappSeed);
-    setForm(whatsappFormFromTenant(tenant));
-    setFieldErrors({});
-    setTouched({});
-    setTestMobile(sanitizeIndianPhoneDigits(tenant.owner.mobile));
-    setVerifyMobileError(undefined);
-  }
-
-  const liveErrors = useMemo(
-    () => livePlatformWhatsappIntegrationFieldErrors(form, touched),
-    [form, touched],
-  );
-
-  const displayError = (field: keyof PlatformWhatsappIntegrationForm) =>
-    fieldErrors[field] ?? liveErrors[field];
-
-  const setField = <K extends keyof PlatformWhatsappIntegrationForm>(
-    key: K,
-    value: PlatformWhatsappIntegrationForm[K],
-  ) => {
-    setForm((prev) => ({ ...prev, [key]: value }));
-    setFieldErrors((prev) => {
-      const next = { ...prev };
-      delete next[key];
-      return next;
-    });
-  };
-
-  const markAllTouched = () => {
-    setTouched({
-      phoneNumberId: true,
-      businessAccountId: true,
-      accessToken: true,
-      appSecret: true,
-      verifyToken: true,
-      callbackUrlOverride: true,
-      environment: true,
-    });
-  };
-
-  const saveReady = platformWhatsappIntegrationFormReady(form);
-  const saveDisabled =
-    saveState.isLoading || !saveReady || !whatsappIntegrationFormHasInput(form);
-
-  const inputClass = (field: keyof PlatformWhatsappIntegrationForm) =>
-    cn(displayError(field) && "border-red-600");
-
-  const sanitizeMetaId = (raw: string) => raw.replace(/\D/g, "");
-
+function TenantSetup({ tenant }: { tenant: PlatformTenantDetail }) {
   return (
-    <Surface
-      title="Meta WhatsApp Cloud API"
-      description="Write-only credentials and webhook verification"
-      action={<StatusBadge status={wa.verificationStatus} />}
-    >
-      <div className="space-y-4 p-5">
-        <div className="rounded-xl border bg-[#fbf7f4] p-4 text-sm">
-          <p>
-            <strong>Current:</strong>{" "}
-            {wa.configured
-              ? `${waPhoneDisplay ?? "Configured"} · ${waTokenMasked ?? "Token saved"}`
-              : "Not configured"}
-          </p>
-          <p className="mt-1 text-muted-foreground">
-            Last verified: {formatWhen(waLastVerified)} · Provider {waProvider}
-          </p>
-          <p className="mt-1 text-muted-foreground">
-            Secrets are never returned after save. Re-enter access token and app
-            secret whenever you save changes.
-          </p>
-        </div>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div>
-            <FieldLabel>Phone number ID *</FieldLabel>
-            <Input
-              inputMode="numeric"
-              value={form.phoneNumberId}
-              onChange={(e) => {
-                setTouched((p) => ({ ...p, phoneNumberId: true }));
-                setField("phoneNumberId", sanitizeMetaId(e.target.value));
-              }}
-              className={inputClass("phoneNumberId")}
-              aria-invalid={Boolean(displayError("phoneNumberId"))}
-            />
-            <FormFieldError message={displayError("phoneNumberId")} />
-          </div>
-          <div>
-            <FieldLabel>Business account ID</FieldLabel>
-            <Input
-              inputMode="numeric"
-              value={form.businessAccountId}
-              onChange={(e) => {
-                setTouched((p) => ({ ...p, businessAccountId: true }));
-                setField("businessAccountId", sanitizeMetaId(e.target.value));
-              }}
-              className={inputClass("businessAccountId")}
-              aria-invalid={Boolean(displayError("businessAccountId"))}
-            />
-            <FormFieldError message={displayError("businessAccountId")} />
-          </div>
-          <div>
-            <FieldLabel>Access token *</FieldLabel>
-            <Input
-              type="password"
-              autoComplete="off"
-              value={form.accessToken}
-              onChange={(e) => {
-                setTouched((p) => ({ ...p, accessToken: true }));
-                setField("accessToken", e.target.value);
-              }}
-              className={inputClass("accessToken")}
-              aria-invalid={Boolean(displayError("accessToken"))}
-            />
-            <FormFieldError message={displayError("accessToken")} />
-          </div>
-          <div>
-            <FieldLabel>App secret *</FieldLabel>
-            <Input
-              type="password"
-              autoComplete="off"
-              value={form.appSecret}
-              onChange={(e) => {
-                setTouched((p) => ({ ...p, appSecret: true }));
-                setField("appSecret", e.target.value);
-              }}
-              className={inputClass("appSecret")}
-              aria-invalid={Boolean(displayError("appSecret"))}
-            />
-            <FormFieldError message={displayError("appSecret")} />
-          </div>
-          <div>
-            <FieldLabel>Verify token</FieldLabel>
-            <Input
-              type="password"
-              autoComplete="off"
-              value={form.verifyToken}
-              onChange={(e) => {
-                setTouched((p) => ({ ...p, verifyToken: true }));
-                setField("verifyToken", e.target.value);
-              }}
-              className={inputClass("verifyToken")}
-              aria-invalid={Boolean(displayError("verifyToken"))}
-            />
-            <FormFieldError message={displayError("verifyToken")} />
-          </div>
-          <div>
-            <FieldLabel>Environment</FieldLabel>
-            <Select
-              value={form.environment}
-              onValueChange={(v) =>
-                setField("environment", v as PlatformWhatsappIntegrationForm["environment"])
-              }
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="PRODUCTION">Production</SelectItem>
-                <SelectItem value="SANDBOX">Sandbox</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="sm:col-span-2">
-            <FieldLabel>Callback URL override</FieldLabel>
-            <Input
-              type="url"
-              placeholder="https://api.example.com/webhooks/whatsapp"
-              value={form.callbackUrlOverride}
-              onChange={(e) => {
-                setTouched((p) => ({ ...p, callbackUrlOverride: true }));
-                setField("callbackUrlOverride", e.target.value);
-              }}
-              className={inputClass("callbackUrlOverride")}
-              aria-invalid={Boolean(displayError("callbackUrlOverride"))}
-            />
-            <FormFieldError message={displayError("callbackUrlOverride")} />
-          </div>
-        </div>
-        <div className="rounded-xl border border-dashed p-4">
-          <FieldLabel>Test message mobile</FieldLabel>
-          <Input
-            inputMode="tel"
-            value={testMobile}
-            disabled={!wa.configured}
-            onChange={(e) => {
-              setVerifyMobileError(undefined);
-              setTestMobile(sanitizeIndianPhoneDigits(e.target.value));
-            }}
-            placeholder="Owner mobile for verification"
-            className={cn(verifyMobileError && "border-red-600")}
-            aria-invalid={Boolean(verifyMobileError)}
-          />
-          <FormFieldError message={verifyMobileError} />
-          <p className="mt-2 text-xs text-muted-foreground">
-            Sends a test WhatsApp message after credentials are saved.
-          </p>
-        </div>
-        <div className="flex flex-wrap justify-end gap-2">
-          <Button
-            variant="outline"
-            disabled={!wa.configured || verifyState.isLoading}
-            onClick={async () => {
-              const mobileErr = validateWhatsappVerifyTestMobile(testMobile);
-              if (mobileErr) {
-                setVerifyMobileError(mobileErr);
-                toast.error("Fix the test mobile number.");
-                return;
-              }
-              try {
-                await verify({
-                  tenantId: tenant.id,
-                  testMobile: whatsappVerifyTestMobileForApi(testMobile),
-                }).unwrap();
-                toast.success("WhatsApp test delivered and verified");
-              } catch (err) {
-                handleFormApiError(err, {
-                  fallback: "Verification failed",
-                });
-              }
-            }}
-          >
-            <Send />
-            Verify with test message
-          </Button>
-          <Button
-            disabled={saveDisabled}
-            onClick={async () => {
-              markAllTouched();
-              const clientErrors = validatePlatformWhatsappIntegrationForm(form);
-              if (Object.keys(clientErrors).length) {
-                setFieldErrors(clientErrors);
-                toast.error("Fix the highlighted fields.");
-                return;
-              }
-              try {
-                await save({
-                  tenantId: tenant.id,
-                  body: whatsappIntegrationBodyForApi(form),
-                }).unwrap();
-                toast.success("Meta credentials saved");
-                setForm((prev) => ({
-                  ...prev,
-                  accessToken: "",
-                  appSecret: "",
-                  verifyToken: "",
-                }));
-                setTouched({});
-              } catch (err) {
-                handleFormApiError(err, {
-                  setFieldErrors,
-                  fallback: "Could not save WhatsApp credentials",
-                });
-              }
-            }}
-          >
-            <Save />
-            Save credentials
-          </Button>
-        </div>
-      </div>
-    </Surface>
+    <div className="grid gap-5 xl:grid-cols-2">
+      <PhonePeCard tenant={tenant} />
+      <MessageCentralCard tenant={tenant} />
+    </div>
   );
 }
 function phonePeFormFromTenant(
@@ -1032,79 +710,46 @@ function PhonePeCard({ tenant }: { tenant: PlatformTenantDetail }) {
   );
 }
 
-function TenantTemplates({ tenant }: { tenant: PlatformTenantDetail }) { const defs = useGetTemplateDefinitionsQuery(); const templates = useGetTenantTemplatesQuery(tenant.id); const [selected, setSelected] = useState<TemplateDefinition | null>(null); if (defs.isLoading || templates.isLoading) return <PageSkeleton cards={3}/>; const registered = new Map((templates.data ?? []).map((row) => [row.messageType, row])); return <><Surface title="WhatsApp template registry" description="Eight required Meta templates plus the recommended payment-success text fallback"><div className="grid gap-4 p-5 md:grid-cols-2 xl:grid-cols-3">{(defs.data ?? []).map((def) => { const row = registered.get(def.messageType); return <button type="button" key={def.messageType} onClick={() => setSelected(def)} className="rounded-2xl border p-4 text-left hover:border-[#b78491] hover:shadow-sm"><div className="flex items-start justify-between gap-3"><span className="grid size-10 place-items-center rounded-xl bg-[#f7ecee] text-[#730321]"><MessageCircleMore className="size-5"/></span><StatusBadge status={row ? row.approvalStatus : "PENDING"}/></div><p className="mt-4 font-bold">{def.label}</p><p className="mt-1 font-mono text-xs text-muted-foreground">{def.messageType}</p><p className="mt-3 text-sm text-muted-foreground">{def.variables.length} variables · {def.required ? "Required" : "Optional fallback"}</p><p className={`mt-3 text-sm font-medium ${row ? "text-emerald-700" : "text-amber-700"}`}>{row ? row.templateName : "Registration missing"}</p>{row && <p className="mt-1 font-mono text-xs text-muted-foreground">ID {row.templateId} · v{row.version}{row.active ? "" : " · inactive"}</p>}</button>; })}</div></Surface>{selected && <TemplateDialog tenant={tenant} definition={selected} current={registered.get(selected.messageType)} open onOpenChange={(v) => !v && setSelected(null)}/>}</>; }
-function TemplateDialog({
-  tenant,
-  definition,
-  current,
-  open,
-  onOpenChange,
-}: {
-  tenant: PlatformTenantDetail;
-  definition: TemplateDefinition;
-  current?: TenantTemplate;
-  open: boolean;
-  onOpenChange: (v: boolean) => void;
-}) {
-  const [save, saveState] = useSaveTenantTemplateMutation();
-  const [del] = useDeleteTenantTemplateMutation();
-  const [test, testState] = useTestTenantTemplateMutation();
-  const [baseline, setBaseline] = useState<PlatformTenantTemplateForm>(() =>
-    platformTenantTemplateFormFromRegistration(
-      tenant.tenantCode,
-      definition,
-      current,
-    ),
-  );
-  const [form, setForm] = useState<PlatformTenantTemplateForm>(() =>
-    platformTenantTemplateFormFromRegistration(
-      tenant.tenantCode,
-      definition,
-      current,
-    ),
+function MessageCentralCard({ tenant }: { tenant: PlatformTenantDetail }) {
+  const mc = tenant.integrations.messageCentral ?? {
+    configured: false,
+    provider: "MESSAGE_CENTRAL",
+    verificationStatus: "NOT_VERIFIED",
+  };
+  const [save, saveState] = useSaveMessageCentralIntegrationMutation();
+  const [verify, verifyState] = useVerifyMessageCentralIntegrationMutation();
+  const [form, setForm] = useState<PlatformMessageCentralIntegrationForm>(() =>
+    emptyMessageCentralIntegrationForm(),
   );
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [touched, setTouched] = useState<
-    Partial<Record<keyof PlatformTenantTemplateForm, boolean>>
+    Partial<Record<keyof PlatformMessageCentralIntegrationForm, boolean>>
   >({});
   const [testMobile, setTestMobile] = useState(() =>
     sanitizeIndianPhoneDigits(tenant.owner.mobile),
   );
   const [verifyMobileError, setVerifyMobileError] = useState<string | undefined>();
 
-  const templateDialogSeed = open
-    ? `${tenant.tenantCode}|${tenant.owner.mobile}|${definition.messageType}|${current?.id ?? ""}`
-    : "";
-  const [appliedTemplateDialogSeed, setAppliedTemplateDialogSeed] = useState("");
-  if (open && appliedTemplateDialogSeed !== templateDialogSeed) {
-    const next = platformTenantTemplateFormFromRegistration(
-      tenant.tenantCode,
-      definition,
-      current,
-    );
-    setAppliedTemplateDialogSeed(templateDialogSeed);
-    setBaseline(next);
-    setForm(next);
+  const mcSeed = `${tenant.id}|${mc.lastVerifiedAt ?? ""}|${mc.configured}`;
+  const [appliedMcSeed, setAppliedMcSeed] = useState("");
+  if (appliedMcSeed !== mcSeed) {
+    setAppliedMcSeed(mcSeed);
+    setForm(emptyMessageCentralIntegrationForm());
     setFieldErrors({});
     setTouched({});
     setTestMobile(sanitizeIndianPhoneDigits(tenant.owner.mobile));
     setVerifyMobileError(undefined);
   }
-  if (!open && appliedTemplateDialogSeed) {
-    setAppliedTemplateDialogSeed("");
-  }
 
   const liveErrors = useMemo(
-    () => livePlatformTenantTemplateFieldErrors(form, touched),
+    () => livePlatformMessageCentralIntegrationFieldErrors(form, touched),
     [form, touched],
   );
-
-  const displayError = (field: keyof PlatformTenantTemplateForm) =>
+  const displayError = (field: keyof PlatformMessageCentralIntegrationForm) =>
     fieldErrors[field] ?? liveErrors[field];
-
-  const setField = <K extends keyof PlatformTenantTemplateForm>(
+  const setField = <K extends keyof PlatformMessageCentralIntegrationForm>(
     key: K,
-    value: PlatformTenantTemplateForm[K],
+    value: PlatformMessageCentralIntegrationForm[K],
   ) => {
     setForm((prev) => ({ ...prev, [key]: value }));
     setFieldErrors((prev) => {
@@ -1113,226 +758,202 @@ function TemplateDialog({
       return next;
     });
   };
-
   const markAllTouched = () => {
     setTouched({
-      templateName: true,
-      templateId: true,
-      languageCode: true,
-      approvalStatus: true,
-      notes: true,
+      customerId: true,
+      key: true,
+      email: true,
+      countryCode: true,
+      flowType: true,
+      otpLength: true,
     });
   };
-
-  const submitDisabled =
-    saveState.isLoading ||
-    !platformTenantTemplateFormReady(form) ||
-    (current != null && platformTenantTemplateFormUnchanged(form, baseline));
-
-  const inputClass = (field: keyof PlatformTenantTemplateForm) =>
+  const saveReady = platformMessageCentralIntegrationFormReady(form);
+  const saveDisabled =
+    saveState.isLoading || !saveReady || !messageCentralIntegrationFormHasInput(form);
+  const inputClass = (field: keyof PlatformMessageCentralIntegrationForm) =>
     cn(displayError(field) && "border-red-600");
 
   return (
-    <ActionDialog
-      open={open}
-      onOpenChange={onOpenChange}
-      title={definition.label}
-      description={`${definition.required ? "Required" : "Optional"} · ${definition.messageType}`}
-      actionLabel={current ? "Update registration" : "Register template"}
-      submitDisabled={submitDisabled}
-      suppressDefaultErrorToast
-      onError={(err) => {
-        handleFormApiError(err, {
-          setFieldErrors,
-          fieldAliases: {
-            providerTemplateName: "templateName",
-            providerTemplateId: "templateId",
-            language: "languageCode",
-          },
-          fallback: "Could not save template registration",
-        });
-      }}
-      onSubmit={async () => {
-        markAllTouched();
-        const clientErrors = validatePlatformTenantTemplateForm(form);
-        if (Object.keys(clientErrors).length) {
-          setFieldErrors(clientErrors);
-          toast.error("Fix the highlighted fields.");
-          return false;
-        }
-        await save({
-          tenantId: tenant.id,
-          messageType: definition.messageType,
-          body: tenantTemplateRegistrationBodyForApi(form, definition),
-        }).unwrap();
-        toast.success("Template registration saved");
-      }}
+    <Surface
+      title="Message Central VerifyNow (SMS OTP)"
+      description="Per-tenant customer login OTP via VerifyNow"
+      action={<StatusBadge status={mc.verificationStatus} />}
     >
-      <div className="space-y-4">
-        <div className="rounded-xl bg-[#fbf7f4] p-4">
-          <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
-            Canonical variable order
+      <div className="space-y-4 p-5">
+        <div className="rounded-xl border bg-[#fbf7f4] p-4 text-sm">
+          <p>
+            <strong>Current:</strong>{" "}
+            {mc.configured
+              ? `${mc.customerIdMasked ?? "Configured"} · ${mc.email ?? "—"}`
+              : "Not configured"}
           </p>
-          <div className="mt-2 flex flex-wrap gap-2">
-            {definition.variables.map((v) => (
-              <code key={v.key} className="rounded bg-white px-2 py-1 text-xs">
-                {v.index}. {v.key}
-              </code>
-            ))}
-          </div>
-        </div>
-        <div>
-          <FieldLabel>Meta template name *</FieldLabel>
-          <Input
-            value={form.templateName}
-            onChange={(e) => {
-              setTouched((p) => ({ ...p, templateName: true }));
-              setField(
-                "templateName",
-                sanitizeMetaTemplateNameInput(e.target.value),
-              );
-            }}
-            className={inputClass("templateName")}
-            aria-invalid={Boolean(displayError("templateName"))}
-          />
-          <FormFieldError message={displayError("templateName")} />
-        </div>
-        <div>
-          <FieldLabel>Meta template ID *</FieldLabel>
-          <Input
-            inputMode="numeric"
-            value={form.templateId}
-            onChange={(e) => {
-              setTouched((p) => ({ ...p, templateId: true }));
-              setField("templateId", sanitizeMetaTemplateIdInput(e.target.value));
-            }}
-            className={inputClass("templateId")}
-            aria-invalid={Boolean(displayError("templateId"))}
-          />
-          <FormFieldError message={displayError("templateId")} />
+          <p className="mt-1 text-muted-foreground">
+            Last verified: {formatWhen(mc.lastVerifiedAt)} · {mc.flowType ?? "SMS"} · OTP length{" "}
+            {mc.otpLength ?? 6}
+          </p>
+          <p className="mt-1 text-muted-foreground">
+            Password key is write-only (base64 encrypted password from Message Central). Re-enter
+            the key whenever you save changes.
+          </p>
         </div>
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
-            <FieldLabel>Language *</FieldLabel>
+            <FieldLabel>Customer ID *</FieldLabel>
             <Input
-              value={form.languageCode}
+              value={form.customerId}
               onChange={(e) => {
-                setTouched((p) => ({ ...p, languageCode: true }));
-                setField(
-                  "languageCode",
-                  sanitizeTemplateLanguageInput(e.target.value),
-                );
+                setTouched((p) => ({ ...p, customerId: true }));
+                setField("customerId", e.target.value);
               }}
-              placeholder="en"
-              className={inputClass("languageCode")}
-              aria-invalid={Boolean(displayError("languageCode"))}
+              className={inputClass("customerId")}
             />
-            <FormFieldError message={displayError("languageCode")} />
+            <FormFieldError message={displayError("customerId")} />
           </div>
           <div>
-            <FieldLabel>Approval status</FieldLabel>
+            <FieldLabel>Account email *</FieldLabel>
+            <Input
+              type="email"
+              value={form.email}
+              onChange={(e) => {
+                setTouched((p) => ({ ...p, email: true }));
+                setField("email", e.target.value);
+              }}
+              className={inputClass("email")}
+            />
+            <FormFieldError message={displayError("email")} />
+          </div>
+          <div className="sm:col-span-2">
+            <FieldLabel>Encrypted password key *</FieldLabel>
+            <Input
+              type="password"
+              autoComplete="off"
+              value={form.key}
+              onChange={(e) => {
+                setTouched((p) => ({ ...p, key: true }));
+                setField("key", e.target.value);
+              }}
+              className={inputClass("key")}
+            />
+            <FormFieldError message={displayError("key")} />
+          </div>
+          <div>
+            <FieldLabel>Country code</FieldLabel>
+            <Input
+              inputMode="numeric"
+              value={form.countryCode}
+              onChange={(e) => {
+                setTouched((p) => ({ ...p, countryCode: true }));
+                setField("countryCode", e.target.value.replace(/\D/g, "").slice(0, 4));
+              }}
+              className={inputClass("countryCode")}
+            />
+            <FormFieldError message={displayError("countryCode")} />
+          </div>
+          <div>
+            <FieldLabel>OTP length</FieldLabel>
+            <Input
+              inputMode="numeric"
+              value={String(form.otpLength)}
+              onChange={(e) => {
+                setTouched((p) => ({ ...p, otpLength: true }));
+                const n = Number(e.target.value.replace(/\D/g, ""));
+                setField("otpLength", Number.isFinite(n) ? n : 6);
+              }}
+              className={inputClass("otpLength")}
+            />
+            <FormFieldError message={displayError("otpLength")} />
+          </div>
+          <div>
+            <FieldLabel>Channel</FieldLabel>
             <Select
-              value={form.approvalStatus}
-              onValueChange={(v) =>
-                setField("approvalStatus", v as TemplateApprovalStatus)
-              }
+              value={form.flowType}
+              onValueChange={(v) => {
+                setTouched((p) => ({ ...p, flowType: true }));
+                setField("flowType", v as PlatformMessageCentralIntegrationForm["flowType"]);
+              }}
             >
-              <SelectTrigger>
+              <SelectTrigger className={inputClass("flowType")}>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="APPROVED">Approved</SelectItem>
-                <SelectItem value="PENDING">Pending</SelectItem>
-                <SelectItem value="REJECTED">Rejected</SelectItem>
+                <SelectItem value="SMS">SMS</SelectItem>
               </SelectContent>
             </Select>
           </div>
         </div>
-        <div>
-          <FieldLabel>Notes</FieldLabel>
+        <div className="rounded-xl border border-dashed p-4">
+          <FieldLabel>Test mobile (optional for verify)</FieldLabel>
           <Input
-            value={form.notes}
+            inputMode="numeric"
+            value={testMobile}
             onChange={(e) => {
-              setTouched((p) => ({ ...p, notes: true }));
-              setField("notes", e.target.value.slice(0, 500));
+              setTestMobile(sanitizeIndianPhoneDigits(e.target.value));
+              setVerifyMobileError(undefined);
             }}
-            className={inputClass("notes")}
-            aria-invalid={Boolean(displayError("notes"))}
           />
-          <FormFieldError message={displayError("notes")} />
+          <FormFieldError message={verifyMobileError} />
         </div>
-        {current && (
-          <div className="space-y-4 border-t pt-4">
-            <div>
-              <FieldLabel>Test message mobile</FieldLabel>
-              <Input
-                inputMode="tel"
-                value={testMobile}
-                onChange={(e) => {
-                  setVerifyMobileError(undefined);
-                  setTestMobile(sanitizeIndianPhoneDigits(e.target.value));
-                }}
-                className={cn(verifyMobileError && "border-red-600")}
-                aria-invalid={Boolean(verifyMobileError)}
-              />
-              <FormFieldError message={verifyMobileError} />
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                disabled={testState.isLoading}
-                onClick={async () => {
-                  const mobileErr = validateWhatsappVerifyTestMobile(testMobile);
-                  if (mobileErr) {
-                    setVerifyMobileError(mobileErr);
-                    toast.error("Fix the test mobile number.");
-                    return;
-                  }
-                  try {
-                    await test({
-                      tenantId: tenant.id,
-                      messageType: definition.messageType,
-                      testMobile: whatsappVerifyTestMobileForApi(testMobile),
-                    }).unwrap();
-                    toast.success("Test template queued");
-                  } catch (err) {
-                    handleFormApiError(err, {
-                      fallback: "Could not queue test message",
-                    });
-                  }
-                }}
-              >
-                <Send />
-                Send test
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                className="text-red-700"
-                onClick={async () => {
-                  try {
-                    await del({
-                      tenantId: tenant.id,
-                      messageType: definition.messageType,
-                    }).unwrap();
-                    toast.success("Template registration removed");
-                    onOpenChange(false);
-                  } catch (err) {
-                    handleFormApiError(err, {
-                      fallback: "Could not delete registration",
-                    });
-                  }
-                }}
-              >
-                <Trash2 />
-                Delete registration
-              </Button>
-            </div>
-          </div>
-        )}
+        <div className="flex flex-wrap justify-end gap-2">
+          <Button
+            variant="outline"
+            disabled={!mc.configured || verifyState.isLoading}
+            onClick={async () => {
+              const mobileErr = testMobile.trim()
+                ? validateMessageCentralVerifyTestMobile(testMobile)
+                : undefined;
+              if (mobileErr) {
+                setVerifyMobileError(mobileErr);
+                return;
+              }
+              try {
+                await verify({
+                  tenantId: tenant.id,
+                  ...(testMobile.trim()
+                    ? { testMobile: messageCentralVerifyTestMobileForApi(testMobile) }
+                    : {}),
+                }).unwrap();
+                toast.success("Message Central credentials verified");
+              } catch (err) {
+                handleFormApiError(err, { fallback: "Verification failed" });
+              }
+            }}
+          >
+            <Smartphone />
+            Verify connection
+          </Button>
+          <Button
+            disabled={saveDisabled}
+            onClick={async () => {
+              markAllTouched();
+              const clientErrors = validatePlatformMessageCentralIntegrationForm(form);
+              if (Object.keys(clientErrors).length) {
+                setFieldErrors(clientErrors);
+                toast.error("Fix the highlighted fields.");
+                return;
+              }
+              try {
+                await save({
+                  tenantId: tenant.id,
+                  body: messageCentralIntegrationBodyForApi(form),
+                }).unwrap();
+                toast.success("Message Central credentials saved");
+                setForm((prev) => ({ ...prev, key: "" }));
+                setTouched({});
+              } catch (err) {
+                handleFormApiError(err, {
+                  setFieldErrors,
+                  fallback: "Could not save Message Central credentials",
+                });
+              }
+            }}
+          >
+            <Save />
+            Save credentials
+          </Button>
+        </div>
       </div>
-    </ActionDialog>
+    </Surface>
   );
 }
 

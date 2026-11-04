@@ -4,11 +4,11 @@ import { useState } from "react";
 import {
   ChevronRight,
   ClipboardList,
+  FileText,
   Headphones,
   LoaderCircle,
   LogOut,
   MapPin,
-  MessageCircle,
   Coins,
   Package,
   Shield,
@@ -28,8 +28,6 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Switch } from "@/components/ui/switch";
 import { PageSkeleton, QueryError } from "@/src/components/common/query-state";
 import { useCustomerTenant } from "@/src/components/customer/customer-tenant-context";
 import { customerPath } from "@/src/lib/customer-tenant";
@@ -40,7 +38,6 @@ import {
   useGetCustomerDevicesQuery,
   useGetCustomerProfileQuery,
   useRevokeCustomerDeviceMutation,
-  useUpdateCustomerProfileMutation,
 } from "@/src/store/api/customer-api";
 import {
   formatPassbookLabel,
@@ -60,10 +57,7 @@ export function CustomerProfilePage() {
   const kycEnabled = useCustomerKycEnabled();
   const { visible: digitalMetalsVisible } = useCustomerDigitalMetalsVisible();
   const { data, isLoading, isError, refetch } = useGetCustomerProfileQuery();
-  const [whatsappOpen, setWhatsappOpen] = useState(false);
   const [logoutOpen, setLogoutOpen] = useState(false);
-  const [update, updateState] = useUpdateCustomerProfileMutation();
-  const [whatsapp, setWhatsapp] = useState(true);
   const { signOut, isSigningOut } = useCustomerSignOut();
 
   if (isLoading || !data) return <PageSkeleton cards={3} />;
@@ -89,21 +83,6 @@ export function CustomerProfilePage() {
     return branch.name;
   })();
 
-  const openWhatsapp = () => {
-    setWhatsapp(data.whatsappOptIn);
-    setWhatsappOpen(true);
-  };
-
-  const saveWhatsapp = async () => {
-    try {
-      await update({ whatsappOptIn: whatsapp }).unwrap();
-      toast.success("WhatsApp preference updated");
-      setWhatsappOpen(false);
-    } catch {
-      toast.error("Could not update preference");
-    }
-  };
-
   return (
     <div className="mx-auto max-w-lg pb-6">
       <h1 className="text-[1.65rem] font-black tracking-[-.03em] text-[#11111b]">Profile</h1>
@@ -126,12 +105,6 @@ export function CustomerProfilePage() {
           value={formatPassbookLabel(data.passbookNumber, data.customerNumber)}
         />
         <ProfileAccountRow icon={MapPin} label="Primary branch" value={branchDisplay} />
-        <ProfileAccountRow
-          icon={MessageCircle}
-          label="WhatsApp updates"
-          value={data.whatsappOptIn ? "On" : "Off"}
-          onClick={openWhatsapp}
-        />
       </section>
 
       <section className="customer-surface mt-4 overflow-hidden py-1">
@@ -157,15 +130,20 @@ export function CustomerProfilePage() {
             />
             <ProfileMenuRow
               icon={ClipboardList}
-              label="Orders & tracking"
+              label="Digital gold orders"
               href={customerDigitalMetalsOrdersHubHref(tenantSlug)}
             />
           </>
         ) : null}
         <ProfileMenuRow
           icon={Package}
-          label="Shop order history"
+          label="Shop orders & delivery"
           href={customerShopOrdersPath(tenantSlug)}
+        />
+        <ProfileMenuRow
+          icon={FileText}
+          label="Passbook & all payments"
+          href={customerPath(tenantSlug, "payments", "activity")}
         />
         <ProfileMenuRow
           icon={Smartphone}
@@ -214,26 +192,6 @@ export function CustomerProfilePage() {
         </AlertDialogContent>
       </AlertDialog>
 
-      <Dialog open={whatsappOpen} onOpenChange={setWhatsappOpen}>
-        <DialogContent className="max-w-sm rounded-2xl">
-          <DialogHeader>
-            <DialogTitle>WhatsApp updates</DialogTitle>
-            <DialogDescription>Payment receipts and service notifications from your jeweller.</DialogDescription>
-          </DialogHeader>
-          <div className="flex items-center justify-between rounded-xl border border-[#ece6e1] p-4">
-            <p className="text-sm font-bold">Enable WhatsApp updates</p>
-            <Switch checked={whatsapp} onCheckedChange={setWhatsapp} />
-          </div>
-          <Button
-            disabled={updateState.isLoading}
-            onClick={saveWhatsapp}
-            className="w-full rounded-xl font-bold text-white"
-            style={{ background: "var(--customer-primary, #730321)" }}
-          >
-            Save
-          </Button>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

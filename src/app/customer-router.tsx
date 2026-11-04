@@ -17,6 +17,10 @@ const CustomerPlansPage = dynamic(() => import("@/src/features/customer/customer
 const CustomerPlanDetailPage = dynamic(() => import("@/src/features/customer/customer-plan-detail-page").then((m) => m.CustomerPlanDetailPage), options);
 const CustomerPaymentsPage = dynamic(() => import("@/src/features/customer/customer-payments-page").then((m) => m.CustomerPaymentsPage), options);
 const CustomerPaymentDetailPage = dynamic(() => import("@/src/features/customer/customer-payments-page").then((m) => m.CustomerPaymentDetailPage), options);
+const CustomerRecentActivityPage = dynamic(
+  () => import("@/src/features/customer/customer-recent-activity-page").then((m) => m.CustomerRecentActivityPage),
+  options,
+);
 const CustomerNotificationsPage = dynamic(() => import("@/src/features/customer/customer-activity-pages").then((m) => m.CustomerNotificationsPage), options);
 const CustomerGoldRatePage = dynamic(() => import("@/src/features/customer/customer-activity-pages").then((m) => m.CustomerGoldRatePage), options);
 const CustomerBranchesPage = dynamic(() => import("@/src/features/customer/customer-activity-pages").then((m) => m.CustomerBranchesPage), options);
@@ -70,7 +74,10 @@ function CustomerRoutes({ slug }: { slug: string[] }) {
       </CustomerSelfEnrolGuard>
     );
   }
-  if (section === "payments") return id ? <CustomerPaymentDetailPage id={id} /> : <CustomerPaymentsPage />;
+  if (section === "payments") {
+    if (id === "activity") return <CustomerRecentActivityPage />;
+    return id ? <CustomerPaymentDetailPage id={id} /> : <CustomerPaymentsPage />;
+  }
   if (section === "notifications") return <CustomerNotificationsPage />;
   if (section === "profile") {
     if (id === "kyc") return <CustomerProfileKycPage />;

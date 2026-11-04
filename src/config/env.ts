@@ -9,10 +9,19 @@ function readUseMocks(): boolean {
   return true;
 }
 
+function readPhonePeEnvironment(): "SANDBOX" | "PRODUCTION" {
+  const raw = process.env.NEXT_PUBLIC_PHONEPE_ENV?.trim().toUpperCase();
+  if (raw === "SANDBOX" || raw === "UAT" || raw === "PREPROD" || raw === "TEST") return "SANDBOX";
+  if (raw === "PRODUCTION" || raw === "LIVE") return "PRODUCTION";
+  return "PRODUCTION";
+}
+
 export const env = {
   apiBaseUrl:
     process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000/api/v1",
   useMocks: readUseMocks(),
+  /** Must match backend `PHONEPE_ENV` when opening hosted PhonePe checkout in the browser. */
+  phonePeEnvironment: readPhonePeEnvironment(),
   mockDelayMs: Number(process.env.NEXT_PUBLIC_MOCK_DELAY_MS ?? 420),
   /** Fallback tenant when URL has no slug (dev only). Must match a real `Tenant.code` in the API. */
   customerTenantCode:

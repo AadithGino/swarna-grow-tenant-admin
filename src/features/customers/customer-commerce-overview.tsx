@@ -253,7 +253,7 @@ export function DigiGoldSummaryPanel({
         {[
           ["Bought", `${summary.bought.count} · ${dmInrShort(summary.bought.paidPaise)}`],
           ["Sold", `${summary.sold.count} · ${dmInrShort(summary.sold.settlementPaise)}`],
-          ["Sells to approve", String(summary.pendingSells)],
+          ["Previous sell requests", String(summary.pendingSells)],
           [
             "Payout due",
             summary.openPayables.count

@@ -176,7 +176,7 @@ export function SchemesPage() {
         icon={Landmark}
         eyebrow="Gold schemes"
         title="Scheme plans"
-        description="The monthly savings plans customers join. Build a plan once, preview its schedule, and every enrollment follows the same rules."
+        description="The monthly savings plans customers join. Build a plan once, preview its schedule, and every enrollment follows the same rules. Duplicate an existing plan to reuse it as a template."
         actions={
           <PermissionGate permission={ACTION.planWrite}>
             <Link href="/schemes/new" className={heroPrimaryButtonClass} data-tour="schemes-builder">

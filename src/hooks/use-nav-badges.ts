@@ -5,7 +5,8 @@ export type NavBadgeKey =
   | "dues"
   | "cashHandovers"
   | "openRedemptions"
-  | "failedMessages";
+  | "failedMessages"
+  | "paymentsNeedingAttention";
 
 export function useNavBadges(): Partial<Record<NavBadgeKey, number>> {
   const branchId = useActingBranchId();
@@ -18,5 +19,6 @@ export function useNavBadges(): Partial<Record<NavBadgeKey, number>> {
     cashHandovers: Number(data.cashHandovers ?? 0) || undefined,
     openRedemptions: Number(data.openRedemptions ?? 0) || undefined,
     failedMessages: Number(data.failedMessages ?? 0) || undefined,
+    paymentsNeedingAttention: Number(data.paymentsNeedingAttention ?? 0) || undefined,
   };
 }

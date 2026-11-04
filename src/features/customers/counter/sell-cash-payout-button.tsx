@@ -8,7 +8,7 @@ import { newIdempotencyKey } from "@/src/lib/idempotency";
 import { useRecordDigitalMetalsSellCashPayoutMutation } from "@/src/store/api/admin-api";
 import { dmInr } from "@/src/features/digital-metals/digital-metals-admin-ui";
 
-/** "Paid ₹X in cash" for an approved counter sell whose payout is cash and still open. */
+/** "Paid ₹X in cash" for an accepted counter sell whose payout is cash and still open. */
 export function SellCashPayoutButton({ row }: { row: Record<string, unknown> }) {
   const [payCash, state] = useRecordDigitalMetalsSellCashPayoutMutation();
   const payable = row.payable as { status?: string } | undefined;

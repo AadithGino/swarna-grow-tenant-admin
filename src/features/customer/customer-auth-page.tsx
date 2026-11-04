@@ -20,6 +20,11 @@ import { useCustomerTenant } from "@/src/components/customer/customer-tenant-con
 import { customerPath } from "@/src/lib/customer-tenant";
 import { customerPortalCapabilitiesFromTenant } from "@/src/lib/customer-portal-capabilities";
 import { CustomerBrand } from "@/src/components/customer/customer-ui";
+import {
+  customerOtpIncompleteMessage,
+  customerOtpLengthFromTenant,
+  customerOtpPattern,
+} from "@/src/lib/customer-otp-ui";
 
 type Step = "mobile" | "otp";
 type AuthMode = "login" | "signup";
@@ -42,6 +47,7 @@ export function CustomerLoginPage() {
   const [verifyOtp, verifyState] = useVerifyCustomerOtpMutation();
   const [loginPassword, loginPasswordState] = useLoginCustomerPasswordMutation();
   const portalCaps = customerPortalCapabilitiesFromTenant(tenant);
+  const otpLength = customerOtpLengthFromTenant(tenant ?? undefined);
   const registrationEnabled = portalCaps.customerSelfRegistration;
   const kycPortalEnabled = portalCaps.kycMandatory;
   const passwordOnlyLogin = portalCaps.customerLoginMode === "PASSWORD_ONLY";
@@ -111,7 +117,9 @@ export function CustomerLoginPage() {
   };
 
   const verify = async () => {
-    if (otp.length !== 6) return toast.error("Enter the 6-digit OTP");
+    if (!customerOtpPattern(otpLength).test(otp)) {
+      return toast.error(customerOtpIncompleteMessage(otpLength));
+    }
     if (!otpId) return toast.error("Request a new OTP for this step, then try again.");
     try {
       const result = await verifyOtp({
@@ -322,7 +330,7 @@ export function CustomerLoginPage() {
                 ? mode === "login"
                   ? `Enter the mobile number registered with ${jewellerName}.`
                   : `Register with your mobile to start saving with ${jewellerName}.`
-                : `We sent a 6-digit code to +91 ${mobile.slice(0, 2)}••• ••${mobile.slice(-3)}.`}
+                : `We sent a ${otpLength}-digit code to +91 ${mobile.slice(0, 2)}••• ••${mobile.slice(-3)}.`}
             </p>
             {passwordOnlyLogin ? (
               <div className="mt-7 space-y-4">
@@ -407,7 +415,7 @@ export function CustomerLoginPage() {
                 <Input
                   id="otp"
                   inputMode="numeric"
-                  maxLength={6}
+                  maxLength={otpLength}
                   value={otp}
                   onChange={(e) => setOtp(e.target.value.replace(/\D/g, ""))}
                   className="mt-2 h-14 rounded-xl text-center text-xl font-black tracking-[.55em]"

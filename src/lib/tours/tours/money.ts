@@ -144,6 +144,19 @@ export const MONEY_TOURS: Tour[] = [
     ],
   },
   {
+    id: "payments-needing-attention",
+    title: "Payments needing attention",
+    summary: "Store and digital-metal payment exceptions in one queue.",
+    category: "money",
+    minutes: 1,
+    startRoute: "/payments/needing-attention",
+    keywords: ["payment exception", "late success", "duplicate payment", "refund needed", "payment attention"],
+    steps: [
+      nav("/payments/needing-attention", "Payments needing attention", "Money"),
+      { id: "about", route: "/payments/needing-attention", target: "@header", title: "Unified queue", body: "Each row shows reason, customer, next action and a link to the source order. Refund obligations are listed separately — the nav badge uses the same count (no double-counting)." },
+    ],
+  },
+  {
     id: "accept-handover",
     title: "Accept or resolve a cash handover",
     summary: "Approve handovers submitted by collectors, or settle a mismatch.",

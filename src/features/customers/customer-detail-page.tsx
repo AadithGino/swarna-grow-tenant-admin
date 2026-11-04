@@ -150,7 +150,6 @@ export function CustomerDetailPage({ id }: { id: string }) {
     && hasPermission(sessionUser, "digital-metals.assisted.trade")
     && dmAccess?.active !== false
     && dmAccess?.paused !== true;
-  const canDmApprove = hasPermission(sessionUser, "digital-metals.sell.approve");
   const canStoreOrder =
     showEcommerceOrdersTab
     && hasPermission(sessionUser, "ecommerce.assisted.order")
@@ -338,7 +337,6 @@ export function CustomerDetailPage({ id }: { id: string }) {
             customerName={customer.name}
             rates={dmSummaryQuery.data?.rates ?? []}
             holdings={dmSummaryQuery.data?.holdings ?? []}
-            canApprove={canDmApprove}
           />
         </>
       ) : null}

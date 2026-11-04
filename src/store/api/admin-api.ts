@@ -82,7 +82,6 @@ import {
   adaptSchemeLedgerList,
   type SchemeLedgerRow,
   adaptDueList,
-  adaptMessages,
   adaptRedemptions,
   adaptEnrolValidation,
   adaptPlans,
@@ -1062,28 +1061,6 @@ export const adminApi = createApi({
       transformResponse: (raw) => contractPayload(raw) as { saved: boolean },
       invalidatesTags: (_r, _e, { id }) => [{ type: "Customer", id }],
     }),
-    updateWhatsappOpt: builder.mutation<
-      { customerId: string; optedIn: boolean; version: number },
-      { id: string; optedIn: boolean }
-    >({
-      query: ({ id, optedIn }) => ({
-        url: `/admin/customers/${id}/whatsapp-opt`,
-        method: "PATCH",
-        params: { id },
-        body: { optedIn },
-        mockKey: "updateWhatsappOpt",
-      }),
-      transformResponse: (raw) =>
-        contractPayload(raw) as {
-          customerId: string;
-          optedIn: boolean;
-          version: number;
-        },
-      invalidatesTags: (_r, _e, { id }) => [
-        { type: "Customer", id },
-        "Customer",
-      ],
-    }),
     getCustomerNominee: builder.query<
       CustomerNomineeDetail | Record<string, unknown>,
       string
@@ -1115,19 +1092,6 @@ export const adminApi = createApi({
           return { error: error as FetchBaseQueryError };
         }
       },
-    }),
-    shareCustomerStatementWhatsapp: builder.mutation<
-      { queued: boolean; customerId: string },
-      string
-    >({
-      query: (id) => ({
-        url: `/admin/customers/${id}/statement/share-whatsapp`,
-        method: "POST",
-        params: { id },
-        mockKey: "shareCustomerStatementWhatsapp",
-      }),
-      transformResponse: (raw) =>
-        contractPayload(raw) as { queued: boolean; customerId: string },
     }),
     getEnrollments: builder.query<
       ReturnType<typeof adaptEnrollments>,
@@ -1728,15 +1692,6 @@ export const adminApi = createApi({
       }),
       invalidatesTags: ["Payment", "Enrollment", "Dashboard", "Report"],
     }),
-    sharePaymentWhatsapp: builder.mutation<{ queued: boolean }, string>({
-      query: (paymentId) => ({
-        url: `/admin/payments/${paymentId}/share-whatsapp`,
-        method: "POST",
-        params: { paymentId },
-        mockKey: "sharePaymentWhatsapp",
-      }),
-      transformResponse: (raw) => contractPayload(raw) as { queued: boolean },
-    }),
     getPaymentReceipt: builder.query<
       | { kind: "blob"; blobUrl: string; contentType: string }
       | { kind: "json"; payload: unknown },
@@ -1883,15 +1838,6 @@ export const adminApi = createApi({
         method: "POST",
         params: { linkId },
         mockKey: "cancelPaymentLink",
-      }),
-      invalidatesTags: ["Payment"],
-    }),
-    resendPaymentLink: builder.mutation<unknown, string>({
-      query: (linkId) => ({
-        url: `/admin/payment-links/${linkId}/resend`,
-        method: "POST",
-        params: { linkId },
-        mockKey: "resendPaymentLink",
       }),
       invalidatesTags: ["Payment"],
     }),
@@ -2228,29 +2174,6 @@ export const adminApi = createApi({
         items: (contractPayload(raw) as Record<string, unknown>[]) ?? [],
         meta: contractMeta(raw) as Record<string, unknown>,
       }),
-    }),
-    getMessages: builder.query<
-      ReturnType<typeof adaptMessages>,
-      | (ListQueryParams &
-          DateRangeQueryParams & { broadcastId?: string; channel?: string })
-      | void
-    >({
-      query: (params) => ({
-        url: "/admin/messaging/messages",
-        params: params ?? {},
-        mockKey: "messages",
-      }),
-      transformResponse: adaptMessages,
-      providesTags: ["Message"],
-    }),
-    resendMessage: builder.mutation<MessageLog, string>({
-      query: (id) => ({
-        url: `/admin/messaging/messages/${id}/resend`,
-        method: "POST",
-        params: { id },
-        mockKey: "resendMessage",
-      }),
-      invalidatesTags: ["Message"],
     }),
     getReports: builder.query<
       ReturnType<typeof adaptAdminReport>,
@@ -3073,24 +2996,6 @@ export const adminApi = createApi({
       }),
       invalidatesTags: ["Grievance"],
     }),
-    getRemindersConfig: builder.query<any, void>({
-      query: () => ({
-        url: "/admin/reminders/config",
-        mockKey: "remindersConfig",
-      }),
-      transformResponse: (raw) => contractPayload(raw) as any,
-      providesTags: ["Message"],
-    }),
-    updateRemindersConfig: builder.mutation<any, Record<string, unknown>>({
-      query: (body) => ({
-        url: "/admin/reminders/config",
-        method: "PUT",
-        body,
-        mockKey: "updateRemindersConfig",
-      }),
-      transformResponse: (raw) => contractPayload(raw) as any,
-      invalidatesTags: ["Message"],
-    }),
     previewPushBroadcastAudience: builder.mutation<
       { eligibleDevices: number; subscriptionCap: number | null },
       { audience: string; branchId?: string; customerIds?: string[] }
@@ -3179,70 +3084,6 @@ export const adminApi = createApi({
         page: contractPage(raw),
         meta: contractMeta(raw),
       }),
-      providesTags: ["Message"],
-    }),
-    getMessagingTemplates: builder.query<any, void>({
-      query: () => ({
-        url: "/admin/messaging/templates",
-        mockKey: "messagingTemplates",
-      }),
-      transformResponse: (raw) => ({
-        items: (contractPayload(raw) as any[]) ?? [],
-        meta: contractMeta(raw),
-      }),
-      providesTags: ["Message"],
-    }),
-    getMessagingTemplatePreview: builder.query<any, string>({
-      query: (messageType) => ({
-        url: `/admin/messaging/templates/${messageType}/preview`,
-        params: { messageType },
-        mockKey: "messagingTemplatePreview",
-      }),
-      transformResponse: (raw) => contractPayload(raw) as any,
-    }),
-    getMessagingSummary: builder.query<
-      any,
-      { from?: string; to?: string; branchId?: string } | void
-    >({
-      query: (params) => ({
-        url: "/admin/messaging/summary",
-        params: params ?? {},
-        mockKey: "messagingSummary",
-      }),
-      transformResponse: (raw) => {
-        const data = contractPayload<any>(raw);
-        if (data && !Array.isArray(data) && data.quotaUsedPercent != null) {
-          return data;
-        }
-        const rows = Array.isArray(data)
-          ? data
-          : Array.isArray(data?.byStatus)
-            ? data.byStatus
-            : [];
-        const counts = Object.fromEntries(
-          rows.map((row: any) => [
-            String(row._id ?? row.status ?? "").toUpperCase(),
-            Number(row.count ?? 0),
-          ]),
-        );
-        const sent = Number(counts.SENT ?? counts.DELIVERED ?? 0);
-        const failed = Number(counts.FAILED ?? 0);
-        const queued = Number(counts.QUEUED ?? counts.PENDING ?? 0);
-        const total = sent + failed + queued;
-        const quotaLimit = Number(data?.quotaLimit ?? 1000);
-        const quotaUsed = Number(data?.quotaUsed ?? total);
-        return {
-          sent,
-          failed,
-          queued,
-          total,
-          quotaUsed,
-          quotaLimit,
-          quotaUsedPercent:
-            quotaLimit > 0 ? Math.round((quotaUsed / quotaLimit) * 100) : 0,
-          byStatus: counts,
-        };
-      },
       providesTags: ["Message"],
     }),
     patchSettingsProfile: builder.mutation<any, Record<string, unknown>>({
@@ -4185,6 +4026,42 @@ export const adminApi = createApi({
       transformResponse: (raw) => contractPayload(raw) as DigitalMetalsDashboardSummary,
       providesTags: [{ type: "DigitalMetals", id: "dashboard-summary" }],
     }),
+    getDigitalMetalsWalletTotals: builder.query<
+      {
+        scope: { branchId: string | null };
+        computedAt: string;
+        dataFreshThrough: string | null;
+        lines: Array<{
+          metal: string;
+          finenessPpm: number;
+          heldUg: string;
+          reservedUg: string;
+          availableUg: string;
+          customers: number;
+        }>;
+      },
+      { branchId?: string } | void
+    >({
+      query: (params) => ({
+        url: "/admin/digital-metals/dashboard/wallet-totals",
+        params: params ?? {},
+        mockKey: "digitalMetalsWalletTotals",
+      }),
+      transformResponse: (raw) => contractPayload(raw) as {
+        scope: { branchId: string | null };
+        computedAt: string;
+        dataFreshThrough: string | null;
+        lines: Array<{
+          metal: string;
+          finenessPpm: number;
+          heldUg: string;
+          reservedUg: string;
+          availableUg: string;
+          customers: number;
+        }>;
+      },
+      providesTags: [{ type: "DigitalMetals", id: "wallet-totals" }],
+    }),
     createDigitalMetalsCounterBuyQuote: builder.mutation<
       DmCounterQuote,
       {
@@ -4453,10 +4330,32 @@ export const adminApi = createApi({
       { orderId: string; expectedVersion?: number }
     >({
       query: ({ orderId, ...body }) => ({
-        url: `/admin/digital-metals/sell-orders/${encodeURIComponent(orderId)}/approve`,
+        url: `/admin/digital-metals/sell-orders/${encodeURIComponent(orderId)}/accept`,
         method: "POST",
         body,
         mockKey: "approveDigitalMetalsSellOrder",
+      }),
+      invalidatesTags: ["DigitalMetals"],
+    }),
+    recordDigitalMetalsSellPayment: builder.mutation<
+      Record<string, unknown>,
+      {
+        orderId: string;
+        expectedVersion: number;
+        amountPaise: number;
+        settlementDate: string;
+        bankReference: string;
+        evidenceUploadIds: string[];
+        staffAttestation: true;
+        idempotencyKey: string;
+      }
+    >({
+      query: ({ orderId, idempotencyKey, ...body }) => ({
+        url: `/admin/digital-metals/sell-orders/${encodeURIComponent(orderId)}/record-payment`,
+        method: "POST",
+        body,
+        headers: { "X-Idempotency-Key": idempotencyKey },
+        mockKey: "recordDigitalMetalsSellPayment",
       }),
       invalidatesTags: ["DigitalMetals"],
     }),
@@ -4917,6 +4816,17 @@ export const adminApi = createApi({
       }),
       providesTags: ["DigitalMetals"],
     }),
+    getDigitalMetalsHedgeDailyIndex: builder.query<
+      Record<string, unknown>,
+      { days?: number; endDate?: string } | void
+    >({
+      query: (params) => ({
+        url: "/admin/digital-metals/hedge/daily-index",
+        params: params ?? {},
+        mockKey: "digitalMetalsHedgeDailyIndex",
+      }),
+      providesTags: ["DigitalMetals"],
+    }),
     closeDigitalMetalsHedgeDay: builder.mutation<
       Record<string, unknown>,
       { idempotencyKey: string; businessDate?: string; revisionReason?: string }
@@ -5253,6 +5163,27 @@ export const adminApi = createApi({
         },
       providesTags: ["Ecommerce"],
     }),
+    getPaymentsNeedingAttention: builder.query<
+      {
+        computedAt?: string;
+        items: Record<string, unknown>[];
+        domainsIncluded?: { ecommerce?: boolean; digitalMetals?: boolean };
+      },
+      { limit?: number } | void
+    >({
+      query: (params) => ({
+        url: "/admin/payments/needing-attention",
+        params: params ?? {},
+        mockKey: "paymentsNeedingAttention",
+      }),
+      transformResponse: (raw) =>
+        (contractPayload(raw) as {
+          computedAt?: string;
+          items: Record<string, unknown>[];
+          domainsIncluded?: { ecommerce?: boolean; digitalMetals?: boolean };
+        }) ?? { items: [] },
+      providesTags: ["Ecommerce", "DigitalMetals"],
+    }),
     getEcommerceOrderEvents: builder.query<
       { items: Record<string, unknown>[] },
       string
@@ -5316,6 +5247,87 @@ export const adminApi = createApi({
         method: "POST",
         body,
         mockKey: "transitionEcommerceOrderFulfilment",
+      }),
+      invalidatesTags: ["Ecommerce"],
+    }),
+    shipEcommerceOrder: builder.mutation<
+      Record<string, unknown>,
+      {
+        orderId: string;
+        expectedVersion: number;
+        carrierName?: string;
+        trackingNumber?: string;
+        trackingUrl?: string;
+        idempotencyKey: string;
+      }
+    >({
+      query: ({ orderId, idempotencyKey, ...body }) => ({
+        url: `/admin/ecommerce/orders/${encodeURIComponent(orderId)}/ship`,
+        method: "POST",
+        body,
+        headers: { "X-Idempotency-Key": idempotencyKey },
+        mockKey: "shipEcommerceOrder",
+      }),
+      invalidatesTags: ["Ecommerce"],
+    }),
+    confirmEcommerceOrderDelivery: builder.mutation<
+      Record<string, unknown>,
+      {
+        orderId: string;
+        expectedVersion: number;
+        proofReference: string;
+        recipientName: string;
+        courierCollectionReference?: string;
+        courierCollectionEvidenceNote?: string;
+        idempotencyKey: string;
+      }
+    >({
+      query: ({ orderId, idempotencyKey, ...body }) => ({
+        url: `/admin/ecommerce/orders/${encodeURIComponent(orderId)}/confirm-delivery`,
+        method: "POST",
+        body,
+        headers: { "X-Idempotency-Key": idempotencyKey },
+        mockKey: "confirmEcommerceOrderDelivery",
+      }),
+      invalidatesTags: ["Ecommerce"],
+    }),
+    readyEcommerceOrderForPickup: builder.mutation<
+      Record<string, unknown>,
+      { orderId: string; expectedVersion: number; idempotencyKey: string }
+    >({
+      query: ({ orderId, idempotencyKey, ...body }) => ({
+        url: `/admin/ecommerce/orders/${encodeURIComponent(orderId)}/ready-for-pickup`,
+        method: "POST",
+        body,
+        headers: { "X-Idempotency-Key": idempotencyKey },
+        mockKey: "readyEcommerceOrderForPickup",
+      }),
+      invalidatesTags: ["Ecommerce"],
+    }),
+    reissueEcommercePickupCode: builder.mutation<Record<string, unknown>, { orderId: string; expectedVersion: number; idempotencyKey: string }>({
+      query: ({ orderId, idempotencyKey, ...body }) => ({
+        url: `/admin/ecommerce/orders/${encodeURIComponent(orderId)}/pickup-code`, method: "POST", body, mockKey: "reissueEcommercePickupCode",
+        headers: { "X-Idempotency-Key": idempotencyKey },
+      }),
+      invalidatesTags: ["Ecommerce"],
+    }),
+    confirmEcommercePickupCollection: builder.mutation<
+      Record<string, unknown>,
+      {
+        orderId: string;
+        expectedVersion: number;
+        pickupCode: string;
+        recipientName: string;
+        staffHandoverConfirmed: true;
+        idempotencyKey: string;
+      }
+    >({
+      query: ({ orderId, idempotencyKey, ...body }) => ({
+        url: `/admin/ecommerce/orders/${encodeURIComponent(orderId)}/confirm-pickup-collection`,
+        method: "POST",
+        body,
+        headers: { "X-Idempotency-Key": idempotencyKey },
+        mockKey: "confirmEcommercePickupCollection",
       }),
       invalidatesTags: ["Ecommerce"],
     }),
@@ -5693,6 +5705,49 @@ export const adminApi = createApi({
         ) as import("@/src/types/ecommerce-order").EcommerceCodRemittanceBatch,
       invalidatesTags: ["Ecommerce"],
     }),
+    recordEcommerceCourierMoneyReceived: builder.mutation<
+      {
+        batch: import("@/src/types/ecommerce-order").EcommerceCodRemittanceBatch;
+        lines: Array<Record<string, unknown>>;
+        reconciliation: {
+          status: string;
+          discrepancyPaise: number;
+          bankCreditPaise: number;
+          netExpectedPaise: number | null;
+          outcomeLabel: string;
+        };
+      },
+      {
+        orderIds: string[];
+        bankCreditReference: string;
+        bankCreditRupees: string | number;
+        totalCourierFeeRupees?: string | number;
+        bankCreditedAt?: string;
+        statementReference?: string;
+        idempotencyKey: string;
+      }
+    >({
+      query: ({ idempotencyKey, ...body }) => ({
+        url: "/admin/ecommerce/courier-cod/record-money-received",
+        method: "POST",
+        body,
+        headers: { "X-Idempotency-Key": idempotencyKey },
+        mockKey: "recordEcommerceCourierMoneyReceived",
+      }),
+      transformResponse: (raw) =>
+        contractPayload(raw) as {
+          batch: import("@/src/types/ecommerce-order").EcommerceCodRemittanceBatch;
+          lines: Array<Record<string, unknown>>;
+          reconciliation: {
+            status: string;
+            discrepancyPaise: number;
+            bankCreditPaise: number;
+            netExpectedPaise: number | null;
+            outcomeLabel: string;
+          };
+        },
+      invalidatesTags: ["Ecommerce"],
+    }),
     retryEcommerceOrderPaymentAttemptReconcile: builder.mutation<
       Record<string, unknown>,
       { orderId: string; paymentAttemptId: string; reason: string }
@@ -5765,60 +5820,6 @@ export const adminApi = createApi({
       }),
       transformResponse: adaptDueList,
       providesTags: ["Enrollment"],
-    }),
-    bulkSendOverdueReminders: builder.mutation<
-      {
-        jobId: string;
-        queued: number;
-        skipped?: {
-          installmentId?: string;
-          schemeId?: string;
-          reason: string;
-        }[];
-      },
-      { installmentIds: string[] }
-    >({
-      query: ({ installmentIds }) => ({
-        url: "/admin/overdues/bulk-send-reminders",
-        method: "POST",
-        body: { schemeIds: installmentIds },
-        mockKey: "bulkSendOverdueReminders",
-      }),
-      transformResponse: (raw) => {
-        const data = contractPayload<any>(raw) ?? {};
-        return {
-          jobId: String(data.jobId ?? data.id ?? "accepted"),
-          queued: Number(data.queued ?? data.accepted ?? 0),
-          skipped: data.skipped,
-        };
-      },
-    }),
-    bulkSendDueLinks: builder.mutation<
-      {
-        jobId: string;
-        queued: number;
-        skipped?: {
-          installmentId?: string;
-          schemeId?: string;
-          reason: string;
-        }[];
-      },
-      { installmentIds: string[] }
-    >({
-      query: ({ installmentIds }) => ({
-        url: "/admin/dues/bulk-send-links",
-        method: "POST",
-        body: { schemeIds: installmentIds },
-        mockKey: "bulkSendDueLinks",
-      }),
-      transformResponse: (raw) => {
-        const data = contractPayload<any>(raw) ?? {};
-        return {
-          jobId: String(data.jobId ?? data.id ?? "accepted"),
-          queued: Number(data.queued ?? data.accepted ?? 0),
-          skipped: data.skipped,
-        };
-      },
     }),
     createReportExport: builder.mutation<
       {
@@ -6035,109 +6036,6 @@ export const adminApi = createApi({
       transformResponse: (raw) => contractPayload(raw) as any,
       providesTags: ["Settings"],
     }),
-    getMessagingMessage: builder.query<Record<string, unknown>, string>({
-      query: (messageId) => ({
-        url: `/admin/messaging/messages/${messageId}`,
-        params: { messageId },
-        mockKey: "getMessagingMessage",
-      }),
-      transformResponse: (raw) =>
-        contractPayload(raw) as Record<string, unknown>,
-      providesTags: ["Message"],
-    }),
-    bulkResendMessages: builder.mutation<
-      { queued: number },
-      { messageIds: string[] }
-    >({
-      query: (body) => ({
-        url: "/admin/messaging/messages/bulk-resend",
-        method: "POST",
-        body,
-        mockKey: "bulkResendMessages",
-      }),
-      transformResponse: (raw) => contractPayload(raw) as { queued: number },
-      invalidatesTags: ["Message"],
-    }),
-    getMessagingOptOuts: builder.query<
-      ReturnType<typeof adaptListBundle>,
-      ListQueryParams | void
-    >({
-      query: (params) => ({
-        url: "/admin/messaging/opt-outs",
-        params: params ?? {},
-        mockKey: "getMessagingOptOuts",
-      }),
-      transformResponse: adaptListBundle,
-      providesTags: ["Message"],
-    }),
-    getMessagingQuota: builder.query<
-      { used: number; limit: number | null },
-      void
-    >({
-      query: () => ({
-        url: "/admin/messaging/quota",
-        mockKey: "getMessagingQuota",
-      }),
-      transformResponse: (raw) =>
-        contractPayload(raw) as { used: number; limit: number | null },
-      providesTags: ["Message"],
-    }),
-    getMessagingDeadLetter: builder.query<
-      ReturnType<typeof adaptListBundle>,
-      ListQueryParams | void
-    >({
-      query: (params) => ({
-        url: "/admin/messaging/dead-letter",
-        params: params ?? {},
-        mockKey: "getMessagingDeadLetter",
-      }),
-      transformResponse: adaptListBundle,
-      providesTags: ["Message"],
-    }),
-    requeueDeadLetter: builder.mutation<
-      { id: string; queued: boolean },
-      string
-    >({
-      query: (id) => ({
-        url: `/admin/messaging/dead-letter/${id}/requeue`,
-        method: "POST",
-        params: { id },
-        mockKey: "requeueDeadLetter",
-      }),
-      transformResponse: (raw) =>
-        contractPayload(raw) as { id: string; queued: boolean },
-      invalidatesTags: ["Message"],
-    }),
-    getMessagingInbound: builder.query<
-      ReturnType<typeof adaptListBundle>,
-      ListQueryParams | void
-    >({
-      query: (params) => ({
-        url: "/admin/messaging/inbound",
-        params: params ?? {},
-        mockKey: "getMessagingInbound",
-      }),
-      transformResponse: adaptListBundle,
-      providesTags: ["Message"],
-    }),
-    getMessagingInboundDetail: builder.query<Record<string, any>, string>({
-      query: (id) => ({
-        url: `/admin/messaging/inbound/${id}`,
-        mockKey: "getMessagingInboundDetail",
-      }),
-      transformResponse: (raw) => contractPayload(raw) as Record<string, any>,
-      providesTags: ["Message"],
-    }),
-    markMessagingInboundRead: builder.mutation<Record<string, any>, string>({
-      query: (id) => ({
-        url: `/admin/messaging/inbound/${id}/read`,
-        method: "POST",
-        body: {},
-        mockKey: "markMessagingInboundRead",
-      }),
-      transformResponse: (raw) => contractPayload(raw) as Record<string, any>,
-      invalidatesTags: ["Message"],
-    }),
     getGatewaySettlementRuns: builder.query<
       Record<string, any>[],
       { limit?: number; cursor?: string } | void
@@ -6302,6 +6200,7 @@ export const adminApi = createApi({
         cashHandovers: number;
         openRedemptions: number;
         failedMessages: number;
+        paymentsNeedingAttention: number;
       },
       { branchId?: string } | void
     >({
@@ -6317,6 +6216,7 @@ export const adminApi = createApi({
           cashHandovers: Number(data.cashHandovers ?? 0),
           openRedemptions: Number(data.openRedemptions ?? 0),
           failedMessages: Number(data.failedMessages ?? 0),
+          paymentsNeedingAttention: Number(data.paymentsNeedingAttention ?? 0),
         };
       },
       providesTags: ["Dashboard", "Enrollment", "Cash", "Message"],
@@ -6536,11 +6436,9 @@ export const {
   useBlockCustomerMutation,
   useUnblockCustomerMutation,
   useAddCustomerNoteMutation,
-  useUpdateWhatsappOptMutation,
   useGetCustomerNomineeQuery,
   useGetCustomerStatementQuery,
   useLazyGetCustomerStatementQuery,
-  useShareCustomerStatementWhatsappMutation,
   useGetEnrollmentsQuery,
   useGetEnrollmentAnalyticsQuery,
   useGetEnrollmentQuery,
@@ -6567,7 +6465,6 @@ export const {
   useReversePaymentMutation,
   usePollPaymentStatusMutation,
   useReconcilePaymentMutation,
-  useSharePaymentWhatsappMutation,
   useGetPaymentReceiptQuery,
   useLazyGetPaymentReceiptQuery,
   useGetPaymentPassbookImageQuery,
@@ -6575,7 +6472,6 @@ export const {
   useRegeneratePassbookImageMutation,
   useGetPaymentLinksQuery,
   useCancelPaymentLinkMutation,
-  useResendPaymentLinkMutation,
   useGetCashOverviewQuery,
   useGetCashStaffBalancesQuery,
   useGetCashHandoversQuery,
@@ -6590,8 +6486,6 @@ export const {
   useGetGoldRatesQuery,
   useGetGoldRateNotificationsQuery,
   useAddGoldRateMutation,
-  useGetMessagesQuery,
-  useResendMessageMutation,
   useGetReportsQuery,
   useGetPlansQuery,
   useGetPlanQuery,
@@ -6636,16 +6530,11 @@ export const {
   useUpdateGrievanceStatusMutation,
   useUpdateGrievancePriorityMutation,
   useUpdateGrievanceMutation,
-  useGetRemindersConfigQuery,
-  useUpdateRemindersConfigMutation,
   usePreviewPushBroadcastAudienceMutation,
   usePresignPushUploadMutation,
   useCompletePushUploadMutation,
   useCreatePushBroadcastMutation,
   useGetPushBroadcastsQuery,
-  useGetMessagingTemplatesQuery,
-  useGetMessagingTemplatePreviewQuery,
-  useGetMessagingSummaryQuery,
   usePatchSettingsProfileMutation,
   usePatchSettingsBrandingMutation,
   usePatchSettingsOperationsMutation,
@@ -6705,6 +6594,7 @@ export const {
   useGetDigitalMetalsCustomerWalletsQuery,
   useGetDigitalMetalsCustomerSummaryQuery,
   useGetDigitalMetalsDashboardSummaryQuery,
+  useGetDigitalMetalsWalletTotalsQuery,
   useCreateDigitalMetalsCounterBuyQuoteMutation,
   usePlaceDigitalMetalsCounterBuyMutation,
   useCreateDigitalMetalsCounterSellQuoteMutation,
@@ -6721,6 +6611,7 @@ export const {
   useGetDigitalMetalsSellOrdersQuery,
   useGetDigitalMetalsSellOrderQuery,
   useApproveDigitalMetalsSellOrderMutation,
+  useRecordDigitalMetalsSellPaymentMutation,
   useGetDigitalMetalsCustomerBankDestinationsQuery,
   useGetDigitalMetalsBankVerificationQueueQuery,
   useVerifyDigitalMetalsBankDestinationMutation,
@@ -6749,6 +6640,7 @@ export const {
   useRetryDigitalMetalsDocumentMutation,
   useGetDigitalMetalsDocumentDownloadUrlMutation,
   useGetDigitalMetalsHedgeLiveQuery,
+  useGetDigitalMetalsHedgeDailyIndexQuery,
   useGetDigitalMetalsHedgeInvalidatedQuery,
   useCloseDigitalMetalsHedgeDayMutation,
   useGetDigitalMetalsRedemptionFulfilmentQueueQuery,
@@ -6768,11 +6660,17 @@ export const {
   useGetEcommerceOrderPaymentAttemptsQuery,
   useGetEcommerceOrderPaymentAttemptEventsQuery,
   useGetEcommercePaymentExceptionsQuery,
+  useGetPaymentsNeedingAttentionQuery,
   useGetEcommerceOrderEventsQuery,
   useGetEcommerceOrderPaymentExceptionRefundQuery,
   useInitiateEcommerceOrderPaymentExceptionRefundMutation,
   useRecordEcommerceOrderPaymentExceptionRefundManualMutation,
   useTransitionEcommerceOrderFulfilmentMutation,
+  useShipEcommerceOrderMutation,
+  useConfirmEcommerceOrderDeliveryMutation,
+  useReadyEcommerceOrderForPickupMutation,
+  useConfirmEcommercePickupCollectionMutation,
+  useReissueEcommercePickupCodeMutation,
   usePatchEcommerceOrderDeliveryTrackingMutation,
   useGetEcommerceReturnRequestsQuery,
   useDecideEcommerceReturnRequestMutation,
@@ -6791,12 +6689,11 @@ export const {
   useGetEcommerceCodRemittanceBatchQuery,
   useAddEcommerceCodRemittanceBatchLineMutation,
   useReconcileEcommerceCodRemittanceBatchMutation,
+  useRecordEcommerceCourierMoneyReceivedMutation,
   useRetryEcommerceOrderPaymentAttemptReconcileMutation,
   usePreviewPlanScheduleMutation,
   useCreatePaymentLinkMutation,
   useGetOverduesQuery,
-  useBulkSendOverdueRemindersMutation,
-  useBulkSendDueLinksMutation,
   useCreateReportExportMutation,
   useGetExportStatusQuery,
   useLazyGetExportStatusQuery,
@@ -6817,15 +6714,6 @@ export const {
   useGetNavBadgesQuery,
   useLazyGetRedemptionReceiptQuery,
   useGetSettingsQuery,
-  useGetMessagingMessageQuery,
-  useBulkResendMessagesMutation,
-  useGetMessagingOptOutsQuery,
-  useGetMessagingQuotaQuery,
-  useGetMessagingDeadLetterQuery,
-  useRequeueDeadLetterMutation,
-  useGetMessagingInboundQuery,
-  useGetMessagingInboundDetailQuery,
-  useMarkMessagingInboundReadMutation,
   useInitiatePaymentRefundMutation,
   useGetPostSettlementRefundCasesQuery,
   useGetPostSettlementRefundCaseQuery,

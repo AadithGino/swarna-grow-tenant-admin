@@ -470,19 +470,19 @@ export function sellOrderStatusLabel(status: string): { title: string; detail: s
   switch (status) {
     case "PENDING_APPROVAL":
       return {
-        title: "Awaiting jeweller approval",
-        detail: "Metal is reserved. Approval must happen before the sale executes and payout opens.",
+        title: "Previous request needs review",
+        detail: "This request was created under the previous sell flow. Contact your jeweller to resolve it.",
       };
     case "RESERVED":
-      return { title: "Metal reserved", detail: "Complete confirmation before the approval window expires." };
+      return { title: "Metal reserved", detail: "Confirm the sale before the quote expires. Your metal is debited when you confirm." };
     case "PAYABLE_OPEN":
-      return { title: "Sale complete — payout in progress", detail: "Metal was debited; bank transfer is handled separately." };
+      return { title: "Sale accepted — payment pending", detail: "Metal was debited at your confirmed price. Your jeweller still owes the payment." };
     case "SETTLED":
-      return { title: "Payout settled", detail: "Funds were sent to your verified bank account." };
+      return { title: "Payment recorded", detail: "Your jeweller has recorded full payment for this sale." };
     case "CANCELLED":
       return { title: "Cancelled", detail: "Reservation released back to your available balance." };
     case "EXPIRED":
-      return { title: "Approval window expired", detail: "Start a new sell quote if you still wish to sell." };
+      return { title: "Sell request expired", detail: "Start a new sell quote if you still wish to sell." };
     default:
       return { title: "Sell order", detail: "Status updates appear here as your jeweller processes the sale." };
   }

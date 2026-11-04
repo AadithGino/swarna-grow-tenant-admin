@@ -43,6 +43,8 @@ export type EcommerceFulfilmentHandoverBlock = {
   deliveryProofReference?: string | null;
   pickupCodeActive?: boolean;
   pickupCodeExpiresAt?: string | null;
+  pickupCodeFailedAttempts?: number;
+  customerPickupAcknowledgedAt?: string | null;
 };
 
 export type EcommerceOrderListItem = {
@@ -55,6 +57,7 @@ export type EcommerceOrderListItem = {
   courierCodRemittanceStatus?: string | null;
   paidAt?: string | null;
   paymentCompleted?: boolean;
+  successfulPaymentAttemptId?: string | null;
   paymentExceptionStatus?: string | null;
   fulfilmentMode?: string | null;
   lines?: EcommerceOrderLine[];
@@ -181,6 +184,8 @@ export type EcommerceOrderDetail = EcommerceOrderListItem & {
 };
 
 export type EcommerceOrderPaymentExceptionRefund = {
+  id?: string;
   status?: string;
+  amountPaise?: number;
   providerRefundId?: string | null;
 };

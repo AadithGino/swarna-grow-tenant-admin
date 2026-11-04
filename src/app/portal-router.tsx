@@ -75,13 +75,6 @@ const GoldRatesPage = dynamic(
     import("@/src/features/gold/gold-rates-page").then((m) => m.GoldRatesPage),
   options,
 );
-const RemindersPage = dynamic(
-  () =>
-    import("@/src/features/reminders/reminders-page").then(
-      (m) => m.RemindersPage,
-    ),
-  options,
-);
 const ReportsPage = dynamic(
   () =>
     import("@/src/features/reports/reports-page").then((m) => m.ReportsPage),
@@ -344,6 +337,13 @@ const EcommercePaymentExceptionsPage = dynamic(
     ),
   options,
 );
+const PaymentsNeedingAttentionPage = dynamic(
+  () =>
+    import("@/src/features/payments/payments-needing-attention-page").then(
+      (m) => m.PaymentsNeedingAttentionPage,
+    ),
+  options,
+);
 const AlertsPage = dynamic(
   () => import("@/src/features/alerts/alerts-page").then((m) => m.AlertsPage),
   options,
@@ -397,13 +397,6 @@ const PlatformPlansPage = dynamic(
     ),
   options,
 );
-const PlatformTemplateRegistryPage = dynamic(
-  () =>
-    import("@/src/features/platform/platform-template-registry-page").then(
-      (m) => m.PlatformTemplateRegistryPage,
-    ),
-  options,
-);
 const PlatformMonitoringPage = dynamic(
   () =>
     import("@/src/features/platform/platform-monitoring-page").then(
@@ -442,7 +435,7 @@ function PlatformRouter({ slug }: { slug: string[] }) {
     return <PlatformTenantsPage />;
   }
   if (section === "plans") return <PlatformPlansPage />;
-  if (section === "templates") return <PlatformTemplateRegistryPage />;
+  if (section === "templates") return <PortalNotFoundPage path={slug.join("/")} />;
   if (section === "monitoring") return <PlatformMonitoringPage />;
   if (section === "audit") return <PlatformAuditPage />;
   if (section === "settings") return <PlatformSettingsPage />;
@@ -480,14 +473,14 @@ export function PortalRouter({ slug }: { slug: string[] }) {
     case "cash-control":
       page = <CashControlPage />;
       break;
+    case "payments":
+      page = id === "needing-attention" ? <PaymentsNeedingAttentionPage /> : <PortalNotFoundPage path={slug.join("/")} />;
+      break;
     case "maturity":
       page = <MaturityPage />;
       break;
     case "gold-rates":
       page = <GoldRatesPage />;
-      break;
-    case "reminders":
-      page = <RemindersPage />;
       break;
     case "reports":
       page = <ReportsPage />;

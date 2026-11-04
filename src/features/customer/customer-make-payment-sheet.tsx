@@ -23,7 +23,7 @@ import {
 import { customerPath } from "@/src/lib/customer-tenant";
 import { openCustomerPaymentTarget } from "@/src/lib/customer-payment-redirect";
 import { pollSessionFromInitResponse } from "@/src/lib/customer-payment-session";
-import { payableQuoteBounds } from "@/src/lib/customer-payable-display";
+import { customerPayableDefaultPaise, payableQuoteBounds } from "@/src/lib/customer-payable-display";
 import {
   livePayableAmountError,
   paymentAmountReady,
@@ -85,9 +85,9 @@ export function CustomerMakePaymentSheet({
   const [range, setRange] = useState(initialRange);
   const [targetCycle, setTargetCycle] = useState(initialRange?.targetCycle ?? "");
   const [fetchRange, fetchRangeState] = useLazyGetCustomerPayableRangeQuery();
-  const suggestedPaise =
-    range?.suggested?.amountPaise ?? range?.maxPayable?.amountPaise ?? scheme.nextActionAmount?.amountPaise ?? 0;
-  const [amount, setAmount] = useState(String(suggestedPaise / 100));
+  const fallbackPaise = scheme.nextActionAmount?.amountPaise ?? 0;
+  const defaultPaise = customerPayableDefaultPaise(range ?? initialRange, fallbackPaise);
+  const [amount, setAmount] = useState(String(defaultPaise / 100));
   const [amountTouched, setAmountTouched] = useState(false);
   const [initiate, state] = useInitiateCustomerPaymentMutation();
   const [initiatePublicLink] = useInitiatePublicPaymentLinkMutation();
@@ -103,22 +103,22 @@ export function CustomerMakePaymentSheet({
     let cancelled = false;
     (async () => {
       try {
-        const next = await fetchRange({
-          schemeId: scheme.id,
-          targetCycle: initialRange?.targetCycle,
-        }).unwrap();
+        const next = await fetchRange(
+          {
+            schemeId: scheme.id,
+            targetCycle: initialRange?.targetCycle,
+          },
+          false,
+        ).unwrap();
         if (cancelled) return;
         setRange(next);
         setTargetCycle(next.targetCycle ?? "");
-        const suggested = next.suggested?.amountPaise ?? next.maxPayable?.amountPaise ?? 0;
-        setAmount(String(suggested / 100));
+        setAmount(String(customerPayableDefaultPaise(next, fallbackPaise) / 100));
       } catch {
         if (cancelled) return;
         setRange(initialRange);
         setTargetCycle(initialRange?.targetCycle ?? "");
-        const suggested =
-          initialRange?.suggested?.amountPaise ?? initialRange?.maxPayable?.amountPaise ?? 0;
-        setAmount(String(suggested / 100));
+        setAmount(String(customerPayableDefaultPaise(initialRange, fallbackPaise) / 100));
         toast.error("Could not refresh payment limits. Showing last known quote.");
       }
     })();
@@ -132,11 +132,13 @@ export function CustomerMakePaymentSheet({
     let cancelled = false;
     (async () => {
       try {
-        const next = await fetchRange({ schemeId: scheme.id, targetCycle }).unwrap();
+        const next = await fetchRange(
+          { schemeId: scheme.id, targetCycle },
+          false,
+        ).unwrap();
         if (cancelled) return;
         setRange(next);
-        const nextSuggested = next.suggested?.amountPaise ?? next.maxPayable?.amountPaise ?? 0;
-        setAmount(String(nextSuggested / 100));
+        setAmount(String(customerPayableDefaultPaise(next, fallbackPaise) / 100));
       } catch {
         if (!cancelled) toast.error("Could not load payment quote for that cycle");
       }

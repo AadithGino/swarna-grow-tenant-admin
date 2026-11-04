@@ -12,7 +12,7 @@ import path from "node:path";
 import { createServer } from "vite";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const out = path.resolve(root, "../backend/src/services/assistant/agent/guide-catalog.js");
+const out = path.resolve(root, "../swarnagrow-backend/src/services/assistant/agent/guide-catalog.js");
 
 const server = await createServer({
   root,

@@ -335,7 +335,7 @@ export function counterTradeMock(
         ?? { id: cid };
       const order = {
         id: `dmso_ctr${seq}`,
-        status: "PENDING_APPROVAL",
+        status: "PAYABLE_OPEN",
         payoutMethod: body.payoutMethod,
         assisted: { channel: "COUNTER", recordedAt: iso(NOW()) },
         metal: q.metal,
@@ -344,9 +344,12 @@ export function counterTradeMock(
         settlementPaise: q.settlementPaise,
         createdAt: iso(NOW()),
         confirmedAt: iso(NOW()),
-        approvalExpiresAt: iso(NOW() + 30 * 60_000),
+        executedAt: iso(NOW()),
+        payable: { id: `dmpaybl_ctr${seq}`, status: "OPEN", amountPaise: q.settlementPaise, outstandingPaise: q.settlementPaise },
+        paymentDisplayState: { key: "UNPAID", label: "Payment pending" },
+        permittedActions: ["RECORD_PAYMENT"],
         customer,
-        version: 1,
+        version: 2,
         sellSummary: { sellRatePerGramPaise: (q.rateSnapshot as { sellRatePerGramPaise: number }).sellRatePerGramPaise },
       };
       (demoSellOrders as AnyRow[]).unshift(order);
@@ -372,7 +375,7 @@ export function counterTradeMock(
       const current = (demoSellOrders as AnyRow[])[idx];
       if (!current) throw { status: 404, data: { code: "NOT_FOUND", message: "Sell order not found" } };
       if (current.status !== "PAYABLE_OPEN") {
-        throw { status: 409, data: { code: "SELL_NOT_APPROVED", message: "Approve the sell before paying the customer." } };
+        throw { status: 409, data: { code: "SELL_NOT_APPROVED", message: "This sale must be accepted before payment can be recorded." } };
       }
       const already = paidCash.has(orderId);
       paidCash.add(orderId);

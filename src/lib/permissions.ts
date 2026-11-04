@@ -37,6 +37,7 @@ export const NAV_PERMISSIONS: Record<string, string[]> = {
   "/dues": ["customer.read", "report.read"],
   "/collections": ["customer.read", "payment.read", "payment.record"],
   "/cash-control": ["cash.read", "cash.handover", "cash.handover.accept"],
+  "/payments/needing-attention": ["ecommerce.read", "digital-metals.read"],
   "/maturity": ["customer.read", "redemption.read", "redemption.write"],
   "/gold-rates": ["gold-rate.read", "gold-rate.write"],
   "/reminders": ["message.read", "settings.read"],

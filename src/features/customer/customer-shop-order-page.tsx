@@ -3,6 +3,10 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  customerPollIntervalMs,
+  SHOP_ORDER_POLL_TERMINAL,
+} from "@/src/lib/customer-payment-polling";
 import { ArrowLeft, Download, Headphones, MapPin, Store, Truck } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -11,7 +15,10 @@ import { Label } from "@/components/ui/label";
 import { useCustomerTenant } from "@/src/components/customer/customer-tenant-context";
 import { PageSkeleton, QueryError } from "@/src/components/common/query-state";
 import { toastApiError } from "@/src/lib/api-error";
-import { openCustomerPaymentTarget } from "@/src/lib/customer-payment-redirect";
+import {
+  openCustomerPaymentTarget,
+  pickPhonePeGatewayUrl,
+} from "@/src/lib/customer-payment-redirect";
 import { newIdempotencyKey } from "@/src/lib/idempotency";
 import {
   readShopPaymentAttemptId,
@@ -73,6 +80,9 @@ function paymentUiState(order: Record<string, unknown>, attempt?: Record<string,
   }
   const status = String(attempt?.status ?? "");
   if (status === "INITIATED" || status === "PENDING") {
+    if (order.paymentAllowed === true && order.status === "PENDING_PAYMENT") {
+      return { canPay: true, detail: "Retry opens a fresh PhonePe checkout if needed." };
+    }
     return { canPay: false, detail: "Complete payment in the gateway." };
   }
   if (status === "FAILED") {
@@ -93,7 +103,12 @@ function paymentUiState(order: Record<string, unknown>, attempt?: Record<string,
 export function CustomerShopOrderPage({ orderId }: { orderId: string }) {
   const router = useRouter();
   const { tenantSlug } = useCustomerTenant();
-  const order = useGetShopOrderQuery(orderId, { pollingInterval: 5_000 });
+  const [shopOrderPollMs, setShopOrderPollMs] = useState(5_000);
+  const order = useGetShopOrderQuery(orderId, { pollingInterval: shopOrderPollMs });
+  useEffect(() => {
+    const next = customerPollIntervalMs(order.data?.status, SHOP_ORDER_POLL_TERMINAL, 5_000);
+    if (next !== shopOrderPollMs) setShopOrderPollMs(next);
+  }, [order.data?.status, shopOrderPollMs]);
   const [createIntent, createState] = useCreateShopOrderPaymentIntentMutation();
   const [cancelOrder, cancelOrderState] = useCancelShopOrderMutation();
   const [createCancellationRequest, requestState] = useCreateShopCancellationRequestMutation();
@@ -140,7 +155,14 @@ export function CustomerShopOrderPage({ orderId }: { orderId: string }) {
 
   useEffect(() => {
     if (!pollAttemptId) return;
-    if (order.data?.paymentCompleted === true || order.data?.status === "PAID") return;
+    const st = String(order.data?.status ?? "");
+    if (
+      order.data?.paymentCompleted === true
+      || st === "PAID"
+      || SHOP_ORDER_POLL_TERMINAL.has(st)
+    ) {
+      return;
+    }
     const t = window.setInterval(() => {
       void refreshAttempt();
       void order.refetch();
@@ -238,20 +260,15 @@ export function CustomerShopOrderPage({ orderId }: { orderId: string }) {
       typeof window !== "undefined"
         ? `${window.location.origin}${customerShopOrderPath(tenantSlug, orderId)}`
         : `https://localhost${customerShopOrderPath(tenantSlug, orderId)}`;
-    const idempotencyKey =
-      readShopPaymentIdempotencyKey(orderId)
-      ?? (serverAttempt?.idempotencyKey ? String(serverAttempt.idempotencyKey) : null)
-      ?? newIdempotencyKey();
+    const idempotencyKey = newIdempotencyKey();
     saveShopPaymentIdempotencyKey(orderId, idempotencyKey);
     try {
       const res = await createIntent({ orderId, idempotencyKey, redirectUrl }).unwrap();
       const pi = res.paymentIntent;
       setPolledAttempt(pi);
       saveShopPaymentAttemptId(orderId, String(pi.id));
+      const gatewayUrl = pickPhonePeGatewayUrl(pi);
       const token = typeof pi.token === "string" ? pi.token : null;
-      const gatewayUrl = token
-        ? `https://mercury.phonepe.com/transact/pg?token=${encodeURIComponent(token)}`
-        : "";
       await openCustomerPaymentTarget(
         { token, redirectUrl: gatewayUrl || redirectUrl, paymentUrl: gatewayUrl || undefined },
         {
@@ -319,6 +336,27 @@ export function CustomerShopOrderPage({ orderId }: { orderId: string }) {
               </p>
             ) : null}
           </ShopOrderStatusHero>
+
+          {String(o.status) === "READY_FOR_PICKUP" && o.pickupCode ? (
+            <section className={cn(card, "text-center")}>
+              <span className="mx-auto grid size-11 place-items-center rounded-xl customer-accent-tint-surface">
+                <Store className="size-5 customer-gold-copy" />
+              </span>
+              <h2 className={cn(sectionTitle, "mt-3")}>Show this code at the store</h2>
+              <p className="mt-1 text-sm text-[#7a6f72]">Staff will enter it to confirm your collection.</p>
+              <p className="mt-4 font-mono text-2xl tracking-[0.35em] text-[#221a1d]">{String(o.pickupCode)}</p>
+              {o.fulfilmentHandover &&
+              typeof o.fulfilmentHandover === "object" &&
+              (o.fulfilmentHandover as { pickupCodeExpiresAt?: string }).pickupCodeExpiresAt ? (
+                <p className="mt-3 text-xs text-amber-900">
+                  Valid until{" "}
+                  {new Date(
+                    String((o.fulfilmentHandover as { pickupCodeExpiresAt: string }).pickupCodeExpiresAt),
+                  ).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}
+                </p>
+              ) : null}
+            </section>
+          ) : null}
 
           {tracking ? (
             <section className={cn(card, "flex flex-wrap items-center gap-4")}>

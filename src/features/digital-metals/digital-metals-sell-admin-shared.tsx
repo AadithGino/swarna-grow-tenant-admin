@@ -25,6 +25,7 @@ export type SellAdminBankBrief = {
 export type SellAdminRow = {
   id: string;
   status: string;
+  payoutMethod?: "BANK" | "CASH";
   metal?: string;
   finenessPpm?: number;
   quantityUg?: string;
@@ -36,6 +37,8 @@ export type SellAdminRow = {
   approvalExpiresAt?: string | null;
   customer?: SellAdminCustomer | null;
   bankDestination?: SellAdminBankBrief | null;
+  paymentDisplayState?: { key?: string; label?: string } | null;
+  displayStatusLabel?: string | null;
 };
 
 export function sellMetalLabel(row: Pick<SellAdminRow, "metal" | "finenessPpm" | "quantityUg">): string {

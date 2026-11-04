@@ -94,7 +94,7 @@ function defaultLimitOverrides(
   return {
     activeCustomers: 8000,
     branches: 12,
-    whatsappMessagesPerMonth: 50000,
+    schemePlans: 30,
   };
 }
 

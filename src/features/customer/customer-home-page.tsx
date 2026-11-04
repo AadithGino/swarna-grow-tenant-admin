@@ -9,12 +9,10 @@ import {
 import {
   AlertTriangle,
   BarChart3,
-  Check,
   ChevronRight,
   Coins,
   Eye,
   EyeOff,
-  FileText,
   Gem,
   Grid2X2,
   IndianRupee,
@@ -33,6 +31,7 @@ import {
   useGetShopAvailabilityQuery,
 } from "@/src/store/api/customer-api";
 import { CustomerPromoBanners, type CustomerPromoBanner } from "@/src/features/customer/customer-promo-banners";
+import { CustomerActivityRow } from "@/src/features/customer/customer-activity-row";
 import { useCustomerTenant } from "@/src/components/customer/customer-tenant-context";
 import { customerPath } from "@/src/lib/customer-tenant";
 import { useCustomerGoldMetricsVisible } from "@/src/lib/customer-gold-ui";
@@ -121,7 +120,19 @@ export function CustomerHomePage() {
   if (isError) return <QueryError onRetry={refetch} />;
 
   const schemes = data.activeSchemes ?? [];
-  const recentPayments = data.recentPayments ?? [];
+  const recentActivity = data.recentActivity?.length
+    ? data.recentActivity
+    : (data.recentPayments ?? []).map((payment) => ({
+        id: `scheme_pay_${payment.id}`,
+        kind: "SCHEME_PAYMENT" as const,
+        title: "Scheme payment",
+        subtitle: payment.schemeName || payment.schemeNumber,
+        amount: payment.amount,
+        occurredAt: payment.paidAt ?? "",
+        statusLabel: "Paid",
+        entityId: payment.id,
+        direction: "OUT" as const,
+      }));
   const appName = data.tenant.appDisplayName ?? data.tenant.displayName;
   const actionScheme = payTargetScheme(schemes, data.actionCard?.schemeId);
   const totalSavings = data.summary.totalPaid.amountDisplay;
@@ -147,7 +158,7 @@ export function CustomerHomePage() {
     ...(customerSelfEnrol
       ? [{ key: "ENROL", label: "Explore plans", icon: Grid2X2, href: customerPath(tenantSlug, "plans") }]
       : []),
-    { key: "PASSBOOK", label: "Passbook", icon: WalletCards, href: customerPath(tenantSlug, "payments") },
+    { key: "PASSBOOK", label: "Passbook", icon: WalletCards, href: customerPath(tenantSlug, "payments", "activity") },
     ...(showGoldMetrics
       ? [{ key: "GOLD", label: "Gold rate", icon: BarChart3, href: customerPath(tenantSlug, "gold-rate") }]
       : []),
@@ -393,39 +404,20 @@ export function CustomerHomePage() {
       <section className="mt-7">
         <div className="mb-3 flex items-center justify-between gap-3">
           <h2 className="text-[1.05rem] font-black text-[#171722]">Recent activity</h2>
-          <Link href={customerPath(tenantSlug, "payments")} className="inline-flex items-center gap-0.5 text-sm font-bold text-[var(--customer-primary,#730321)]">
+          <Link href={customerPath(tenantSlug, "payments", "activity")} className="inline-flex items-center gap-0.5 text-sm font-bold text-[var(--customer-primary,#730321)]">
             View all
             <ChevronRight className="size-4" />
           </Link>
         </div>
-        {recentPayments.length ? (
+        {recentActivity.length ? (
           <div className="space-y-3">
-            {recentPayments.slice(0, 3).map((payment) => (
-              <Link
-                key={payment.id}
-                href={customerPath(tenantSlug, "payments", payment.id)}
-                className="flex items-center gap-3.5 rounded-2xl border border-[#f0ebe6] bg-white p-4 shadow-[0_8px_24px_rgba(var(--customer-primary-rgb,115,3,33),0.06)] transition hover:-translate-y-0.5 sm:p-[1.05rem]"
-              >
-                <span className="grid size-11 shrink-0 place-items-center rounded-full bg-[#0b9860] text-white shadow-[0_4px_12px_rgba(11,152,96,0.28)]">
-                  <Check className="size-5" strokeWidth={2.75} />
-                </span>
-                <div className="min-w-0 flex-1">
-                  <p className="text-[0.9375rem] font-bold leading-snug text-[#171722]">Payment successful</p>
-                  <p className="mt-1 truncate text-sm text-[#77727c]">
-                    <span className="font-semibold text-[#5c5763]">{payment.amount.amountDisplay}</span>
-                    <span className="mx-2 text-[#d5ced6]">·</span>
-                    {payment.paidAt ? formatCustomerDate(payment.paidAt) : "—"}
-                  </p>
-                </div>
-                <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-[#f6f2ee] text-[#a59da8]">
-                  <FileText className="size-[1.15rem]" strokeWidth={1.75} />
-                </span>
-              </Link>
+            {recentActivity.slice(0, 3).map((item) => (
+              <CustomerActivityRow key={item.id} item={item} tenantSlug={tenantSlug} compact />
             ))}
           </div>
         ) : (
           <div className="customer-surface px-4 py-9 text-center text-sm text-[#77727c] sm:px-5">
-            Your verified payments will appear here.
+            Scheme, shop, and digital gold activity will appear here.
           </div>
         )}
       </section>

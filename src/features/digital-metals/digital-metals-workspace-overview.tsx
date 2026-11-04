@@ -30,7 +30,7 @@ type ActivityRow = {
 export function DigitalMetalsWorkspaceOverview({ workspaceVisible }: { workspaceVisible: boolean }) {
   const capability = useGetDigitalMetalsCapabilityQuery(undefined, { skip: !workspaceVisible });
   const pendingSells = useGetDigitalMetalsSellOrdersQuery(
-    { status: "PENDING_APPROVAL", limit: 20 },
+    { status: "PAYABLE_OPEN", limit: 20 },
     { skip: !workspaceVisible },
   );
   const paymentExceptions = useGetDigitalMetalsPaymentExceptionsQuery(undefined, { skip: !workspaceVisible });
@@ -78,15 +78,15 @@ export function DigitalMetalsWorkspaceOverview({ workspaceVisible }: { workspace
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
           href="/digital-metals/sells"
-          label="Sells to approve"
+          label="Sell payments pending"
           value={String(pendingCount)}
           loading={pendingSells.isLoading}
-          detail="Customer-confirmed sales waiting for you"
+          detail="Accepted sales awaiting payment"
           icon={Coins}
           tone={pendingCount ? "gold" : "wine"}
         />
         <StatCard
-          href="/digital-metals/payment-exceptions"
+          href="/payments/needing-attention"
           label="Payment exceptions"
           value={String(exceptionCount)}
           loading={paymentExceptions.isLoading}

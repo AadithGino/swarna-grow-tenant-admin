@@ -61,6 +61,10 @@ describe("nextFulfilmentTargets", () => {
   it("pickup path from processing", () => {
     expect(nextFulfilmentTargets("PROCESSING", "BRANCH_PICKUP")).toEqual(["READY_FOR_PICKUP"]);
   });
+
+  it("does not expose mark collected button for ready pickup (dedicated panel)", () => {
+    expect(nextFulfilmentTargets("READY_FOR_PICKUP", "BRANCH_PICKUP")).toEqual([]);
+  });
 });
 
 describe("orderListPrimaryAction", () => {

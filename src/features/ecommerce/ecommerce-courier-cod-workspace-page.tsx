@@ -16,6 +16,7 @@ import { formatOrderInr } from "@/src/features/ecommerce/ecommerce-order-ui";
 import { newIdempotencyKey } from "@/src/lib/idempotency";
 import { toastApiError } from "@/src/lib/api-error";
 import type { EcommerceCodRemittanceBatch } from "@/src/types/ecommerce-order";
+import { EcommerceRecordMoneyReceivedPanel } from "@/src/features/ecommerce/ecommerce-record-money-received-panel";
 import {
   useAddEcommerceCodRemittanceBatchLineMutation,
   useCreateEcommerceCodRemittanceBatchMutation,
@@ -24,6 +25,7 @@ import {
   useListCourierCodOrdersQuery,
   useListEcommerceCodRemittanceBatchesQuery,
   useReconcileEcommerceCodRemittanceBatchMutation,
+  useRecordEcommerceCourierMoneyReceivedMutation,
 } from "@/src/store/api/admin-api";
 
 type CourierQueue =
@@ -90,8 +92,10 @@ export function EcommerceCourierCodWorkspacePage() {
   const [createBatch, createBatchState] = useCreateEcommerceCodRemittanceBatchMutation();
   const [addLine, addLineState] = useAddEcommerceCodRemittanceBatchLineMutation();
   const [reconcile, reconcileState] = useReconcileEcommerceCodRemittanceBatchMutation();
+  const [recordMoney, recordMoneyState] = useRecordEcommerceCourierMoneyReceivedMutation();
 
   const [queue, setQueue] = useState<CourierQueue>("awaiting_collection");
+  const [selectedForRemittance, setSelectedForRemittance] = useState<Set<string>>(() => new Set());
   const [orderCursor, setOrderCursor] = useState<string | undefined>();
   const [olderOrders, setOlderOrders] = useState<
     Array<{
@@ -118,6 +122,7 @@ export function EcommerceCourierCodWorkspacePage() {
     setOrderCursor(undefined);
     setOlderOrders([]);
     setSelectedOrderId(null);
+    setSelectedForRemittance(new Set());
   };
 
   const loadMoreOrders = () => {
@@ -139,6 +144,27 @@ export function EcommerceCourierCodWorkspacePage() {
     [orderItems, selectedOrderId],
   );
 
+  const selectedRemittanceOrders = useMemo(
+    () =>
+      orderItems
+        .filter((o) => selectedForRemittance.has(o.orderId))
+        .map((o) => ({
+          orderId: o.orderId,
+          orderNumber: o.orderNumber,
+          expectedCodPaise: o.expectedCodPaise,
+        })),
+    [orderItems, selectedForRemittance],
+  );
+
+  const toggleRemittanceSelection = (orderId: string) => {
+    setSelectedForRemittance((prev) => {
+      const next = new Set(prev);
+      if (next.has(orderId)) next.delete(orderId);
+      else next.add(orderId);
+      return next;
+    });
+  };
+
   const queues = useMemo(() => {
     const s = summary.data;
     if (!s) return [];
@@ -155,7 +181,7 @@ export function EcommerceCourierCodWorkspacePage() {
 
   if (!canRead) {
     return (
-      <PageHeader title="Courier COD" description={readBlockedMessage ?? "Ecommerce read access required."} />
+      <PageHeader title="Courier cash" description={readBlockedMessage ?? "Ecommerce read access required."} />
     );
   }
   if (summary.isLoading) return <PageSkeleton cards={2} />;
@@ -172,8 +198,8 @@ export function EcommerceCourierCodWorkspacePage() {
       <PageHeader
         eyebrow="Online store"
         icon={Truck}
-        title="Courier COD"
-        description="Confirm what couriers collected, group it into remittance batches, and match the bank credit."
+        title="Courier cash"
+        description="Record the cash couriers collected on delivery. Remittance batches and bank matching are handled below when you need them."
         meta={summary.data?.courierIntegrationLabel ? <span>{summary.data.courierIntegrationLabel}</span> : undefined}
       />
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -202,7 +228,11 @@ export function EcommerceCourierCodWorkspacePage() {
       <section className="overflow-hidden rounded-[1.15rem] border border-[#e8dcd7] bg-white">
         <FilterBar
           quickViews={<QuickViews value={queue} onChange={(v) => selectQueue(v as CourierQueue)} options={QUEUE_TABS.map((t) => ({ value: t.id, label: t.label }))} ariaLabel="COD queue" />}
-          resultLabel={`${orderItems.length}${ordersPage.data?.meta.hasMore ? "+" : ""} orders · pick one to add it to a batch`}
+          resultLabel={
+            queue === "awaiting_remittance"
+              ? `${orderItems.length}${ordersPage.data?.meta.hasMore ? "+" : ""} orders · select orders then record bank deposit`
+              : `${orderItems.length}${ordersPage.data?.meta.hasMore ? "+" : ""} orders · pick one to add it to a batch`
+          }
         />
         <div className="text-sm">
           {ordersPage.isLoading && !orderItems.length ? (
@@ -217,17 +247,33 @@ export function EcommerceCourierCodWorkspacePage() {
                 const cc = row.courierCod ?? {};
                 const tracking = cc.trackingReference ? String(cc.trackingReference) : "—";
                 const batchId = cc.activeRemittanceBatchId ? String(cc.activeRemittanceBatchId) : null;
-                const selected = selectedOrderId === row.orderId;
+                const selected =
+                  queue === "awaiting_remittance"
+                    ? selectedForRemittance.has(row.orderId)
+                    : selectedOrderId === row.orderId;
                 return (
                   <li
                     key={row.orderId}
-                    className={`grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-1 px-5 py-3 sm:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)_7rem_8rem_auto] ${selected ? "bg-[#fbf1f3]" : "hover:bg-[#fcf6f4]"}`}
+                    className={`grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-1 px-5 py-3 sm:grid-cols-[auto_minmax(0,1.1fr)_minmax(0,1fr)_7rem_8rem_auto] ${selected ? "bg-[#fbf1f3]" : "hover:bg-[#fcf6f4]"}`}
                   >
+                    {queue === "awaiting_remittance" ? (
+                      <input
+                        type="checkbox"
+                        className="size-4 accent-[#7b0a2b]"
+                        aria-label={`Select ${row.orderNumber} for remittance`}
+                        checked={selectedForRemittance.has(row.orderId)}
+                        onChange={() => toggleRemittanceSelection(row.orderId)}
+                      />
+                    ) : null}
                     <button
                       type="button"
                       aria-pressed={selected}
                       className="min-w-0 text-left"
                       onClick={() => {
+                        if (queue === "awaiting_remittance") {
+                          toggleRemittanceSelection(row.orderId);
+                          return;
+                        }
                         setSelectedOrderId(row.orderId);
                         setLineGrossPaise(String(row.expectedCodPaise));
                         setLineFeePaise("0");
@@ -267,8 +313,34 @@ export function EcommerceCourierCodWorkspacePage() {
         </div>
       </section>
 
+      {queue === "awaiting_remittance" ? (
+        <EcommerceRecordMoneyReceivedPanel
+          selectedOrders={selectedRemittanceOrders}
+          canOperate={canFulfilmentOperate}
+          isSubmitting={recordMoneyState.isLoading}
+          onSubmit={(payload) =>
+            recordMoney({
+              ...payload,
+              idempotencyKey: newIdempotencyKey(),
+            }).unwrap()
+          }
+          onSuccess={({ outcomeLabel }) => {
+            toast.success(
+              outcomeLabel && outcomeLabel !== "Matched"
+                ? `Money recorded — ${outcomeLabel}.`
+                : "Money recorded and matched to the bank deposit.",
+            );
+            setSelectedForRemittance(new Set());
+            void ordersPage.refetch();
+            void summary.refetch();
+            resetBatchList();
+          }}
+          onError={toastApiError}
+        />
+      ) : null}
+
       <div className="grid gap-6 lg:grid-cols-2">
-        <Surface title="Remittance batches">
+        <Surface title="Remittance batches (advanced)">
           <div className="space-y-3 p-5 text-sm">
             {canFulfilmentOperate ? (
               <div className="flex flex-wrap items-end gap-2 border-b pb-4">

@@ -67,6 +67,7 @@ import {
 } from "@/src/store/api/admin-api";
 import { StatusBadge } from "@/src/components/common/status-badge";
 import { CursorPagination } from "@/src/components/common/cursor-pagination";
+import { RatesWorkspaceHub } from "@/src/components/dashboard/rates-workspace-hub";
 
 function trendLabel(row: {
   effectiveDate?: string | null;
@@ -340,6 +341,7 @@ export function GoldRatesPage() {
           </ActionDialog>
         }
       />
+      <RatesWorkspaceHub />
       <div className="grid gap-4 md:grid-cols-3">
         <StatCard
           icon={Scale}

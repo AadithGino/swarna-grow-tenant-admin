@@ -32,7 +32,9 @@ export const MOCK_OWNER_SESSION: PortalSession = {
     { key: "OPERATIONS", label: "Operational rules", completed: true, href: "/settings" },
     { key: "BRANCH", label: "Add at least one branch", completed: true, href: "/staff-branches" },
     { key: "STAFF", label: "Invite staff", completed: false, href: "/staff-branches" },
-    { key: "GOLD_RATE", label: "Set today's gold rate", completed: false, href: "/gold-rates" },
+    { key: "GOLD_RATE", label: "Set today's scheme gold rate", completed: false, href: "/gold-rates" },
+    { key: "STORE_GOLD_RATE", label: "Publish online store gold rate", completed: false, href: "/ecommerce/gold-rates" },
+    { key: "DM_RATES", label: "Publish digital metals buy/sell rates", completed: false, href: "/digital-metals/rates" },
     { key: "FIRST_PLAN", label: "Create first scheme plan", completed: true, href: "/schemes" },
   ],
 };

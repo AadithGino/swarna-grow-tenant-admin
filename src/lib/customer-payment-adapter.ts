@@ -260,6 +260,15 @@ export function adaptCustomerSettlementPreview(raw: unknown): CustomerSettlement
   };
 }
 
+/** GET /app/schemes list — live API unwrap yields `{ items, meta }`; mocks return arrays. */
+export function normalizeCustomerSchemeList<T>(raw: unknown): T[] {
+  if (Array.isArray(raw)) return raw;
+  if (raw && typeof raw === "object" && Array.isArray((raw as { items?: unknown }).items)) {
+    return (raw as { items: T[] }).items;
+  }
+  return [];
+}
+
 /** Normalizes GET /app/schemes/:id (payments need gold accrual flattening). */
 export function adaptCustomerSchemeDetail(raw: unknown): CustomerSchemeDetail {
   const dto = (raw ?? {}) as CustomerSchemeDetail;

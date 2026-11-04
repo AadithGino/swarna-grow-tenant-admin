@@ -952,6 +952,42 @@ export function commerceDemoMock(
           { metal: "SILVER", finenessPpm: 999_000, coverageIncomplete: false, closingObligationUg: String(holdingsUg.SILVER), closingHedgePositionUg: String(holdingsUg.SILVER + 120_000_000), uncoveredUg: "0", walletReconcileDeltaUg: null },
         ],
       });
+    case "digitalMetalsHedgeDailyIndex": {
+      const items = ["2026-10-25", "2026-10-24", "2026-10-23"].map((businessDate, i) => ({
+        businessDate,
+        metals: {
+          GOLD: {
+            openingMetalOwedUg: String(holdingsUg.GOLD - i * 100_000),
+            closingMetalOwedUg: String(holdingsUg.GOLD - i * 80_000),
+            dayNetChangeUg: String(20_000),
+            creditedBuyUg: String(50_000),
+            executedSellUg: String(30_000),
+            physicalHandoverUg: "0",
+            ledgerMatchesBook: true,
+          },
+          SILVER: {
+            openingMetalOwedUg: String(holdingsUg.SILVER),
+            closingMetalOwedUg: String(holdingsUg.SILVER + 10_000),
+            dayNetChangeUg: "10000",
+            creditedBuyUg: "10000",
+            executedSellUg: "0",
+            physicalHandoverUg: "0",
+            ledgerMatchesBook: true,
+          },
+        },
+      }));
+      return contract({
+        reportType: "DAILY_HEDGE_INDEX",
+        endDate: "2026-10-25",
+        days: items.length,
+        currentBalances: {
+          businessDate: "2026-10-25",
+          goldClosingUg: String(holdingsUg.GOLD),
+          silverClosingUg: String(holdingsUg.SILVER),
+        },
+        items,
+      });
+    }
     case "digitalMetalsHedgeInvalidated":
       return contract({ items: [] });
     case "digitalMetalsProcurementEntries": {

@@ -168,7 +168,7 @@ export function DigitalMetalsProcurementPage() {
           eyebrow={DM_SECTION}
           icon={BookOpenCheck}
           title="Procurement journal"
-          description="Opening positions, supplier commitments, receipts, disposals and reversals. Every entry needs a second person to approve."
+          description="Advanced supplier and vault journal — not part of the daily customer workflow. Use Hedge book for live coverage and day-end snapshots."
           actions={
             <>
               <Button variant="outline" asChild className="rounded-xl">

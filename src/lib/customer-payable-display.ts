@@ -12,6 +12,18 @@ export function customerPayableAmountIsEditable(
   return range.minPayable.amountPaise !== range.maxPayable.amountPaise;
 }
 
+/** Default amount in paise for the payment sheet — never above current max payable. */
+export function customerPayableDefaultPaise(
+  range?: PayableRange | null,
+  fallbackPaise = 0,
+): number {
+  if (!range) return fallbackPaise;
+  const max = range.maxPayable?.amountPaise ?? 0;
+  if (max <= 0) return 0;
+  const suggested = range.suggested?.amountPaise ?? max;
+  return Math.min(Math.max(0, suggested), max);
+}
+
 export function payableQuoteBounds(range?: PayableRange | null): PayableQuoteBounds | undefined {
   if (!range) return undefined;
   const min = range.minPayable.amountPaise / 100;

@@ -2,15 +2,18 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import vinext from "vinext";
 import { defineConfig } from "vite";
-import hostingConfig from "./.openai/hosting.json";
+import { existsSync, readFileSync } from "node:fs";
 import { readExecutionProfile } from "./scripts/execution-profile.mjs";
-import { sites } from "./build/sites-vite-plugin";
+
 
 const rootDir = path.dirname(fileURLToPath(import.meta.url));
 
 const SITE_CREATOR_PLACEHOLDER_DATABASE_ID =
   "00000000-0000-4000-8000-000000000000";
 
+const hostingPath = new URL("./.openai/hosting.json", import.meta.url);
+const hostingConfig: { d1?: string; r2?: string } = existsSync(hostingPath)
+  ? JSON.parse(readFileSync(hostingPath, "utf8")) : {};
 const { d1, r2 } = hostingConfig;
 
 // macOS Seatbelt blocks FSEvents, so Codex previews need polling for HMR.
@@ -40,6 +43,10 @@ const localBindingConfig = {
 };
 
 export default defineConfig(async () => {
+  const previewPluginPath = new URL("./build/sites-vite-plugin.ts", import.meta.url);
+  if (managedLinux && !existsSync(previewPluginPath)) throw new Error("Managed preview requires its checkout-local Sites plugin.");
+  const previewPlugins = existsSync(previewPluginPath)
+    ? [(await import(previewPluginPath.href)).sites({ mockAuth: false })] : [];
   // Vercel / Nitro path (vinext docs): use Nitro instead of Cloudflare Workers plugin.
   const deployVercel =
     process.env.VERCEL === "1"
@@ -76,7 +83,7 @@ export default defineConfig(async () => {
       },
     };
     return {
-      plugins: [patchVinextLink, vinext(), sites({ mockAuth: false }), nitro()],
+      plugins: [patchVinextLink, vinext(), ...previewPlugins, nitro()],
     };
   }
 
@@ -105,7 +112,7 @@ export default defineConfig(async () => {
     },
     plugins: [
       vinext(),
-      sites({ mockAuth: !managedLinux }),
+      ...previewPlugins,
       cloudflare({
         viteEnvironment: { name: "rsc", childEnvironments: ["ssr"] },
         inspectorPort: false,

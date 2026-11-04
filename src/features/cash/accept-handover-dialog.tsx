@@ -97,11 +97,10 @@ export function AcceptHandoverDialog({
       <DialogContent>
         <DialogBody>
           <DialogHeader>
-            <DialogTitle>Accept {handover.handoverNo}</DialogTitle>
+            <DialogTitle>Step 2 — Record receipt · {handover.handoverNo}</DialogTitle>
           </DialogHeader>
           <p className="text-sm text-muted-foreground">
-            Submitted {money(submitted)}. Edit accepted amount if your count
-            differs — any shortfall stays on staff balance until resolved.
+            Submitted {money(submitted)}. Confirm what you physically counted. If it differs, record the variance — shortfalls stay on staff balance until resolved in Cash control.
           </p>
           <div className="mt-4 space-y-3">
             <div>

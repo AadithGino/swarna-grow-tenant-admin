@@ -178,7 +178,7 @@ export function useAssistantChat(
 
   useEffect(() => {
     if (!conversationId) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- reset when switching to new chat
+       
       resetLocal();
       return;
     }

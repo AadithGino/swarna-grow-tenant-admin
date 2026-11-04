@@ -10,12 +10,16 @@ import { Label } from "@/components/ui/label";
 import { PageSkeleton, QueryError } from "@/src/components/common/query-state";
 import { toastApiError } from "@/src/lib/api-error";
 import { newIdempotencyKey } from "@/src/lib/idempotency";
+import {
+  customerPollIntervalMs,
+  DM_BUY_ORDER_POLL_TERMINAL,
+} from "@/src/lib/customer-payment-polling";
 import { useCustomerTenant } from "@/src/components/customer/customer-tenant-context";
 import { customerPath } from "@/src/lib/customer-tenant";
 import {
   isPhonePeMockSdkToken,
   openCustomerPaymentTarget,
-  phonePeSdkGatewayUrl,
+  pickPhonePeGatewayUrl,
 } from "@/src/lib/customer-payment-redirect";
 import { env } from "@/src/config/env";
 import {
@@ -316,7 +320,14 @@ export function CustomerDigitalMetalsBuyOrderPage({ orderId }: { orderId: string
   const router = useRouter();
   const dispatch = useAppDispatch();
   const { tenantSlug } = useCustomerTenant();
-  const order = useGetCustomerDigitalMetalsBuyOrderQuery(orderId, { pollingInterval: 4_000 });
+  const [buyOrderPollMs, setBuyOrderPollMs] = useState(4_000);
+  const order = useGetCustomerDigitalMetalsBuyOrderQuery(orderId, {
+    pollingInterval: buyOrderPollMs,
+  });
+  useEffect(() => {
+    const next = customerPollIntervalMs(order.data?.status, DM_BUY_ORDER_POLL_TERMINAL, 4_000);
+    if (next !== buyOrderPollMs) setBuyOrderPollMs(next);
+  }, [order.data?.status, buyOrderPollMs]);
   const [createIntent, createIntentState] = useCreateDigitalMetalsBuyPaymentIntentMutation();
   const [pollIntent] = useLazyPollDigitalMetalsBuyPaymentIntentQuery();
   const [completeHarness, harnessState] = useCompleteDigitalMetalsTestHarnessPaymentMutation();
@@ -364,8 +375,8 @@ export function CustomerDigitalMetalsBuyOrderPage({ orderId }: { orderId: string
   }, [attempts, activeAttemptId]);
 
   useEffect(() => {
-    const status = order.data?.status;
-    if (status === "CREDITED" || status === "REFUND_REVIEW") return;
+    const status = String(order.data?.status ?? "");
+    if (DM_BUY_ORDER_POLL_TERMINAL.has(status)) return;
     const t = window.setInterval(() => void refreshAttempt(), 5_000);
     return () => window.clearInterval(t);
   }, [order.data?.status, refreshAttempt]);
@@ -382,7 +393,14 @@ export function CustomerDigitalMetalsBuyOrderPage({ orderId }: { orderId: string
 
   const status = String(o.status);
   const statusCopy = buyOrderStatusLabel(status);
-  const canPay = status === "PAYMENT_PENDING" || status === "PAYMENT_FAILED";
+  const latestAttemptStatus = String(attempts[0]?.status ?? "");
+  const canPay =
+    status === "PAYMENT_FAILED"
+    || (status === "PAYMENT_PENDING"
+      && (!latestAttemptStatus
+        || latestAttemptStatus === "FAILED"
+        || latestAttemptStatus === "INITIATED"
+        || latestAttemptStatus === "PENDING"));
   const orderReturnPath = dmOrderPath(tenantSlug, orderId);
   const redirectReturn = typeof window !== "undefined"
     ? `${window.location.origin}${orderReturnPath}`
@@ -395,6 +413,8 @@ export function CustomerDigitalMetalsBuyOrderPage({ orderId }: { orderId: string
     if (submittingPay) return;
     setSubmittingPay(true);
     try {
+      // Each Pay/Retry click starts a new PhonePe session (new attempt + merchant order id).
+      paymentIdempotencyKey.current = newIdempotencyKey();
       sessionStorage.setItem(`dm-pay-idem-${orderId}`, paymentIdempotencyKey.current);
       const intent = await createIntent({
         orderId,
@@ -407,7 +427,9 @@ export function CustomerDigitalMetalsBuyOrderPage({ orderId }: { orderId: string
       const tokenRaw =
         intent.token ?? nestedPi?.token ?? intent.sdkToken ?? nestedPi?.sdkToken;
       const token = tokenRaw ? String(tokenRaw) : undefined;
-      const gatewayUrl = phonePeSdkGatewayUrl(token);
+      const gatewayUrl =
+        pickPhonePeGatewayUrl(intent as Record<string, unknown>)
+        || pickPhonePeGatewayUrl(nestedPi);
       if (!gatewayUrl) {
         if (attemptId) {
           toast.message("Demo payment", { description: "Confirming your purchase…" });

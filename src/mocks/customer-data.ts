@@ -47,7 +47,6 @@ export const customerProfile: CustomerProfile = {
   email: "anjali.nair@example.com",
   address: "Panampilly Nagar, Kochi, Kerala 682036",
   mobileImmutable: true,
-  whatsappOptIn: true,
   memberSince: "2025-05-14",
   profileComplete: true,
   branch: { id: "br_kochi", name: "Kochi Main", code: "MAIN", address: "M.G. Road, Kochi", mobile: "+91 484 2211000" },

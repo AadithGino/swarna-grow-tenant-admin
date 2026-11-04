@@ -48,6 +48,7 @@ import { EntityAuditTab } from "@/src/features/audit/entity-audit-tab";
 import { goldLedgerColumns } from "@/src/components/common/gold-payment-columns";
 import { downloadJson } from "@/src/lib/download";
 import { grams, idempotencyKey, money } from "@/src/lib/format";
+import { shareOrCopyPaymentLink } from "@/src/lib/payment-link-share";
 import { paymentHasGoldAccrual } from "@/src/lib/gold-payment-display";
 import {
   cashSettlementBasisLabel,
@@ -171,7 +172,7 @@ export function EnrollmentDetailPage({ id }: { id: string }) {
         amountPaise,
         idempotencyKey: idempotencyKey(),
       }).unwrap();
-      toast.success(`Payment link sent · expires ${link.expiresAt}`);
+      await shareOrCopyPaymentLink(link);
     } catch (err) {
       toastApiError(err, "Could not create payment link");
     }
@@ -260,7 +261,7 @@ export function EnrollmentDetailPage({ id }: { id: string }) {
               onClick={() => void handleSendPaymentLink()}
             >
               <Send className="size-4" aria-hidden />
-              Send payment link
+              Create payment link
             </button>
             {row.canRecordPayment !== false && !matured && !closedOut ? (
               <PaymentDialog

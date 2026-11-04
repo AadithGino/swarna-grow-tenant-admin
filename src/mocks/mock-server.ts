@@ -3227,6 +3227,64 @@ export async function mockRequest<T>({
           ],
         },
       } as T;
+    case "digitalMetalsHedgeDailyIndex":
+      return {
+        __contract: true,
+        payload: {
+          reportType: "DAILY_HEDGE_INDEX",
+          endDate: "2026-10-17",
+          days: 3,
+          currentBalances: { businessDate: "2026-10-17", goldClosingUg: "2000000", silverClosingUg: "500000" },
+          items: [
+            {
+              businessDate: "2026-10-17",
+              metals: {
+                GOLD: {
+                  openingMetalOwedUg: "1900000",
+                  closingMetalOwedUg: "2000000",
+                  dayNetChangeUg: "100000",
+                  creditedBuyUg: "150000",
+                  executedSellUg: "50000",
+                  physicalHandoverUg: "0",
+                  ledgerMatchesBook: true,
+                },
+                SILVER: {
+                  openingMetalOwedUg: "480000",
+                  closingMetalOwedUg: "500000",
+                  dayNetChangeUg: "20000",
+                  creditedBuyUg: "20000",
+                  executedSellUg: "0",
+                  physicalHandoverUg: "0",
+                  ledgerMatchesBook: true,
+                },
+              },
+            },
+            {
+              businessDate: "2026-10-16",
+              metals: {
+                GOLD: {
+                  openingMetalOwedUg: "1800000",
+                  closingMetalOwedUg: "1900000",
+                  dayNetChangeUg: "100000",
+                  creditedBuyUg: "100000",
+                  executedSellUg: "0",
+                  physicalHandoverUg: "0",
+                  ledgerMatchesBook: true,
+                },
+                SILVER: {
+                  openingMetalOwedUg: "480000",
+                  closingMetalOwedUg: "480000",
+                  dayNetChangeUg: "0",
+                  creditedBuyUg: "0",
+                  executedSellUg: "0",
+                  physicalHandoverUg: "0",
+                  ledgerMatchesBook: true,
+                },
+              },
+            },
+          ],
+        },
+      } as T;
     case "digitalMetalsProcurementEntries":
       return { __contract: true, payload: { items: [] } } as T;
     case "postDigitalMetalsRedemptionFulfilmentAction":

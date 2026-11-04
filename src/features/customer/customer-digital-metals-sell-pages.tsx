@@ -10,6 +10,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PageSkeleton, QueryError } from "@/src/components/common/query-state";
 import { toastApiError } from "@/src/lib/api-error";
+import {
+  customerPollIntervalMs,
+  DM_SELL_ORDER_POLL_TERMINAL,
+} from "@/src/lib/customer-payment-polling";
 import { newIdempotencyKey } from "@/src/lib/idempotency";
 import { useCustomerTenant } from "@/src/components/customer/customer-tenant-context";
 import { customerPath } from "@/src/lib/customer-tenant";
@@ -172,7 +176,7 @@ export function CustomerDigitalMetalsSellPage() {
   return (
     <CustomerDmPageShell
       title="Sell digital metal"
-      subtitle="Sell from your available balance. Metal is held while your jeweller approves, then the money goes to your verified bank."
+      subtitle="Confirm a sale from your available balance. It is accepted immediately; your jeweller then pays your verified bank."
       backHref={portfolioBack}
       backLabel="Wallet"
       testId="customer-dm-sell-form"
@@ -260,7 +264,7 @@ export function CustomerDigitalMetalsSellPage() {
             </p>
             <ol className="mt-5 space-y-3 border-t border-[#ecdfd8] pt-4 text-xs leading-5 text-[#5c4f52]">
               <li><strong className="text-[#221a1d]">1.</strong> Confirm the quote and pick a verified bank account.</li>
-              <li><strong className="text-[#221a1d]">2.</strong> Your jeweller approves the sale — grams are held until then.</li>
+              <li><strong className="text-[#221a1d]">2.</strong> Confirm the sale — grams are debited immediately and your payment becomes due.</li>
               <li><strong className="text-[#221a1d]">3.</strong> Money is transferred, usually within 1–2 business days.</li>
             </ol>
           </aside>
@@ -338,7 +342,7 @@ export function CustomerDigitalMetalsSellReviewPage({ quoteId }: { quoteId: stri
     <CustomerDmPageShell
       narrow
       title="Review sell & payout"
-      subtitle="Net settlement goes to your verified bank after jeweller approval."
+      subtitle="Confirming accepts the sale immediately. Payment to your verified bank remains pending."
       backHref={customerPath(tenantSlug, "digital-metals", "sell")}
       testId="customer-dm-sell-review"
     >
@@ -456,8 +460,15 @@ export function CustomerDigitalMetalsSellReviewPage({ quoteId }: { quoteId: stri
 
 export function CustomerDigitalMetalsSellOrderPage({ orderId }: { orderId: string }) {
   const { tenantSlug } = useCustomerTenant();
-  const order = useGetCustomerDigitalMetalsSellOrderQuery(orderId, { pollingInterval: 5_000 });
-  const payout = useGetCustomerDigitalMetalsSellOrderPayoutStatusQuery(orderId, { pollingInterval: 5_000 });
+  const [sellPollMs, setSellPollMs] = useState(5_000);
+  const order = useGetCustomerDigitalMetalsSellOrderQuery(orderId, { pollingInterval: sellPollMs });
+  const payout = useGetCustomerDigitalMetalsSellOrderPayoutStatusQuery(orderId, {
+    pollingInterval: sellPollMs,
+  });
+  useEffect(() => {
+    const next = customerPollIntervalMs(order.data?.status, DM_SELL_ORDER_POLL_TERMINAL, 5_000);
+    if (next !== sellPollMs) setSellPollMs(next);
+  }, [order.data?.status, sellPollMs]);
   const [cancel, cancelState] = useCancelCustomerDigitalMetalsSellOrderMutation();
 
   const sellSummary = useMemo(() => {
@@ -490,12 +501,14 @@ export function CustomerDigitalMetalsSellOrderPage({ orderId }: { orderId: strin
 
   const o = order.data ?? {};
   const status = String(o.status ?? "");
-  const statusCopy = sellOrderStatusLabel(status);
+  const paid = payout.data?.bankPayoutSettled === true || payout.data?.cashPaid === true;
+  const statusCopy = sellOrderStatusLabel(paid ? "SETTLED" : status);
   const snap = (o.snapshot ?? {}) as Record<string, unknown>;
   const settlementPaise = Number(o.settlementPaise ?? snap.settlementPaise ?? 0);
   const canCancel = status === "RESERVED" || status === "PENDING_APPROVAL";
   const saleExecuted = payout.data?.saleExecuted === true;
-  const bankSettled = payout.data?.bankPayoutSettled === true;
+  const isCash = o.payoutMethod === "CASH" || payout.data?.payoutMethod === "CASH";
+  const bankSettled = paid;
   const latestPayout = (payout.data?.payouts as { status?: string }[] | undefined)?.[0];
   const payoutStatus = latestPayout?.status ? String(latestPayout.status) : null;
 
@@ -513,13 +526,13 @@ export function CustomerDigitalMetalsSellOrderPage({ orderId }: { orderId: strin
     {
       id: "reserve",
       label: "Metal reserved",
-      detail: "Grams held while approval is pending.",
+      detail: "Your quoted quantity is held until you confirm the sale.",
       state: "done" as const,
     },
     {
       id: "sale",
       label: "Sale executed",
-      detail: saleExecuted ? "Metal debited from your wallet." : "Waiting for jeweller approval.",
+      detail: saleExecuted ? "Metal debited from your wallet." : "Confirm the quote to accept the sale.",
       state: saleExecuted ? ("done" as const) : status === "CANCELLED" ? ("failed" as const) : ("current" as const),
     },
   ];
@@ -527,19 +540,19 @@ export function CustomerDigitalMetalsSellOrderPage({ orderId }: { orderId: strin
     {
       id: "open",
       label: "Payout opened",
-      detail: saleExecuted ? "Bank transfer initiated." : "Opens after sale executes.",
+      detail: saleExecuted ? "Your jeweller owes this payment. A sale confirmation does not send money." : "Opens when you confirm the sale.",
       state: saleExecuted ? ("done" as const) : ("upcoming" as const),
     },
     {
       id: "settle",
-      label: "Bank settlement",
+      label: isCash ? "Cash payment" : "Bank settlement",
       detail: bankSettled
-        ? "Funds sent to your bank."
+        ? (isCash ? "Cash payment recorded by your jeweller." : "Bank payment recorded by your jeweller.")
         : payoutStatus === "UNKNOWN"
           ? "Transfer status unclear — your jeweller is investigating."
           : payoutStatus === "FAILED"
             ? "Transfer failed — contact your jeweller for next steps."
-            : "May take 1–2 business days after sale.",
+            : (isCash ? "Waiting for your jeweller to pay and record cash payment." : "Waiting for your jeweller to transfer and record payment."),
       state: bankSettled
         ? ("done" as const)
         : payoutStatus === "FAILED" || payoutStatus === "UNKNOWN"
@@ -568,7 +581,7 @@ export function CustomerDigitalMetalsSellOrderPage({ orderId }: { orderId: strin
           </div>
           {o.approvalExpiresAt && status === "PENDING_APPROVAL" ? (
             <p className="mt-3 text-xs text-[#8a6a70]">
-              Approval window:{" "}
+              Previous request deadline:{" "}
               {new Date(String(o.approvalExpiresAt)).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })}
             </p>
           ) : null}
@@ -593,7 +606,7 @@ export function CustomerDigitalMetalsSellOrderPage({ orderId }: { orderId: strin
         <div className="mt-3">
           <CustomerDmTimeline steps={metalSteps} />
         </div>
-        <h2 className="mt-6 text-sm font-semibold text-[#28161a]">Bank payout</h2>
+        <h2 className="mt-6 text-sm font-semibold text-[#28161a]">{isCash ? "Cash payment" : "Bank payout"}</h2>
         <div className="mt-3">
           <CustomerDmTimeline steps={bankSteps} />
         </div>

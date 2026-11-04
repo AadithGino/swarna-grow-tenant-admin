@@ -351,7 +351,7 @@ function CreateEnrollmentDialogInner({
                   [
                     ["RECORD_MANUAL_PAYMENT", "Record manual payment now"] as const,
                     ...(onlinePayments
-                      ? ([["CREATE_PAYMENT_LINK", "Send payment link only"]] as const)
+                      ? ([["CREATE_PAYMENT_LINK", "Create online payment link only"]] as const)
                       : []),
                   ] satisfies ReadonlyArray<readonly [string, string]>
                 ).map(([value, label]) => (
