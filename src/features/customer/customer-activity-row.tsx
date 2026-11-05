@@ -10,7 +10,7 @@ import {
   type CustomerRecentActivityItem,
 } from "@/src/lib/customer-recent-activity";
 import {
-  activityIcon,
+  ActivityRowIcon,
   activityIconStyles,
   ActivityDirectionBadge,
   activityAmountClass,
@@ -27,7 +27,6 @@ export function CustomerActivityRow({
   compact?: boolean;
 }) {
   const href = customerRecentActivityHref(tenantSlug, item);
-  const Icon = activityIcon(item);
   const styles = activityIconStyles(item);
   return (
     <Link
@@ -39,7 +38,7 @@ export function CustomerActivityRow({
       }
     >
       <span className={`grid size-11 shrink-0 place-items-center rounded-full ${styles.circleClass}`}>
-        <Icon className="size-5" strokeWidth={2} />
+        <ActivityRowIcon item={item} className="size-5" strokeWidth={2} />
       </span>
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">

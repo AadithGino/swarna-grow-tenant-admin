@@ -30,34 +30,9 @@ export function RedemptionFulfillmentCard({
   data: RedemptionFulfillmentSummary;
   periodLabel?: string;
 }) {
+  /** Quiet dashboard when nothing completed in the period — open queues live under Needs attention. */
   if (!data.count && !data.prematureCount && !data.maturityCount) {
-    return (
-      <Surface
-        title="Redemption & closure"
-        description={
-          periodLabel
-            ? `Completed handovers · ${periodLabel}`
-            : "Completed handovers"
-        }
-        action={
-          <Button variant="outline" size="sm" asChild>
-            <Link href="/reports">
-              Maturity & redemption report
-              <ArrowRight className="size-4" />
-            </Link>
-          </Button>
-        }
-      >
-        <p className="px-5 pb-5 text-sm text-muted-foreground">
-          No completed redemptions or premature closures in this period. Open
-          requests appear under{" "}
-          <Link href="/maturity" className="font-semibold text-[#730321]">
-            Maturity & redemption
-          </Link>
-          .
-        </p>
-      </Surface>
-    );
+    return null;
   }
 
   return (

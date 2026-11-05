@@ -11,6 +11,10 @@ export type CustomerPhonePeCheckout = {
   statusPollUrl: string | null;
 };
 
+function readOptionalString(value: unknown): string | null {
+  return typeof value === "string" && value ? value : null;
+}
+
 function firstHttpUrl(...candidates: Array<string | null | undefined>): string | null {
   for (const value of candidates) {
     if (typeof value === "string" && value.startsWith("http")) return value;
@@ -29,9 +33,13 @@ export function normalizePhonePeCheckout(
     || (row.checkoutKind === "SDK_ORDER" && linkToken ? linkToken : null)
     || null;
   const paymentUrl =
-    firstHttpUrl(row.paymentUrl, row.redirectUrl, row.gatewayUrl)
-    || (typeof row.paymentUrl === "string" && row.paymentUrl ? row.paymentUrl : null)
-    || (typeof row.gatewayUrl === "string" && row.gatewayUrl ? row.gatewayUrl : null)
+    firstHttpUrl(
+      readOptionalString(row.paymentUrl),
+      readOptionalString(row.redirectUrl),
+      readOptionalString(row.gatewayUrl),
+    )
+    || readOptionalString(row.paymentUrl)
+    || readOptionalString(row.gatewayUrl)
     || null;
   const explicitKind =
     row.checkoutKind === "SDK_ORDER" || row.checkoutKind === "HOSTED_REDIRECT"
@@ -39,7 +47,13 @@ export function normalizePhonePeCheckout(
       : null;
   const checkoutKind =
     explicitKind
-    ?? (firstHttpUrl(row.paymentUrl, row.redirectUrl, row.gatewayUrl) ? "HOSTED_REDIRECT" : null)
+    ?? (firstHttpUrl(
+      readOptionalString(row.paymentUrl),
+      readOptionalString(row.redirectUrl),
+      readOptionalString(row.gatewayUrl),
+    )
+      ? "HOSTED_REDIRECT"
+      : null)
     ?? (sdkToken ? "SDK_ORDER" : null);
   return {
     checkoutKind,

@@ -25,6 +25,7 @@ export type CustomerSchemeStatus =
 
 export type CustomerProfile = {
   id: string;
+  tenantId?: string;
   customerNumber: string;
   passbookNumber: string;
   name: string;
@@ -65,6 +66,7 @@ export type CustomerProfile = {
 };
 
 export type TenantBranding = {
+  id?: string;
   tenantCode: string;
   displayName: string;
   appDisplayName: string;

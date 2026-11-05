@@ -22,7 +22,6 @@ import {
 import { newIdempotencyKey } from "@/src/lib/idempotency";
 import {
   readShopPaymentAttemptId,
-  readShopPaymentIdempotencyKey,
   saveShopPaymentAttemptId,
   saveShopPaymentIdempotencyKey,
 } from "@/src/lib/shop-payment-idempotency";

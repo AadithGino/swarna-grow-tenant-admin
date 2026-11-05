@@ -57,12 +57,15 @@ export function CustomerLoginPage() {
     customerPath(tenantSlug),
   );
 
+  const sessionTenantId = useAppSelector((s) => s.customerSession.tenantId);
+  const urlTenantId = tenant?.id;
+
   useEffect(() => {
     if (!mounted) return;
-    if (authenticated || realmHasStoredSession("customer")) {
-      router.replace(homePath);
-    }
-  }, [mounted, authenticated, router, homePath]);
+    if (!authenticated && !realmHasStoredSession("customer")) return;
+    if (sessionTenantId && urlTenantId && sessionTenantId !== urlTenantId) return;
+    router.replace(homePath);
+  }, [mounted, authenticated, router, homePath, sessionTenantId, urlTenantId]);
 
   useEffect(() => {
     if (!seconds) return;
@@ -138,6 +141,7 @@ export function CustomerLoginPage() {
       dispatch(
         customerSignedIn({
           customerId: result.customer.id,
+          tenantId: result.customer.tenantId ?? (result.tenant as { id?: string }).id,
           tenantCode: result.tenant.tenantCode,
           accessToken: result.accessToken,
           refreshToken: result.refreshToken,
@@ -207,6 +211,7 @@ export function CustomerLoginPage() {
       dispatch(
         customerSignedIn({
           customerId: result.customer.id,
+          tenantId: result.customer.tenantId ?? (result.tenant as { id?: string }).id,
           tenantCode: result.tenant.tenantCode,
           accessToken: result.accessToken,
           refreshToken: result.refreshToken,

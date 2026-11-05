@@ -13,6 +13,8 @@ function readPhonePeEnvironment(): "SANDBOX" | "PRODUCTION" {
   const raw = process.env.NEXT_PUBLIC_PHONEPE_ENV?.trim().toUpperCase();
   if (raw === "SANDBOX" || raw === "UAT" || raw === "PREPROD" || raw === "TEST") return "SANDBOX";
   if (raw === "PRODUCTION" || raw === "LIVE") return "PRODUCTION";
+  const api = process.env.NEXT_PUBLIC_API_BASE_URL ?? "";
+  if (/localhost|127\.0\.0\.1/i.test(api)) return "SANDBOX";
   return "PRODUCTION";
 }
 

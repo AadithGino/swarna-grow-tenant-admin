@@ -150,80 +150,87 @@ export function EcommerceDashboardSection({
   const c = summary?.collections;
   const p = summary?.placement;
   const pipe = summary?.pipeline;
-  const empty =
+  const money = (ref?: { amountDisplay?: string }) => ref?.amountDisplay ?? "₹0";
+  const count = (n?: number) => (typeof n === "number" ? n : 0);
+  const emptyPeriod =
     !summaryLoading
-    && (p?.ordersPlaced ?? 0) === 0
-    && (c?.collectedOrderCount ?? 0) === 0;
-
-  if (empty) {
-    return (
-      <EcommerceSectionShell periodLabel={periodLabel} action={manageOrdersAction}>
-        <p className="px-5 pb-5 text-sm text-muted-foreground">
-          No storefront activity in this period yet. Publish products in{" "}
-          <Link href="/ecommerce/catalog" className="font-semibold text-[#730321]">
-            Catalog
-          </Link>
-          , turn on the customer store in Settings if needed, and share your shop link with
-          buyers.
-        </p>
-      </EcommerceSectionShell>
-    );
-  }
-
+    && count(p?.ordersPlaced) === 0
+    && count(c?.collectedOrderCount) === 0;
   return (
     <EcommerceSectionShell periodLabel={periodLabel} action={manageOrdersAction}>
+      {emptyPeriod ? (
+        <div className="mx-5 mt-5 flex flex-col gap-3 rounded-xl border border-dashed border-[#e8dcd7] bg-[#fcfaf8] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-sm text-[#6f5c60]">
+            <span className="font-semibold text-[#28161a]">No orders in {periodLabel.toLowerCase()}.</span>{" "}
+            Counts below are zero for this period — pipeline totals are live when orders exist.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" size="sm" asChild>
+              <Link href="/ecommerce/catalog">Catalog</Link>
+            </Button>
+            <Button variant="outline" size="sm" asChild>
+              <Link href="/settings/operations">Store settings</Link>
+            </Button>
+            <Button size="sm" asChild>
+              <Link href="/ecommerce">
+                Store overview
+                <ArrowRight className="size-4" />
+              </Link>
+            </Button>
+          </div>
+        </div>
+      ) : null}
+
       <div className="grid gap-4 p-5 sm:grid-cols-2 xl:grid-cols-5">
         <LinkableStatCard
           href={ecommerceOrdersListHref("all", periodQuery)}
           icon={ShoppingBag}
           label="Orders placed"
-          value={p?.ordersPlaced ?? "—"}
+          value={count(p?.ordersPlaced)}
           detail="Created in period"
           tone="cream"
         />
         <LinkableStatCard
           icon={CreditCard}
           label="Online confirmed (placed)"
-          value={p?.onlinePaidOrdersPlacedInPeriod ?? "—"}
+          value={count(p?.onlinePaidOrdersPlacedInPeriod)}
           detail="Online + paid when order was placed"
           tone="wine"
         />
         <LinkableStatCard
           icon={IndianRupee}
           label="Online collected"
-          value={c?.onlineCollected?.amountDisplay ?? "—"}
+          value={money(c?.onlineCollected)}
           detail="paidAt in period"
           tone="green"
         />
         <LinkableStatCard
           icon={Truck}
           label="COD courier confirmed"
-          value={
-            c?.codCourierCollectionConfirmed?.amountDisplay
-            ?? c?.codCollected?.amountDisplay
-            ?? "—"
-          }
+          value={money(
+            c?.codCourierCollectionConfirmed ?? c?.codCollected,
+          )}
           detail="Courier POD in period — not bank receipt"
           tone="gold"
         />
         <LinkableStatCard
           icon={Banknote}
           label="COD bank remittance"
-          value={c?.codBankRemittanceReconciled?.amountDisplay ?? "—"}
+          value={money(c?.codBankRemittanceReconciled)}
           detail="Reconciled bank credit in period"
           tone="cream"
         />
         <LinkableStatCard
           icon={RotateCcw}
           label="Refund outflow"
-          value={c?.refundOutflow?.amountDisplay ?? "—"}
+          value={money(c?.refundOutflow)}
           detail="Provider + manual in period"
           tone="red"
         />
         <LinkableStatCard
           icon={IndianRupee}
           label="Net collections"
-          value={c?.netCollected?.amountDisplay ?? "—"}
+          value={money(c?.netCollected)}
           detail="Gross collected − refunds"
           tone="green"
         />
@@ -231,7 +238,7 @@ export function EcommerceDashboardSection({
           href={ecommerceOrdersListHref("to_fulfil", periodQuery)}
           icon={PackageOpen}
           label="Awaiting fulfilment"
-          value={pipe?.awaitingFulfilment ?? "—"}
+          value={count(pipe?.awaitingFulfilment)}
           detail="Live pipeline (not period)"
           tone="gold"
         />
@@ -239,7 +246,7 @@ export function EcommerceDashboardSection({
           href={ecommerceOrdersListHref("payment_issues", periodQuery)}
           icon={AlertTriangle}
           label="Payment exceptions"
-          value={pipe?.paymentExceptionsOpen ?? "—"}
+          value={count(pipe?.paymentExceptionsOpen)}
           detail="Needs operator attention"
           tone="red"
         />

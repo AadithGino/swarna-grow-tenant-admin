@@ -17,6 +17,7 @@ export function PaginatedDataTable<T extends { id: string }>({
   canPrevious,
   onRowClick,
   emptyTitle,
+  minTableWidth,
 }: {
   rows: T[];
   columns: DataColumn<T>[];
@@ -27,6 +28,7 @@ export function PaginatedDataTable<T extends { id: string }>({
   canPrevious: boolean;
   onRowClick?: (row: T) => void;
   emptyTitle?: string;
+  minTableWidth?: string;
 }) {
   return (
     <>
@@ -35,6 +37,7 @@ export function PaginatedDataTable<T extends { id: string }>({
         columns={columns}
         onRowClick={onRowClick}
         emptyTitle={emptyTitle}
+        minWidth={minTableWidth}
       />
       <CursorPagination
         page={page}

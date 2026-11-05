@@ -21,6 +21,7 @@ type CustomerTenantContextValue = {
   tenantSlug: string | null;
   tenantCode: string;
   tenant: {
+    id?: string;
     tenantCode: string;
     displayName: string;
     appDisplayName?: string;
@@ -122,6 +123,7 @@ export function CustomerTenantProvider({
       tenantCode: tenant?.tenantCode ?? tenantCode,
       tenant: tenant
         ? {
+            id: tenant.id,
             tenantCode: tenant.tenantCode,
             displayName: tenant.displayName,
             appDisplayName: tenant.appDisplayName,

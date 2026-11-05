@@ -127,18 +127,23 @@ export function CustomerDetailPage({ id }: { id: string }) {
     { skip: !canEcommerceRead },
   );
   const showEcommerceOrdersTab =
-    canEcommerceRead
-    && (canViewEcommerceHistoricalWorkspace(ecommerceAccess)
-      || ecommerceOrdersMetaQuery.data?.hasOrderHistory === true);
+    canEcommerceRead &&
+    (canViewEcommerceHistoricalWorkspace(ecommerceAccess) ||
+      ecommerceOrdersMetaQuery.data?.hasOrderHistory === true);
   const dmCapability = useGetDigitalMetalsCapabilityQuery(undefined, {
     skip: !hasPermission(sessionUser, "digital-metals.read"),
   });
   const dmAccess =
-    (dmCapability.data as import("@/src/lib/digital-metals-entitlement").DigitalMetalsServerAccessState | undefined)
-    ?? resolveDigitalMetalsServerAccess(subscriptionQuery.data, operationsQuery.data);
+    (dmCapability.data as
+      | import("@/src/lib/digital-metals-entitlement").DigitalMetalsServerAccessState
+      | undefined) ??
+    resolveDigitalMetalsServerAccess(
+      subscriptionQuery.data,
+      operationsQuery.data,
+    );
   const showDigitalMetalsTab =
-    hasPermission(sessionUser, "digital-metals.read")
-    && canViewDigitalMetalsWorkspace(dmAccess);
+    hasPermission(sessionUser, "digital-metals.read") &&
+    canViewDigitalMetalsWorkspace(dmAccess);
   const dmSummaryQuery = useGetDigitalMetalsCustomerSummaryQuery(id, {
     skip: !showDigitalMetalsTab,
   });
@@ -146,14 +151,14 @@ export function CustomerDetailPage({ id }: { id: string }) {
     skip: !showEcommerceOrdersTab,
   });
   const canDmTrade =
-    showDigitalMetalsTab
-    && hasPermission(sessionUser, "digital-metals.assisted.trade")
-    && dmAccess?.active !== false
-    && dmAccess?.paused !== true;
+    showDigitalMetalsTab &&
+    hasPermission(sessionUser, "digital-metals.assisted.trade") &&
+    dmAccess?.active !== false &&
+    dmAccess?.paused !== true;
   const canStoreOrder =
-    showEcommerceOrdersTab
-    && hasPermission(sessionUser, "ecommerce.assisted.order")
-    && ecommerceAccess?.active !== false;
+    showEcommerceOrdersTab &&
+    hasPermission(sessionUser, "ecommerce.assisted.order") &&
+    ecommerceAccess?.active !== false;
   const schemesOverviewQuery = useGetCustomerSchemesQuery({
     customerId: id,
     limit: 100,
@@ -197,7 +202,9 @@ export function CustomerDetailPage({ id }: { id: string }) {
     schemesOverview.reduce((sum, s) => sum + Number(s.paid ?? 0), 0);
   const isLiveEnrollment = (status: string) =>
     ["ACTIVE", "LOCKED", "DEFAULTED"].includes(status);
-  const liveOverview = schemesOverview.filter((x) => isLiveEnrollment(x.status));
+  const liveOverview = schemesOverview.filter((x) =>
+    isLiveEnrollment(x.status),
+  );
   // Only live enrollments count; redeemed/closed schemes owe nothing.
   const remainingOnPlans = liveOverview.reduce(
     (sum, s) => sum + Number(s.outstanding ?? 0),
@@ -208,9 +215,7 @@ export function CustomerDetailPage({ id }: { id: string }) {
     0,
   );
   const payableEnrollments = schemesOverview.filter(
-    (x) =>
-      isLiveEnrollment(x.status) &&
-      x.canRecordPayment !== false,
+    (x) => isLiveEnrollment(x.status) && x.canRecordPayment !== false,
   );
   const activeSchemes = schemesOverview.filter((x) =>
     isLiveEnrollment(x.status),
@@ -237,9 +242,7 @@ export function CustomerDetailPage({ id }: { id: string }) {
     try {
       const amountPaise = Math.round(
         Number(
-          paymentLinkScheme.nextDueAmount ??
-            paymentLinkScheme.installment ??
-            0,
+          paymentLinkScheme.nextDueAmount ?? paymentLinkScheme.installment ?? 0,
         ) * 100,
       );
       if (!amountPaise) {
@@ -265,10 +268,7 @@ export function CustomerDetailPage({ id }: { id: string }) {
   async function handleDownloadStatement() {
     try {
       const result = await fetchStatement(id).unwrap();
-      downloadBlobUrl(
-        `${customer.customerNo}-statement.pdf`,
-        result.blobUrl,
-      );
+      downloadBlobUrl(`${customer.customerNo}-statement.pdf`, result.blobUrl);
     } catch {
       toast.error("Could not download statement");
     }
@@ -415,13 +415,31 @@ export function CustomerDetailPage({ id }: { id: string }) {
         <StatCard
           icon={ShieldCheck}
           label="KYC"
-          value={customer.kyc === "VERIFIED" ? "Verified" : customer.kyc === "REJECTED" ? "Rejected" : "Pending"}
-          detail={customer.kyc === "VERIFIED" ? "Identity verified" : customer.kyc === "REJECTED" ? "Ask the customer to resubmit" : "Not verified yet"}
+          value={
+            customer.kyc === "VERIFIED"
+              ? "Verified"
+              : customer.kyc === "REJECTED"
+                ? "Rejected"
+                : "Pending"
+          }
+          detail={
+            customer.kyc === "VERIFIED"
+              ? "Identity verified"
+              : customer.kyc === "REJECTED"
+                ? "Ask the customer to resubmit"
+                : "Not verified yet"
+          }
           tone={customer.kyc === "VERIFIED" ? "green" : "gold"}
         />
       </div>
       {showDigitalMetalsTab || showEcommerceOrdersTab ? (
-        <div className={showDigitalMetalsTab && showEcommerceOrdersTab ? "grid gap-4 lg:grid-cols-2" : "grid gap-4"}>
+        <div
+          className={
+            showDigitalMetalsTab && showEcommerceOrdersTab
+              ? "grid gap-4 lg:grid-cols-2"
+              : "grid gap-4"
+          }
+        >
           {showDigitalMetalsTab ? (
             <DigiGoldPortfolioCard
               summary={dmSummaryQuery.data}
@@ -450,113 +468,115 @@ export function CustomerDetailPage({ id }: { id: string }) {
             </p>
           </div>
           <div className="flex flex-wrap items-center justify-end gap-2">
-              <PermissionGate permission={ACTION.schemeEnrol}>
-                <Button
-                  size="sm"
-                  className="shrink-0"
-                  data-tour="customer-enrol"
-                  onClick={() => setEnrollOpen(true)}
-                >
-                  <Plus />
-                  Create enrollment
-                </Button>
-              </PermissionGate>
+            <PermissionGate permission={ACTION.schemeEnrol}>
               <Button
-                variant="secondary"
                 size="sm"
-                className="shrink-0 bg-[#f3eef0] text-foreground hover:bg-[#ebe3e6]"
-                disabled={createLinkState.isLoading || !paymentLinkScheme?.id}
-                onClick={() => void handleSendPaymentLink()}
+                className="shrink-0"
+                data-tour="customer-enrol"
+                onClick={() => setEnrollOpen(true)}
               >
-                <Send />
-                Send payment link
+                <Plus />
+                Create enrollment
               </Button>
-              <Button
-                variant="secondary"
-                size="sm"
-                className="shrink-0 bg-[#f3eef0] text-foreground hover:bg-[#ebe3e6]"
-                disabled={statementState.isFetching}
-                onClick={() => void handleDownloadStatement()}
+            </PermissionGate>
+            <Button
+              variant="secondary"
+              size="sm"
+              className="shrink-0 bg-[#f3eef0] text-foreground hover:bg-[#ebe3e6]"
+              disabled={createLinkState.isLoading || !paymentLinkScheme?.id}
+              onClick={() => void handleSendPaymentLink()}
+            >
+              <Send />
+              Send payment link
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              className="shrink-0 bg-[#f3eef0] text-foreground hover:bg-[#ebe3e6]"
+              disabled={statementState.isFetching}
+              onClick={() => void handleDownloadStatement()}
+            >
+              <Download />
+              Download passbook
+            </Button>
+            <PermissionGate permission={ACTION.customerPasswordWrite}>
+              <ActionDialog
+                trigger={
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    className="shrink-0 bg-[#f3eef0] text-foreground hover:bg-[#ebe3e6]"
+                  >
+                    Set customer password
+                  </Button>
+                }
+                title="Set customer password"
+                description="Set a numeric password for this customer (minimum 4 digits)."
+                actionLabel="Save password"
+                submitDisabled={!/^\d{4,128}$/.test(password.trim())}
+                onSubmit={async () => {
+                  await setCustomerPassword({
+                    id: customer.id,
+                    password: password.trim(),
+                  }).unwrap();
+                  setPassword("");
+                  toast.success("Customer password updated");
+                }}
+                onOpenChange={(open) => {
+                  if (!open) setPassword("");
+                }}
               >
-                <Download />
-                Download passbook
-              </Button>
-              <PermissionGate permission={ACTION.customerPasswordWrite}>
-                <ActionDialog
-                  trigger={
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      className="shrink-0 bg-[#f3eef0] text-foreground hover:bg-[#ebe3e6]"
-                    >
-                      Set customer password
-                    </Button>
-                  }
-                  title="Set customer password"
-                  description="Set a numeric password for this customer (minimum 4 digits)."
-                  actionLabel="Save password"
-                  submitDisabled={!/^\d{4,128}$/.test(password.trim())}
-                  onSubmit={async () => {
-                    await setCustomerPassword({
-                      id: customer.id,
-                      password: password.trim(),
-                    }).unwrap();
-                    setPassword("");
-                    toast.success("Customer password updated");
-                  }}
-                  onOpenChange={(open) => {
-                    if (!open) setPassword("");
-                  }}
-                >
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">New password</label>
-                    <Input
-                      type="password"
-                      inputMode="numeric"
-                      value={password}
-                      onChange={(e) =>
-                        setPassword(e.target.value.replace(/\D/g, "").slice(0, 128))
-                      }
-                      placeholder="Min. 4 digits"
-                    />
-                  </div>
-                </ActionDialog>
-              </PermissionGate>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">New password</label>
+                  <Input
+                    type="password"
+                    inputMode="numeric"
+                    value={password}
+                    onChange={(e) =>
+                      setPassword(
+                        e.target.value.replace(/\D/g, "").slice(0, 128),
+                      )
+                    }
+                    placeholder="Min. 4 digits"
+                  />
+                </div>
+              </ActionDialog>
+            </PermissionGate>
+            <Button
+              variant="outline"
+              size="sm"
+              className="shrink-0 border-red-200 bg-white text-red-700 hover:bg-red-50 hover:text-red-800"
+              onClick={() => {
+                if (
+                  customer.status === "BLOCKED" ||
+                  customer.status === "INACTIVE"
+                ) {
+                  setStatusMode("restore");
+                } else {
+                  setStatusMode("deactivate");
+                }
+                setStatusOpen(true);
+              }}
+            >
+              {customer.status === "BLOCKED"
+                ? "Unblock"
+                : customer.status === "INACTIVE"
+                  ? "Reactivate"
+                  : "Deactivate"}
+            </Button>
+            {customer.status === "ACTIVE" ? (
               <Button
                 variant="outline"
                 size="sm"
                 className="shrink-0 border-red-200 bg-white text-red-700 hover:bg-red-50 hover:text-red-800"
                 onClick={() => {
-                  if (
-                    customer.status === "BLOCKED" ||
-                    customer.status === "INACTIVE"
-                  ) {
-                    setStatusMode("restore");
-                  } else {
-                    setStatusMode("deactivate");
-                  }
+                  setStatusMode("block");
                   setStatusOpen(true);
                 }}
               >
-                {customer.status === "BLOCKED"
-                  ? "Unblock"
-                  : customer.status === "INACTIVE"
-                    ? "Reactivate"
-                    : "Deactivate"}
+                Block customer
               </Button>
-              {customer.status === "ACTIVE" ? (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="shrink-0 border-red-200 bg-white text-red-700 hover:bg-red-50 hover:text-red-800"
-                  onClick={() => {
-                    setStatusMode("block");
-                    setStatusOpen(true);
-                  }}
-                >
-                  Block customer
-                </Button>
-              ) : null}
+            ) : null}
           </div>
         </div>
       </Surface>
@@ -630,13 +650,20 @@ export function CustomerDetailPage({ id }: { id: string }) {
               </div>
             </Surface>
           </div>
-          {(showDigitalMetalsTab && dmSummaryQuery.data) || (showEcommerceOrdersTab && storeSummaryQuery.data) ? (
+          {(showDigitalMetalsTab && dmSummaryQuery.data) ||
+          (showEcommerceOrdersTab && storeSummaryQuery.data) ? (
             <div className="mt-5 grid gap-5 xl:grid-cols-[1.2fr_.8fr]">
               {showDigitalMetalsTab && dmSummaryQuery.data ? (
-                <DigiGoldSummaryPanel summary={dmSummaryQuery.data} onOpenTab={() => setTab("digital-metals")} />
+                <DigiGoldSummaryPanel
+                  summary={dmSummaryQuery.data}
+                  onOpenTab={() => setTab("digital-metals")}
+                />
               ) : null}
               {showEcommerceOrdersTab && storeSummaryQuery.data ? (
-                <StoreSummaryPanel summary={storeSummaryQuery.data} onOpenTab={() => setTab("ecommerce-orders")} />
+                <StoreSummaryPanel
+                  summary={storeSummaryQuery.data}
+                  onOpenTab={() => setTab("ecommerce-orders")}
+                />
               ) : null}
             </div>
           ) : null}
@@ -699,7 +726,11 @@ export function CustomerDetailPage({ id }: { id: string }) {
               actions={
                 canDmTrade ? (
                   <>
-                    <Button size="sm" variant="outline" onClick={() => setBuyMetalOpen(true)}>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setBuyMetalOpen(true)}
+                    >
                       <Coins />
                       Buy
                     </Button>
@@ -707,7 +738,11 @@ export function CustomerDetailPage({ id }: { id: string }) {
                       size="sm"
                       variant="outline"
                       onClick={() => setSellMetalOpen(true)}
-                      disabled={!dmSummaryQuery.data?.holdings.some((h) => Number(h.availableUg) > 0)}
+                      disabled={
+                        !dmSummaryQuery.data?.holdings.some(
+                          (h) => Number(h.availableUg) > 0,
+                        )
+                      }
                     >
                       <Scale />
                       Sell
@@ -715,7 +750,11 @@ export function CustomerDetailPage({ id }: { id: string }) {
                   </>
                 ) : null
               }
-              sellAction={canDmTrade ? (row) => <SellCashPayoutButton row={row} /> : undefined}
+              sellAction={
+                canDmTrade
+                  ? (row) => <SellCashPayoutButton row={row} />
+                  : undefined
+              }
             />
           </PageTabsPanel>
         ) : null}
@@ -790,7 +829,9 @@ export function CustomerDetailPage({ id }: { id: string }) {
                   className: "whitespace-nowrap text-right",
                   render: (r) => money(r.amount),
                 },
-                ...(showGoldLedger ? goldLedgerColumns<(typeof payments)[number]>() : []),
+                ...(showGoldLedger
+                  ? goldLedgerColumns<(typeof payments)[number]>()
+                  : []),
                 {
                   key: "status",
                   header: "Status",

@@ -1,14 +1,11 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type KeyboardEvent, type MouseEvent } from "react";
 import { useSearchParams } from "next/navigation";
 import {
   AlertTriangle,
   Download,
   HandCoins,
-  IndianRupee,
-  RotateCcw,
-  CreditCard,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ListSearchInput } from "@/src/components/common/list-search-input";
@@ -18,11 +15,12 @@ import {
 } from "@/src/components/common/charts";
 import { DateRangeFilter } from "@/src/components/common/date-range-filter";
 import { PaginatedDataTable } from "@/src/components/common/paginated-data-table";
+import { Surface } from "@/src/components/common/page-parts";
 import {
-  PageHeader,
-  StatCard,
-  Surface,
-} from "@/src/components/common/page-parts";
+  HeroStat,
+  SectionHero,
+  heroButtonClass,
+} from "@/src/components/admin-ui/section-hero";
 import { PageFilterTabs, PageTab } from "@/src/components/common/page-tabs";
 import {
   EmptyState,
@@ -154,8 +152,9 @@ export function CollectionsPage() {
   if (skipForBadDates) {
     return (
       <>
-        <PageHeader
-          eyebrow="Money & fulfilment"
+        <SectionHero
+          icon={HandCoins}
+          eyebrow="Money"
           title="Collections"
           description="All collection channels, gateway states, receipts and reversals in one operational ledger."
         />
@@ -225,31 +224,48 @@ export function CollectionsPage() {
     }
   }
 
+  const clip = "block truncate";
   const ledgerColumns = [
     {
       key: "receipt",
       header: "Receipt",
+      widthClass: "w-[11rem]",
+      className: "truncate",
       render: (r: (typeof rows)[number]) => (
-        <ReceiptLink paymentId={r.id} receiptNo={r.receiptNo}>
-          <strong>{r.receiptNo}</strong>
+        <ReceiptLink paymentId={r.id} receiptNo={r.receiptNo} className={clip}>
+          <strong className="truncate" title={r.receiptNo}>
+            {r.receiptNo}
+          </strong>
         </ReceiptLink>
       ),
     },
     {
       key: "date",
       header: "Recorded at",
-      render: (r: (typeof rows)[number]) => r.date,
+      widthClass: "w-[12rem]",
+      className: "truncate whitespace-nowrap text-[0.85rem]",
+      render: (r: (typeof rows)[number]) => (
+        <span className="truncate" title={r.date}>
+          {r.date}
+        </span>
+      ),
     },
     {
       key: "customer",
       header: "Customer",
+      widthClass: "w-[10rem]",
+      className: "truncate",
       render: (r: (typeof rows)[number]) => (
-        <CustomerLink customerId={r.customerId}>{r.customer}</CustomerLink>
+        <CustomerLink customerId={r.customerId} className={clip}>
+          <span title={r.customer}>{r.customer}</span>
+        </CustomerLink>
       ),
     },
     {
       key: "enrollment",
       header: "Enrollment",
+      widthClass: "w-[9rem]",
+      className: "truncate whitespace-nowrap",
       render: (r: (typeof rows)[number]) => (
         <EnrollmentLink schemeId={r.schemeId}>{r.enrollmentNo}</EnrollmentLink>
       ),
@@ -257,6 +273,9 @@ export function CollectionsPage() {
     {
       key: "amount",
       header: "Net amount",
+      widthClass: "w-[8.5rem]",
+      className: "overflow-visible whitespace-normal text-right tabular-nums",
+      headerClassName: "text-right",
       render: (r: (typeof rows)[number]) => (
         <div>
           <strong>{money(r.netAmount ?? r.amount)}</strong>
@@ -272,16 +291,22 @@ export function CollectionsPage() {
     {
       key: "mode",
       header: "Mode",
+      widthClass: "w-[8rem]",
+      className: "truncate text-[0.85rem]",
       render: (r: (typeof rows)[number]) => r.mode.replaceAll("_", " "),
     },
     {
       key: "staff",
       header: "Staff",
+      widthClass: "w-[8rem]",
+      className: "truncate",
       render: (r: (typeof rows)[number]) => r.staff,
     },
     {
       key: "source",
       header: "Source",
+      widthClass: "w-[7.5rem]",
+      className: "truncate text-[0.85rem]",
       render: (r: (typeof rows)[number]) =>
         r.source === "STAFF"
           ? "Staff app"
@@ -292,11 +317,15 @@ export function CollectionsPage() {
     {
       key: "status",
       header: "Status",
+      widthClass: "w-[8rem]",
       render: (r: (typeof rows)[number]) => <StatusBadge status={r.status} />,
     },
     {
       key: "ops",
-      header: "",
+      header: "Actions",
+      widthClass: "w-[11rem]",
+      className: "overflow-visible whitespace-normal text-right align-top",
+      headerClassName: "text-right",
       render: (r: (typeof rows)[number]) => {
         const status = String(r.status ?? "");
         const showPendingOps =
@@ -304,13 +333,22 @@ export function CollectionsPage() {
           tab === "late" ||
           status === "PENDING" ||
           status === "LATE_SUCCESS";
+        const stopRow = (e: MouseEvent | KeyboardEvent) => {
+          e.stopPropagation();
+        };
         return (
-          <div className="flex flex-wrap justify-end gap-1">
+          <div
+            className="flex flex-col items-stretch gap-1 sm:items-end"
+            onClick={stopRow}
+            onKeyDown={stopRow}
+            role="presentation"
+          >
             {showPendingOps ? (
-              <>
+              <div className="flex flex-wrap justify-end gap-1">
                 <Button
                   size="sm"
                   variant="ghost"
+                  className="h-8 px-2"
                   disabled={paymentActionBusy}
                   onClick={() => void handlePollStatus(r.id)}
                 >
@@ -319,47 +357,52 @@ export function CollectionsPage() {
                 <Button
                   size="sm"
                   variant="ghost"
+                  className="h-8 px-2"
                   disabled={paymentActionBusy}
                   onClick={() => void handleReconcile(r.id)}
                 >
                   Reconcile
                 </Button>
-              </>
+              </div>
             ) : null}
-            {status === "SUCCESS" &&
-            tab !== "reversed" &&
-            r.mode !== "ONLINE_GATEWAY" &&
-            r.mode !== "LEGACY_ONLINE" ? (
+            <div className="flex flex-wrap justify-end gap-1">
+              {status === "SUCCESS" &&
+              tab !== "reversed" &&
+              r.mode !== "ONLINE_GATEWAY" &&
+              r.mode !== "LEGACY_ONLINE" ? (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-8 px-2 text-red-700"
+                  disabled={paymentActionBusy}
+                  onClick={() =>
+                    setReverseTarget({ id: r.id, receiptNo: r.receiptNo })
+                  }
+                >
+                  Reverse
+                </Button>
+              ) : null}
+              {r.mode === "ONLINE_GATEWAY" &&
+              ["SUCCESS", "PARTIALLY_REFUNDED"].includes(status) ? (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-8 px-2"
+                  onClick={() => setRefundTarget(r)}
+                >
+                  Refund
+                </Button>
+              ) : null}
               <Button
                 size="sm"
-                variant="ghost"
-                className="text-red-700"
-                disabled={paymentActionBusy}
-                onClick={() =>
-                  setReverseTarget({ id: r.id, receiptNo: r.receiptNo })
-                }
+                variant="outline"
+                className="h-8 gap-1 px-2"
+                onClick={() => void handleDownloadReceipt(r.id, r.receiptNo)}
               >
-                Reverse
+                <Download className="size-3.5" aria-hidden />
+                Receipt
               </Button>
-            ) : null}
-            {r.mode === "ONLINE_GATEWAY" &&
-            ["SUCCESS", "PARTIALLY_REFUNDED"].includes(status) ? (
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => setRefundTarget(r)}
-              >
-                Refund
-              </Button>
-            ) : null}
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => void handleDownloadReceipt(r.id, r.receiptNo)}
-            >
-              <Download />
-              Receipt
-            </Button>
+            </div>
           </div>
         );
       },
@@ -449,116 +492,115 @@ export function CollectionsPage() {
           </div>
         </Surface>
       ) : null}
-      <PageHeader
-        eyebrow="Money & fulfilment"
+      <SectionHero
+        icon={HandCoins}
+        eyebrow="Money"
         title="Collections"
         description="All collection channels, gateway states, receipts and reversals in one operational ledger."
         actions={
-          <>
-            <ListSearchInput
-              value={q}
-              onChange={setQ}
-              placeholder="Receipt, customer…"
-              className="w-[200px]"
-              inputClassName="h-10 rounded-xl"
-              iconClassName="size-4"
-            />
-            <DateRangeFilter
-              label="Paid"
-              from={from}
-              to={to}
-              onFromChange={setFrom}
-              onToChange={setTo}
-              onPreset={() => {
-                setFrom(defaultListRangeFrom());
-                setTo(defaultListRangeTo());
-              }}
-            />
-            <Button
-              variant="outline"
-              onClick={() =>
-                downloadCsv(
-                  "collections.csv",
-                  [
-                    "Receipt",
-                    "Date",
-                    "Customer",
-                    "Enrollment",
-                    "Amount",
-                    "Mode",
-                    "Status",
-                  ],
-                  rows.map((r: (typeof rows)[number]) => [
-                    r.receiptNo,
-                    r.date,
-                    r.customer,
-                    r.enrollmentNo,
-                    r.amount,
-                    r.mode,
-                    r.status,
-                  ]),
-                )
-              }
-            >
-              <Download />
-              Export
-            </Button>
-          </>
+          <button
+            type="button"
+            className={heroButtonClass}
+            onClick={() =>
+              downloadCsv(
+                "collections.csv",
+                [
+                  "Receipt",
+                  "Date",
+                  "Customer",
+                  "Enrollment",
+                  "Amount",
+                  "Mode",
+                  "Status",
+                ],
+                rows.map((r: (typeof rows)[number]) => [
+                  r.receiptNo,
+                  r.date,
+                  r.customer,
+                  r.enrollmentNo,
+                  r.amount,
+                  r.mode,
+                  r.status,
+                ]),
+              )
+            }
+          >
+            <Download className="size-4" aria-hidden />
+            Export CSV
+          </button>
         }
-      />
-      <Surface className="overflow-visible">
-        <PageFilterTabs
-          sectionLabel="Collection operations"
-          value={section}
-          onValueChange={(value) => setSection(value as CollectionSection)}
-        >
-          <PageTab value="payments">Payments</PageTab>
-          <PageTab value="refunds">PhonePe refunds</PageTab>
-          <PageTab value="settlement">Daily settlement</PageTab>
-          <PageTab value="post-settlement-refunds">
-            Post-settlement
-            {pendingPostSettlementCount > 0 ? ` (${pendingPostSettlementCount})` : ""}
-          </PageTab>
-        </PageFilterTabs>
-      </Surface>
-      {section === "post-settlement-refunds" ? <PostSettlementRefundsPanel /> : null}
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-        <StatCard
-          icon={IndianRupee}
+      >
+        <HeroStat
           label="Collected (net)"
           value={money(s.collected ?? 0)}
           detail={`${s.successfulCount ?? 0} successful of ${s.count ?? 0} payments in period`}
-          tone="green"
         />
-        <StatCard
-          icon={HandCoins}
+        <HeroStat
           label="Cash"
           value={money(s.cash ?? 0)}
           detail={`${cashShare}% of collected`}
-          tone="cream"
         />
-        <StatCard
-          icon={CreditCard}
+        <HeroStat
           label="Non-cash"
           value={money(s.digital ?? 0)}
           detail={`UPI ${money(s.upi ?? 0)} · Card ${money(s.card ?? 0)}${(s.online ?? 0) > 0 ? ` · Online ${money(s.online ?? 0)}` : ""}`}
-          tone="gold"
         />
-        <StatCard
-          icon={AlertTriangle}
+        <HeroStat
           label="Awaiting gateway"
           value={money(s.pending ?? 0)}
           detail={`${s.pendingCount ?? 0} pending · ${s.failed ?? 0} failed`}
-          tone={(s.pending ?? 0) > 0 ? "red" : "cream"}
         />
-        <StatCard
-          icon={RotateCcw}
+        <HeroStat
           label="Reversed"
           value={money(s.reversed ?? 0)}
           detail={`${s.reversedCount ?? 0} reversed · ${money(s.refunded ?? 0)} partly refunded`}
-          tone={(s.reversed ?? 0) > 0 ? "red" : "cream"}
         />
-      </div>
+      </SectionHero>
+
+      <Surface className="overflow-visible p-0">
+        <div className="px-4 pt-4 pb-3 sm:px-5">
+          <PageFilterTabs
+            sectionLabel="Collection operations"
+            toolbarChrome="plain"
+            value={section}
+            onValueChange={(value) => setSection(value as CollectionSection)}
+            tabsListClassName="h-auto w-fit max-w-full flex-wrap justify-start shadow-none"
+          >
+            <PageTab value="payments">Payments</PageTab>
+            <PageTab value="refunds">PhonePe refunds</PageTab>
+            <PageTab value="settlement">Daily settlement</PageTab>
+            <PageTab value="post-settlement-refunds">
+              Post-settlement
+              {pendingPostSettlementCount > 0
+                ? ` (${pendingPostSettlementCount})`
+                : ""}
+            </PageTab>
+          </PageFilterTabs>
+        </div>
+        <div className="flex flex-col gap-2 border-t border-[#eaded9] bg-[#fcfaf8] px-4 py-3 sm:flex-row sm:items-center sm:justify-end sm:gap-3 sm:px-5">
+          <ListSearchInput
+            value={q}
+            onChange={setQ}
+            placeholder="Receipt, customer…"
+            className="w-full sm:w-56"
+            inputClassName="h-10 rounded-xl"
+            iconClassName="size-4"
+          />
+          <DateRangeFilter
+            label="Paid"
+            from={from}
+            to={to}
+            onFromChange={setFrom}
+            onToChange={setTo}
+            onPreset={() => {
+              setFrom(defaultListRangeFrom());
+              setTo(defaultListRangeTo());
+            }}
+            className="w-full shrink-0 sm:w-auto"
+          />
+        </div>
+      </Surface>
+      {section === "post-settlement-refunds" ? <PostSettlementRefundsPanel /> : null}
       {section === "payments" ? <><div className="grid gap-5 xl:grid-cols-[1.5fr_.8fr]">
         <Surface title="Collection trend" description="Cash versus digital">
           <div className="h-[320px] p-5">
@@ -584,17 +626,22 @@ export function CollectionsPage() {
           </div>
         </Surface>
       </div>
-      <Surface className="overflow-visible">
+      <Surface className="p-0">
+        <div className="px-4 py-3 sm:px-5">
         <PageFilterTabs
           sectionLabel="Payment views"
+          toolbarChrome="plain"
           value={tab}
           onValueChange={(value) => setTab(value as LedgerTab)}
+          tabsListClassName="h-auto w-fit max-w-full flex-wrap justify-start shadow-none"
         >
           <PageTab value="all">All payments</PageTab>
           <PageTab value="pending">Pending</PageTab>
           <PageTab value="late">Late success</PageTab>
           <PageTab value="reversed">Reversed</PageTab>
         </PageFilterTabs>
+        </div>
+        <div className="border-t border-[#eaded9]">
         <PaginatedDataTable
           rows={rows}
           page={page}
@@ -606,7 +653,9 @@ export function CollectionsPage() {
             router.push(collectionsSearchHref(r.receiptNo || r.id))
           }
           columns={ledgerColumns}
+          minTableWidth="min-w-[88rem]"
         />
+        </div>
       </Surface>
       </> : null}
       {section === "refunds" ? (

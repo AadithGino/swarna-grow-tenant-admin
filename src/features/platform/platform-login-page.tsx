@@ -24,6 +24,7 @@ import {
   persistPlatformTokens,
   TOKEN_KEYS,
 } from "@/src/lib/auth-token-storage";
+import { resetAuthLogoutGuards } from "@/src/lib/auth-logout";
 import { safeAuthReturnPath } from "@/src/lib/auth-return-path";
 import { useClientMounted } from "@/src/hooks/use-client-mounted";
 import { usePlatformLoginMutation } from "@/src/store/api/platform-api";
@@ -57,6 +58,10 @@ export function PlatformLoginPage() {
     searchParams.get("next"),
     "/platform",
   );
+
+  useEffect(() => {
+    resetAuthLogoutGuards();
+  }, []);
 
   useEffect(() => {
     if (!mounted) return;

@@ -47,6 +47,34 @@ export function activityIcon(item: CustomerRecentActivityItem): LucideIcon {
   return Coins;
 }
 
+/** Stable icon element for list rows (eslint react-hooks/static-components). */
+export function ActivityRowIcon({
+  item,
+  className,
+  strokeWidth = 2,
+}: {
+  item: CustomerRecentActivityItem;
+  className?: string;
+  strokeWidth?: number;
+}) {
+  const kind = String(item.kind);
+  const metal = String(item.metal ?? "").toUpperCase();
+  const props = { className, strokeWidth, "aria-hidden": true as const };
+  if (kind === "SHOP_ORDER") return <ShoppingBag {...props} />;
+  if (kind === "SCHEME_PAYMENT") return <Layers3 {...props} />;
+  if (kind === "DIGITAL_METALS_SELL") return <Banknote {...props} />;
+  if (kind === "DIGITAL_METALS_REDEMPTION") return <Truck {...props} />;
+  if (
+    kind === "DIGITAL_METALS_BUY_METAL"
+    || kind === "DIGITAL_METALS_SELL_METAL"
+    || kind === "DIGITAL_METALS_REDEMPTION_METAL"
+  ) {
+    return metal === "SILVER" ? <Coins {...props} /> : <Gem {...props} />;
+  }
+  if (kind === "DIGITAL_METALS_BUY") return <Banknote {...props} />;
+  return <Coins {...props} />;
+}
+
 export function activityIconStyles(item: CustomerRecentActivityItem): {
   circleClass: string;
   iconClass: string;

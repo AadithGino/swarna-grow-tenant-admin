@@ -48,14 +48,20 @@ async function postRefreshOnce(
   path: string,
   refreshToken: string,
 ): Promise<{ tokens: RefreshTokenPayload; retryable: boolean }> {
-  const response = await fetch(apiUrl(path), {
-    method: "POST",
-    headers: {
-      Accept: "application/json",
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ refreshToken }),
-  });
+  let response: Response;
+  try {
+    response = await fetch(apiUrl(path), {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ refreshToken }),
+    });
+  } catch {
+    // Backend down, CORS block, or offline — treat as transient (no thrown stack in UI).
+    return { tokens: null, retryable: true };
+  }
   if (response.ok) {
     try {
       const body = await response.json();
@@ -101,8 +107,8 @@ async function refreshRealmOnce(realm: AuthRealm): Promise<RefreshTokenPayload> 
 }
 
 /** True when the client should sign out after a failed refresh (no recoverable session). */
-export function shouldLogoutAfterRefreshFailure(realm: AuthRealm): boolean {
-  return !readStoredRefreshToken(realm);
+export function shouldLogoutAfterRefreshFailure(_realm?: AuthRealm): boolean {
+  return true;
 }
 
 /** Refresh access token for a realm; concurrent callers share one in-flight request. */

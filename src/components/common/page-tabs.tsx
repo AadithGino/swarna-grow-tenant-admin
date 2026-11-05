@@ -42,17 +42,19 @@ export function PageTabsBar({
   listVariant = "detail",
   className,
   chromeClassName,
+  compactLabel,
   children,
 }: {
   sectionLabel: string;
   listVariant?: ListVariant;
   className?: string;
   chromeClassName?: string;
+  compactLabel?: boolean;
   children: ReactNode;
 }) {
   return (
     <div className={cn(detailRecordTabsChromeClass, chromeClassName)}>
-      <DetailRecordTabsHeader label={sectionLabel} />
+      <DetailRecordTabsHeader label={sectionLabel} compact={compactLabel} />
       <TabsList variant={listVariant} className={className}>
         {children}
       </TabsList>
@@ -96,17 +98,31 @@ export { TabsTrigger as PageTab };
 export function PageFilterTabs({
   sectionLabel,
   className,
+  tabsListClassName,
+  toolbarChrome,
   children,
   ...tabsProps
 }: TabsRootProps & {
   sectionLabel: string;
+  /** Override tab list width/layout (default: compact `w-fit`). */
+  tabsListClassName?: string;
+  /** Use `plain` inside a parent Surface toolbar (no inner card chrome). */
+  toolbarChrome?: "default" | "plain";
   children: ReactNode;
 }) {
+  const plain = toolbarChrome === "plain";
   return (
     <Tabs className={cn("gap-0", className)} {...tabsProps}>
       <PageTabsBar
         sectionLabel={sectionLabel}
-        className="h-auto w-fit max-w-full"
+        compactLabel={plain}
+        chromeClassName={
+          plain ? "border-0 bg-transparent px-0 py-0" : undefined
+        }
+        className={cn(
+          "h-auto max-w-full !w-fit",
+          tabsListClassName,
+        )}
       >
         {children}
       </PageTabsBar>

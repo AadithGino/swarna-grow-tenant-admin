@@ -35,7 +35,7 @@ export function SectionHero({
         className,
       )}
     >
-      <div className="flex flex-col gap-5 border-b border-[#eadfdb] px-5 py-5 sm:px-6 sm:py-6 lg:flex-row lg:items-start lg:justify-between">
+      <div className="flex flex-col gap-5 border-b border-[#eadfdb] px-5 py-5 sm:px-6 sm:py-6 lg:flex-row lg:items-center lg:justify-between">
         <div className="min-w-0">
           {eyebrow ? (
             <p className="text-[0.72rem] font-semibold uppercase tracking-[0.08em] text-[#9a6f2a]">

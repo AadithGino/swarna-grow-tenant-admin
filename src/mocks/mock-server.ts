@@ -374,8 +374,33 @@ export async function mockRequest<T>({
             count: 184,
           },
           customers: { active: 846 },
-          schemes: { open: 612, activeAndLocked: 571, overdue: 23, matured: 9 },
-          attention: { pendingCashHandovers: 3, openGrievances: 2, openRedemptions: 4 },
+          schemes: {
+            open: 612,
+            activeAndLocked: 571,
+            activePaying: 527,
+            planCapped: 44,
+            defaulted: 41,
+            pendingFirstPayment: 0,
+            completed: 120,
+            overdue: 23,
+            matured: 9,
+            statusBreakdown: {
+              notStarted: 0,
+              activePaying: 527,
+              planCapped: 44,
+              defaulted: 41,
+              open: 612,
+              matured: 9,
+              completed: 120,
+              inProgress: 612,
+              total: 741,
+            },
+          },
+          attention: {
+            pendingCashHandovers: 3,
+            openGrievances: 2,
+            openRedemptions: 4,
+          },
           redemptions: {
             count: 6,
             settlementPaise: 8420000,
@@ -3234,7 +3259,11 @@ export async function mockRequest<T>({
           reportType: "DAILY_HEDGE_INDEX",
           endDate: "2026-10-17",
           days: 3,
-          currentBalances: { businessDate: "2026-10-17", goldClosingUg: "2000000", silverClosingUg: "500000" },
+          currentBalances: {
+            businessDate: "2026-10-17",
+            goldClosingUg: "2000000",
+            silverClosingUg: "500000",
+          },
           items: [
             {
               businessDate: "2026-10-17",
@@ -4746,8 +4775,18 @@ export async function mockRequest<T>({
       const answer = mockAgentAnswer(message);
       const now = new Date().toISOString();
       mockAssistantThread.push(
-        { id: `amg_u_${mockAssistantThread.length}`, role: "user", text: message, createdAt: now },
-        { id: answer.messageId ?? `amg_a_${mockAssistantThread.length}`, role: "assistant", bundle: answer, createdAt: now },
+        {
+          id: `amg_u_${mockAssistantThread.length}`,
+          role: "user",
+          text: message,
+          createdAt: now,
+        },
+        {
+          id: answer.messageId ?? `amg_a_${mockAssistantThread.length}`,
+          role: "assistant",
+          bundle: answer,
+          createdAt: now,
+        },
       );
       return answer as T;
     }

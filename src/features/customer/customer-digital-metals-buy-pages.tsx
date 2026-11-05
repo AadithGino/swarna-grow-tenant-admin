@@ -424,12 +424,8 @@ export function CustomerDigitalMetalsBuyOrderPage({ orderId }: { orderId: string
       const nestedPi = intent.paymentIntent as Record<string, unknown> | undefined;
       const attemptId = String(intent.id ?? nestedPi?.id ?? attempts[0]?.id ?? "");
       if (attemptId) setActiveAttemptId(attemptId);
-      const tokenRaw =
-        intent.token ?? nestedPi?.token ?? intent.sdkToken ?? nestedPi?.sdkToken;
-      const token = tokenRaw ? String(tokenRaw) : undefined;
-      const gatewayUrl =
-        pickPhonePeGatewayUrl(intent as Record<string, unknown>)
-        || pickPhonePeGatewayUrl(nestedPi);
+      const paymentPayload = (nestedPi ?? intent) as Record<string, unknown>;
+      const gatewayUrl = pickPhonePeGatewayUrl(intent as Record<string, unknown>) || pickPhonePeGatewayUrl(nestedPi);
       if (!gatewayUrl) {
         if (attemptId) {
           toast.message("Demo payment", { description: "Confirming your purchase…" });
@@ -453,15 +449,15 @@ export function CustomerDigitalMetalsBuyOrderPage({ orderId }: { orderId: string
         await order.refetch();
         return;
       }
-      await openCustomerPaymentTarget(
-        { token, redirectUrl: gatewayUrl, paymentUrl: gatewayUrl },
-        {
-          tenantSlug,
-          statusRedirectUrl: orderReturnPath,
-          initiateLink: async () => ({ redirectUrl: redirectReturn, gatewayUrl }),
-          navigate: (path) => router.push(path),
-        },
-      );
+      await openCustomerPaymentTarget(paymentPayload, {
+        tenantSlug,
+        statusRedirectUrl: orderReturnPath,
+        initiateLink: async () => ({ redirectUrl: redirectReturn, gatewayUrl }),
+        navigate: (path) => router.push(path),
+      });
+      const tokenRaw =
+        paymentPayload.token ?? paymentPayload.sdkToken;
+      const token = tokenRaw ? String(tokenRaw) : undefined;
       if (isPhonePeMockSdkToken(token)) {
         toast.message("Demo PhonePe", {
           description: "Simulating payment confirmation…",

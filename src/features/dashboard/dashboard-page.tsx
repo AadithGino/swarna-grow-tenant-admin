@@ -18,6 +18,7 @@ import { PageSkeleton, QueryError } from "@/src/components/common/query-state";
 import { DashboardWidgetGrid } from "@/src/components/dashboard/dashboard-widget-grid";
 import { PlanUsageCard } from "@/src/components/dashboard/plan-usage-card";
 import { RedemptionFulfillmentCard } from "@/src/components/dashboard/redemption-fulfillment-card";
+import { EnrollmentStatusBreakdown } from "@/src/components/enrollments/enrollment-status-breakdown";
 import { SetupChecklist } from "@/src/components/dashboard/setup-checklist";
 import {
   DashboardAlertList,
@@ -184,7 +185,10 @@ export function DashboardPage() {
           setPeriod(v);
         }}
       >
-        <SelectTrigger className="h-10 w-[10.5rem] bg-white" aria-label="Period">
+        <SelectTrigger
+          className="h-10 w-[10.5rem] bg-white"
+          aria-label="Period"
+        >
           <SelectValue placeholder="Period" />
         </SelectTrigger>
         <SelectContent>
@@ -300,6 +304,13 @@ export function DashboardPage() {
 
       {widgets ? <DashboardWidgetGrid widgets={widgets} /> : null}
 
+      {data.enrollmentStatus ? (
+        <EnrollmentStatusBreakdown
+          data={data.enrollmentStatus}
+          scopeLabel={data.scope?.label}
+        />
+      ) : null}
+
       <SetupChecklist />
 
       {data.redemptionFulfillment ? (
@@ -364,7 +375,9 @@ export function DashboardPage() {
           loading={dmSummary.isFetching}
           error={dmSummary.isError ? dmSummary.error : undefined}
           onRetry={() => void dmSummary.refetch()}
-          periodLabel={data.period?.label ?? period.replaceAll("_", " ").toLowerCase()}
+          periodLabel={
+            data.period?.label ?? period.replaceAll("_", " ").toLowerCase()
+          }
         />
       ) : null}
 
@@ -381,67 +394,69 @@ export function DashboardPage() {
       </Surface>
 
       {(data.attention ?? []).length ? (
-      <Surface
-        title="Operational attention"
-        description="Items that need an owner today"
-      >
-        <DataTable
-          rows={(data.attention ?? []).map((x: any, i: number) => ({
-            ...x,
-            id: String(i),
-          }))}
-          columns={[
-            {
-              key: "priority",
-              header: "Priority",
-              render: (r: any) => (
-                <span className="rounded-full bg-[#fff6df] px-2.5 py-1 text-xs font-semibold text-[#805817]">
-                  {r.priority}
-                </span>
-              ),
-            },
-            {
-              key: "item",
-              header: "Item",
-              render: (r: any) => <span className="font-medium">{r.item}</span>,
-            },
-            {
-              key: "customer",
-              header: "Customer / branch",
-              render: (r: any) => r.customer,
-            },
-            {
-              key: "amount",
-              header: "Amount",
-              render: (r: any) => (Number(r.amount) ? money(r.amount) : "—"),
-            },
-            { key: "age", header: "Age", render: (r: any) => r.age },
-            {
-              key: "status",
-              header: "Status",
-              render: (r: any) => (
-                <span className="text-red-600">{r.status}</span>
-              ),
-            },
-            {
-              key: "action",
-              header: "Action",
-              render: (r: any) =>
-                r.actionPath ? (
-                  <Button size="sm" variant="outline" asChild>
-                    <Link href={portalPathFromContract(r.actionPath)}>
-                      {r.actionLabel ?? r.action ?? "Open"}
-                    </Link>
-                  </Button>
-                ) : (
-                  <Button size="sm" variant="outline">
-                    {r.action}
-                  </Button>
+        <Surface
+          title="Operational attention"
+          description="Items that need an owner today"
+        >
+          <DataTable
+            rows={(data.attention ?? []).map((x: any, i: number) => ({
+              ...x,
+              id: String(i),
+            }))}
+            columns={[
+              {
+                key: "priority",
+                header: "Priority",
+                render: (r: any) => (
+                  <span className="rounded-full bg-[#fff6df] px-2.5 py-1 text-xs font-semibold text-[#805817]">
+                    {r.priority}
+                  </span>
                 ),
-            },
-          ]}
-        />
-      </Surface>
+              },
+              {
+                key: "item",
+                header: "Item",
+                render: (r: any) => (
+                  <span className="font-medium">{r.item}</span>
+                ),
+              },
+              {
+                key: "customer",
+                header: "Customer / branch",
+                render: (r: any) => r.customer,
+              },
+              {
+                key: "amount",
+                header: "Amount",
+                render: (r: any) => (Number(r.amount) ? money(r.amount) : "—"),
+              },
+              { key: "age", header: "Age", render: (r: any) => r.age },
+              {
+                key: "status",
+                header: "Status",
+                render: (r: any) => (
+                  <span className="text-red-600">{r.status}</span>
+                ),
+              },
+              {
+                key: "action",
+                header: "Action",
+                render: (r: any) =>
+                  r.actionPath ? (
+                    <Button size="sm" variant="outline" asChild>
+                      <Link href={portalPathFromContract(r.actionPath)}>
+                        {r.actionLabel ?? r.action ?? "Open"}
+                      </Link>
+                    </Button>
+                  ) : (
+                    <Button size="sm" variant="outline">
+                      {r.action}
+                    </Button>
+                  ),
+              },
+            ]}
+          />
+        </Surface>
       ) : null}
     </>
   );

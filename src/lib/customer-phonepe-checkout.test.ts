@@ -19,6 +19,16 @@ describe("scheme vs PhonePe checkout URLs", () => {
     expect(url).toBe("https://mercury-uat.phonepe.com/transact/checkout?token=real");
   });
 
+  it("does not treat merchant return redirectUrl as PhonePe gateway", () => {
+    const url = pickPhonePeGatewayUrl({
+      redirectUrl: "http://localhost:5173/customer/evoluxe/digital-metals/buy-order/dmbo_01",
+      sdkToken: "sandbox-sdk-token",
+      checkoutKind: "SDK_ORDER",
+    });
+    expect(url).toMatch(/mercury(-uat)?\.phonepe\.com\/transact\//);
+    expect(url).not.toContain("localhost");
+  });
+
   it("does not mark link-only responses as SDK_ORDER", () => {
     const row = normalizePhonePeCheckout({
       token: "link-only",

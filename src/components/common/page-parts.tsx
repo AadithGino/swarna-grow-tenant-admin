@@ -136,9 +136,20 @@ export function Surface({
 }
 
 /** Section label above detail-page tab bars (use with TabsList variant="detail"). */
-export function DetailRecordTabsHeader({ label }: { label: string }) {
+export function DetailRecordTabsHeader({
+  label,
+  compact,
+}: {
+  label: string;
+  compact?: boolean;
+}) {
   return (
-    <p className="mb-3 text-[0.82rem] font-semibold text-[#9a6f2a]">
+    <p
+      className={cn(
+        "text-[0.82rem] font-semibold text-[#9a6f2a]",
+        compact ? "mb-2" : "mb-3",
+      )}
+    >
       {label}
     </p>
   );

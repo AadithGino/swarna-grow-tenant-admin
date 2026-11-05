@@ -17,11 +17,21 @@ export function extractPaymentLinkToken(pathOrUrl: string): string | null {
 
 type InitiateLink = (linkToken: string) => Promise<{ gatewayUrl?: string; redirectUrl?: string }>;
 
+function isPhonePeHostedCheckoutUrl(url: string): boolean {
+  return /phonepe\.com/i.test(url) && /\/transact\//i.test(url);
+}
+
 /** Prefer API-hosted checkout URL; fall back to SDK token URL (Flutter / legacy). */
 export function pickPhonePeGatewayUrl(raw: Record<string, unknown> | null | undefined): string {
   if (!raw) return "";
   if (typeof raw.paymentUrl === "string" && raw.paymentUrl.startsWith("http")) return raw.paymentUrl;
-  if (typeof raw.redirectUrl === "string" && raw.redirectUrl.startsWith("http")) return raw.redirectUrl;
+  if (
+    typeof raw.redirectUrl === "string"
+    && raw.redirectUrl.startsWith("http")
+    && isPhonePeHostedCheckoutUrl(raw.redirectUrl)
+  ) {
+    return raw.redirectUrl;
+  }
   if (typeof raw.gatewayUrl === "string" && raw.gatewayUrl.startsWith("http")) return raw.gatewayUrl;
   const sdkToken =
     (typeof raw.sdkToken === "string" && raw.sdkToken)

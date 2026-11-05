@@ -74,7 +74,6 @@ import { normalizeShopOrdersListResponse } from "@/src/lib/customer-shop-orders-
 import {
   normalizeCustomerActivityPage,
   type CustomerActivityListPage,
-  type CustomerRecentActivityItem,
 } from "@/src/lib/customer-recent-activity";
 
 type ApiEnvelope<T> = { success: true; data: T; meta?: { nextCursor: string | null; hasMore: boolean; limit: number; total: number } };
@@ -912,7 +911,6 @@ export const customerApi = createApi({
         params: { limit: 20, ...params },
       }),
       transformResponse: (raw: unknown) => normalizeCustomerActivityPage(raw),
-      serializeQueryArgs: ({ endpointName }) => endpointName,
       merge: (current, incoming, { arg }) => {
         if (!arg?.cursor) return incoming;
         return {
@@ -922,7 +920,10 @@ export const customerApi = createApi({
       },
       forceRefetch: ({ currentArg, previousArg }) => currentArg?.cursor !== previousArg?.cursor,
     }),
-    getCustomerProfile: builder.query<CustomerProfile, void>({ query: () => "/app/profile", providesTags: ["CustomerProfile"] }),
+    getCustomerProfile: builder.query<CustomerProfile, void>({
+      query: () => "/app/profile",
+      providesTags: ["CustomerProfile"],
+    }),
     updateCustomerProfile: builder.mutation<CustomerProfile, Partial<CustomerProfile>>({ query: (body) => ({ url: "/app/profile", method: "PATCH", body }), invalidatesTags: ["CustomerProfile", "CustomerHome"] }),
     completeCustomerProfile: builder.mutation<
       CustomerProfile,
@@ -1440,7 +1441,6 @@ export const customerApi = createApi({
         mockKey: "shopOrders",
       }),
       transformResponse: (raw: unknown) => normalizeShopOrdersListResponse(raw),
-      serializeQueryArgs: ({ endpointName }) => endpointName,
       merge: (current, incoming, { arg }) => {
         if (!arg?.cursor) return incoming;
         return {

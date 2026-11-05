@@ -27,16 +27,22 @@ export function goldLedgerColumns<T extends { goldAccrual?: PaymentGoldAccrual |
     {
       key: "goldWeight",
       header: "Gold booked",
+      widthClass: "w-[7.5rem]",
+      className: "truncate",
       render: (r: T) => <GoldWeightCell accrual={r.goldAccrual} />,
     },
     {
       key: "goldRate",
       header: "Rate / g",
+      widthClass: "w-[7.5rem]",
+      className: "truncate whitespace-nowrap",
       render: (r: T) => <GoldRateCell accrual={r.goldAccrual} />,
     },
     {
       key: "goldDate",
       header: "Booking date",
+      widthClass: "w-[8rem]",
+      className: "truncate whitespace-nowrap text-[0.85rem]",
       render: (r: T) => <GoldBookedDateCell accrual={r.goldAccrual} />,
     },
   ];

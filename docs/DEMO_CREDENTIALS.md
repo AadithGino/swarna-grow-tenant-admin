@@ -42,7 +42,7 @@ From `SEED_PLATFORM_EMAIL` / `SEED_PLATFORM_PASSWORD` in backend `.env` (default
 
 | Role | Name | Mobile | Branch |
 |------|------|--------|--------|
-| Tenant owner | Rahul Nair | `9847012345` | All branches |
+| Tenant owner | Rahul Nair | `image.png` | All branches |
 | Tenant admin | Divya Admin | `9847012347` | All branches |
 | Branch manager | Anu Menon | `9847012346` | Kochi (`KOC`) |
 | Branch staff | Priya K | `9847012350` | Mangalore HQ (`MGR`) |

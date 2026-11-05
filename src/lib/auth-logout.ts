@@ -15,6 +15,14 @@ let platformLogoutStarted = false;
 let customerLogoutStarted = false;
 let agentLogoutStarted = false;
 
+/** Allow a new forced sign-out after the user returns to a login screen. */
+export function resetAuthLogoutGuards() {
+  tenantLogoutStarted = false;
+  platformLogoutStarted = false;
+  customerLogoutStarted = false;
+  agentLogoutStarted = false;
+}
+
 export function clearPlatformAuthStorage() {
   clearPlatformTokens();
 }

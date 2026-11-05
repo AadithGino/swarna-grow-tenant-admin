@@ -64,11 +64,16 @@ export function shouldAttemptAuthRefresh(
   return isUnauthorizedFetchError(error);
 }
 
-/** Avoid signing out when refresh failed transiently but a refresh token remains. */
+/**
+ * After 401, sign out when refresh was not attempted (hard auth failure) or when
+ * refresh was attempted but could not obtain a new access token. Keeping the
+ * shell "logged in" with a dead access token while a refresh token remains in
+ * storage caused stuck screens ("invalid token" + Retry forever).
+ */
 export function shouldForceAuthLogout(
-  realm: AuthRealm,
+  _realm: AuthRealm,
   refreshWasAttempted: boolean,
 ): boolean {
   if (!refreshWasAttempted) return true;
-  return shouldLogoutAfterRefreshFailure(realm);
+  return shouldLogoutAfterRefreshFailure();
 }

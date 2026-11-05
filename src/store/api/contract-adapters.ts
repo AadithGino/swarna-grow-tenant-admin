@@ -28,6 +28,7 @@ import type {
   StaffPerformanceHandoversSection,
 } from "@/src/types/staff-performance";
 import { initials, money } from "@/src/lib/format";
+import { adaptEnrollmentStatusBreakdown } from "@/src/lib/enrollment-status-counts";
 import { mergePageMeta, type ListPageMeta } from "@/src/lib/cursor-pagination";
 import {
   cappedCyclePayableBounds,
@@ -957,6 +958,7 @@ function enrollmentSummaryFromMeta(
       active: activeAndLocked,
       activeAndLocked,
       open: Number(metaSummary.open ?? activeAndLocked + defaulted),
+      pendingFirstPayment: Number(metaSummary.pendingFirstPayment ?? 0),
       locked: Number(metaSummary.locked ?? 0),
       defaulted,
       matured: Number(metaSummary.matured ?? 0),
@@ -1285,9 +1287,7 @@ export function adaptPayments(raw: any) {
       reversed: rupees(meta.reversedAmount) || derived.reversed,
       reversedCount: Number(meta.reversedCount ?? 0),
       /** Partial refunds on payments that still count as collected (excludes full reversals). */
-      refunded:
-        rupees(meta.refundedAmount) ||
-        derived.refunded,
+      refunded: rupees(meta.refundedAmount) || derived.refunded,
       grossCollected: rupees(meta.grossSuccessfulAmount),
       lateSuccess: derived.lateSuccess,
     },
@@ -1481,10 +1481,13 @@ export function adaptPaginatedList<T = Record<string, unknown>>(
   };
 }
 
-function adaptMoneyBlock(value: unknown): StaffPerformanceMoneyBlock | undefined {
+function adaptMoneyBlock(
+  value: unknown,
+): StaffPerformanceMoneyBlock | undefined {
   if (!value || typeof value !== "object") return undefined;
   const row = value as Record<string, unknown>;
-  const amountPaise = row.amountPaise != null ? Number(row.amountPaise) : undefined;
+  const amountPaise =
+    row.amountPaise != null ? Number(row.amountPaise) : undefined;
   const amountDisplay =
     row.amountDisplay != null ? String(row.amountDisplay) : undefined;
   if (amountPaise == null && !amountDisplay) return undefined;
@@ -1498,7 +1501,8 @@ export function adaptStaffPerformanceSummary(
   const cashRaw = data.cash as Record<string, unknown> | undefined;
   return {
     range: data.range as StaffPerformanceSummaryView["range"],
-    trendGroupBy: data.trendGroupBy != null ? String(data.trendGroupBy) : undefined,
+    trendGroupBy:
+      data.trendGroupBy != null ? String(data.trendGroupBy) : undefined,
     collectionTotal: adaptMoneyBlock(data.collectionTotal),
     averageTicket: adaptMoneyBlock(data.averageTicket),
     enrolments: data.enrolments != null ? Number(data.enrolments) : undefined,
@@ -1775,11 +1779,10 @@ export function adaptSettingsOperations(raw: unknown): Record<string, unknown> {
     paymentReversalWindowHours: ops.paymentReversalWindowHours ?? 48,
     redemptionApprovalRequired: ops.redemptionApprovalRequired ?? true,
     termsAndConditions: ops.termsAndConditions ?? "",
-    ecommerceEnabled: data.ecommerceEnabled === true || ops.ecommerceEnabled === true,
-    ecommerce:
-      (data.ecommerce as Record<string, unknown> | undefined) ??
-      (ops.ecommerce as Record<string, unknown> | undefined) ??
-      {
+    ecommerceEnabled:
+      data.ecommerceEnabled === true || ops.ecommerceEnabled === true,
+    ecommerce: (data.ecommerce as Record<string, unknown> | undefined) ??
+      (ops.ecommerce as Record<string, unknown> | undefined) ?? {
         planEntitled: false,
         enabled: false,
         active: false,
@@ -2481,11 +2484,24 @@ export function adaptDashboard(
       {
         key: "ACTIVE_SCHEMES",
         label: "Open enrollments",
-        displayValue: String(count(summary.schemes?.open ?? summary.schemes?.active)),
-        secondaryLabel: `${count(summary.schemes?.activeAndLocked)} paying · rest awaiting first payment or defaulted`,
+        displayValue: String(
+          adaptEnrollmentStatusBreakdown(summary.schemes?.statusBreakdown)
+            ?.open ?? count(summary.schemes?.open ?? summary.schemes?.active),
+        ),
+        secondaryLabel: (() => {
+          const b = adaptEnrollmentStatusBreakdown(
+            summary.schemes?.statusBreakdown,
+          );
+          if (b) {
+            return `${b.activePaying} paying · ${b.planCapped} capped · ${b.defaulted} defaulted`;
+          }
+          return "Paying, capped, or defaulted";
+        })(),
         actionPath: "/enrollments",
         group: "kpi",
-        rawValue: count(summary.schemes?.open ?? summary.schemes?.active),
+        rawValue:
+          adaptEnrollmentStatusBreakdown(summary.schemes?.statusBreakdown)
+            ?.open ?? count(summary.schemes?.open ?? summary.schemes?.active),
       },
       {
         key: "OVERDUE",
@@ -2667,6 +2683,9 @@ export function adaptDashboard(
       : null,
     scope: summary.scope ?? { label: "All showrooms" },
     period: summary.period ?? { label: "This month" },
+    enrollmentStatus:
+      adaptEnrollmentStatusBreakdown(summary.schemes?.statusBreakdown) ??
+      undefined,
     redemptionFulfillment: summary.redemptions
       ? {
           count: Number(summary.redemptions.count ?? 0),
@@ -2690,7 +2709,9 @@ export function adaptDashboard(
           ),
           maturityHandedOut:
             summary.redemptions.maturityRedemptions?.settlementPaise != null
-              ? fromPaise(summary.redemptions.maturityRedemptions.settlementPaise)
+              ? fromPaise(
+                  summary.redemptions.maturityRedemptions.settlementPaise,
+                )
               : undefined,
           purchaseCredit: fromPaise(
             summary.redemptions.purchaseAdjustmentSettlementPaise ?? 0,
@@ -3370,11 +3391,10 @@ function settlementPreviewMetaFields(payload: Record<string, unknown>) {
         ?.valuationRate?.ratePerGramPaise ??
       0,
   );
-  const goldMg = Number(
-    payload.goldWeightMg ?? payload.principalWeightMg ?? 0,
-  );
-  const compGold = (payload.computation as { goldWeight?: { weightDisplay?: string } })
-    ?.goldWeight?.weightDisplay;
+  const goldMg = Number(payload.goldWeightMg ?? payload.principalWeightMg ?? 0);
+  const compGold = (
+    payload.computation as { goldWeight?: { weightDisplay?: string } }
+  )?.goldWeight?.weightDisplay;
   return {
     cashSettlementBasis:
       (payload.cashSettlementBasis as SettlementPreview["cashSettlementBasis"]) ??
@@ -3471,12 +3491,14 @@ export function adaptSettlementPreview(
       warningText: payload.warningText,
       valuationNote: payload.valuationNote,
       ...settlementPreviewMetaFields(payload),
-      handoverValue: payload.handoverValuePaise != null
-        ? fromPaise(Number(payload.handoverValuePaise))
-        : undefined,
-      roundingDelta: payload.roundingDeltaPaise != null
-        ? fromPaise(Number(payload.roundingDeltaPaise))
-        : undefined,
+      handoverValue:
+        payload.handoverValuePaise != null
+          ? fromPaise(Number(payload.handoverValuePaise))
+          : undefined,
+      roundingDelta:
+        payload.roundingDeltaPaise != null
+          ? fromPaise(Number(payload.roundingDeltaPaise))
+          : undefined,
     };
   }
 
@@ -3487,10 +3509,7 @@ export function adaptSettlementPreview(
   const benefit = fromPaise(payload?.benefitPaise ?? 0);
   const penalty = fromPaise(payload?.penaltyPaise ?? 0);
   return {
-    eligible:
-      typeof payload?.eligible === "boolean"
-        ? payload.eligible
-        : false,
+    eligible: typeof payload?.eligible === "boolean" ? payload.eligible : false,
     type: (payload?.type as SettlementPreviewType) ?? fallbackType,
     finalValue: settlementPaise / 100,
     lines:
@@ -3774,7 +3793,9 @@ function mapAdaptRedemptionItem(item: any) {
     customerId: String(
       item.customerId ?? item.customer?._id ?? item.customer?.id ?? "",
     ),
-    schemeId: String(item.schemeId ?? item.scheme?._id ?? item.scheme?.id ?? ""),
+    schemeId: String(
+      item.schemeId ?? item.scheme?._id ?? item.scheme?.id ?? "",
+    ),
     scheme:
       item.scheme?.enrollmentNumber ??
       item.scheme?.schemeNumber ??

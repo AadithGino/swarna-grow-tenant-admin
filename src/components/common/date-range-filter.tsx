@@ -129,7 +129,7 @@ export function DateRangeFilter({
   return (
     <div
       className={cn(
-        "flex flex-wrap items-center gap-1.5 rounded-xl border border-[#eaded9] bg-[#f7f0ec]/70 px-2 py-1.5",
+        "flex flex-wrap items-center gap-1.5 rounded-xl border border-[#eaded9] bg-[#f7f0ec]/70 px-2 py-2 min-h-10",
         className,
       )}
       role="group"

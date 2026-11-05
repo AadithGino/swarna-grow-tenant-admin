@@ -671,19 +671,12 @@ export function CustomerDigitalMetalsRedeemOrderPage({ orderId }: { orderId: str
         return;
       }
 
-      await openCustomerPaymentTarget(
-        {
-          token,
-          redirectUrl: gatewayUrl,
-          paymentUrl: gatewayUrl,
-        },
-        {
-          tenantSlug,
-          statusRedirectUrl: orderReturnPath,
-          initiateLink: async () => ({ redirectUrl: redirectReturn, gatewayUrl }),
-          navigate: (path) => router.push(path),
-        },
-      );
+      await openCustomerPaymentTarget(paymentIntent, {
+        tenantSlug,
+        statusRedirectUrl: orderReturnPath,
+        initiateLink: async () => ({ redirectUrl: redirectReturn, gatewayUrl }),
+        navigate: (path) => router.push(path),
+      });
     } catch (err) {
       toastApiError(err);
       payIdempotencyRef.current = newIdempotencyKey();

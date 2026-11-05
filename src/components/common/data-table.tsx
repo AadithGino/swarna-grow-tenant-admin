@@ -6,12 +6,16 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { cn } from "@/lib/utils";
 import { EmptyState } from "./query-state";
 
 export interface DataColumn<T> {
   key: string;
   header: string;
+  /** Applied to header and body cells (use with minWidth + table-fixed). */
+  widthClass?: string;
   className?: string;
+  headerClassName?: string;
   render: (row: T) => React.ReactNode;
 }
 
@@ -20,21 +24,35 @@ export function DataTable<T extends { id: string }>({
   rows,
   onRowClick,
   emptyTitle,
+  minWidth,
 }: {
   columns: DataColumn<T>[];
   rows: T[];
   onRowClick?: (row: T) => void;
   emptyTitle?: string;
+  /** Min table width; enables fixed layout + horizontal scroll in the table wrapper. */
+  minWidth?: string;
 }) {
   if (!rows.length) return <EmptyState title={emptyTitle} />;
+  const wide = Boolean(minWidth);
   return (
-    <Table className="min-w-full">
+    <Table
+      className={cn(
+        "w-full",
+        wide && "table-fixed",
+        minWidth,
+      )}
+    >
       <TableHeader className="bg-[#fbf8f6]">
         <TableRow>
           {columns.map((column) => (
             <TableHead
               key={column.key}
-              className={`h-10 px-4 text-[0.78rem] font-semibold text-[#7a6d70] ${column.className ?? ""}`}
+              className={cn(
+                "h-10 px-4 text-left text-[0.78rem] font-semibold text-[#7a6d70]",
+                column.widthClass,
+                column.headerClassName,
+              )}
             >
               {column.header}
             </TableHead>
@@ -60,7 +78,12 @@ export function DataTable<T extends { id: string }>({
             {columns.map((column) => (
               <TableCell
                 key={column.key}
-                className={`px-4 py-3 text-[0.9rem] ${column.className ?? ""}`}
+                className={cn(
+                  "px-4 py-3 text-left text-[0.9rem] align-middle",
+                  wide && !column.className?.includes("overflow-visible") && "overflow-hidden",
+                  column.widthClass,
+                  column.className,
+                )}
               >
                 {column.render(row)}
               </TableCell>

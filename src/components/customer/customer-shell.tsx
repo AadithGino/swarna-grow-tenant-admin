@@ -11,6 +11,7 @@ import { cn } from "@/lib/utils";
 import { useCustomerTenant } from "@/src/components/customer/customer-tenant-context";
 import { customerPath } from "@/src/lib/customer-tenant";
 import { CustomerRegistrationGuard } from "@/src/components/customer/customer-registration-guard";
+import { CustomerIdentityProvider, useCustomerIdentity } from "@/src/components/customer/customer-identity-context";
 import { useCustomerPortalCapabilities } from "@/src/lib/customer-portal-capabilities";
 import { CustomerBrand } from "@/src/components/customer/customer-ui";
 import { CustomerFcmRegistrar } from "@/src/components/customer/customer-fcm-registrar";
@@ -32,15 +33,16 @@ const mobileNavigation = [
   { segment: "profile", label: "Profile", icon: UserRound, exact: false, fab: false },
 ] as const;
 
-export function CustomerShell({ children }: { children: React.ReactNode }) {
+function CustomerShellInner({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   useEffect(() => {
     if (pathname) recordPortalNavigation(pathname);
   }, [pathname]);
   const { tenantSlug } = useCustomerTenant();
   const { signOut } = useCustomerSignOut();
-  const { data: home } = useGetCustomerHomeQuery();
-  const { data: shopAvailability } = useGetShopAvailabilityQuery();
+  const { ready: identityReady } = useCustomerIdentity();
+  const { data: home } = useGetCustomerHomeQuery(undefined, { skip: !identityReady });
+  const { data: shopAvailability } = useGetShopAvailabilityQuery(undefined, { skip: !identityReady });
   const storeAvailable = shopAvailability?.available === true;
   const { visible: digitalMetalsVisible } = useCustomerDigitalMetalsVisible();
   const { customerSelfEnrol, customerAppWriteEnabled, customerAppPaymentsEnabled } = useCustomerPortalCapabilities();
@@ -222,5 +224,13 @@ export function CustomerShell({ children }: { children: React.ReactNode }) {
         Sign out
       </button>
     </div>
+  );
+}
+
+export function CustomerShell({ children }: { children: React.ReactNode }) {
+  return (
+    <CustomerIdentityProvider>
+      <CustomerShellInner>{children}</CustomerShellInner>
+    </CustomerIdentityProvider>
   );
 }

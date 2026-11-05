@@ -9,6 +9,8 @@ import {
 type CustomerSessionState = {
   authenticated: boolean;
   customerId?: string;
+  /** Backend tenant id confirmed from /app/profile (not JWT). */
+  tenantId?: string;
   tenantCode?: string;
   profileComplete?: boolean;
   kycMandatory?: boolean;
@@ -52,11 +54,24 @@ const customerSessionSlice = createSlice({
     customerProfileCompleted(state) {
       state.profileComplete = true;
     },
+    customerIdentityConfirmed(
+      state,
+      action: PayloadAction<{
+        customerId: string;
+        tenantId: string;
+        tenantCode?: string;
+      }>,
+    ) {
+      state.tenantId = action.payload.tenantId;
+      state.customerId = action.payload.customerId;
+      if (action.payload.tenantCode) state.tenantCode = action.payload.tenantCode;
+    },
     customerSignedIn(
       state,
       action: PayloadAction<{
         customerId: string;
         tenantCode: string;
+        tenantId?: string;
         accessToken?: string;
         refreshToken?: string;
         profileComplete?: boolean;
@@ -72,6 +87,7 @@ const customerSessionSlice = createSlice({
       state.authenticated = true;
       state.customerId = action.payload.customerId;
       state.tenantCode = action.payload.tenantCode;
+      if (action.payload.tenantId) state.tenantId = action.payload.tenantId;
       state.profileComplete = action.payload.profileComplete;
       state.kycMandatory = action.payload.kycMandatory;
       state.customerSelfRegistration = action.payload.customerSelfRegistration;
@@ -90,6 +106,7 @@ const customerSessionSlice = createSlice({
     customerSignedOut(state) {
       state.authenticated = false;
       state.customerId = undefined;
+      state.tenantId = undefined;
       state.profileComplete = undefined;
       state.kycMandatory = undefined;
       state.customerSelfRegistration = undefined;
@@ -109,6 +126,7 @@ export const {
   customerSignedIn,
   customerSignedOut,
   customerProfileCompleted,
+  customerIdentityConfirmed,
   hydrateCustomerSession,
 } = customerSessionSlice.actions;
 export default customerSessionSlice.reducer;

@@ -26,6 +26,7 @@ import { BrandMark } from "@/src/components/brand/brand-mark";
 import { FieldLabel } from "@/src/components/common/page-parts";
 import { env } from "@/src/config/env";
 import { MOCK_OWNER_SESSION } from "@/src/config/mock-session";
+import { resetAuthLogoutGuards } from "@/src/lib/auth-logout";
 import { portalSessionFromLogin } from "@/src/lib/auth-session";
 import { safeAuthReturnPath } from "@/src/lib/auth-return-path";
 import { getOrCreateDeviceId } from "@/src/lib/device-id";
@@ -124,6 +125,10 @@ export function LoginPage() {
   const [confirmPassword, setConfirmPassword] = useState("");
 
   const postLoginPath = safeAuthReturnPath(searchParams.get("next"), "/");
+
+  useEffect(() => {
+    resetAuthLogoutGuards();
+  }, []);
 
   useEffect(() => {
     if (!mounted || !hydrated) return;

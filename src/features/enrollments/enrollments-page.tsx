@@ -15,6 +15,11 @@ import {
 } from "@/src/components/common/search-filter-bar";
 import { CursorPagination } from "@/src/components/common/cursor-pagination";
 import { HeroStat, SectionHero, heroPrimaryButtonClass } from "@/src/components/admin-ui/section-hero";
+import { EnrollmentStatusHeroStats } from "@/src/components/enrollments/enrollment-status-breakdown";
+import {
+  adaptEnrollmentStatusBreakdown,
+  enrollmentStatusFromLegacyFields,
+} from "@/src/lib/enrollment-status-counts";
 import {
   AdminTable,
   CellStack,
@@ -22,7 +27,11 @@ import {
   ListPanel,
   type AdminColumn,
 } from "@/src/components/admin-ui/admin-table";
-import { FilterBar, FilterSearch, QuickViews } from "@/src/components/admin-ui/filter-bar";
+import {
+  FilterBar,
+  FilterSearch,
+  QuickViews,
+} from "@/src/components/admin-ui/filter-bar";
 import { CycleProgress } from "@/src/features/enrollments/cycle-progress";
 import { PageSkeleton, QueryError } from "@/src/components/common/query-state";
 import { StatusBadge } from "@/src/components/common/status-badge";
@@ -51,13 +60,14 @@ import {
 
 const ENROLLMENT_STATUS_FILTERS: FilterOption[] = [
   { value: "OPEN", label: "Open" },
-  { value: "ACTIVE", label: "Active (status)" },
-  { value: "LOCKED", label: "Capped / locked" },
+  { value: "PENDING_PAYMENT", label: "Not started" },
+  { value: "ACTIVE", label: "Paying instalments" },
+  { value: "LOCKED", label: "Plan capped" },
   { value: "DEFAULTED", label: "Defaulted" },
   { value: "MATURED", label: "Matured" },
   { value: "REDEEMED", label: "Redeemed" },
   { value: "CLOSED_PREMATURE", label: "Closed premature" },
-  { value: "PAST", label: "Past (redeemed / closed)" },
+  { value: "PAST", label: "Completed" },
 ];
 
 export function EnrollmentsPage() {
@@ -67,15 +77,13 @@ export function EnrollmentsPage() {
   const [status, setStatus] = useState("ACTIVE");
   const [q, setQ] = useState("");
   const debouncedQ = useDebouncedValue(q, 350);
-  const pager = useCursorPagination(
-    8,
-    `${debouncedQ}|${status}|${branchKey}`,
-  );
+  const pager = useCursorPagination(8, `${debouncedQ}|${status}|${branchKey}`);
   const query = useGetEnrollmentsQuery(
     {
       q: listSearchQueryForApi(debouncedQ),
       status: status === "PAST" || status === "OPEN" ? undefined : status,
-      group: status === "PAST" ? "PAST" : status === "OPEN" ? "OPEN" : undefined,
+      group:
+        status === "PAST" ? "PAST" : status === "OPEN" ? "OPEN" : undefined,
       branchId,
       ...pager.queryParams,
     },
@@ -92,63 +100,18 @@ export function EnrollmentsPage() {
 
   const summary = query.data.summary;
   const page = query.data.page ?? emptyPageMeta();
-  const analyticsSummary = analyticsQuery.data?.summary ?? [];
   const analyticsTotals = analyticsQuery.data?.totals as
-    | {
-        activeEnrollments?: number;
-        activeAndLockedEnrollments?: number;
-        openEnrollments?: number;
-        lockedEnrollments?: number;
-        defaultedEnrollments?: number;
-        maturedEnrollments?: number;
-        redeemedOrClosedEnrollments?: number;
-      }
+    | Record<string, unknown>
     | undefined;
-  const asCount = (value: unknown, fallback = 0): number =>
-    typeof value === "number" && Number.isFinite(value) ? value : fallback;
-  const metric = (key: string): number | undefined => {
-    const value = analyticsSummary.find((m) => m.key === key)?.value;
-    return typeof value === "number" && Number.isFinite(value)
-      ? value
-      : undefined;
-  };
-
-  const lockedCount = asCount(
-    analyticsTotals?.lockedEnrollments,
-    asCount(summary.locked),
-  );
-  const defaultedCount = asCount(
-    analyticsTotals?.defaultedEnrollments,
-    asCount(metric("DEFAULTED"), asCount(summary.defaulted)),
-  );
-  const activeAndLockedCount = asCount(
-    analyticsTotals?.activeAndLockedEnrollments,
-    asCount(
-      analyticsTotals?.activeEnrollments,
-      asCount(
-        metric("ACTIVE_ENROLLMENTS"),
-        asCount(
-          (summary as { activeAndLocked?: number }).activeAndLocked,
-          asCount(summary.active),
-        ),
-      ),
-    ),
-  );
-  const openEnrollmentCount = asCount(
-    analyticsTotals?.openEnrollments,
-    asCount(
-      (summary as { open?: number }).open,
-      activeAndLockedCount + defaultedCount,
-    ),
-  );
-  const maturedCount = asCount(
-    analyticsTotals?.maturedEnrollments,
-    asCount(metric("MATURED"), asCount(summary.matured)),
-  );
-  const redeemedCount = asCount(
-    analyticsTotals?.redeemedOrClosedEnrollments,
-    asCount(summary.redeemed),
-  );
+  const statusBreakdown =
+    adaptEnrollmentStatusBreakdown(
+      analyticsTotals?.statusBreakdown as Record<string, unknown> | undefined,
+    ) ??
+    enrollmentStatusFromLegacyFields(analyticsTotals) ??
+    adaptEnrollmentStatusBreakdown(
+      (summary as { statusBreakdown?: Record<string, unknown> }).statusBreakdown,
+    ) ??
+    enrollmentStatusFromLegacyFields(summary as Record<string, unknown>);
 
   const rows = query.data.items as any[];
   const statusLabel = filterLabelFor(ENROLLMENT_STATUS_FILTERS, status);
@@ -176,7 +139,9 @@ export function EnrollmentsPage() {
       cell: (r) => (
         <CellStack
           leading={<InitialsAvatar name={r.customer} className="size-8" />}
-          primary={<CustomerLink customerId={r.customerId}>{r.customer}</CustomerLink>}
+          primary={
+            <CustomerLink customerId={r.customerId}>{r.customer}</CustomerLink>
+          }
           secondary={r.branch}
         />
       ),
@@ -189,16 +154,25 @@ export function EnrollmentsPage() {
         <CycleProgress
           progress={Number(r.progress ?? 0)}
           tenure={Number(r.tenure ?? 0)}
-          tone={r.status === "DEFAULTED" ? "red" : r.status === "MATURED" ? "gold" : "wine"}
+          tone={
+            r.status === "DEFAULTED"
+              ? "red"
+              : r.status === "MATURED"
+                ? "gold"
+                : "wine"
+          }
         />
       ),
-      sortValue: (r) => Number(r.progress ?? 0) / Math.max(1, Number(r.tenure ?? 1)),
+      sortValue: (r) =>
+        Number(r.progress ?? 0) / Math.max(1, Number(r.tenure ?? 1)),
     },
     {
       key: "paid",
       header: "Paid",
       align: "right",
-      cell: (r) => <span className="font-semibold tabular-nums">{money(r.paid)}</span>,
+      cell: (r) => (
+        <span className="font-semibold tabular-nums">{money(r.paid)}</span>
+      ),
       sortValue: (r) => Number(r.paid ?? 0),
     },
     {
@@ -206,7 +180,10 @@ export function EnrollmentsPage() {
       header: "Next due",
       cell: (r) =>
         r.nextDue ? (
-          <CellStack primary={money(r.nextDueAmount ?? r.installment)} secondary={r.nextDue} />
+          <CellStack
+            primary={money(r.nextDueAmount ?? r.installment)}
+            secondary={r.nextDue}
+          />
         ) : (
           <span className="text-[#a2969a]">—</span>
         ),
@@ -215,7 +192,9 @@ export function EnrollmentsPage() {
     {
       key: "maturity",
       header: "Maturity",
-      cell: (r) => <span className="text-sm text-[#5c4a4e]">{r.maturity ?? "—"}</span>,
+      cell: (r) => (
+        <span className="text-sm text-[#5c4a4e]">{r.maturity ?? "—"}</span>
+      ),
       hideOnMobile: true,
     },
     {
@@ -232,7 +211,7 @@ export function EnrollmentsPage() {
         icon={Layers3}
         eyebrow="Gold schemes"
         title="Enrollments"
-        description="Every customer's scheme account — instalments paid, what's due next and when it matures."
+        description="Every customer's scheme account — instalments paid, what's due next and when it matures. Tap a summary stat to filter the directory."
         actions={
           <EnrollmentsCreateDialog
             trigger={
@@ -244,42 +223,20 @@ export function EnrollmentsPage() {
           />
         }
       >
-        <HeroStat
-          label="Active & capped"
-          value={activeAndLockedCount}
-          loading={analyticsQuery.isLoading}
-          detail={`${openEnrollmentCount} open incl. defaulted`}
-          active={status === "ACTIVE"}
-          onClick={() => setStatus("ACTIVE")}
-        />
-        <HeroStat
-          label="Capped"
-          value={lockedCount}
-          detail="Flexible plans that hit the limit"
-          active={status === "LOCKED"}
-          onClick={() => setStatus("LOCKED")}
-        />
-        <HeroStat
-          label="Defaulted"
-          value={defaultedCount}
-          detail="Missed instalments beyond grace"
-          active={status === "DEFAULTED"}
-          onClick={() => setStatus("DEFAULTED")}
-        />
-        <HeroStat
-          label="Matured"
-          value={maturedCount}
-          detail="Waiting to be redeemed"
-          active={status === "MATURED"}
-          onClick={() => setStatus("MATURED")}
-        />
-        <HeroStat
-          label="Redeemed / closed"
-          value={redeemedCount}
-          detail="Completed accounts"
-          active={status === "PAST"}
-          onClick={() => setStatus("PAST")}
-        />
+        {statusBreakdown ? (
+          <EnrollmentStatusHeroStats
+            data={statusBreakdown}
+            loading={analyticsQuery.isLoading}
+            activeFilter={status}
+            onFilter={(key) => setStatus(key)}
+          />
+        ) : analyticsQuery.isLoading ? (
+          <>
+            <HeroStat label="Not started" value="—" loading />
+            <HeroStat label="Open" value="—" loading />
+            <HeroStat label="Total accounts" value="—" loading />
+          </>
+        ) : null}
       </SectionHero>
       <PageTabs defaultValue="directory">
         <PageTabsBar sectionLabel="Enrollments">
@@ -312,7 +269,17 @@ export function EnrollmentsPage() {
                     placeholder="Enrollment number, customer or phone"
                   />
                 }
-                activeFilters={q.trim() ? [{ key: "q", label: `“${q.trim()}”`, onClear: () => setQ("") }] : []}
+                activeFilters={
+                  q.trim()
+                    ? [
+                        {
+                          key: "q",
+                          label: `“${q.trim()}”`,
+                          onClear: () => setQ(""),
+                        },
+                      ]
+                    : []
+                }
                 resultLabel={`${statusLabel.replace(" (status)", "")} · ${rows.length}${page.hasMore ? "+" : ""} shown`}
               />
             }
@@ -326,7 +293,8 @@ export function EnrollmentsPage() {
               caption="Enrollments"
               empty={
                 <p className="px-5 py-10 text-center text-sm text-[#857a7d]">
-                  No {statusLabel.replace(" (status)", "").toLowerCase()} enrollments
+                  No {statusLabel.replace(" (status)", "").toLowerCase()}{" "}
+                  enrollments
                   {q.trim() ? ` match “${q.trim()}”` : ""}.
                 </p>
               }

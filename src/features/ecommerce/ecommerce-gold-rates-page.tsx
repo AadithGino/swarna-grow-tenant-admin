@@ -34,6 +34,7 @@ import {
   utcIsoToDatetimeLocalValue,
 } from "@/src/lib/datetime-local";
 import { ecommerceGoldRateNotificationPreview } from "@/src/lib/gold-rate-notification-ui";
+import { RatesWorkspaceHub } from "@/src/components/dashboard/rates-workspace-hub";
 
 export function EcommerceGoldRatesPage() {
   const current = useGetEcommerceGoldRatesCurrentQuery();
@@ -172,6 +173,7 @@ export function EcommerceGoldRatesPage() {
           </Button>
         }
       />
+      <RatesWorkspaceHub />
       <EcommerceStoreSettingsTabs />
       {!entitled ? <Notice tone="amber">{disabledMessage}</Notice> : null}
       <div className="grid gap-4 sm:grid-cols-3">

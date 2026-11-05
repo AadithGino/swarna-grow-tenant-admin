@@ -30,6 +30,7 @@ import {
 import { useDigitalMetalsServerEntitlement } from "./digital-metals-admin-shared";
 import { DigitalMetalsAssetPicker, DigitalMetalsSettingsEditor, useConfigAssetSelection } from "./digital-metals-config-editor";
 import { DM_SECTION, DmGate, dmInr, shortDateTime } from "./digital-metals-admin-ui";
+import { RatesWorkspaceHub } from "@/src/components/dashboard/rates-workspace-hub";
 
 const TABS = [
   { href: "/digital-metals/rates", label: "Rates", icon: TrendingUp },
@@ -88,6 +89,7 @@ export function DigitalMetalsConfigPage({ section }: { section: "settings" | "ra
           title="Rates & settings"
           description={`Publish the buy and sell rates customers trade at, and set fees and tax per metal. Times are in ${DATETIME_LOCAL_TIMEZONE_LABEL}.`}
         />
+        <RatesWorkspaceHub />
         <SectionTabs tabs={TABS} ariaLabel="Rates and settings" />
 
         {section !== "settings" ? (

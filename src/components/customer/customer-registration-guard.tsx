@@ -10,6 +10,7 @@ import { customerPath } from "@/src/lib/customer-tenant";
 import { useGetCustomerProfileQuery } from "@/src/store/api/customer-api";
 import { useAppSelector } from "@/src/store/hooks";
 import { useClientMounted } from "@/src/hooks/use-client-mounted";
+import { useCustomerIdentity } from "@/src/components/customer/customer-identity-context";
 
 function hasStoredCustomerTokens() {
   return Boolean(
@@ -35,8 +36,9 @@ export function CustomerRegistrationGuard({
   const ready = mounted;
 
   const hasSession = tokenPresent || authenticated;
+  const { ready: identityReady, mismatch } = useCustomerIdentity();
   const { data: profile, isLoading } = useGetCustomerProfileQuery(undefined, {
-    skip: !ready || !hasSession,
+    skip: !ready || !hasSession || mismatch,
   });
 
   const needsOnboarding =
@@ -53,7 +55,7 @@ export function CustomerRegistrationGuard({
     }
   }, [ready, hasSession, needsOnboarding, router, tenantSlug]);
 
-  if (!ready || !hasSession || isLoading) {
+  if (!ready || !hasSession || !identityReady || isLoading) {
     return <PageSkeleton cards={2} />;
   }
   if (needsOnboarding) {

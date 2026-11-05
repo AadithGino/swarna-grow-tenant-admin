@@ -793,8 +793,8 @@ function MessageCentralCard({ tenant }: { tenant: PlatformTenantDetail }) {
             {mc.otpLength ?? 6}
           </p>
           <p className="mt-1 text-muted-foreground">
-            Password key is write-only (base64 encrypted password from Message Central). Re-enter
-            the key whenever you save changes.
+            Use either a pre-issued auth token (JWT) or password key + account email. Secrets are
+            write-only — re-enter when you save changes.
           </p>
         </div>
         <div className="grid gap-4 sm:grid-cols-2">
@@ -811,7 +811,7 @@ function MessageCentralCard({ tenant }: { tenant: PlatformTenantDetail }) {
             <FormFieldError message={displayError("customerId")} />
           </div>
           <div>
-            <FieldLabel>Account email *</FieldLabel>
+            <FieldLabel>Account email</FieldLabel>
             <Input
               type="email"
               value={form.email}
@@ -824,7 +824,22 @@ function MessageCentralCard({ tenant }: { tenant: PlatformTenantDetail }) {
             <FormFieldError message={displayError("email")} />
           </div>
           <div className="sm:col-span-2">
-            <FieldLabel>Encrypted password key *</FieldLabel>
+            <FieldLabel>Auth token (JWT)</FieldLabel>
+            <Input
+              type="password"
+              autoComplete="off"
+              placeholder="From Message Central when no password key is issued"
+              value={form.authToken}
+              onChange={(e) => {
+                setTouched((p) => ({ ...p, authToken: true }));
+                setField("authToken", e.target.value);
+              }}
+              className={inputClass("authToken")}
+            />
+            <FormFieldError message={displayError("authToken")} />
+          </div>
+          <div className="sm:col-span-2">
+            <FieldLabel>Password key (optional)</FieldLabel>
             <Input
               type="password"
               autoComplete="off"

@@ -21,7 +21,7 @@ import {
   WalletCards,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { CustomerHomeSchemeCard, formatCustomerDate } from "@/src/components/customer/customer-ui";
+import { CustomerHomeSchemeCard } from "@/src/components/customer/customer-ui";
 import { CUSTOMER_MOBILE_NAV_DOCK } from "@/src/features/customer/customer-scheme-detail-views";
 import { PageSkeleton, QueryError } from "@/src/components/common/query-state";
 import {
