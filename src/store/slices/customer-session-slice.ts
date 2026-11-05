@@ -8,6 +8,8 @@ import {
 
 type CustomerSessionState = {
   authenticated: boolean;
+  /** Bumped on sign-in/out and confirmed tenant/customer changes; stale RTK responses must ignore. */
+  dataEpoch: number;
   customerId?: string;
   /** Backend tenant id confirmed from /app/profile (not JWT). */
   tenantId?: string;
@@ -24,6 +26,7 @@ type CustomerSessionState = {
 
 const initialState: CustomerSessionState = {
   authenticated: env.useMocks,
+  dataEpoch: 0,
   customerId: env.useMocks ? "cus_10482" : undefined,
   tenantCode: env.useMocks ? "KAI" : undefined,
 };
@@ -62,9 +65,15 @@ const customerSessionSlice = createSlice({
         tenantCode?: string;
       }>,
     ) {
+      const prev = `${state.tenantId ?? ""}:${state.customerId ?? ""}`;
+      const next = `${action.payload.tenantId}:${action.payload.customerId}`;
       state.tenantId = action.payload.tenantId;
       state.customerId = action.payload.customerId;
       if (action.payload.tenantCode) state.tenantCode = action.payload.tenantCode;
+      if (prev && prev !== next) state.dataEpoch += 1;
+    },
+    customerDataEpochBump(state) {
+      state.dataEpoch += 1;
     },
     customerSignedIn(
       state,
@@ -85,6 +94,7 @@ const customerSessionSlice = createSlice({
       }>,
     ) {
       state.authenticated = true;
+      state.dataEpoch += 1;
       state.customerId = action.payload.customerId;
       state.tenantCode = action.payload.tenantCode;
       if (action.payload.tenantId) state.tenantId = action.payload.tenantId;
@@ -105,6 +115,7 @@ const customerSessionSlice = createSlice({
     },
     customerSignedOut(state) {
       state.authenticated = false;
+      state.dataEpoch += 1;
       state.customerId = undefined;
       state.tenantId = undefined;
       state.profileComplete = undefined;
@@ -127,6 +138,7 @@ export const {
   customerSignedOut,
   customerProfileCompleted,
   customerIdentityConfirmed,
+  customerDataEpochBump,
   hydrateCustomerSession,
 } = customerSessionSlice.actions;
 export default customerSessionSlice.reducer;

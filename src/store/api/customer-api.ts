@@ -69,6 +69,8 @@ import {
   type CustomerPaymentPollResult,
 } from "@/src/lib/customer-payment-poll";
 import { readCustomerPaymentSession } from "@/src/lib/customer-payment-session";
+import { readCustomerDataEpoch } from "@/src/lib/customer-identity";
+import type { RootState } from "@/src/store";
 import { normalizeCustomerTenantResolve } from "@/src/lib/customer-tenant-branding";
 import { normalizeShopOrdersListResponse } from "@/src/lib/customer-shop-orders-list";
 import {
@@ -804,10 +806,20 @@ const dynamicBaseQuery: BaseQueryFn<
     "/public/",
   ]);
   const dispatch = api.dispatch as AppDispatch;
+  const epochAtStart = readCustomerDataEpoch(api.getState() as RootState);
 
   let result = env.useMocks
     ? await mockBaseQuery(requestArgs, api, extra)
     : await liveBaseQuery(requestArgs, api, extra);
+
+  const epochAfter = readCustomerDataEpoch(api.getState() as RootState);
+  if (!env.useMocks && epochAfter !== epochAtStart) {
+    return rtkErrorResult({
+      status: "CUSTOM_ERROR",
+      error: "Stale customer identity response discarded",
+      data: { code: "CUSTOMER_IDENTITY_STALE" },
+    });
+  }
 
   if (shouldAttemptAuthRefresh(result.error, guard, env.useMocks)) {
     const refreshed = await refreshAfterUnauthorized("customer", guard);

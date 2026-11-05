@@ -53,11 +53,11 @@ export function CustomerIdentityProvider({ children }: { children: ReactNode }) 
   const sessionCustomerId = useAppSelector((s) => s.customerSession.customerId ?? null);
   const sessionTenantCode = useAppSelector((s) => s.customerSession.tenantCode ?? null);
   const { signOut } = useCustomerSignOut();
-  const lastIdentityKey = useRef<string | null>(null);
+  const lastTransitionKey = useRef<string | null>(null);
 
   const hasSession = mounted && (authenticated || hasStoredCustomerTokens());
 
-  const { data: profile, isLoading, isFetching, isError } = useGetCustomerProfileQuery(undefined, {
+  const { data: profile, isLoading, isError } = useGetCustomerProfileQuery(undefined, {
     skip: !hasSession,
   });
 
@@ -79,18 +79,29 @@ export function CustomerIdentityProvider({ children }: { children: ReactNode }) 
     !customerUrlTenantMatchesSession(urlTenantId, confirmedTenantId);
 
   useEffect(() => {
-    if (!hasSession || !urlTenantId || !confirmedTenantId) return;
-    const key = `${confirmedTenantId}:${confirmedCustomerId}:${urlTenantId}`;
-    if (lastIdentityKey.current && lastIdentityKey.current !== key) {
+    if (!hasSession || !confirmedTenantId || !confirmedCustomerId) return;
+    const transitionKey = `${confirmedTenantId}:${confirmedCustomerId}`;
+    if (lastTransitionKey.current && lastTransitionKey.current !== transitionKey) {
       resetCustomerScopedClientState(dispatch);
     }
-    lastIdentityKey.current = key;
-  }, [hasSession, urlTenantId, confirmedTenantId, confirmedCustomerId, dispatch]);
+    lastTransitionKey.current = transitionKey;
+  }, [hasSession, confirmedTenantId, confirmedCustomerId, dispatch]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const onStorage = (event: StorageEvent) => {
+      if (!event.key?.startsWith("swarnagrow.customer.")) return;
+      resetCustomerScopedClientState(dispatch);
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, [dispatch]);
 
   const ready =
     hasSession &&
     Boolean(profile?.tenantId && profile?.id) &&
     Boolean(urlTenantId) &&
+    !mismatch &&
     customerUrlTenantMatchesSession(urlTenantId, profile?.tenantId) &&
     (!sessionCustomerId || sessionCustomerId === profile?.id);
 
@@ -118,7 +129,7 @@ export function CustomerIdentityProvider({ children }: { children: ReactNode }) 
     );
   }
 
-  if (isLoading || isFetching || (!profile && !isError)) {
+  if (isLoading || (!profile && !isError)) {
     return (
       <CustomerIdentityContext.Provider value={value}>
         <PageSkeleton cards={2} />

@@ -13,7 +13,7 @@ export function DigitalMetalsRedemptionChargeBreakdown({
 }) {
   const metalReserved = quote.quantityReservedUg ?? quote.quantityUg;
   const remaining = quote.remainingAvailableUg;
-  const chargeTotal = Number(quote.chargeTotalPaise ?? 0);
+  const chargeTotal = Number(quote.chargeTotalPaise ?? quote.totalChargePaise ?? 0);
   const lines = (quote.chargeLines as ChargeLine[] | undefined) ?? [];
   const taxPaise = quote.taxPaise != null ? Number(quote.taxPaise) : null;
 
