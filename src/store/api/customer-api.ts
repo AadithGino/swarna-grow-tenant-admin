@@ -830,6 +830,14 @@ const dynamicBaseQuery: BaseQueryFn<
         api,
         extra,
       );
+      const epochAfterRetry = readCustomerDataEpoch(api.getState() as RootState);
+      if (epochAfterRetry !== epochAtStart) {
+        return rtkErrorResult({
+          status: "CUSTOM_ERROR",
+          error: "Stale customer identity response discarded",
+          data: { code: "CUSTOMER_IDENTITY_STALE" },
+        });
+      }
     } else if (shouldForceAuthLogout("customer", true)) {
       handleCustomerUnauthorized(dispatch);
     }

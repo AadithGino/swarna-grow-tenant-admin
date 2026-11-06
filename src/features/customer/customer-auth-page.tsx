@@ -13,6 +13,7 @@ import {
   realmHasStoredSession,
 } from "@/src/lib/auth-token-storage";
 import { safeAuthReturnPath } from "@/src/lib/auth-return-path";
+import { resetCustomerScopedStateIfAccountSwitch } from "@/src/lib/customer-identity-switch";
 import { customerSignedIn } from "@/src/store/slices/customer-session-slice";
 import { useAppDispatch, useAppSelector } from "@/src/store/hooks";
 import { toast } from "sonner";
@@ -138,6 +139,10 @@ export function CustomerLoginPage() {
         ...customerPortalCapabilitiesFromTenant(result.tenant),
         ...result.tenantCapabilities,
       };
+      resetCustomerScopedStateIfAccountSwitch(dispatch, {
+        customerId: result.customer.id,
+        tenantId: result.customer.tenantId ?? (result.tenant as { id?: string }).id,
+      });
       dispatch(
         customerSignedIn({
           customerId: result.customer.id,
@@ -208,6 +213,10 @@ export function CustomerLoginPage() {
         ...customerPortalCapabilitiesFromTenant(result.tenant),
         ...result.tenantCapabilities,
       };
+      resetCustomerScopedStateIfAccountSwitch(dispatch, {
+        customerId: result.customer.id,
+        tenantId: result.customer.tenantId ?? (result.tenant as { id?: string }).id,
+      });
       dispatch(
         customerSignedIn({
           customerId: result.customer.id,

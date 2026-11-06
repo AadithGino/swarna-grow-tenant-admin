@@ -135,6 +135,7 @@ export function persistCustomerTokens(
   if (typeof window === "undefined") return;
   writeCustomerTokenStorage(accessToken, refreshToken);
   emitTokens("customer", { accessToken, refreshToken });
+  window.dispatchEvent(new CustomEvent("swarnagrow:customer-tokens-updated"));
 }
 
 export function clearCustomerTokens() {

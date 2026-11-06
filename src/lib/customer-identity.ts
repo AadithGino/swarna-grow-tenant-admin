@@ -11,14 +11,32 @@ export function customerUrlTenantMatchesSession(
   return String(urlTenantId) === String(sessionTenantId);
 }
 
-export function resetCustomerScopedClientState(dispatch: AppDispatch) {
+export type ResetCustomerScopedClientStateOptions = {
+  clearPaymentSession?: boolean;
+};
+
+export function resetCustomerScopedClientState(
+  dispatch: AppDispatch,
+  options: ResetCustomerScopedClientStateOptions = {},
+) {
+  const { clearPaymentSession = true } = options;
   dispatch(customerDataEpochBump());
   dispatch(customerApi.util.resetApiState());
-  if (typeof window !== "undefined") {
+  if (clearPaymentSession && typeof window !== "undefined") {
     clearCustomerPaymentSession();
   }
 }
 
+/** Cross-tab token changes: block protected work and drop stale cache without clearing checkout state yet. */
+export function markCustomerIdentityRevalidation(dispatch: AppDispatch) {
+  dispatch(customerDataEpochBump());
+  dispatch(customerApi.util.invalidateTags(["CustomerProfile", "CustomerHome"]));
+}
+
 export function readCustomerDataEpoch(state: RootState): number {
   return state.customerSession.dataEpoch ?? 0;
+}
+
+export function readCustomerIdentityRevalidating(state: RootState): boolean {
+  return state.customerSession.identityRevalidating ?? false;
 }

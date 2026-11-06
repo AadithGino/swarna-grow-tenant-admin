@@ -217,6 +217,16 @@ export type CustomerSchemeDetail = SchemeCard & {
   helperText: string;
   payableRange?: PayableRange;
   payments: PaymentListItem[];
+  /** Fixed plans — contractual due date per instalment (from GET /app/schemes/:id). */
+  installmentSchedule?: CustomerInstallmentScheduleRow[];
+};
+
+export type CustomerInstallmentScheduleRow = {
+  number: number;
+  dueDate: string;
+  status: string;
+  amount?: MoneyRef;
+  remaining?: MoneyRef;
 };
 
 export type SchemePlan = {

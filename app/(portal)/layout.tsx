@@ -4,6 +4,7 @@ import { usePathname } from "next/navigation";
 import { AdminShell } from "@/src/components/layout/admin-shell";
 import { PlatformShell } from "@/src/components/layout/platform-shell";
 import { CustomerShell } from "@/src/components/customer/customer-shell";
+import { CustomerIdentityProvider } from "@/src/components/customer/customer-identity-context";
 import { CustomerTenantProvider } from "@/src/components/customer/customer-tenant-context";
 import { AgentShell } from "@/src/components/agent/agent-shell";
 import { CUSTOMER_ROUTE_SECTIONS } from "@/src/lib/customer-tenant";
@@ -58,7 +59,7 @@ export default function PortalLayout({
     const inner = isCustomerAuthSurface(pathname) ? children : <CustomerShell>{children}</CustomerShell>;
     return (
       <CustomerTenantProvider tenantSlug={tenantSlug}>
-        {inner}
+        <CustomerIdentityProvider>{inner}</CustomerIdentityProvider>
       </CustomerTenantProvider>
     );
   }

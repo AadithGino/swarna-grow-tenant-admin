@@ -11,7 +11,7 @@ import { cn } from "@/lib/utils";
 import { useCustomerTenant } from "@/src/components/customer/customer-tenant-context";
 import { customerPath } from "@/src/lib/customer-tenant";
 import { CustomerRegistrationGuard } from "@/src/components/customer/customer-registration-guard";
-import { CustomerIdentityProvider, useCustomerIdentity } from "@/src/components/customer/customer-identity-context";
+import { useCustomerIdentity } from "@/src/components/customer/customer-identity-context";
 import { useCustomerPortalCapabilities } from "@/src/lib/customer-portal-capabilities";
 import { CustomerBrand } from "@/src/components/customer/customer-ui";
 import { CustomerFcmRegistrar } from "@/src/components/customer/customer-fcm-registrar";
@@ -228,9 +228,5 @@ function CustomerShellInner({ children }: { children: React.ReactNode }) {
 }
 
 export function CustomerShell({ children }: { children: React.ReactNode }) {
-  return (
-    <CustomerIdentityProvider>
-      <CustomerShellInner>{children}</CustomerShellInner>
-    </CustomerIdentityProvider>
-  );
+  return <CustomerShellInner>{children}</CustomerShellInner>;
 }
