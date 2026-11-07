@@ -32,7 +32,7 @@ const server = spawn(process.execPath, [vinextCli, "start", "--port", String(por
 server.unref();
 await new Promise((r) => setTimeout(r, 4500));
 
-const routes = ["/", "/enrollments", "/login", "/payment-return"];
+const routes = ["/", "/dashboard", "/enrollments", "/dues", "/customers", "/login", "/payment-return"];
 for (const route of routes) {
   const target =
     route === "/"

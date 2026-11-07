@@ -95,6 +95,11 @@ function readUseMocks(): boolean {
   return true;
 }
 
+function readPortalHardNav(): boolean {
+  const raw = process.env.NEXT_PUBLIC_PORTAL_HARD_NAV?.trim().toLowerCase();
+  return raw === "true" || raw === "1" || raw === "yes";
+}
+
 function readPhonePeEnvironment(): "SANDBOX" | "PRODUCTION" {
   const raw = process.env.NEXT_PUBLIC_PHONEPE_ENV?.trim().toUpperCase();
   if (raw === "SANDBOX" || raw === "UAT" || raw === "PREPROD" || raw === "TEST") return "SANDBOX";
@@ -108,6 +113,8 @@ export const env = {
   apiBaseUrl:
     process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000/api/v1",
   useMocks: readUseMocks(),
+  /** Full page loads for portal sidebar links (required on vinext static / Netlify). */
+  portalHardNav: readPortalHardNav(),
   /** Must match backend `PHONEPE_ENV` when opening hosted PhonePe checkout in the browser. */
   phonePeEnvironment: readPhonePeEnvironment(),
   mockDelayMs: Number(process.env.NEXT_PUBLIC_MOCK_DELAY_MS ?? 420),

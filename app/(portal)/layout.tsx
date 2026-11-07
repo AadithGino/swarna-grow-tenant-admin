@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { usePathname } from "next/navigation";
+import { useBrowserPathname } from "@/src/hooks/use-browser-pathname";
 import { ensureCustomerIdentityLifecycle } from "@/src/lib/customer-identity-lifecycle";
 import { AdminShell } from "@/src/components/layout/admin-shell";
 import { PlatformShell } from "@/src/components/layout/platform-shell";
@@ -49,7 +49,7 @@ export default function PortalLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const pathname = usePathname();
+  const pathname = useBrowserPathname();
   useEffect(() => {
     ensureCustomerIdentityLifecycle();
   }, []);

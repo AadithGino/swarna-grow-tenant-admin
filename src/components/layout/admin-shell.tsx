@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
+import { useBrowserPathname } from "@/src/hooks/use-browser-pathname";
+import { env } from "@/src/config/env";
 import { recordPortalNavigation } from "@/src/lib/portal-nav";
 import { memo, useCallback, useEffect, useState } from "react";
 import { useClientMounted } from "@/src/hooks/use-client-mounted";
@@ -292,9 +294,13 @@ function NavLink({
     <Link
       href={item.href}
       onClick={(event) => {
-        // vinext Link soft-nav is broken on the Vercel/Nitro build; router.push still works.
         event.preventDefault();
         onNavigate?.();
+        if (env.portalHardNav) {
+          window.location.assign(item.href);
+          return;
+        }
+        // vinext Link soft-nav is unreliable on static/Nitro builds; router.push is the fallback.
         router.push(item.href);
       }}
       data-tour={`nav:${item.href}`}
@@ -343,7 +349,7 @@ function Navigation({
   compact?: boolean;
   onNavigate?: () => void;
 }) {
-  const pathname = usePathname() ?? "/";
+  const pathname = useBrowserPathname();
   const user = useAppSelector((s) => s.session.session?.user);
   const badges = useNavBadges();
   const ecommerceNav = useEcommerceWorkspaceNavVisible();
@@ -837,7 +843,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
     });
   }, []);
   const router = useRouter();
-  const pathname = usePathname();
+  const pathname = useBrowserPathname();
   const mounted = useClientMounted();
   const hydrated = useAppSelector((state) => state.session.hydrated);
   const session = useAppSelector((state) => state.session.session);
@@ -845,7 +851,9 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
     if (!mounted || !hydrated) return;
     const hasTokens = realmHasStoredSession("tenant");
     if (!hasTokens || !session) {
-      router.replace(`/login?next=${encodeURIComponent(pathname || "/")}`);
+      const target = `/login?next=${encodeURIComponent(pathname || "/")}`;
+      if (env.portalHardNav) window.location.replace(target);
+      else router.replace(target);
     }
   }, [mounted, hydrated, session, pathname, router]);
 

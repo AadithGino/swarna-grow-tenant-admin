@@ -6,6 +6,7 @@
   NODE_VERSION = "22"
   NEXT_PUBLIC_API_BASE_URL = "https://api.swarnagrow.com/api/v1"
   NEXT_PUBLIC_USE_MOCKS = "false"
+  NEXT_PUBLIC_PORTAL_HARD_NAV = "true"
   NEXT_PUBLIC_FLUTTER_PAYMENT_RETURN_URL = "https://swarnagrowv1.netlify.app/payment-return"
   NEXT_PUBLIC_FLUTTER_APP_DEEP_LINK = "evoluxe://payment-return"
 
