@@ -1,10 +1,12 @@
-import { PortalRouter } from "@/src/app/portal-router";
+"use client";
 
-export default async function PortalPage({
-  params,
-}: {
-  params: Promise<{ slug?: string[] }>;
-}) {
-  const { slug } = await params;
-  return <PortalRouter slug={slug ?? []} />;
+import { usePathname } from "next/navigation";
+import { PortalRouter } from "@/src/app/portal-router";
+import { pathnameToPortalSlug } from "@/src/lib/portal-path-slug";
+
+/** Client slug from URL — required for static hosts (Netlify) where RSC params stay at "/". */
+export default function PortalPage() {
+  const pathname = usePathname() ?? "/";
+  const slug = pathnameToPortalSlug(pathname);
+  return <PortalRouter slug={slug} />;
 }

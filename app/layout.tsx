@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
+import Script from "next/script";
 import { Providers } from "@/src/app/providers";
+import { VINEXT_STATIC_LOCATION_BOOTSTRAP } from "@/src/lib/vinext-static-location-bootstrap";
 import { Toaster } from "@/components/ui/sonner";
 import "./globals.css";
 
@@ -18,6 +20,9 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${inter.variable} antialiased`}>
+        <Script id="sg-static-location-bootstrap" strategy="beforeInteractive">
+          {VINEXT_STATIC_LOCATION_BOOTSTRAP}
+        </Script>
         <Providers>{children}</Providers>
         <Toaster richColors position="top-right" />
       </body>

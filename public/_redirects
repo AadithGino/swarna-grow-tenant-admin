@@ -1,0 +1,2 @@
+# SPA fallback — static files (/_next/*, assets) are served as-is; other paths get the shell.
+/*    /index.html   200

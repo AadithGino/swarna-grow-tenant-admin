@@ -1,0 +1,2 @@
+/** Inline IIFE — keep in a .ts file so eslint does not flag layout script bodies. */
+export const VINEXT_STATIC_LOCATION_BOOTSTRAP = `(function(){try{var p=location.pathname;var q=location.search?location.search.slice(1).split("&").filter(Boolean):[];var s=Symbol.for("vinext.navigationRuntime");var r=self[s]||(self[s]={bootstrap:{routeManifest:null},functions:{}});r.bootstrap.rsc=r.bootstrap.rsc||{rsc:[]};Object.assign(r.bootstrap.rsc,{params:{},nav:{pathname:p,searchParams:q}});}catch(e){}})();`;
