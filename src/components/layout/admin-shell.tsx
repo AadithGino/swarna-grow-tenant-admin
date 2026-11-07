@@ -851,9 +851,12 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
     if (!mounted || !hydrated) return;
     const hasTokens = realmHasStoredSession("tenant");
     if (!hasTokens || !session) {
+      if (pathname === "/login") return;
       const target = `/login?next=${encodeURIComponent(pathname || "/")}`;
-      if (env.portalHardNav) window.location.replace(target);
-      else router.replace(target);
+      if (env.portalHardNav) {
+        if (window.location.pathname.replace(/\/+$/, "") === "/login") return;
+        window.location.replace(target);
+      } else router.replace(target);
     }
   }, [mounted, hydrated, session, pathname, router]);
 

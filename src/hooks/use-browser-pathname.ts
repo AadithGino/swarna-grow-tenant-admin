@@ -2,9 +2,16 @@
 
 import { useSyncExternalStore } from "react";
 
+/** Netlify pretty URLs append a trailing slash; treat `/login/` as `/login`. */
+export function normalizeBrowserPathname(pathname: string): string {
+  const path = (pathname || "/").split("?")[0] || "/";
+  if (path === "/") return "/";
+  return path.replace(/\/+$/, "") || "/";
+}
+
 function readPathname(): string {
   if (typeof window === "undefined") return "/";
-  return window.location.pathname || "/";
+  return normalizeBrowserPathname(window.location.pathname || "/");
 }
 
 function subscribe(onStoreChange: () => void): () => void {

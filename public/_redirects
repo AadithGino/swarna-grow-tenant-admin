@@ -1,2 +1,4 @@
-# SPA fallback — static files (/_next/*, assets) are served as-is; other paths get the shell.
+# Collapse trailing slashes so /login/ does not remount AdminShell and reload forever.
+/login/    /login    301
+/dashboard/    /dashboard    301
 /*    /index.html   200

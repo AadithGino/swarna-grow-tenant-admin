@@ -2,6 +2,10 @@
   command = "pnpm run build:netlify"
   publish = "netlify-dist"
 
+# Trailing-slash pretty URLs turn /login into /login/ and retrigger auth redirects.
+[build.processing.html]
+  pretty_urls = false
+
 [build.environment]
   NODE_VERSION = "22"
   NEXT_PUBLIC_API_BASE_URL = "https://api.swarnagrow.com/api/v1"
