@@ -23,12 +23,17 @@ if (!existsSync(redirects)) {
   writeFileSync(redirects, "/*    /index.html   200\n");
 }
 
+const envFile = join(root, "env.netlify.production");
 const vinextCli = join(root, "node_modules", "vinext", "dist", "cli.js");
-const server = spawn(process.execPath, [vinextCli, "start", "--port", String(port)], {
-  cwd: root,
-  stdio: "ignore",
-  detached: true,
-});
+const server = spawn(
+  process.execPath,
+  [existsSync(envFile) ? "--env-file" : "", existsSync(envFile) ? envFile : "", vinextCli, "start", "--port", String(port)].filter(Boolean),
+  {
+    cwd: root,
+    stdio: "ignore",
+    detached: true,
+  },
+);
 server.unref();
 await new Promise((r) => setTimeout(r, 4500));
 

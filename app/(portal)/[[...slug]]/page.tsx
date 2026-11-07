@@ -8,5 +8,6 @@ import { pathnameToPortalSlug } from "@/src/lib/portal-path-slug";
 export default function PortalPage() {
   const pathname = useBrowserPathname();
   const slug = pathnameToPortalSlug(pathname);
-  return <PortalRouter slug={slug} />;
+  // Remount when the real URL changes (vinext client router on static hosts).
+  return <PortalRouter key={pathname} slug={slug} />;
 }

@@ -97,7 +97,21 @@ function readUseMocks(): boolean {
 
 function readPortalHardNav(): boolean {
   const raw = process.env.NEXT_PUBLIC_PORTAL_HARD_NAV?.trim().toLowerCase();
-  return raw === "true" || raw === "1" || raw === "yes";
+  if (raw === "false" || raw === "0" || raw === "no") return false;
+  if (raw === "true" || raw === "1" || raw === "yes") return true;
+  // Static Netlify deploy: live HTTPS API builds default to full-page sidebar nav.
+  if (isProductionBundle() && !skipProductionGuard()) {
+    const mode = parseApiMode(process.env.NEXT_PUBLIC_USE_MOCKS);
+    const api = process.env.NEXT_PUBLIC_API_BASE_URL?.trim() ?? "";
+    if (
+      mode === "live" &&
+      api.startsWith("https://") &&
+      !LOCAL_HOST_SUBSTRINGS.some((h) => api.includes(h.replace(/[\[\]]/g, "")))
+    ) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function readPhonePeEnvironment(): "SANDBOX" | "PRODUCTION" {

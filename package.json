@@ -11,7 +11,7 @@
     "dev": "node scripts/run-framework.mjs dev",
     "build": "NODE_ENV=production node scripts/validate-production-public-env.mjs && node scripts/run-framework.mjs build",
     "build:vercel": "NODE_ENV=production node scripts/validate-production-public-env.mjs && NITRO_PRESET=vercel DEPLOY_TARGET=vercel node scripts/run-framework.mjs build",
-    "build:netlify": "NODE_ENV=production node scripts/validate-production-public-env.mjs && node scripts/run-framework.mjs build && node scripts/assemble-netlify-dist.mjs",
+    "build:netlify": "NODE_ENV=production node --env-file=env.netlify.production scripts/validate-production-public-env.mjs && NODE_ENV=production node --env-file=env.netlify.production scripts/run-framework.mjs build && node scripts/assemble-netlify-dist.mjs",
     "start": "node --import ./scripts/sites-env.mjs ./node_modules/wrangler/bin/wrangler.js dev --config dist/server/wrangler.json --local --persist-to .wrangler/state --ip 127.0.0.1 --inspector-port 0",
     "lint": "eslint src components app lib hooks --max-warnings 0",
     "lint:customer": "eslint src/features/customer src/components/customer src/app/customer-router.tsx src/store/api/customer-api.ts src/store/slices/customer-session-slice.ts --max-warnings 0",
