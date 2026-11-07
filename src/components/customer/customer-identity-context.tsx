@@ -14,16 +14,13 @@ import { PageSkeleton } from "@/src/components/common/query-state";
 import { useCustomerTenant } from "@/src/components/customer/customer-tenant-context";
 import {
   customerUrlTenantMatchesSession,
-  markCustomerIdentityRevalidation,
   resetCustomerScopedClientState,
 } from "@/src/lib/customer-identity";
-import { clearCustomerPaymentSession } from "@/src/lib/customer-payment-session";
 import { customerPath, tenantCodeToSlug } from "@/src/lib/customer-tenant";
 import { useCustomerSignOut } from "@/src/lib/use-customer-sign-out";
 import { useGetCustomerProfileQuery } from "@/src/store/api/customer-api";
 import { useAppDispatch, useAppSelector } from "@/src/store/hooks";
-import { customerIdentityConfirmed } from "@/src/store/slices/customer-session-slice";
-import { onTokensPersisted, TOKEN_KEYS } from "@/src/lib/auth-token-storage";
+import { TOKEN_KEYS } from "@/src/lib/auth-token-storage";
 import { useClientMounted } from "@/src/hooks/use-client-mounted";
 
 type CustomerIdentityContextValue = {
@@ -48,11 +45,6 @@ function writeConfirmedIdentityKey(value: string) {
   sessionStorage.setItem(CONFIRMED_IDENTITY_KEY, value);
 }
 
-function clearConfirmedIdentityKey() {
-  if (typeof window === "undefined") return;
-  sessionStorage.removeItem(CONFIRMED_IDENTITY_KEY);
-}
-
 function hasStoredCustomerTokens() {
   if (typeof window === "undefined") return false;
   return Boolean(
@@ -64,32 +56,27 @@ function hasStoredCustomerTokens() {
 export function CustomerIdentityProvider({ children }: { children: ReactNode }) {
   const dispatch = useAppDispatch();
   const mounted = useClientMounted();
-  const { tenant, tenantCode: urlTenantCode } = useCustomerTenant();
+  const { tenant } = useCustomerTenant();
   const urlTenantId = tenant?.id ?? null;
   const authenticated = useAppSelector((s) => s.customerSession.authenticated);
   const sessionTenantId = useAppSelector((s) => s.customerSession.tenantId ?? null);
   const sessionCustomerId = useAppSelector((s) => s.customerSession.customerId ?? null);
   const sessionTenantCode = useAppSelector((s) => s.customerSession.tenantCode ?? null);
   const identityRevalidating = useAppSelector((s) => s.customerSession.identityRevalidating);
+  const sessionGeneration = useAppSelector((s) => s.customerSession.sessionGeneration);
+  const profileConfirmedGeneration = useAppSelector(
+    (s) => s.customerSession.profileConfirmedGeneration,
+  );
+  const sessionConfirmed =
+    profileConfirmedGeneration >= 0 && profileConfirmedGeneration === sessionGeneration;
   const { signOut } = useCustomerSignOut();
   const lastTransitionKey = useRef<string | null>(null);
 
   const hasSession = mounted && (authenticated || hasStoredCustomerTokens());
 
-  const { data: profile, isLoading, isError } = useGetCustomerProfileQuery(undefined, {
+  const { data: profile, isLoading, isFetching, isError } = useGetCustomerProfileQuery(undefined, {
     skip: !hasSession,
   });
-
-  useEffect(() => {
-    if (!profile?.tenantId || !profile.id) return;
-    dispatch(
-      customerIdentityConfirmed({
-        tenantId: profile.tenantId,
-        customerId: profile.id,
-        tenantCode: profile.tenant?.tenantCode ?? urlTenantCode,
-      }),
-    );
-  }, [dispatch, profile, urlTenantCode]);
 
   const confirmedTenantId = profile?.tenantId ?? sessionTenantId;
   const confirmedCustomerId = profile?.id ?? sessionCustomerId;
@@ -98,7 +85,7 @@ export function CustomerIdentityProvider({ children }: { children: ReactNode }) 
     !customerUrlTenantMatchesSession(urlTenantId, confirmedTenantId);
 
   useEffect(() => {
-    if (!profile?.tenantId || !profile?.id) return;
+    if (!sessionConfirmed || !profile?.tenantId || !profile?.id) return;
     const transitionKey = `${profile.tenantId}:${profile.id}`;
     const prevKey = readConfirmedIdentityKey() ?? lastTransitionKey.current;
     if (prevKey && prevKey !== transitionKey) {
@@ -106,47 +93,7 @@ export function CustomerIdentityProvider({ children }: { children: ReactNode }) 
     }
     lastTransitionKey.current = transitionKey;
     writeConfirmedIdentityKey(transitionKey);
-  }, [profile?.tenantId, profile?.id, dispatch]);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const onTokenChange = () => {
-      const access = localStorage.getItem(TOKEN_KEYS.customer.access);
-      const prevKey = readConfirmedIdentityKey() ?? lastTransitionKey.current;
-      if (access && prevKey) {
-        try {
-          const payload = JSON.parse(atob(access.split(".")[1] ?? "")) as {
-            sub?: string;
-            tid?: string;
-          };
-          const nextKey =
-            payload.tid && payload.sub ? `${payload.tid}:${payload.sub}` : null;
-          if (nextKey && nextKey !== prevKey) {
-            clearCustomerPaymentSession();
-            lastTransitionKey.current = null;
-            clearConfirmedIdentityKey();
-            resetCustomerScopedClientState(dispatch);
-            return;
-          }
-        } catch {
-          /* non-JWT test tokens */
-        }
-      }
-      markCustomerIdentityRevalidation(dispatch);
-    };
-    const offPersisted = onTokensPersisted("customer", onTokenChange);
-    const onStorage = (event: StorageEvent) => {
-      if (!event.key?.startsWith("swarnagrow.customer.")) return;
-      onTokenChange();
-    };
-    window.addEventListener("storage", onStorage);
-    window.addEventListener("swarnagrow:customer-tokens-updated", onTokenChange);
-    return () => {
-      offPersisted();
-      window.removeEventListener("storage", onStorage);
-      window.removeEventListener("swarnagrow:customer-tokens-updated", onTokenChange);
-    };
-  }, [dispatch]);
+  }, [sessionConfirmed, profile?.tenantId, profile?.id, dispatch]);
 
   const profileMatchesSession =
     Boolean(profile?.tenantId && profile?.id) &&
@@ -159,7 +106,8 @@ export function CustomerIdentityProvider({ children }: { children: ReactNode }) 
     Boolean(urlTenantId) &&
     !mismatch &&
     customerUrlTenantMatchesSession(urlTenantId, profile?.tenantId) &&
-    !identityRevalidating;
+    !identityRevalidating &&
+    sessionConfirmed;
 
   const value = useMemo(
     (): CustomerIdentityContextValue => ({
@@ -185,7 +133,13 @@ export function CustomerIdentityProvider({ children }: { children: ReactNode }) 
     );
   }
 
-  if (isLoading || identityRevalidating || (!profile && !isError)) {
+  if (
+    isLoading
+    || isFetching
+    || identityRevalidating
+    || !sessionConfirmed
+    || (!profile && !isError)
+  ) {
     return (
       <CustomerIdentityContext.Provider value={value}>
         <PageSkeleton cards={2} />

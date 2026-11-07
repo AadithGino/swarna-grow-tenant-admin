@@ -135,6 +135,8 @@ export function CustomerTenantProvider({
             customerSelfEnrol: tenant.customerSelfEnrol,
             multiScheme: tenant.multiScheme,
             customerLoginMode: tenant.customerLoginMode,
+            otpLength: tenant.otpLength,
+            authCountryCode: tenant.authCountryCode,
             customerAppWriteEnabled: tenant.customerAppWriteEnabled,
             customerAppPaymentsEnabled: tenant.customerAppPaymentsEnabled,
             supportNumber: tenant.supportNumber,

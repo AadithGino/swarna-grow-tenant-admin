@@ -52,6 +52,7 @@ import { newIdempotencyKey } from "@/src/lib/idempotency";
 import { buildCustomerEnrolMockResponse } from "@/src/lib/customer-enrol-mock";
 import { ensureMutationJsonBody } from "@/src/lib/rtk-mutation-body";
 import type { AppDispatch } from "@/src/store";
+import { customerIdentityConfirmed } from "@/src/store/slices/customer-session-slice";
 import { adaptCustomerSchemePlan, adaptCustomerSchemePlanList } from "@/src/lib/customer-plan-adapter";
 import {
   adaptCustomerPayment,
@@ -69,7 +70,7 @@ import {
   type CustomerPaymentPollResult,
 } from "@/src/lib/customer-payment-poll";
 import { readCustomerPaymentSession } from "@/src/lib/customer-payment-session";
-import { readCustomerDataEpoch } from "@/src/lib/customer-identity";
+import { readCustomerDataEpoch, readCustomerSessionGeneration } from "@/src/lib/customer-identity";
 import type { RootState } from "@/src/store";
 import { normalizeCustomerTenantResolve } from "@/src/lib/customer-tenant-branding";
 import { normalizeShopOrdersListResponse } from "@/src/lib/customer-shop-orders-list";
@@ -755,6 +756,8 @@ const liveBaseQuery = fetchBaseQuery({
       if (token) headers.set("Authorization", `Bearer ${token}`);
     }
     headers.set("Accept", "application/json");
+    // Browser customer portal: hosted PhonePe redirect (explicit; avoids ambiguity if X-Platform is ever set).
+    headers.set("X-Checkout-Channel", "hosted");
     if (env.apiBaseUrl && !env.useMocks) {
       headers.set("X-Swarna-Client-Api-Base", env.apiBaseUrl);
     }
@@ -807,12 +810,15 @@ const dynamicBaseQuery: BaseQueryFn<
   ]);
   const dispatch = api.dispatch as AppDispatch;
   const epochAtStart = readCustomerDataEpoch(api.getState() as RootState);
+  const sessionGenAtStart = readCustomerSessionGeneration(api.getState() as RootState);
 
   let result = env.useMocks
     ? await mockBaseQuery(requestArgs, api, extra)
     : await liveBaseQuery(requestArgs, api, extra);
 
-  const epochAfter = readCustomerDataEpoch(api.getState() as RootState);
+  const stateAfter = api.getState() as RootState;
+  const epochAfter = readCustomerDataEpoch(stateAfter);
+  const sessionGenAfter = readCustomerSessionGeneration(stateAfter);
   if (!env.useMocks && epochAfter !== epochAtStart) {
     return rtkErrorResult({
       status: "CUSTOM_ERROR",
@@ -820,22 +826,40 @@ const dynamicBaseQuery: BaseQueryFn<
       data: { code: "CUSTOMER_IDENTITY_STALE" },
     });
   }
+  if (sessionGenAfter !== sessionGenAtStart) {
+    return rtkErrorResult({
+      status: "CUSTOM_ERROR",
+      error: "Stale customer session generation; response discarded",
+      data: { code: "CUSTOMER_SESSION_STALE" },
+    });
+  }
 
   if (shouldAttemptAuthRefresh(result.error, guard, env.useMocks)) {
     const refreshed = await refreshAfterUnauthorized("customer", guard);
     if (refreshed) {
+      const epochBeforeRetry = readCustomerDataEpoch(api.getState() as RootState);
+      const sessionGenBeforeRetry = readCustomerSessionGeneration(api.getState() as RootState);
       result = await retryAuthorizedRequest(
         liveBaseQuery,
         requestArgs,
         api,
         extra,
       );
-      const epochAfterRetry = readCustomerDataEpoch(api.getState() as RootState);
-      if (epochAfterRetry !== epochAtStart) {
+      const stateAfterRetry = api.getState() as RootState;
+      const epochAfterRetry = readCustomerDataEpoch(stateAfterRetry);
+      const sessionGenAfterRetry = readCustomerSessionGeneration(stateAfterRetry);
+      if (epochAfterRetry !== epochBeforeRetry) {
         return rtkErrorResult({
           status: "CUSTOM_ERROR",
           error: "Stale customer identity response discarded",
           data: { code: "CUSTOMER_IDENTITY_STALE" },
+        });
+      }
+      if (sessionGenAfterRetry !== sessionGenBeforeRetry) {
+        return rtkErrorResult({
+          status: "CUSTOM_ERROR",
+          error: "Stale customer session generation; response discarded",
+          data: { code: "CUSTOMER_SESSION_STALE" },
         });
       }
     } else if (shouldForceAuthLogout("customer", true)) {
@@ -867,7 +891,16 @@ export const customerApi = createApi({
         normalizeCustomerTenantResolve(raw as Parameters<typeof normalizeCustomerTenantResolve>[0]),
     }),
     requestCustomerOtp: builder.mutation<
-      { otpId: string; maskedMobile: string; expiresInSeconds: number; isRegistered?: boolean },
+      {
+        otpId: string;
+        maskedMobile: string;
+        expiresInSeconds: number;
+        resendAvailableInSeconds?: number;
+        attemptsAllowed?: number;
+        otpLength?: number;
+        authCountryCode?: string;
+        isRegistered?: boolean;
+      },
       { tenantCode: string; mobile: string; deviceId: string; purpose: string }
     >({ query: (body) => ({ url: "/public/auth/otp/request", method: "POST", body }) }),
     verifyCustomerOtp: builder.mutation<
@@ -943,6 +976,25 @@ export const customerApi = createApi({
     getCustomerProfile: builder.query<CustomerProfile, void>({
       query: () => "/app/profile",
       providesTags: ["CustomerProfile"],
+      async onQueryStarted(_arg, { dispatch, queryFulfilled, getState }) {
+        const genAtStart = readCustomerSessionGeneration(getState() as RootState);
+        try {
+          const { data: profile } = await queryFulfilled;
+          const genAfter = readCustomerSessionGeneration(getState() as RootState);
+          if (genAfter !== genAtStart) return;
+          if (!profile?.tenantId || !profile?.id) return;
+          dispatch(
+            customerIdentityConfirmed({
+              tenantId: profile.tenantId,
+              customerId: profile.id,
+              tenantCode: profile.tenant?.tenantCode,
+              forSessionGeneration: genAtStart,
+            }),
+          );
+        } catch {
+          /* error path handled elsewhere */
+        }
+      },
     }),
     updateCustomerProfile: builder.mutation<CustomerProfile, Partial<CustomerProfile>>({ query: (body) => ({ url: "/app/profile", method: "PATCH", body }), invalidatesTags: ["CustomerProfile", "CustomerHome"] }),
     completeCustomerProfile: builder.mutation<

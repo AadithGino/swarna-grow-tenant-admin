@@ -22,8 +22,23 @@ Authorization: Bearer <accessToken>
 Content-Type: application/json
 X-Idempotency-Key: <uuid-v4>
 X-Platform: android
+X-Checkout-Channel: auto
 X-App-Version: 1.0.0
 ```
+
+### 1.1 `X-Checkout-Channel` (optional)
+
+On **payment-intent** routes (flexible `POST …/payment-intents`, shop, Digital Gold buy/redemption intents), the backend picks **SDK vs hosted** from `X-Platform` unless you override:
+
+| Value | Behavior |
+|--------|-----------|
+| *(omit)* or `auto` | `X-Platform: android\|ios` → SDK token; otherwise hosted redirect |
+| `sdk` | Always SDK (`createSdkOrder` + token) |
+| `hosted` | Always hosted browser checkout (`paymentUrl`) — e.g. WebView bridge before native SDK is live |
+
+Invalid values return **`400`** with `error.details[0].field` = **`x-checkout-channel`**.
+
+**Not applicable** to dedicated SDK-only routes: `POST …/pay/sdk-order`, `createSdkPaymentIntent`, and fixed-link SDK initiation — those always return SDK; the header has no effect.
 
 ---
 
@@ -154,6 +169,40 @@ Poll the `statusPollUrl` returned on the payment intent. Live checkout requires 
 
 Do **not** load `https://mercury.phonepe.com/transact/pg?token=...` in an external browser on mobile — that path is for **web** clients only.
 
+### 6.1 iOS — UPI apps not showing (Info.plist)
+
+On **Android**, PhonePe can list PhonePe / GPay / Paytm without extra manifest entries. On **iPhone**, iOS blocks “can this app be installed?” checks unless you declare URL schemes in **`ios/Runner/Info.plist`**. If the UPI grid is empty or only “Other methods”, fix the native iOS project (not SwarnaGrow backend).
+
+**Required (PhonePe Flutter SDK setup):** [PhonePe SDK setup — iOS](https://developer.phonepe.com/payment-gateway/mobile-app-integration/standard-checkout-mobile/flutter/sdk-setup)
+
+```xml
+<key>LSApplicationQueriesSchemes</key>
+<array>
+  <string>ppemerchantsdkv1</string>
+  <string>ppemerchantsdkv2</string>
+  <string>ppemerchantsdkv3</string>
+  <string>paytmmp</string>
+  <string>gpay</string>
+  <string>phonepe</string>
+  <string>tez</string>
+  <string>upi</string>
+</array>
+```
+
+**Also required on iOS:**
+
+| Item | Purpose |
+|------|---------|
+| **URL Types** in Xcode (`CFBundleURLTypes`) | Return from PhonePe after pay — must match **`appSchema`** passed to `PhonePePaymentSdk.init` / `startTransaction` |
+| **`PhonePeAppId`** in Info.plist | From PhonePe after you share **Apple Team ID** with their integration team |
+| **`X-Platform: ios`** on payment-intent API calls | Backend returns **`SDK_ORDER`** + token (same as Android) |
+| **Real device** with UPI apps installed | Simulator often has **no** PhonePe/GPay; grid stays empty |
+| **`cd ios && pod install`** after SDK / plist changes | Rebuild IPA |
+
+**Backend:** Already returns the same `token` for iOS when `X-Platform: ios` is set. Empty UPI list is almost always missing **`LSApplicationQueriesSchemes`**, wrong **`appSchema`**, or testing on simulator.
+
+**Expectation:** Fewer UPI apps on iOS than Android (market/install base). Cards and net banking in PhonePe’s sheet may still work when UPI tiles are missing.
+
 ---
 
 ## 7. Polling guidelines
@@ -186,6 +235,7 @@ Do **not** load `https://mercury.phonepe.com/transact/pg?token=...` in an extern
 
 ## 10. Related docs
 
-- `swarnagrow-tenant-admin-*/docs/FLUTTER_CUSTOMER_API_GUIDE.md` — full customer API
+- [`docs/FLUTTER_CUSTOMER_API_GUIDE.md`](./FLUTTER_CUSTOMER_API_GUIDE.md) — **full customer portal API** (auth, schemes, shop, Digital Gold, §8 PhonePe)
+- [`docs/FLUTTER_CUSTOMER_ECOMMERCE_AND_DIGITAL_METALS_INTEGRATION.md`](./FLUTTER_CUSTOMER_ECOMMERCE_AND_DIGITAL_METALS_INTEGRATION.md) — shop + Digital Gold example JSON for every route
 - [PHONEPE_PRODUCTION_ACTIVATION_HANDOFF.md](./PHONEPE_PRODUCTION_ACTIVATION_HANDOFF.md) — gates, webhooks, reconcile
 - [ECOMMERCE_PHONEPE_STAGING_CHECKLIST.md](./ECOMMERCE_PHONEPE_STAGING_CHECKLIST.md) — shop staging

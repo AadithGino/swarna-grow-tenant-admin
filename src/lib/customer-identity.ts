@@ -37,6 +37,10 @@ export function readCustomerDataEpoch(state: RootState): number {
   return state.customerSession.dataEpoch ?? 0;
 }
 
+export function readCustomerSessionGeneration(state: RootState): number {
+  return state.customerSession.sessionGeneration ?? 0;
+}
+
 export function readCustomerIdentityRevalidating(state: RootState): boolean {
   return state.customerSession.identityRevalidating ?? false;
 }

@@ -1,6 +1,8 @@
 "use client";
 
+import { useEffect } from "react";
 import { usePathname } from "next/navigation";
+import { ensureCustomerIdentityLifecycle } from "@/src/lib/customer-identity-lifecycle";
 import { AdminShell } from "@/src/components/layout/admin-shell";
 import { PlatformShell } from "@/src/components/layout/platform-shell";
 import { CustomerShell } from "@/src/components/customer/customer-shell";
@@ -32,6 +34,8 @@ function isCustomerAuthSurface(pathname: string): boolean {
   if (
     pathname === "/pay" ||
     pathname.startsWith("/pay/") ||
+    pathname === "/payment-return" ||
+    pathname.startsWith("/payment-return/") ||
     /^\/customer\/[^/]+\/pay(\/|$)/.test(pathname)
   ) {
     return true;
@@ -46,11 +50,15 @@ export default function PortalLayout({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
+  useEffect(() => {
+    ensureCustomerIdentityLifecycle();
+  }, []);
   if (pathname === "/login") return children;
   if (pathname === "/platform/login") return children;
   if (pathname === "/agent/login") return children;
   // Public payment deep links (no tenant/admin session required).
   if (pathname === "/pay" || pathname.startsWith("/pay/")) return children;
+  if (pathname === "/payment-return" || pathname.startsWith("/payment-return/")) return children;
   if (pathname === "/agent" || pathname.startsWith("/agent/")) {
     return <AgentShell>{children}</AgentShell>;
   }

@@ -19,16 +19,33 @@ import { useAppDispatch, useAppSelector } from "@/src/store/hooks";
 import { toast } from "sonner";
 import { useCustomerTenant } from "@/src/components/customer/customer-tenant-context";
 import { customerPath } from "@/src/lib/customer-tenant";
+import { env } from "@/src/config/env";
 import { customerPortalCapabilitiesFromTenant } from "@/src/lib/customer-portal-capabilities";
 import { CustomerBrand } from "@/src/components/customer/customer-ui";
+import type { OtpRequestMetaPick, TenantOtpInputSlice } from "@/src/lib/customer-auth-otp-form-meta";
+import {
+  customerAuthOtpLengthFromContext,
+  customerAuthOtpSmsRegionFromContext,
+} from "@/src/lib/customer-auth-otp-form-meta";
 import {
   customerOtpIncompleteMessage,
-  customerOtpLengthFromTenant,
   customerOtpPattern,
+  customerOtpSmsRegionLabel,
 } from "@/src/lib/customer-otp-ui";
 
 type Step = "mobile" | "otp";
 type AuthMode = "login" | "signup";
+
+/** Same OTP field derivation as the login page (AUD-09); exported for regression tests. */
+export function deriveCustomerAuthOtpFormState(
+  tenant: TenantOtpInputSlice | null | undefined,
+  requestMeta: OtpRequestMetaPick | null,
+) {
+  return {
+    otpLength: customerAuthOtpLengthFromContext(tenant, requestMeta),
+    smsRegion: customerOtpSmsRegionLabel(customerAuthOtpSmsRegionFromContext(tenant, requestMeta)),
+  };
+}
 
 export function CustomerLoginPage() {
   const router = useRouter();
@@ -39,16 +56,17 @@ export function CustomerLoginPage() {
   const mounted = useClientMounted();
   const [mode, setMode] = useState<AuthMode>("login");
   const [step, setStep] = useState<Step>("mobile");
-  const [mobile, setMobile] = useState("9847012345");
-  const [otp, setOtp] = useState("123456");
+  const [mobile, setMobile] = useState("");
+  const [otp, setOtp] = useState("");
   const [otpId, setOtpId] = useState("");
   const [seconds, setSeconds] = useState(0);
+  const [requestOtpMeta, setRequestOtpMeta] = useState<{ otpLength?: number; authCountryCode?: string } | null>(null);
   const [password, setPassword] = useState("");
   const [requestOtp, requestState] = useRequestCustomerOtpMutation();
   const [verifyOtp, verifyState] = useVerifyCustomerOtpMutation();
   const [loginPassword, loginPasswordState] = useLoginCustomerPasswordMutation();
   const portalCaps = customerPortalCapabilitiesFromTenant(tenant);
-  const otpLength = customerOtpLengthFromTenant(tenant ?? undefined);
+  const { otpLength, smsRegion } = deriveCustomerAuthOtpFormState(tenant, requestOtpMeta);
   const registrationEnabled = portalCaps.customerSelfRegistration;
   const kycPortalEnabled = portalCaps.kycMandatory;
   const passwordOnlyLogin = portalCaps.customerLoginMode === "PASSWORD_ONLY";
@@ -82,6 +100,7 @@ export function CustomerLoginPage() {
     setOtpId("");
     setOtp("");
     setSeconds(0);
+    setRequestOtpMeta(null);
   };
 
   const sendOtp = async () => {
@@ -95,8 +114,13 @@ export function CustomerLoginPage() {
         deviceId: "customer-web",
       }).unwrap();
       setOtpId(result.otpId);
+      setOtp("");
       setStep("otp");
-      setSeconds(30);
+      setRequestOtpMeta({
+        otpLength: result.otpLength,
+        authCountryCode: result.authCountryCode,
+      });
+      setSeconds(result.resendAvailableInSeconds ?? 30);
       if (mode === "signup" && (result as { isRegistered?: boolean }).isRegistered) {
         toast.message("This number is already registered — we’ll sign you in after OTP.");
       } else {
@@ -344,7 +368,7 @@ export function CustomerLoginPage() {
                 ? mode === "login"
                   ? `Enter the mobile number registered with ${jewellerName}.`
                   : `Register with your mobile to start saving with ${jewellerName}.`
-                : `We sent a ${otpLength}-digit code to +91 ${mobile.slice(0, 2)}••• ••${mobile.slice(-3)}.`}
+                : `We sent a ${otpLength}-digit SMS code (${smsRegion}) to your number ending in ${mobile.slice(-3)}.`}
             </p>
             {passwordOnlyLogin ? (
               <div className="mt-7 space-y-4">
@@ -431,17 +455,27 @@ export function CustomerLoginPage() {
                   inputMode="numeric"
                   maxLength={otpLength}
                   value={otp}
-                  onChange={(e) => setOtp(e.target.value.replace(/\D/g, ""))}
+                  onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, otpLength))}
+                  onPaste={(e) => {
+                    e.preventDefault();
+                    const text = e.clipboardData.getData("text").replace(/\D/g, "").slice(0, otpLength);
+                    setOtp(text);
+                  }}
                   className="mt-2 h-14 rounded-xl text-center text-xl font-black tracking-[.55em]"
                 />
                 <p className="mt-3 text-center text-xs text-muted-foreground">
-                  {mode === "signup" ? "Create account" : "Sign in"} OTP · demo code: <b>123456</b>
-                  {mode === "signup" ? (
+                  {mode === "signup" ? "Create account" : "Sign in"} OTP.
+                  {env.useMocks ? (
                     <>
-                      <br />
-                      <span className="text-[11px]">Use the OTP from the last “Send secure OTP” on this tab.</span>
+                      {" "}
+                      Mock API: use <b>123456</b> (or match your <span className="font-mono">otpLength</span>).
                     </>
-                  ) : null}
+                  ) : (
+                    <>
+                      {" "}
+                      Use the code from the most recent “Send secure OTP” for this step; resend replaces the code.
+                    </>
+                  )}
                 </p>
                 <Button
                   onClick={verify}

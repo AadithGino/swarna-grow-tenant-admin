@@ -1,11 +1,97 @@
 /**
- * API mode: defaults to contract-shaped mocks until the backend URL is supplied.
+ * API mode: in non-production bundles, defaults to contract-shaped mocks until the backend URL is supplied.
  * Set `NEXT_PUBLIC_USE_MOCKS=false` to connect every RTK Query endpoint to the API.
+ *
+ * Production bundles (NODE_ENV === "production" at build time) fail closed unless
+ * live API mode and a valid HTTPS API base are explicitly set.
  */
+
+const TRUTHY = new Set(["true", "1", "yes"]);
+const FALSY = new Set(["false", "0", "no"]);
+
+/** Reserved for dev/preview; production rejects these hosts. */
+const LOCAL_HOST_SUBSTRINGS = ["localhost", "127.0.0.1", "[::1]", "0.0.0.0"];
+
+function isProductionBundle(): boolean {
+  if (process.env.SWARNA_PRODUCTION_PUBLIC_ENV_STRICT === "1") return true;
+  return process.env.NODE_ENV === "production";
+}
+
+function skipProductionGuard(): boolean {
+  if (process.env.SWARNA_PRODUCTION_PUBLIC_ENV_STRICT === "1") return false;
+  return (
+    process.env.VITEST === "true" ||
+    process.env.SWARNA_SKIP_PRODUCTION_ENV_GUARD === "1"
+  );
+}
+
+function parseApiMode(raw: string | undefined): "live" | "mocks" | "unset" | "invalid" {
+  const v = raw?.trim().toLowerCase();
+  if (!v) return "unset";
+  if (TRUTHY.has(v)) return "mocks";
+  if (FALSY.has(v)) return "live";
+  return "invalid";
+}
+
+function validateProductionPublicEnv(): void {
+  if (!isProductionBundle() || skipProductionGuard()) return;
+
+  const mode = parseApiMode(process.env.NEXT_PUBLIC_USE_MOCKS);
+  if (mode !== "live") {
+    throw new Error(
+      `[AUD-11] Production build requires NEXT_PUBLIC_USE_MOCKS=false (explicit live API mode). Got: ${JSON.stringify(process.env.NEXT_PUBLIC_USE_MOCKS ?? "")}`,
+    );
+  }
+
+  const base = process.env.NEXT_PUBLIC_API_BASE_URL?.trim() ?? "";
+  if (!base) {
+    throw new Error(
+      "[AUD-11] Production build requires a nonempty NEXT_PUBLIC_API_BASE_URL (HTTPS API base, ending in /api/v1).",
+    );
+  }
+  let url: URL;
+  try {
+    url = new URL(base);
+  } catch {
+    throw new Error(
+      `[AUD-11] Production NEXT_PUBLIC_API_BASE_URL is not a valid URL: ${JSON.stringify(base)}`,
+    );
+  }
+  if (url.protocol !== "https:") {
+    throw new Error(
+      `[AUD-11] Production NEXT_PUBLIC_API_BASE_URL must use https. Got protocol ${url.protocol}`,
+    );
+  }
+  const path = `${url.pathname}`.replace(/\/$/, "") || "";
+  if (!path.endsWith("/api/v1")) {
+    throw new Error(
+      "[AUD-11] Production NEXT_PUBLIC_API_BASE_URL must end with /api/v1 (contract base).",
+    );
+  }
+  const host = url.hostname.toLowerCase();
+  if (LOCAL_HOST_SUBSTRINGS.some((s) => host.includes(s.replace(/[\[\]]/g, "")))) {
+    throw new Error(
+      "[AUD-11] Production NEXT_PUBLIC_API_BASE_URL must not point to localhost or loopback.",
+    );
+  }
+
+  const testUi = process.env.NEXT_PUBLIC_ECOMMERCE_PAYMENT_TEST_UI?.trim().toLowerCase();
+  if (testUi === "true" || testUi === "1" || testUi === "yes") {
+    throw new Error(
+      "[AUD-11] NEXT_PUBLIC_ECOMMERCE_PAYMENT_TEST_UI must not be enabled in production builds.",
+    );
+  }
+}
+
+validateProductionPublicEnv();
+
 function readUseMocks(): boolean {
-  const raw = process.env.NEXT_PUBLIC_USE_MOCKS?.trim().toLowerCase();
-  if (raw === "true" || raw === "1" || raw === "yes") return true;
-  if (raw === "false" || raw === "0" || raw === "no") return false;
+  if (isProductionBundle() && !skipProductionGuard()) {
+    return false;
+  }
+  const mode = parseApiMode(process.env.NEXT_PUBLIC_USE_MOCKS);
+  if (mode === "live") return false;
+  if (mode === "mocks" || mode === "unset") return true;
   return true;
 }
 
@@ -39,4 +125,9 @@ export const env = {
 /** Host root for routes outside `/api/v1` (e.g. `/health`). */
 export function apiOrigin(): string {
   return env.apiBaseUrl.replace(/\/api\/v1\/?$/, "") || env.apiBaseUrl;
+}
+
+/** Exported for unit tests (production guard helpers). */
+export function __testOnlyValidateProductionPublicEnv(): void {
+  validateProductionPublicEnv();
 }
