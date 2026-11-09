@@ -14,23 +14,70 @@ function readPathname(): string {
   return normalizeBrowserPathname(window.location.pathname || "/");
 }
 
-function subscribe(onStoreChange: () => void): () => void {
-  const onPop = () => onStoreChange();
-  window.addEventListener("popstate", onPop);
-  const { pushState, replaceState } = window.history;
-  const wrap =
-    (original: typeof pushState) =>
-    (...args: Parameters<typeof pushState>) => {
-      const result = original.apply(window.history, args);
-      onStoreChange();
+const listeners = new Set<() => void>();
+let lastEmittedPathname = "";
+let emitScheduled = false;
+
+function emitPathname() {
+  if (emitScheduled) return;
+  emitScheduled = true;
+  queueMicrotask(() => {
+    emitScheduled = false;
+    const next = readPathname();
+    if (next === lastEmittedPathname) return;
+    lastEmittedPathname = next;
+    for (const listener of listeners) listener();
+  });
+}
+
+let historyPatched = false;
+
+type HistoryFn = History["pushState"] & { __sgPath?: boolean };
+
+function patchVinextOriginals() {
+  const state = (
+    window as unknown as Record<symbol, { originalPushState?: HistoryFn; originalReplaceState?: HistoryFn }>
+  )[Symbol.for("vinext.clientNavigationState")];
+  const wrapOriginal = (key: "originalPushState" | "originalReplaceState") => {
+    const native = state?.[key];
+    if (!native || native.__sgPath) return;
+    const wrapped: HistoryFn = function (this: History, ...args: Parameters<HistoryFn>) {
+      const result = native.apply(this, args);
+      emitPathname();
       return result;
     };
-  window.history.pushState = wrap(pushState);
-  window.history.replaceState = wrap(replaceState);
+    wrapped.__sgPath = true;
+    state![key] = wrapped;
+  };
+  wrapOriginal("originalPushState");
+  wrapOriginal("originalReplaceState");
+}
+
+/** One shared history patch. Per-subscriber wrappers used to overwrite each other, so the sidebar stopped updating after the page did. */
+function ensureHistoryPatch() {
+  if (typeof window === "undefined") return;
+  patchVinextOriginals();
+  if (historyPatched) return;
+  historyPatched = true;
+  lastEmittedPathname = readPathname();
+
+  const wrap = (original: History["pushState"]): History["pushState"] =>
+    function (this: History, ...args: Parameters<History["pushState"]>) {
+      const result = original.apply(this, args);
+      emitPathname();
+      return result;
+    };
+
+  window.history.pushState = wrap(window.history.pushState);
+  window.history.replaceState = wrap(window.history.replaceState);
+  window.addEventListener("popstate", emitPathname);
+}
+
+function subscribe(onStoreChange: () => void): () => void {
+  ensureHistoryPatch();
+  listeners.add(onStoreChange);
   return () => {
-    window.removeEventListener("popstate", onPop);
-    window.history.pushState = pushState;
-    window.history.replaceState = replaceState;
+    listeners.delete(onStoreChange);
   };
 }
 

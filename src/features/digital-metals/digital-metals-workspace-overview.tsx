@@ -11,13 +11,14 @@ import {
   useGetDigitalMetalsPaymentExceptionsQuery,
   useGetDigitalMetalsPayablesQuery,
   useGetDigitalMetalsRedemptionFulfilmentQueueQuery,
+  useGetDigitalMetalsRedemptionOrdersQuery,
   useGetDigitalMetalsSellOrdersQuery,
 } from "@/src/store/api/admin-api";
 import { DmCustomerCell, MetalPill, dmInr, dmInrShort, dmWeight, timeAgo } from "./digital-metals-admin-ui";
 
 type ActivityRow = {
   id: string;
-  kind: "BUY" | "SELL";
+  kind: "BUY" | "SELL" | "REDEMPTION";
   status: string;
   metal?: string;
   quantityUg?: string;
@@ -25,6 +26,18 @@ type ActivityRow = {
   createdAt?: string | null;
   customer?: { id?: string; name?: string; mobile?: string; customerNumber?: string } | null;
 };
+
+const ACTIVITY_KIND_LABEL = {
+  BUY: "Bought",
+  SELL: "Sold",
+  REDEMPTION: "Redeemed",
+} as const;
+
+function activityHref(row: ActivityRow) {
+  if (row.kind === "BUY") return `/digital-metals/purchases/${row.id}`;
+  if (row.kind === "SELL") return `/digital-metals/sells/${row.id}`;
+  return `/digital-metals/redemption/orders/${row.id}`;
+}
 
 /** Action-queue tiles + latest activity for the Digital Gold overview. */
 export function DigitalMetalsWorkspaceOverview({ workspaceVisible }: { workspaceVisible: boolean }) {
@@ -36,8 +49,9 @@ export function DigitalMetalsWorkspaceOverview({ workspaceVisible }: { workspace
   const paymentExceptions = useGetDigitalMetalsPaymentExceptionsQuery(undefined, { skip: !workspaceVisible });
   const fulfilment = useGetDigitalMetalsRedemptionFulfilmentQueueQuery(undefined, { skip: !workspaceVisible });
   const payables = useGetDigitalMetalsPayablesQuery(undefined, { skip: !workspaceVisible });
-  const recentBuys = useGetDigitalMetalsBuyOrdersQuery({ limit: 6 }, { skip: !workspaceVisible });
-  const recentSells = useGetDigitalMetalsSellOrdersQuery({ limit: 6 }, { skip: !workspaceVisible });
+  const recentBuys = useGetDigitalMetalsBuyOrdersQuery({ limit: 8 }, { skip: !workspaceVisible });
+  const recentSells = useGetDigitalMetalsSellOrdersQuery({ limit: 8 }, { skip: !workspaceVisible });
+  const recentRedemptions = useGetDigitalMetalsRedemptionOrdersQuery({ limit: 8 }, { skip: !workspaceVisible });
 
   if (!workspaceVisible) return null;
 
@@ -65,13 +79,33 @@ export function DigitalMetalsWorkspaceOverview({ workspaceVisible }: { workspace
       status: String(o.status ?? ""),
       metal: o.metal as string | undefined,
       quantityUg: o.quantityUg as string | undefined,
-      amountPaise: Number(o.settlementPaise ?? 0),
-      createdAt: o.createdAt as string | undefined,
+      amountPaise: Number(o.settlementPaise ?? o.netPayablePaise ?? 0),
+      createdAt: (o.executedAt ?? o.createdAt) as string | undefined,
       customer: o.customer as ActivityRow["customer"],
     })),
-  ]
-    .sort((a, b) => String(b.createdAt ?? "").localeCompare(String(a.createdAt ?? "")))
-    .slice(0, 8);
+    ...((recentRedemptions.data?.items ?? []) as Record<string, unknown>[]).map((o) => ({
+      id: String(o.id),
+      kind: "REDEMPTION" as const,
+      status: String(o.status ?? ""),
+      metal: o.metal as string | undefined,
+      quantityUg: o.quantityUg as string | undefined,
+      amountPaise: Number(o.chargeTotalPaise ?? 0),
+      createdAt: (o.createdAt ?? o.updatedAt) as string | undefined,
+      customer: o.customer as ActivityRow["customer"],
+    })),
+  ];
+  const byKind = {
+    BUY: activity.filter((row) => row.kind === "BUY"),
+    SELL: activity.filter((row) => row.kind === "SELL"),
+    REDEMPTION: activity.filter((row) => row.kind === "REDEMPTION"),
+  };
+  const latest = (["BUY", "SELL", "REDEMPTION"] as const)
+    .flatMap((kind) =>
+      [...byKind[kind]]
+        .sort((a, b) => String(b.createdAt ?? "").localeCompare(String(a.createdAt ?? "")))
+        .slice(0, 4),
+    )
+    .sort((a, b) => String(b.createdAt ?? "").localeCompare(String(a.createdAt ?? "")));
 
   return (
     <div className="space-y-6" data-testid="digital-metals-workspace-overview">
@@ -126,28 +160,34 @@ export function DigitalMetalsWorkspaceOverview({ workspaceVisible }: { workspace
 
       <Surface
         title="Latest activity"
-        description="Newest buys and sells across all customers"
+        description="Newest buys, sells, and physical redemptions"
         action={
           <Link href="/digital-metals/purchases" className="inline-flex items-center gap-1 text-sm font-semibold text-[#7b0a2b] hover:underline">
             All purchases <ArrowRight className="size-3.5" />
           </Link>
         }
       >
-        {activity.length === 0 ? (
+        {latest.length === 0 ? (
           <p className="px-5 py-6 text-sm text-[#7a6d70]">No customer activity yet.</p>
         ) : (
           <ul className="divide-y divide-[#f3eae7]">
-            {activity.map((row) => (
+            {latest.map((row) => (
               <li key={`${row.kind}-${row.id}`}>
                 <Link
-                  href={row.kind === "BUY" ? `/digital-metals/purchases/${row.id}` : `/digital-metals/sells/${row.id}`}
-                  className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-1 px-5 py-3 transition-colors hover:bg-[#fcf6f4] sm:grid-cols-[minmax(0,1.3fr)_6rem_minmax(0,1fr)_11rem]"
+                  href={activityHref(row)}
+                  className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-1 px-5 py-3 transition-colors hover:bg-[#fcf6f4] sm:grid-cols-[minmax(0,1.3fr)_6.5rem_minmax(0,1fr)_11rem]"
                 >
                   <DmCustomerCell customer={row.customer} fallbackId={row.id} />
                   <span
-                    className={`hidden w-fit rounded-full px-2 py-0.5 text-xs font-bold sm:inline-flex ${row.kind === "BUY" ? "bg-emerald-50 text-emerald-700" : "bg-sky-50 text-sky-700"}`}
+                    className={`hidden w-fit rounded-full px-2 py-0.5 text-xs font-bold sm:inline-flex ${
+                      row.kind === "BUY"
+                        ? "bg-emerald-50 text-emerald-700"
+                        : row.kind === "SELL"
+                          ? "bg-sky-50 text-sky-700"
+                          : "bg-amber-50 text-amber-800"
+                    }`}
                   >
-                    {row.kind === "BUY" ? "Bought" : "Sold"}
+                    {ACTIVITY_KIND_LABEL[row.kind]}
                   </span>
                   <span className="hidden items-center gap-2 text-sm text-[#5c4a4e] sm:flex">
                     <MetalPill metal={row.metal} />

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect } from "react";
-import { usePathname } from "next/navigation";
+import { useBrowserPathname } from "@/src/hooks/use-browser-pathname";
 import { recordPortalNavigation } from "@/src/lib/portal-nav";
 import { Bell, CircleHelp, Coins, CreditCard, Home, IndianRupee, Layers3, LogOut, ShoppingBag, Sparkles, UserRound, WalletCards } from "lucide-react";
 import { useGetCustomerHomeQuery, useGetShopAvailabilityQuery } from "@/src/store/api/customer-api";
@@ -34,7 +34,7 @@ const mobileNavigation = [
 ] as const;
 
 function CustomerShellInner({ children }: { children: React.ReactNode }) {
-  const pathname = usePathname();
+  const pathname = useBrowserPathname();
   useEffect(() => {
     if (pathname) recordPortalNavigation(pathname);
   }, [pathname]);

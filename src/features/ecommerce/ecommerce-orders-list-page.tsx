@@ -71,6 +71,10 @@ export function EcommerceOrdersPage() {
     (next: EcommerceOrdersListFiltersState, cursor?: string) => {
       const q = ordersListFiltersToSearchParams(next, cursor);
       const path = q.toString() ? `/ecommerce/orders?${q}` : "/ecommerce/orders";
+      if (typeof window !== "undefined") {
+        const here = `${window.location.pathname.replace(/\/+$/, "") || "/"}${window.location.search}`;
+        if (here === path) return;
+      }
       router.replace(path, { scroll: false });
     },
     [router],

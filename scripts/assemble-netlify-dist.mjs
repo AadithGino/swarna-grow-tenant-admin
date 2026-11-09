@@ -53,5 +53,6 @@ try {
   /* ignore */
 }
 
-spawnSync("zip", ["-r", "-q", "netlify-deploy.zip", "."], { cwd: outDir, stdio: "inherit" });
-console.log(JSON.stringify({ ok: true, publishDir: "netlify-dist", routes }));
+const zipPath = join(root, "netlify-deploy.zip");
+spawnSync("zip", ["-r", "-q", zipPath, "."], { cwd: outDir, stdio: "inherit" });
+console.log(JSON.stringify({ ok: true, publishDir: "netlify-dist", zip: zipPath, routes }));

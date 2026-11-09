@@ -6,6 +6,7 @@ import { WebMcpBridge } from "./webmcp-bridge";
 import { AuthProactiveRefresh } from "@/src/components/session/auth-proactive-refresh";
 import { AuthTokenSyncBridge } from "@/src/components/session/auth-token-sync-bridge";
 import { SessionHydrator } from "@/src/components/session/session-hydrator";
+import { StaticHardNav } from "@/src/components/static-hard-nav";
 
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
@@ -14,6 +15,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
       <AuthProactiveRefresh />
       <AuthTokenSyncBridge />
       <WebMcpBridge />
+      <StaticHardNav />
       {children}
     </Provider>
   );

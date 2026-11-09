@@ -8,6 +8,6 @@ import { pathnameToPortalSlug } from "@/src/lib/portal-path-slug";
 export default function PortalPage() {
   const pathname = useBrowserPathname();
   const slug = pathnameToPortalSlug(pathname);
-  // Remount when the real URL changes (vinext client router on static hosts).
-  return <PortalRouter key={pathname} slug={slug} />;
+  // No remount key: remounting fought vinext soft-nav and caused orders?_rsc fetch loops from the sidebar.
+  return <PortalRouter slug={slug} />;
 }

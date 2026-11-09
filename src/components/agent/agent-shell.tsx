@@ -2,7 +2,8 @@
 
 import { useEffect } from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
+import { useBrowserPathname } from "@/src/hooks/use-browser-pathname";
 import { BarChart3, Bell, History, Home, LogOut, Search, UserRound } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAppDispatch, useAppSelector } from "@/src/store/hooks";
@@ -20,7 +21,7 @@ const nav = [
 ] as const;
 
 export function AgentShell({ children }: { children: React.ReactNode }) {
-  const pathname = usePathname();
+  const pathname = useBrowserPathname();
   const router = useRouter();
   const dispatch = useAppDispatch();
   const { session, hydrated } = useAppSelector((state) => state.agentSession);

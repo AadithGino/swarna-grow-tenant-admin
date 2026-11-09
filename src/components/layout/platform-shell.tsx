@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
+import { useBrowserPathname } from "@/src/hooks/use-browser-pathname";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { usePlatformSession } from "@/src/features/platform/use-platform-session";
 import { clearPlatformAuthStorage } from "@/src/lib/auth-logout";
@@ -39,7 +40,7 @@ const nav = [
 ];
 
 function PlatformNavigation({ close, monitoringCount }: { close?: () => void; monitoringCount: number }) {
-  const pathname = usePathname();
+  const pathname = useBrowserPathname();
   return (
     <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-5">
       <p className="mb-3 px-3 text-[0.68rem] font-bold uppercase tracking-[0.17em] text-[#c59a9f]">Platform operations</p>
@@ -101,7 +102,7 @@ function PlatformSidebar({ close, monitoringCount }: { close?: () => void; monit
 
 export function PlatformShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
-  const pathname = usePathname();
+  const pathname = useBrowserPathname();
   const dispatch = useAppDispatch();
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
