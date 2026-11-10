@@ -75,6 +75,9 @@ export type TenantBranding = {
   accentColor: string;
   foregroundColor: string;
   contrastColor: string;
+  splashBackgroundColor?: string | null;
+  splashTagline?: string | null;
+  splashEnabled?: boolean;
   supportNumber: string;
   city: string;
   kycMandatory?: boolean;

@@ -418,6 +418,38 @@ const PlatformSettingsPage = dynamic(
     ),
   options,
 );
+const PlatformDemoTemplatesPage = dynamic(
+  () =>
+    import("@/src/features/platform/platform-demo-templates-page").then(
+      (m) => m.PlatformDemoTemplatesPage,
+    ),
+  options,
+);
+const PlatformDemoTemplateDetailPage = dynamic(
+  () =>
+    import("@/src/features/platform/platform-demo-template-detail-page").then(
+      (m) => m.PlatformDemoTemplateDetailPage,
+    ),
+  options,
+);
+const PlatformDemoInstancesPage = dynamic(
+  () =>
+    import("@/src/features/platform/platform-demo-instances-page").then(
+      (m) => m.PlatformDemoInstancesPage,
+    ),
+  options,
+);
+const PlatformDemoInstanceDetailPage = dynamic(
+  () =>
+    import("@/src/features/platform/platform-demo-instance-detail-page").then(
+      (m) => m.PlatformDemoInstanceDetailPage,
+    ),
+  options,
+);
+const DemoEntryPage = dynamic(
+  () => import("@/src/features/demo/demo-entry-page").then((m) => m.DemoEntryPage),
+  options,
+);
 
 function PlatformRouter({ slug }: { slug: string[] }) {
   const [, section, id, detail] = slug;
@@ -436,6 +468,14 @@ function PlatformRouter({ slug }: { slug: string[] }) {
   }
   if (section === "plans") return <PlatformPlansPage />;
   if (section === "templates") return <PortalNotFoundPage path={slug.join("/")} />;
+  if (section === "demos") {
+    if (id === "templates" && detail) return <PlatformDemoTemplateDetailPage templateId={detail} />;
+    if (id === "instances") {
+      if (detail && detail !== "new") return <PlatformDemoInstanceDetailPage instanceId={detail} />;
+      return <PlatformDemoInstancesPage />;
+    }
+    return <PlatformDemoTemplatesPage />;
+  }
   if (section === "monitoring") return <PlatformMonitoringPage />;
   if (section === "audit") return <PlatformAuditPage />;
   if (section === "settings") return <PlatformSettingsPage />;
@@ -446,6 +486,7 @@ export function PortalRouter({ slug }: { slug: string[] }) {
   if (slug[0] === "customer") return <CustomerRouter slug={slug} />;
   if (slug[0] === "agent") return <AgentRouter slug={slug} />;
   if (slug[0] === "platform") return <PlatformRouter slug={slug} />;
+  if (slug[0] === "demo" && slug[1]) return <DemoEntryPage publicId={slug[1]} />;
   if (slug[0] === "pay" && slug[1])
     return <CustomerLegacyPayRedirect linkToken={slug[1]} />;
   const [section = "dashboard", id, action] = slug;

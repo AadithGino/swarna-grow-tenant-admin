@@ -210,3 +210,89 @@ export type WebhookFailure = {
 export type ErrorLog = {
   id: string; code: string; message: string; statusCode: number; traceId: string; occurredAt: string; tenantId: string | null;
 };
+
+// --- Demo Builder (Platform Manager: register/publish templates, create/manage demo
+// instances; unrelated to the DemoBuilder-unrelated "Template registry" messaging-template
+// feature above — see DemoTemplate/DemoInstance below vs TemplateDefinition/TenantTemplate.) ---
+export type DemoTemplateStatus = "DRAFT" | "ACTIVE" | "RETIRED";
+export type DemoTemplateVersionStatus = "SNAPSHOTTING" | "VALIDATING" | "PUBLISHED" | "FAILED";
+export type DemoInstanceStatus =
+  | "PROVISIONING"
+  | "READY"
+  | "RESETTING"
+  | "FAILED"
+  | "EXPIRED"
+  | "DISABLED"
+  | "DELETING"
+  | "DELETED";
+
+export type DemoTemplate = {
+  id: string;
+  name: string;
+  approvedSourceTenantId: string;
+  currentPublishedVersionId: string | null;
+  status: DemoTemplateStatus;
+  createdBy: string;
+  version: number;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+export type DemoTemplateVersion = {
+  id: string;
+  templateId: string;
+  version: number;
+  schemaVersion: string;
+  status: DemoTemplateVersionStatus;
+  checksum: string | null;
+  manifest: { counts?: Record<string, number>; findings?: string[] } | null;
+  dateAnchor: string | null;
+  publishedBy: string | null;
+  publishedAt: string | null;
+  failureReason: string | null;
+  createdAt?: string;
+};
+
+export type DemoBranding = {
+  logoUploadId?: string | null;
+  primaryColor?: string | null;
+  accentColor?: string | null;
+  displayName?: string | null;
+  splashBackgroundColor?: string | null;
+  splashTagline?: string | null;
+  splashEnabled?: boolean;
+  revision?: number;
+};
+
+export type DemoInstance = {
+  id: string;
+  publicId: string;
+  prospectName: string;
+  prospectContactMobile: string | null;
+  branding: DemoBranding;
+  templateVersionId: string;
+  activeTenantId: string | null;
+  activeGenerationId: string | null;
+  status: DemoInstanceStatus;
+  expiresAt: string;
+  createdBy: string;
+  linkVersion: number;
+  disabledAt: string | null;
+  lastOpenedAt: string | null;
+  version: number;
+  createdAt?: string;
+};
+
+export type RegisterDemoTemplateResult = {
+  template: DemoTemplate;
+  sourceTenant: { id: string; code: string; name: string };
+};
+
+export type CreateDemoInstanceResult = { instance: DemoInstance; linkSecret: string };
+export type RotateDemoLinkResult = { instance: DemoInstance; linkSecret: string };
+export type CopyDemoLinkResult = { publicId: string; linkSecret: string };
+
+export type DemoInstanceListResponse = {
+  rows: DemoInstance[];
+  meta: { total?: number; limit?: number; nextCursor?: string | null };
+};

@@ -8,6 +8,7 @@ import { customerApi } from "./api/customer-api";
 import customerSessionReducer from "./slices/customer-session-slice";
 import agentSessionReducer from "./slices/agent-session-slice";
 import { agentApi } from "./api/agent-api";
+import { demoPublicApi } from "./api/demo-public-api";
 import { branchListener } from "./branch-listener";
 
 export const store = configureStore({
@@ -20,6 +21,7 @@ export const store = configureStore({
     [platformApi.reducerPath]: platformApi.reducer,
     [customerApi.reducerPath]: customerApi.reducer,
     [agentApi.reducerPath]: agentApi.reducer,
+    [demoPublicApi.reducerPath]: demoPublicApi.reducer,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware()
@@ -27,6 +29,7 @@ export const store = configureStore({
       .concat(platformApi.middleware)
       .concat(customerApi.middleware)
       .concat(agentApi.middleware)
+      .concat(demoPublicApi.middleware)
       .prepend(branchListener.middleware),
 });
 

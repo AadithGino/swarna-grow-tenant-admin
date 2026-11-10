@@ -1,8 +1,22 @@
-import { auditLogs, chartData, dashboardSummary, errorLogs, platformInvoices, platformPlans, platformTenants, webhookFailures } from "./platform-data";
+import {
+  auditLogs,
+  chartData,
+  dashboardSummary,
+  errorLogs,
+  platformDemoInstances,
+  platformDemoTemplates,
+  platformDemoTemplateVersions,
+  platformInvoices,
+  platformPlans,
+  platformTenants,
+  webhookFailures,
+} from "./platform-data";
 
 export type PlatformMockRequest = { mockKey: string; params?: Record<string, unknown>; body?: Record<string, any> };
 const wait = () => new Promise((resolve) => setTimeout(resolve, 360));
 const byTenant = (id: unknown) => platformTenants.find((tenant) => tenant.id === String(id));
+const byDemoTemplate = (id: unknown) => platformDemoTemplates.find((row) => row.id === String(id));
+const byDemoInstance = (id: unknown) => platformDemoInstances.find((row) => row.id === String(id));
 
 export async function platformMockRequest({ mockKey, params = {}, body = {} }: PlatformMockRequest) {
   await wait();
@@ -115,6 +129,149 @@ export async function platformMockRequest({ mockKey, params = {}, body = {} }: P
     case "webhookFailures": return webhookFailures.filter((row) => !params.provider || params.provider === "ALL" || row.provider === params.provider);
     case "retryWebhook": { const row = webhookFailures.find((item) => item.id === String(params.id)); if (row) { row.attempts += 1; row.status = "FAILED"; } return { id: params.id, queued: true }; }
     case "errorLogs": return errorLogs.filter((row) => !params.tenantId || row.tenantId === params.tenantId);
+
+    // --- Demo Builder ---
+    case "registerDemoTemplate": {
+      const source = byTenant(body.approvedSourceTenantId);
+      if (!source) throw new Error("Source tenant not found");
+      if (!source.id) throw new Error("Source tenant not found");
+      const id = `dtpl_${Date.now()}`;
+      const created = {
+        id,
+        name: String(body.name ?? "Untitled template"),
+        approvedSourceTenantId: String(body.approvedSourceTenantId),
+        currentPublishedVersionId: null,
+        status: "DRAFT" as const,
+        createdBy: "pusr_ops",
+        version: 1,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      platformDemoTemplates.unshift(created);
+      platformDemoTemplateVersions[id] = [];
+      return { template: created, sourceTenant: { id: source.id, code: source.tenantCode, name: source.businessName } };
+    }
+    case "demoTemplates": return platformDemoTemplates;
+    case "demoTemplate": {
+      const row = byDemoTemplate(params.templateId);
+      if (!row) throw new Error("Demo template not found");
+      return row;
+    }
+    case "demoTemplateVersions": return platformDemoTemplateVersions[String(params.templateId)] ?? [];
+    case "publishDemoTemplateVersion": {
+      const template = byDemoTemplate(params.templateId);
+      if (!template) throw new Error("Demo template not found");
+      const versions = (platformDemoTemplateVersions[template.id] ??= []);
+      const nextVersion = (versions[0]?.version ?? 0) + 1;
+      const created = {
+        id: `dtplv_${template.id}_${nextVersion}`,
+        templateId: template.id,
+        version: nextVersion,
+        schemaVersion: "demo-slice-1",
+        status: "PUBLISHED" as const,
+        checksum: `sha256-mock-${nextVersion}`,
+        manifest: { counts: { Branch: 2, Customer: 45, SchemePlan: 6, Scheme: 58, Payment: 300, LedgerEntry: 300 } },
+        dateAnchor: new Date().toISOString(),
+        publishedBy: "pusr_ops",
+        publishedAt: new Date().toISOString(),
+        failureReason: null,
+        createdAt: new Date().toISOString(),
+      };
+      versions.unshift(created);
+      template.currentPublishedVersionId = created.id;
+      template.status = "ACTIVE";
+      template.updatedAt = new Date().toISOString();
+      return created;
+    }
+    case "createDemoInstance": {
+      const template = byDemoTemplate(body.templateId);
+      if (!template) throw new Error("Demo template not found");
+      if (!template.currentPublishedVersionId) throw new Error("This template has no published version yet.");
+      const id = `dins_${Date.now()}`;
+      const created = {
+        id,
+        publicId: `pub_${Math.random().toString(36).slice(2, 12)}`,
+        prospectName: String(body.prospectName ?? "Demo prospect"),
+        prospectContactMobile: body.prospectContactMobile ?? null,
+        branding: body.branding ?? {},
+        templateVersionId: template.currentPublishedVersionId,
+        activeTenantId: `tnt_demo_${id}`,
+        activeGenerationId: "dgen_1",
+        status: "READY" as const,
+        expiresAt: new Date(Date.now() + (Number(body.expiryDays) || 30) * 86400000).toISOString(),
+        createdBy: "pusr_ops",
+        linkVersion: 1,
+        disabledAt: null,
+        lastOpenedAt: null,
+        version: 1,
+        createdAt: new Date().toISOString(),
+      };
+      platformDemoInstances.unshift(created);
+      return { instance: created, linkSecret: `mock-link-secret-${id}` };
+    }
+    case "demoInstances": {
+      const status = params.status ? String(params.status) : null;
+      const rows = platformDemoInstances.filter((row) => !status || row.status === status);
+      return { rows, meta: { total: rows.length, limit: rows.length } };
+    }
+    case "demoInstance": {
+      const row = byDemoInstance(params.instanceId);
+      if (!row) throw new Error("Demo instance not found");
+      return row;
+    }
+    case "updateDemoInstance": {
+      const row = byDemoInstance(params.instanceId);
+      if (!row) throw new Error("Demo instance not found");
+      const { prospectName, prospectContactMobile, branding } = body;
+      if (prospectName !== undefined) row.prospectName = prospectName;
+      if (prospectContactMobile !== undefined) row.prospectContactMobile = prospectContactMobile;
+      if (branding) {
+        row.branding = { ...row.branding, ...branding, revision: (row.branding.revision ?? 1) + 1 };
+      }
+      row.version += 1;
+      return row;
+    }
+    case "rotateDemoLink": {
+      const row = byDemoInstance(params.instanceId);
+      if (!row) throw new Error("Demo instance not found");
+      row.linkVersion += 1;
+      return { instance: row, linkSecret: `mock-link-secret-rotated-${row.id}-${row.linkVersion}` };
+    }
+    case "copyDemoLink": {
+      const row = byDemoInstance(params.instanceId);
+      if (!row) throw new Error("Demo instance not found");
+      return { publicId: row.publicId, linkSecret: `mock-link-secret-${row.id}` };
+    }
+    case "disableDemoInstance": {
+      const row = byDemoInstance(params.instanceId);
+      if (!row) throw new Error("Demo instance not found");
+      row.status = "DISABLED";
+      row.disabledAt = new Date().toISOString();
+      return row;
+    }
+    case "reactivateDemoInstance": {
+      const row = byDemoInstance(params.instanceId);
+      if (!row) throw new Error("Demo instance not found");
+      if (row.status !== "DISABLED") throw new Error("Only a disabled demo instance can be reactivated.");
+      row.status = "READY";
+      row.disabledAt = null;
+      return row;
+    }
+    case "presignDemoLogoUpload": {
+      const uploadId = `upl_demo_${Date.now()}`;
+      return {
+        uploadId,
+        uploadUrl: `http://localhost:4050/api/v1/platform/demo/uploads/${uploadId}/content`,
+        method: "PUT",
+        headers: { "Content-Type": String(body.contentType ?? "image/png") },
+        expiresAt: new Date(Date.now() + 15 * 60_000).toISOString(),
+        completeUrl: `/platform/demo/uploads/${uploadId}/complete`,
+      };
+    }
+    case "completeDemoLogoUpload": {
+      const uploadId = String(params.uploadId ?? `upl_demo_${Date.now()}`);
+      return { uploadId, status: "UPLOADED", viewUrl: `/uploads/${uploadId}` };
+    }
     default: throw new Error(`Unknown platform mock request: ${mockKey}`);
   }
 }

@@ -56,6 +56,8 @@ export default function PortalLayout({
   if (pathname === "/login") return children;
   if (pathname === "/platform/login") return children;
   if (pathname === "/agent/login") return children;
+  // Public Demo Builder share links — branded splash, no admin/customer shell.
+  if (pathname === "/demo" || pathname.startsWith("/demo/")) return children;
   // Public payment deep links (no tenant/admin session required).
   if (pathname === "/pay" || pathname.startsWith("/pay/")) return children;
   if (pathname === "/payment-return" || pathname.startsWith("/payment-return/")) return children;

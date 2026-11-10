@@ -16,7 +16,7 @@ import {
   useGetPlatformDashboardQuery,
   usePlatformLogoutMutation,
 } from "@/src/store/api/platform-api";
-import { Building2, ChevronDown, CreditCard, FileClock, LayoutDashboard, Menu, Search, Settings2, ShieldCheck, Tags, Webhook } from "lucide-react";
+import { Building2, ChevronDown, CreditCard, FileClock, LayoutDashboard, Menu, Search, Settings2, ShieldCheck, Sparkles, Tags, Webhook } from "lucide-react";
 import { BrandMark } from "@/src/components/brand/brand-mark";
 import {
   PlatformGlobalSearchDialog,
@@ -35,6 +35,7 @@ const nav = [
   { label: "Jewellers", href: "/platform/tenants", icon: Building2 },
   { label: "Subscription plans", href: "/platform/plans", icon: Tags },
   { label: "Template registry", href: "/platform/templates", icon: CreditCard },
+  { label: "Demo Builder", href: "/platform/demos", icon: Sparkles },
   { label: "Monitoring", href: "/platform/monitoring", icon: Webhook },
   { label: "Audit trail", href: "/platform/audit", icon: FileClock },
 ];

@@ -143,6 +143,34 @@ button {
   }
 }
 
+@keyframes customer-splash-shimmer {
+  0% { background-position: 120% 0; }
+  100% { background-position: -120% 0; }
+}
+
+@keyframes customer-splash-progress {
+  0% { transform: translateX(-130%); }
+  100% { transform: translateX(280%); }
+}
+
+@keyframes customer-splash-rise {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.customer-splash-shimmer {
+  background-size: 220% 100%;
+  animation: customer-splash-shimmer 2.6s ease-in-out infinite;
+}
+
+.customer-splash-progress {
+  animation: customer-splash-progress 2.15s ease-in-out infinite;
+}
+
+.customer-splash-rise {
+  animation: customer-splash-rise 0.75s ease-out both;
+}
+
 .customer-theme {
   --primary: var(--customer-primary, #730321);
   --accent: var(--customer-accent, #c9a227);

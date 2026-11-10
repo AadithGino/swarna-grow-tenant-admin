@@ -30,6 +30,16 @@ import {
   type ListPageMeta,
 } from "@/src/lib/cursor-pagination";
 import type { AuditLog, ErrorLog, PlatformDashboardSummary, PlatformInvoice, PlatformPlan, PlatformTenantDetail, PlatformTenantListResponse, PlatformTenantRow, UsageMetric, WebhookFailure } from "@/src/types/platform";
+import type {
+  CopyDemoLinkResult,
+  CreateDemoInstanceResult,
+  DemoInstance,
+  DemoInstanceListResponse,
+  DemoTemplate,
+  DemoTemplateVersion,
+  RegisterDemoTemplateResult,
+  RotateDemoLinkResult,
+} from "@/src/types/platform";
 
 export type PlatformAuditLogsResult = {
   items: AuditLog[];
@@ -102,6 +112,15 @@ export function normalizeTenantDetail(raw: Record<string, unknown>): PlatformTen
     flags: (raw.flags as Record<string, boolean>) ?? {},
     effectiveFlags: (raw.effectiveFlags as Record<string, boolean>) ?? {},
   };
+}
+
+/** Demo Builder APIs may return Mongo `_id`; UI contracts use `id`. */
+function withEntityId<T extends { id?: string }>(raw: T | null | undefined): T {
+  if (!raw || typeof raw !== "object") return raw as T;
+  const record = raw as T & { _id?: string };
+  const id = String(record.id ?? record._id ?? "");
+  const { _id: _ignored, ...rest } = record;
+  return { ...(rest as T), id };
 }
 
 export function normalizeTenantListPayload(data: unknown): PlatformTenantListResponse {
@@ -276,7 +295,7 @@ const baseQuery: BaseQueryFn<
 };
 
 export const platformApi = createApi({
-  reducerPath: "platformApi", baseQuery, tagTypes: ["PlatformDashboard", "PlatformTenant", "PlatformTenantList", "PlatformPlan", "PlatformTemplate", "PlatformInvoice", "PlatformOps", "PlatformDigitalMetals"],
+  reducerPath: "platformApi", baseQuery, tagTypes: ["PlatformDashboard", "PlatformTenant", "PlatformTenantList", "PlatformPlan", "PlatformTemplate", "PlatformInvoice", "PlatformOps", "PlatformDigitalMetals", "PlatformDemoTemplate", "PlatformDemoTemplateList", "PlatformDemoInstance", "PlatformDemoInstanceList"],
   endpoints: (builder) => ({
     platformLogin: builder.mutation<any, { email: string; password: string }>({ query: (body) => ({ url: "/platform/auth/login", method: "POST", body, mockKey: "login" }) }),
     refreshPlatformToken: builder.mutation<any, { refreshToken: string }>({ query: (body) => ({ url: "/platform/auth/refresh", method: "POST", body, mockKey: "refresh" }) }),
@@ -483,7 +502,167 @@ export const platformApi = createApi({
       },
       providesTags: ["PlatformOps"],
     }),
+
+    // --- Demo Builder: template registration/publication, demo instance lifecycle ---
+    registerDemoTemplate: builder.mutation<RegisterDemoTemplateResult, { name: string; approvedSourceTenantId: string }>({
+      query: (body) => ({ url: "/platform/demo/templates", method: "POST", body, mockKey: "registerDemoTemplate" }),
+      transformResponse: (response: unknown) => {
+        const raw = (response ?? {}) as RegisterDemoTemplateResult & { template?: Record<string, unknown> };
+        return { ...raw, template: withEntityId(raw.template as DemoTemplate) };
+      },
+      invalidatesTags: ["PlatformDemoTemplateList"],
+    }),
+    getDemoTemplates: builder.query<DemoTemplate[], void>({
+      query: () => ({ url: "/platform/demo/templates", mockKey: "demoTemplates" }),
+      transformResponse: (response: unknown) =>
+        (Array.isArray(response) ? response : []).map((row) => withEntityId(row as DemoTemplate)),
+      providesTags: ["PlatformDemoTemplateList"],
+    }),
+    getDemoTemplate: builder.query<DemoTemplate, string>({
+      query: (templateId) => ({ url: `/platform/demo/templates/${templateId}`, mockKey: "demoTemplate", mockParams: { templateId } }),
+      transformResponse: (response: unknown) => withEntityId(response as DemoTemplate),
+      providesTags: (_r, _e, id) => [{ type: "PlatformDemoTemplate", id }],
+    }),
+    getDemoTemplateVersions: builder.query<DemoTemplateVersion[], string>({
+      query: (templateId) => ({
+        url: `/platform/demo/templates/${templateId}/versions`,
+        mockKey: "demoTemplateVersions",
+        mockParams: { templateId },
+      }),
+      transformResponse: (response: unknown) =>
+        (Array.isArray(response) ? response : []).map((row) => withEntityId(row as DemoTemplateVersion)),
+      providesTags: (_r, _e, templateId) => [{ type: "PlatformDemoTemplate", id: templateId }],
+    }),
+    publishDemoTemplateVersion: builder.mutation<DemoTemplateVersion, string>({
+      query: (templateId) => ({
+        url: `/platform/demo/templates/${templateId}/publish`,
+        method: "POST",
+        body: {},
+        mockKey: "publishDemoTemplateVersion",
+        mockParams: { templateId },
+      }),
+      transformResponse: (response: unknown) => withEntityId(response as DemoTemplateVersion),
+      invalidatesTags: (_r, _e, templateId) => [
+        { type: "PlatformDemoTemplate", id: templateId },
+        "PlatformDemoTemplateList",
+      ],
+    }),
+    createDemoInstance: builder.mutation<CreateDemoInstanceResult, Record<string, unknown>>({
+      query: (body) => ({ url: "/platform/demo/instances", method: "POST", body, mockKey: "createDemoInstance" }),
+      transformResponse: (response: unknown) => {
+        const raw = (response ?? {}) as CreateDemoInstanceResult & { instance?: Record<string, unknown> };
+        return { ...raw, instance: withEntityId(raw.instance as DemoInstance) };
+      },
+      invalidatesTags: ["PlatformDemoInstanceList"],
+    }),
+    presignDemoLogoUpload: builder.mutation<
+      {
+        uploadId: string;
+        uploadUrl: string;
+        method: string;
+        headers: Record<string, string>;
+        expiresAt?: string;
+        completeUrl?: string;
+      },
+      { purpose: string; fileName: string; contentType: string; sizeBytes: number }
+    >({
+      query: (body) => ({
+        url: "/platform/demo/uploads/presign",
+        method: "POST",
+        body,
+        mockKey: "presignDemoLogoUpload",
+      }),
+    }),
+    completeDemoLogoUpload: builder.mutation<
+      { uploadId: string; status: string; viewUrl?: string },
+      string
+    >({
+      query: (uploadId) => ({
+        url: `/platform/demo/uploads/${uploadId}/complete`,
+        method: "POST",
+        body: {},
+        mockKey: "completeDemoLogoUpload",
+        mockParams: { uploadId },
+      }),
+    }),
+    getDemoInstances: builder.query<DemoInstanceListResponse, { status?: string; cursor?: string; limit?: number } | void>({
+      query: (params) => ({
+        url: "/platform/demo/instances",
+        params: params ?? undefined,
+        mockKey: "demoInstances",
+        mockParams: params ?? {},
+      }),
+      transformResponse: (response: unknown) => {
+        if (response && typeof response === "object" && "rows" in (response as Record<string, unknown>)) {
+          const payload = response as DemoInstanceListResponse;
+          return { ...payload, rows: (payload.rows ?? []).map((row) => withEntityId(row)) };
+        }
+        const rows = Array.isArray(response) ? (response as DemoInstance[]) : [];
+        return { rows: rows.map((row) => withEntityId(row)), meta: { total: rows.length } };
+      },
+      providesTags: ["PlatformDemoInstanceList"],
+    }),
+    getDemoInstance: builder.query<DemoInstance, string>({
+      query: (instanceId) => ({ url: `/platform/demo/instances/${instanceId}`, mockKey: "demoInstance", mockParams: { instanceId } }),
+      transformResponse: (response: unknown) => withEntityId(response as DemoInstance),
+      providesTags: (_r, _e, id) => [{ type: "PlatformDemoInstance", id }],
+    }),
+    updateDemoInstance: builder.mutation<DemoInstance, { instanceId: string; body: Record<string, unknown> }>({
+      query: ({ instanceId, body }) => ({
+        url: `/platform/demo/instances/${instanceId}`,
+        method: "PATCH",
+        body,
+        mockKey: "updateDemoInstance",
+        mockParams: { instanceId },
+      }),
+      transformResponse: (response: unknown) => withEntityId(response as DemoInstance),
+      invalidatesTags: (_r, _e, a) => [{ type: "PlatformDemoInstance", id: a.instanceId }, "PlatformDemoInstanceList"],
+    }),
+    rotateDemoInstanceLink: builder.mutation<RotateDemoLinkResult, string>({
+      query: (instanceId) => ({
+        url: `/platform/demo/instances/${instanceId}/rotate-link`,
+        method: "POST",
+        body: {},
+        mockKey: "rotateDemoLink",
+        mockParams: { instanceId },
+      }),
+      transformResponse: (response: unknown) => {
+        const raw = (response ?? {}) as RotateDemoLinkResult & { instance?: Record<string, unknown> };
+        return { ...raw, instance: withEntityId(raw.instance as DemoInstance) };
+      },
+      invalidatesTags: (_r, _e, id) => [{ type: "PlatformDemoInstance", id }],
+    }),
+    copyDemoInstanceLink: builder.mutation<CopyDemoLinkResult, string>({
+      query: (instanceId) => ({
+        url: `/platform/demo/instances/${instanceId}/link`,
+        method: "GET",
+        mockKey: "copyDemoLink",
+        mockParams: { instanceId },
+      }),
+    }),
+    disableDemoInstance: builder.mutation<DemoInstance, string>({
+      query: (instanceId) => ({
+        url: `/platform/demo/instances/${instanceId}/disable`,
+        method: "POST",
+        body: {},
+        mockKey: "disableDemoInstance",
+        mockParams: { instanceId },
+      }),
+      transformResponse: (response: unknown) => withEntityId(response as DemoInstance),
+      invalidatesTags: (_r, _e, id) => [{ type: "PlatformDemoInstance", id }, "PlatformDemoInstanceList"],
+    }),
+    reactivateDemoInstance: builder.mutation<DemoInstance, string>({
+      query: (instanceId) => ({
+        url: `/platform/demo/instances/${instanceId}/reactivate`,
+        method: "POST",
+        body: {},
+        mockKey: "reactivateDemoInstance",
+        mockParams: { instanceId },
+      }),
+      transformResponse: (response: unknown) => withEntityId(response as DemoInstance),
+      invalidatesTags: (_r, _e, id) => [{ type: "PlatformDemoInstance", id }, "PlatformDemoInstanceList"],
+    }),
   }),
 });
 
-export const { usePlatformLoginMutation, usePlatformLogoutMutation, useGetPlatformDashboardQuery, useGetPlatformChartQuery, useGetPlatformPlansQuery, useGetPlatformPlanQuery, useSavePlatformPlanMutation, useDeprecatePlatformPlanMutation, useGetPlatformTenantsQuery, useGetPlatformTenantQuery, useCreatePlatformTenantMutation, useUpdatePlatformTenantMutation, useSuspendPlatformTenantMutation, useReactivatePlatformTenantMutation, useGoLivePlatformTenantMutation, useResetOwnerCredentialsMutation, useGetPlatformUsageQuery, useGetPlatformFlagsQuery, useSavePlatformFlagsMutation, usePausePlatformDigitalMetalsMutation, useGetPlatformDigitalMetalsStatusQuery, useApprovePlatformDigitalMetalsTaxMutation, usePublishPlatformDigitalMetalsTermsMutation, useSavePaymentIntegrationMutation, useVerifyPaymentIntegrationMutation, useSaveMessageCentralIntegrationMutation, useVerifyMessageCentralIntegrationMutation, useChangeTenantPlanMutation, useUpdateTenantLimitsMutation, useExtendTenantSubscriptionMutation, useCancelTenantSubscriptionMutation, useGetTenantInvoicesQuery, useCreateTenantInvoiceMutation, useMarkPlatformInvoicePaidMutation, useGetPlatformAuditLogsQuery, useGetWebhookFailuresQuery, useLazyGetWebhookFailuresQuery, useRetryWebhookFailureMutation, useGetPlatformErrorLogsQuery, useGetPlatformLivenessHealthQuery, useGetPlatformReadinessHealthQuery } = platformApi;
+export const { usePlatformLoginMutation, usePlatformLogoutMutation, useGetPlatformDashboardQuery, useGetPlatformChartQuery, useGetPlatformPlansQuery, useGetPlatformPlanQuery, useSavePlatformPlanMutation, useDeprecatePlatformPlanMutation, useGetPlatformTenantsQuery, useGetPlatformTenantQuery, useCreatePlatformTenantMutation, useUpdatePlatformTenantMutation, useSuspendPlatformTenantMutation, useReactivatePlatformTenantMutation, useGoLivePlatformTenantMutation, useResetOwnerCredentialsMutation, useGetPlatformUsageQuery, useGetPlatformFlagsQuery, useSavePlatformFlagsMutation, usePausePlatformDigitalMetalsMutation, useGetPlatformDigitalMetalsStatusQuery, useApprovePlatformDigitalMetalsTaxMutation, usePublishPlatformDigitalMetalsTermsMutation, useSavePaymentIntegrationMutation, useVerifyPaymentIntegrationMutation, useSaveMessageCentralIntegrationMutation, useVerifyMessageCentralIntegrationMutation, useChangeTenantPlanMutation, useUpdateTenantLimitsMutation, useExtendTenantSubscriptionMutation, useCancelTenantSubscriptionMutation, useGetTenantInvoicesQuery, useCreateTenantInvoiceMutation, useMarkPlatformInvoicePaidMutation, useGetPlatformAuditLogsQuery, useGetWebhookFailuresQuery, useLazyGetWebhookFailuresQuery, useRetryWebhookFailureMutation, useGetPlatformErrorLogsQuery, useGetPlatformLivenessHealthQuery, useGetPlatformReadinessHealthQuery, useRegisterDemoTemplateMutation, useGetDemoTemplatesQuery, useGetDemoTemplateQuery, useGetDemoTemplateVersionsQuery, usePublishDemoTemplateVersionMutation, useCreateDemoInstanceMutation, usePresignDemoLogoUploadMutation, useCompleteDemoLogoUploadMutation, useGetDemoInstancesQuery, useGetDemoInstanceQuery, useUpdateDemoInstanceMutation, useRotateDemoInstanceLinkMutation, useCopyDemoInstanceLinkMutation, useDisableDemoInstanceMutation, useReactivateDemoInstanceMutation } = platformApi;

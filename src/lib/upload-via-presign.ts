@@ -23,6 +23,8 @@ export async function uploadFileViaPresign(
   }) => Promise<PresignResult>,
   purpose: string,
   complete?: (uploadId: string) => Promise<UploadCompleteResult>,
+  /** Extra headers for the binary PUT (e.g. Authorization when uploadUrl is same-origin). */
+  putHeaders?: Record<string, string>,
 ): Promise<string> {
   const contentType = file.type || "application/octet-stream";
   const result = await presign({
@@ -37,6 +39,7 @@ export async function uploadFileViaPresign(
       headers: {
         ...(result.headers ?? {}),
         "Content-Type": contentType,
+        ...(putHeaders ?? {}),
       },
       body: file,
     });

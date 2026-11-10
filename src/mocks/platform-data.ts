@@ -1,4 +1,16 @@
-import type { AuditLog, ErrorLog, PlatformInvoice, PlatformPlan, PlatformTenantDetail, TenantTemplate, TemplateDefinition, WebhookFailure } from "@/src/types/platform";
+import type {
+  AuditLog,
+  DemoInstance,
+  DemoTemplate,
+  DemoTemplateVersion,
+  ErrorLog,
+  PlatformInvoice,
+  PlatformPlan,
+  PlatformTenantDetail,
+  TenantTemplate,
+  TemplateDefinition,
+  WebhookFailure,
+} from "@/src/types/platform";
 
 const money = (amountPaise: number) => ({ amountPaise, amountDisplay: `₹${(amountPaise / 100).toLocaleString("en-IN")}` });
 
@@ -49,3 +61,120 @@ export const chartData: Record<string, unknown> = {
   "mrr-trend": { chartType: "area", title: "MRR trend", xAxis: { type: "category", label: "Period" }, yAxis: { type: "currency", label: "MRR", unit: "INR" }, series: [{ key: "MRR", name: "MRR", data: [194, 207, 218, 236, 251, 274].map((y, i) => ({ x: ["Apr", "May", "Jun", "Jul", "Aug", "Sep"][i], y: y * 100000, yDisplay: `₹${y},000` })) }] },
   "tier-distribution": { chartType: "donut", title: "Subscription distribution", series: [{ key: "TIER", name: "Tenants", data: [{ x: "Starter", y: 21 }, { x: "Growth", y: 31 }, { x: "Pro", y: 13 }, { x: "Custom", y: 2 }] }] },
 };
+
+// --- Demo Builder (mock mode) ---
+export const platformDemoTemplates: DemoTemplate[] = [
+  {
+    id: "dtpl_kairali",
+    name: "Kairali Jewellers — standard demo",
+    approvedSourceTenantId: "tnt_02",
+    currentPublishedVersionId: "dtplv_kairali_2",
+    status: "ACTIVE",
+    createdBy: "pusr_ops",
+    version: 1,
+    createdAt: "2026-08-02T09:00:00Z",
+    updatedAt: "2026-09-10T11:15:00Z",
+  },
+  {
+    id: "dtpl_sreegold",
+    name: "Sree Gold — small jeweller demo",
+    approvedSourceTenantId: "tnt_01",
+    currentPublishedVersionId: null,
+    status: "DRAFT",
+    createdBy: "pusr_ops",
+    version: 1,
+    createdAt: "2026-09-20T14:30:00Z",
+    updatedAt: "2026-09-20T14:30:00Z",
+  },
+];
+
+export const platformDemoTemplateVersions: Record<string, DemoTemplateVersion[]> = {
+  dtpl_kairali: [
+    {
+      id: "dtplv_kairali_2",
+      templateId: "dtpl_kairali",
+      version: 2,
+      schemaVersion: "demo-slice-1",
+      status: "PUBLISHED",
+      checksum: "sha256-mock-2",
+      manifest: { counts: { Branch: 2, Customer: 48, SchemePlan: 6, Scheme: 61, Payment: 318, LedgerEntry: 318 } },
+      dateAnchor: "2026-09-10T11:15:00Z",
+      publishedBy: "pusr_ops",
+      publishedAt: "2026-09-10T11:15:00Z",
+      failureReason: null,
+      createdAt: "2026-09-10T11:12:00Z",
+    },
+    {
+      id: "dtplv_kairali_1",
+      templateId: "dtpl_kairali",
+      version: 1,
+      schemaVersion: "demo-slice-1",
+      status: "PUBLISHED",
+      checksum: "sha256-mock-1",
+      manifest: { counts: { Branch: 2, Customer: 40, SchemePlan: 5, Scheme: 50, Payment: 260, LedgerEntry: 260 } },
+      dateAnchor: "2026-08-02T09:05:00Z",
+      publishedBy: "pusr_ops",
+      publishedAt: "2026-08-02T09:05:00Z",
+      failureReason: null,
+      createdAt: "2026-08-02T09:01:00Z",
+    },
+  ],
+  dtpl_sreegold: [],
+};
+
+export const platformDemoInstances: DemoInstance[] = [
+  {
+    id: "dins_acmejewels",
+    publicId: "pub_acmejewels9f2",
+    prospectName: "Acme Jewels (prospect)",
+    prospectContactMobile: "+919847700001",
+    branding: {
+      logoUploadId: null,
+      primaryColor: "#730321",
+      accentColor: "#C9A227",
+      displayName: "Acme Jewels",
+      splashBackgroundColor: "#fbf1f3",
+      splashTagline: "Your gold savings, simplified",
+      splashEnabled: true,
+      revision: 2,
+    },
+    templateVersionId: "dtplv_kairali_2",
+    activeTenantId: "tnt_demo_acmejewels",
+    activeGenerationId: "dgen_1",
+    status: "READY",
+    expiresAt: "2026-12-10T00:00:00Z",
+    createdBy: "pusr_ops",
+    linkVersion: 1,
+    disabledAt: null,
+    lastOpenedAt: "2026-11-02T06:40:00Z",
+    version: 3,
+    createdAt: "2026-10-10T08:00:00Z",
+  },
+  {
+    id: "dins_vellayani",
+    publicId: "pub_vellayani4a1",
+    prospectName: "Vellayani Gold House (prospect)",
+    prospectContactMobile: null,
+    branding: {
+      logoUploadId: null,
+      primaryColor: "#5e0a20",
+      accentColor: "#d2a94d",
+      displayName: "Vellayani Gold House",
+      splashBackgroundColor: null,
+      splashTagline: null,
+      splashEnabled: true,
+      revision: 1,
+    },
+    templateVersionId: "dtplv_kairali_2",
+    activeTenantId: "tnt_demo_vellayani",
+    activeGenerationId: "dgen_1",
+    status: "DISABLED",
+    expiresAt: "2026-11-25T00:00:00Z",
+    createdBy: "pusr_ops",
+    linkVersion: 2,
+    disabledAt: "2026-10-28T10:00:00Z",
+    lastOpenedAt: "2026-10-27T05:12:00Z",
+    version: 5,
+    createdAt: "2026-09-28T07:45:00Z",
+  },
+];

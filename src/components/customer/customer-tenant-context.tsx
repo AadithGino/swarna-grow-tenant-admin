@@ -28,6 +28,9 @@ type CustomerTenantContextValue = {
     logoUrl?: string | null;
     primaryColor?: string;
     accentColor?: string;
+    splashBackgroundColor?: string | null;
+    splashTagline?: string | null;
+    splashEnabled?: boolean;
     kycMandatory?: boolean;
     customerSelfRegistration?: boolean;
     customerSelfEnrol?: boolean;
@@ -130,6 +133,9 @@ export function CustomerTenantProvider({
             logoUrl: tenant.logoUrl,
             primaryColor: tenant.primaryColor,
             accentColor: tenant.accentColor,
+            splashBackgroundColor: tenant.splashBackgroundColor,
+            splashTagline: tenant.splashTagline,
+            splashEnabled: tenant.splashEnabled,
             kycMandatory: tenant.kycMandatory,
             customerSelfRegistration: tenant.customerSelfRegistration,
             customerSelfEnrol: tenant.customerSelfEnrol,

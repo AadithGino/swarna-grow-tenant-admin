@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useBrowserPathname } from "@/src/hooks/use-browser-pathname";
 import { recordPortalNavigation } from "@/src/lib/portal-nav";
 import { Bell, CircleHelp, Coins, CreditCard, Home, IndianRupee, Layers3, LogOut, ShoppingBag, Sparkles, UserRound, WalletCards } from "lucide-react";
@@ -14,6 +14,7 @@ import { CustomerRegistrationGuard } from "@/src/components/customer/customer-re
 import { useCustomerIdentity } from "@/src/components/customer/customer-identity-context";
 import { useCustomerPortalCapabilities } from "@/src/lib/customer-portal-capabilities";
 import { CustomerBrand } from "@/src/components/customer/customer-ui";
+import { CustomerBrandingSplash } from "@/src/components/customer/customer-branding-splash";
 import { CustomerFcmRegistrar } from "@/src/components/customer/customer-fcm-registrar";
 import { useCustomerDigitalMetalsVisible } from "@/src/lib/customer-digital-metals-visible";
 
@@ -38,11 +39,18 @@ function CustomerShellInner({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (pathname) recordPortalNavigation(pathname);
   }, [pathname]);
-  const { tenantSlug } = useCustomerTenant();
+  const { tenantSlug, tenantCode } = useCustomerTenant();
   const { signOut } = useCustomerSignOut();
   const { ready: identityReady } = useCustomerIdentity();
-  const { data: home } = useGetCustomerHomeQuery(undefined, { skip: !identityReady });
-  const { data: shopAvailability } = useGetShopAvailabilityQuery(undefined, { skip: !identityReady });
+  const [splashDone, setSplashDone] = useState(false);
+  const onSplashDone = useCallback(() => setSplashDone(true), []);
+  // Re-show splash when switching jeweller slug/code in the same SPA session.
+  useEffect(() => {
+    setSplashDone(false);
+  }, [tenantCode]);
+  // Defer portal data until splash finishes so skeleton/nav never bleed through.
+  const { data: home } = useGetCustomerHomeQuery(undefined, { skip: !identityReady || !splashDone });
+  const { data: shopAvailability } = useGetShopAvailabilityQuery(undefined, { skip: !identityReady || !splashDone });
   const storeAvailable = shopAvailability?.available === true;
   const { visible: digitalMetalsVisible } = useCustomerDigitalMetalsVisible();
   const { customerSelfEnrol, customerAppWriteEnabled, customerAppPaymentsEnabled } = useCustomerPortalCapabilities();
@@ -89,6 +97,14 @@ function CustomerShellInner({ children }: { children: React.ReactNode }) {
     .join("")
     .slice(0, 2)
     .toUpperCase();
+
+  if (!splashDone) {
+    return (
+      <div className="customer-theme min-h-screen bg-[#1f0109]">
+        <CustomerBrandingSplash onDone={onSplashDone} />
+      </div>
+    );
+  }
 
   return (
     <div className="customer-theme min-h-screen text-[#171722]">

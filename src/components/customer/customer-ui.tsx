@@ -27,7 +27,6 @@ import type {
 import { useCustomerTenant } from "@/src/components/customer/customer-tenant-context";
 import { customerPath } from "@/src/lib/customer-tenant";
 import { useGetPublicCustomerUploadDownloadQuery } from "@/src/store/api/customer-api";
-import { apiOrigin } from "@/src/config/env";
 
 function uploadIdFromPath(value?: string | null): string | null {
   if (!value) return null;
@@ -35,42 +34,39 @@ function uploadIdFromPath(value?: string | null): string | null {
   return match?.[1] ? decodeURIComponent(match[1]) : null;
 }
 
-function resolveTenantLogoUrl(value?: string | null): string | null {
-  if (!value) return null;
-  if (/^https?:\/\//i.test(value)) return value;
-  if (value.startsWith("/")) return `${apiOrigin()}${value}`;
-  return value;
-}
-
 export function CustomerBrand({ compact = false }: { compact?: boolean }) {
   const { tenant } = useCustomerTenant();
   const logoUploadId = uploadIdFromPath(tenant?.logoUrl);
-  const { data: logoDownload } = useGetPublicCustomerUploadDownloadQuery(
+  const { data: logoDownload, isError: logoFailed } = useGetPublicCustomerUploadDownloadQuery(
     logoUploadId as string,
     { skip: !logoUploadId },
   );
+  // Prefer the public-download presign. Never hit /uploads/:id directly — that route is not public.
   const logoSrc =
-    logoDownload?.downloadUrl ??
-    resolveTenantLogoUrl(tenant?.logoUrl);
+    logoDownload?.downloadUrl
+    ?? (tenant?.logoUrl && /^https?:\/\//i.test(tenant.logoUrl) ? tenant.logoUrl : null);
   const title = tenant?.appDisplayName ?? tenant?.displayName ?? "Kairali Gold Savings";
+  const initial = title.slice(0, 1).toUpperCase();
+  const showInitial = !logoSrc && (!logoUploadId || logoFailed);
 
   return (
     <span className="inline-flex min-w-0 items-center gap-3">
       {logoSrc ? (
-        <span className="relative size-11 shrink-0 overflow-hidden rounded-xl bg-white">
-          <Image src={logoSrc} alt="" fill sizes="44px" unoptimized className="object-contain" />
+        <span className="relative size-11 shrink-0 overflow-hidden rounded-xl bg-white ring-1 ring-black/5">
+          <Image src={logoSrc} alt="" fill sizes="44px" unoptimized className="object-contain p-1" />
+        </span>
+      ) : showInitial ? (
+        <span
+          className="relative grid size-11 shrink-0 place-items-center rounded-xl text-lg font-extrabold text-white"
+          style={{ background: "var(--customer-primary, #730321)" }}
+        >
+          {initial}
         </span>
       ) : (
         <span
-          className="relative grid size-11 shrink-0 place-items-center font-serif text-[2.35rem] leading-none"
-          style={{ color: "var(--customer-accent, #b68a2d)" }}
-        >
-          K
-          <i
-            className="absolute right-0.5 top-1 h-2.5 w-5 -rotate-28 rounded-[100%_0]"
-            style={{ background: "var(--customer-accent, #b68a2d)" }}
-          />
-        </span>
+          className="size-11 shrink-0 animate-pulse rounded-xl"
+          style={{ background: "rgba(var(--customer-primary-rgb, 115, 3, 33), 0.12)" }}
+        />
       )}
       {!compact ? (
         <span className="min-w-0 leading-none">

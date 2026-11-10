@@ -20,6 +20,11 @@ export function normalizeCustomerTenantBranding(
     ),
     foregroundColor: String(tenant.foregroundColor ?? branding.foregroundColor ?? "#ffffff"),
     contrastColor: String(tenant.contrastColor ?? branding.contrastColor ?? "#ffffff"),
+    splashBackgroundColor: (tenant.splashBackgroundColor
+      ?? branding.splashBackgroundColor
+      ?? null) as string | null,
+    splashTagline: (tenant.splashTagline ?? branding.splashTagline ?? null) as string | null,
+    splashEnabled: (tenant.splashEnabled ?? branding.splashEnabled) !== false,
     supportNumber: String(tenant.supportNumber ?? branding.supportNumber ?? ""),
     city: String(tenant.city ?? branding.city ?? ""),
   } as TenantBranding;
