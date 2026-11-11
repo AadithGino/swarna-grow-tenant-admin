@@ -7,8 +7,6 @@ import { CustomerDigitalMetalsDocumentPanel } from "@/src/features/customer/cust
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { PageSkeleton, QueryError } from "@/src/components/common/query-state";
 import { toastApiError } from "@/src/lib/api-error";
 import { newIdempotencyKey } from "@/src/lib/idempotency";
@@ -31,6 +29,7 @@ import {
   useLazyPollDigitalMetalsRedemptionPaymentIntentQuery,
   useCreateCustomerDigitalMetalsDeliveryAddressMutation,
   useCreateCustomerDigitalMetalsRedemptionQuoteMutation,
+  useDeleteCustomerDigitalMetalsDeliveryAddressMutation,
   useGetCustomerBranchesQuery,
   useGetCustomerDigitalMetalsCapabilityQuery,
   useGetCustomerDigitalMetalsDeliveryAddressesQuery,
@@ -39,7 +38,17 @@ import {
   useGetCustomerDigitalMetalsRedemptionFulfilmentQuery,
   useGetCustomerDigitalMetalsRedemptionOrderQuery,
   useGetCustomerDigitalMetalsRedemptionPickupInstructionsQuery,
+  useUpdateCustomerDigitalMetalsDeliveryAddressMutation,
 } from "@/src/store/api/customer-api";
+import {
+  DeleteDeliveryAddressDialog,
+  DeliveryAddressCardActions,
+  DeliveryAddressFormFields,
+  deliveryAddressToForm,
+  emptyDeliveryAddressForm,
+  formatDeliveryAddressDetail,
+  type DeliveryAddressFormState,
+} from "@/src/features/customer/customer-delivery-address-book";
 import { formatDeliveryAddressSnapshot, formatInrFromPaise, ugToGramsDisplay } from "@/src/lib/digital-metals-display";
 import { DigitalMetalsRedemptionChargeBreakdown } from "@/src/lib/digital-metals-redemption-charge-breakdown";
 import {
@@ -194,6 +203,8 @@ export function CustomerDigitalMetalsRedeemSetupPage({ catalogueItemId }: { cata
   const branchesQuery = useGetCustomerBranchesQuery();
   const addressesQuery = useGetCustomerDigitalMetalsDeliveryAddressesQuery();
   const [createAddress, createAddressState] = useCreateCustomerDigitalMetalsDeliveryAddressMutation();
+  const [updateAddress, updateAddressState] = useUpdateCustomerDigitalMetalsDeliveryAddressMutation();
+  const [deleteAddress, deleteAddressState] = useDeleteCustomerDigitalMetalsDeliveryAddressMutation();
   const [createQuote, quoteState] = useCreateCustomerDigitalMetalsRedemptionQuoteMutation();
 
   const item = useMemo(
@@ -217,15 +228,9 @@ export function CustomerDigitalMetalsRedeemSetupPage({ catalogueItemId }: { cata
   const [pickupBranchId, setPickupBranchId] = useState("");
   const [deliveryAddressId, setDeliveryAddressId] = useState("");
   const [showAddressForm, setShowAddressForm] = useState(false);
-  const [addressForm, setAddressForm] = useState({
-    line1: "",
-    city: "",
-    state: "Kerala",
-    pincode: "",
-    recipientName: "",
-    mobile: "",
-    label: "Home",
-  });
+  const [editingAddressId, setEditingAddressId] = useState<string | null>(null);
+  const [deleteAddressId, setDeleteAddressId] = useState<string | null>(null);
+  const [addressForm, setAddressForm] = useState<DeliveryAddressFormState>(emptyDeliveryAddressForm);
 
   const addressItems = addressesQuery.data?.items ?? [];
   const effectiveBranchId =
@@ -253,20 +258,69 @@ export function CustomerDigitalMetalsRedeemSetupPage({ catalogueItemId }: { cata
     );
   }
 
+  function openCreateAddress() {
+    setEditingAddressId(null);
+    setAddressForm(emptyDeliveryAddressForm());
+    setShowAddressForm(true);
+  }
+
+  function openEditAddress(row: Record<string, unknown>) {
+    setEditingAddressId(String(row.id));
+    setAddressForm(deliveryAddressToForm(row));
+    setShowAddressForm(true);
+    setDeliveryAddressId(String(row.id));
+  }
+
+  function closeAddressForm() {
+    setShowAddressForm(false);
+    setEditingAddressId(null);
+    setAddressForm(emptyDeliveryAddressForm());
+  }
+
   async function onSaveAddress() {
+    if (!addressForm.line1.trim() || !addressForm.city.trim() || !addressForm.state.trim() || !addressForm.pincode.trim()) {
+      toast.error("Fill house/street, city, state and pincode.");
+      return;
+    }
     try {
-      const created = await createAddress({
-        ...addressForm,
-        idempotencyKey: newIdempotencyKey(),
-        isDefault: addressItems.length === 0,
-      }).unwrap();
-      setDeliveryAddressId(String(created.id));
-      setShowAddressForm(false);
-      toast.success("Address saved");
+      if (editingAddressId) {
+        const current = addressItems.find((row) => String(row.id) === editingAddressId);
+        const updated = await updateAddress({
+          addressId: editingAddressId,
+          ...addressForm,
+          ...(typeof current?.version === "number" ? { expectedVersion: Number(current.version) } : {}),
+        }).unwrap();
+        setDeliveryAddressId(String(updated.id ?? editingAddressId));
+        toast.success("Address updated");
+      } else {
+        const created = await createAddress({
+          ...addressForm,
+          idempotencyKey: newIdempotencyKey(),
+          isDefault: addressItems.length === 0,
+        }).unwrap();
+        setDeliveryAddressId(String(created.id));
+        toast.success("Address saved");
+      }
+      closeAddressForm();
     } catch (err) {
       toastApiError(err);
     }
   }
+
+  async function onConfirmDeleteAddress() {
+    if (!deleteAddressId) return;
+    try {
+      await deleteAddress({ addressId: deleteAddressId }).unwrap();
+      if (deliveryAddressId === deleteAddressId) setDeliveryAddressId("");
+      if (editingAddressId === deleteAddressId) closeAddressForm();
+      setDeleteAddressId(null);
+      toast.success("Address removed");
+    } catch (err) {
+      toastApiError(err);
+    }
+  }
+
+  const addressBusy = createAddressState.isLoading || updateAddressState.isLoading;
 
   async function continueToQuote() {
     if (mode === "PICKUP" && !effectiveBranchId) {
@@ -366,7 +420,13 @@ export function CustomerDigitalMetalsRedeemSetupPage({ catalogueItemId }: { cata
                     onSelect={() => setDeliveryAddressId(String(a.id))}
                     icon={<MapPin className="size-5" />}
                     title={String(a.label ?? "Address")}
-                    detail={[a.recipientName, a.line1, a.city, a.pincode].filter(Boolean).map(String).join(" · ")}
+                    detail={formatDeliveryAddressDetail(a)}
+                    aside={
+                      <DeliveryAddressCardActions
+                        onEdit={() => openEditAddress(a)}
+                        onDelete={() => setDeleteAddressId(String(a.id))}
+                      />
+                    }
                   />
                 ))}
               </div>
@@ -374,51 +434,33 @@ export function CustomerDigitalMetalsRedeemSetupPage({ catalogueItemId }: { cata
               <p className="text-sm text-[#7a6f72]">Add an address for courier delivery.</p>
             )}
             {showAddressForm ? (
-              <div className="mt-3 grid gap-3 rounded-2xl border border-[#ecdfd8] bg-[#fcfaf8] p-4 sm:grid-cols-2">
-                <div className="space-y-1.5">
-                  <Label htmlFor="dm-addr-name">Recipient name</Label>
-                  <Input id="dm-addr-name" value={addressForm.recipientName} onChange={(e) => setAddressForm((f) => ({ ...f, recipientName: e.target.value }))} className="h-11 rounded-xl bg-white" />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="dm-addr-mobile">Mobile</Label>
-                  <Input id="dm-addr-mobile" inputMode="tel" value={addressForm.mobile} onChange={(e) => setAddressForm((f) => ({ ...f, mobile: e.target.value }))} className="h-11 rounded-xl bg-white" />
-                </div>
-                <div className="space-y-1.5 sm:col-span-2">
-                  <Label htmlFor="dm-addr-line1">House, street and area</Label>
-                  <Input id="dm-addr-line1" value={addressForm.line1} onChange={(e) => setAddressForm((f) => ({ ...f, line1: e.target.value }))} className="h-11 rounded-xl bg-white" />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="dm-addr-city">City</Label>
-                  <Input id="dm-addr-city" value={addressForm.city} onChange={(e) => setAddressForm((f) => ({ ...f, city: e.target.value }))} className="h-11 rounded-xl bg-white" />
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1.5">
-                    <Label htmlFor="dm-addr-state">State</Label>
-                    <Input id="dm-addr-state" value={addressForm.state} onChange={(e) => setAddressForm((f) => ({ ...f, state: e.target.value }))} className="h-11 rounded-xl bg-white" />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label htmlFor="dm-addr-pin">Pincode</Label>
-                    <Input id="dm-addr-pin" inputMode="numeric" value={addressForm.pincode} onChange={(e) => setAddressForm((f) => ({ ...f, pincode: e.target.value }))} className="h-11 rounded-xl bg-white" />
-                  </div>
-                </div>
-                <div className="flex gap-2 sm:col-span-2">
-                  <Button type="button" className="h-10 rounded-full px-5 text-white" style={{ background: "var(--customer-primary, #730321)" }} disabled={createAddressState.isLoading} onClick={() => void onSaveAddress()}>
-                    Save address
-                  </Button>
-                  <Button type="button" variant="ghost" className="h-10 rounded-full" onClick={() => setShowAddressForm(false)}>
-                    Cancel
-                  </Button>
-                </div>
-              </div>
+              <DeliveryAddressFormFields
+                form={addressForm}
+                setForm={setAddressForm}
+                idPrefix="dm-addr"
+                showLabel
+                busy={addressBusy}
+                submitLabel={editingAddressId ? "Save changes" : "Save address"}
+                onSubmit={() => void onSaveAddress()}
+                onCancel={closeAddressForm}
+              />
             ) : (
               <button
                 type="button"
                 className="mt-3 inline-flex items-center gap-1.5 text-sm font-semibold text-[var(--customer-primary,#730321)] underline-offset-4 hover:underline"
-                onClick={() => setShowAddressForm(true)}
+                onClick={openCreateAddress}
               >
                 <Plus className="size-4" /> Add a new address
               </button>
             )}
+            <DeleteDeliveryAddressDialog
+              open={Boolean(deleteAddressId)}
+              onOpenChange={(open) => {
+                if (!open) setDeleteAddressId(null);
+              }}
+              busy={deleteAddressState.isLoading}
+              onConfirm={() => void onConfirmDeleteAddress()}
+            />
             <p className="mt-3 text-xs text-[#7a6f72]">Same address book as the online store — saved once, used for both.</p>
           </fieldset>
         )}

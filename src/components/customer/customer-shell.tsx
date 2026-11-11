@@ -42,11 +42,35 @@ function CustomerShellInner({ children }: { children: React.ReactNode }) {
   const { tenantSlug, tenantCode } = useCustomerTenant();
   const { signOut } = useCustomerSignOut();
   const { ready: identityReady } = useCustomerIdentity();
-  const [splashDone, setSplashDone] = useState(false);
-  const onSplashDone = useCallback(() => setSplashDone(true), []);
-  // Re-show splash when switching jeweller slug/code in the same SPA session.
+  const splashStorageKey = tenantCode ? `swarnagrow.customer.splashDone.${tenantCode}` : null;
+  const [splashDone, setSplashDone] = useState(() => {
+    if (typeof window === "undefined" || !tenantCode) return false;
+    try {
+      return sessionStorage.getItem(`swarnagrow.customer.splashDone.${tenantCode}`) === "1";
+    } catch {
+      return false;
+    }
+  });
+  const onSplashDone = useCallback(() => {
+    setSplashDone(true);
+    if (!splashStorageKey) return;
+    try {
+      sessionStorage.setItem(splashStorageKey, "1");
+    } catch {
+      /* ignore quota / private mode */
+    }
+  }, [splashStorageKey]);
+  // Re-show splash only when switching jeweller in the same browser tab session.
   useEffect(() => {
-    setSplashDone(false);
+    if (!tenantCode) {
+      setSplashDone(false);
+      return;
+    }
+    try {
+      setSplashDone(sessionStorage.getItem(`swarnagrow.customer.splashDone.${tenantCode}`) === "1");
+    } catch {
+      setSplashDone(false);
+    }
   }, [tenantCode]);
   // Defer portal data until splash finishes so skeleton/nav never bleed through.
   const { data: home } = useGetCustomerHomeQuery(undefined, { skip: !identityReady || !splashDone });

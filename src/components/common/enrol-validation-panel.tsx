@@ -34,10 +34,13 @@ export function EnrolValidationPanel({
   validation,
   loading,
   className,
+  resolveActionPath,
 }: {
   validation?: EnrolValidationPreview | null;
   loading?: boolean;
   className?: string;
+  /** Override contract action paths (e.g. agent portal → `/agent/customers/:id/kyc`). */
+  resolveActionPath?: (actionPath: string) => string;
 }) {
   if (loading) {
     return (
@@ -86,7 +89,7 @@ export function EnrolValidationPanel({
             {b.message}
             {b.actionPath ? (
               <Link
-                href={portalPathFromContract(b.actionPath)}
+                href={(resolveActionPath ?? portalPathFromContract)(b.actionPath)}
                 className="ml-1 font-semibold underline underline-offset-2"
               >
                 Fix

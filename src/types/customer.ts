@@ -31,7 +31,16 @@ export type CustomerProfile = {
   name: string;
   mobile: string;
   email?: string;
-  address?: string;
+  address?:
+    | string
+    | {
+        line1?: string | null;
+        line2?: string | null;
+        city?: string | null;
+        state?: string | null;
+        pincode?: string | null;
+      }
+    | null;
   mobileImmutable: true;
   memberSince: string;
   profileComplete: boolean;

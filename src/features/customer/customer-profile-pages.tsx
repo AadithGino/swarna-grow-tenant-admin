@@ -8,6 +8,7 @@ import {
   Headphones,
   LoaderCircle,
   LogOut,
+  Mail,
   MapPin,
   Coins,
   Package,
@@ -48,6 +49,7 @@ import {
   ProfileMenuAction,
   ProfileMenuRow,
 } from "@/src/features/customer/customer-profile-shared";
+import { formatCustomerAddressDisplay } from "@/src/lib/customer-address-display";
 import { useCustomerSignOut } from "@/src/lib/use-customer-sign-out";
 import Link from "next/link";
 import { toast } from "sonner";
@@ -98,6 +100,24 @@ export function CustomerProfilePage() {
       </section>
 
       <section className="customer-surface mt-4 overflow-hidden py-1">
+        <ProfileAccountRow
+          icon={UserRound}
+          label="Name"
+          value={data.name}
+          href={customerPath(tenantSlug, "profile", "edit")}
+        />
+        <ProfileAccountRow
+          icon={Mail}
+          label="Email"
+          value={data.email?.trim() ? data.email : "Add email"}
+          href={customerPath(tenantSlug, "profile", "edit")}
+        />
+        <ProfileAccountRow
+          icon={MapPin}
+          label="Address"
+          value={formatCustomerAddressDisplay(data.address) || "Add address"}
+          href={customerPath(tenantSlug, "profile", "edit")}
+        />
         <ProfileAccountRow icon={Smartphone} label="Mobile" value={maskCustomerMobile(data.mobile)} locked />
         <ProfileAccountRow
           icon={ClipboardList}
@@ -120,6 +140,11 @@ export function CustomerProfilePage() {
           icon={UserRound}
           label="Nominee"
           href={customerPath(tenantSlug, "profile", "nominee")}
+        />
+        <ProfileMenuRow
+          icon={MapPin}
+          label="Saved addresses"
+          href={customerPath(tenantSlug, "profile", "addresses")}
         />
         {digitalMetalsVisible ? (
           <>

@@ -11,7 +11,7 @@ import { useAppDispatch } from "@/src/store/hooks";
 export function useCustomerSignOut() {
   const router = useRouter();
   const dispatch = useAppDispatch();
-  const { tenantSlug } = useCustomerTenant();
+  const { tenantSlug, tenantCode } = useCustomerTenant();
   const [logout, { isLoading }] = useCustomerLogoutMutation();
 
   const signOut = async () => {
@@ -20,6 +20,13 @@ export function useCustomerSignOut() {
       await logout({ refreshToken }).unwrap();
     } catch {
       // Always clear local session even if revoke fails.
+    }
+    if (tenantCode) {
+      try {
+        sessionStorage.removeItem(`swarnagrow.customer.splashDone.${tenantCode}`);
+      } catch {
+        /* ignore */
+      }
     }
     dispatch(customerSignedOut());
     dispatch(customerApi.util.resetApiState());

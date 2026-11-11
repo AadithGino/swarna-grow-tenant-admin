@@ -181,7 +181,9 @@ const mockBaseQuery: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQueryErro
   if (url === "/app/home/banners") return ok({ items: [] });
   if (url === "/app/shop/banners") return ok({ items: [] });
   if (url === "/app/profile" && method === "GET") return ok(customerProfile);
-  if (url === "/app/profile" && method === "PATCH") return ok({ ...customerProfile, ...body });
+  if (url === "/app/profile" && (method === "PATCH" || method === "PUT")) {
+    return ok({ ...customerProfile, ...body });
+  }
   if (url === "/app/profile/complete" && method === "POST") {
     return ok({
       ...customerProfile,
@@ -996,7 +998,21 @@ export const customerApi = createApi({
         }
       },
     }),
-    updateCustomerProfile: builder.mutation<CustomerProfile, Partial<CustomerProfile>>({ query: (body) => ({ url: "/app/profile", method: "PATCH", body }), invalidatesTags: ["CustomerProfile", "CustomerHome"] }),
+    updateCustomerProfile: builder.mutation<
+      CustomerProfile,
+      Partial<Pick<CustomerProfile, "name" | "email" | "address">>
+    >({
+      query: (body) => ({
+        url: "/app/profile",
+        method: "PATCH",
+        body: {
+          ...(body.name !== undefined ? { name: body.name } : {}),
+          ...(body.email !== undefined ? { email: body.email } : {}),
+          ...(body.address !== undefined ? { address: body.address } : {}),
+        },
+      }),
+      invalidatesTags: ["CustomerProfile", "CustomerHome"],
+    }),
     completeCustomerProfile: builder.mutation<
       CustomerProfile,
       { name: string; email?: string; address?: string }
@@ -1433,6 +1449,48 @@ export const customerApi = createApi({
         return raw as Record<string, unknown>;
       },
       invalidatesTags: ["ShopAddresses"],
+    }),
+    updateShopAddress: builder.mutation<
+      Record<string, unknown>,
+      {
+        addressId: string;
+        line1?: string;
+        city?: string;
+        state?: string;
+        pincode?: string;
+        line2?: string;
+        label?: string;
+        recipientName?: string;
+        mobile?: string;
+        isDefault?: boolean;
+        expectedVersion?: number;
+      }
+    >({
+      query: ({ addressId, ...body }) => ({
+        url: `/app/shop/addresses/${addressId}`,
+        method: "PATCH",
+        body,
+      }),
+      transformResponse: (raw: unknown) => {
+        if (raw && typeof raw === "object" && "data" in raw) {
+          return (raw as { data: Record<string, unknown> }).data;
+        }
+        return raw as Record<string, unknown>;
+      },
+      invalidatesTags: ["ShopAddresses", "DigitalMetalsDeliveryAddresses"],
+    }),
+    deleteShopAddress: builder.mutation<{ id: string; deleted: boolean }, { addressId: string }>({
+      query: ({ addressId }) => ({
+        url: `/app/shop/addresses/${addressId}`,
+        method: "DELETE",
+      }),
+      transformResponse: (raw: unknown) => {
+        if (raw && typeof raw === "object" && "data" in raw) {
+          return (raw as { data: { id: string; deleted: boolean } }).data;
+        }
+        return raw as { id: string; deleted: boolean };
+      },
+      invalidatesTags: ["ShopAddresses", "DigitalMetalsDeliveryAddresses"],
     }),
     createShopQuote: builder.mutation<
       Record<string, any>,
@@ -2119,7 +2177,52 @@ export const customerApi = createApi({
         }
         return raw as Record<string, unknown>;
       },
-      invalidatesTags: ["DigitalMetalsDeliveryAddresses"],
+      invalidatesTags: ["DigitalMetalsDeliveryAddresses", "ShopAddresses"],
+    }),
+    updateCustomerDigitalMetalsDeliveryAddress: builder.mutation<
+      Record<string, unknown>,
+      {
+        addressId: string;
+        line1?: string;
+        city?: string;
+        state?: string;
+        pincode?: string;
+        line2?: string;
+        label?: string;
+        recipientName?: string;
+        mobile?: string;
+        isDefault?: boolean;
+        expectedVersion?: number;
+      }
+    >({
+      query: ({ addressId, ...body }) => ({
+        url: `/app/digital-metals/delivery-addresses/${addressId}`,
+        method: "PATCH",
+        body,
+      }),
+      transformResponse: (raw: unknown) => {
+        if (raw && typeof raw === "object" && "data" in raw) {
+          return (raw as { data: Record<string, unknown> }).data;
+        }
+        return raw as Record<string, unknown>;
+      },
+      invalidatesTags: ["DigitalMetalsDeliveryAddresses", "ShopAddresses"],
+    }),
+    deleteCustomerDigitalMetalsDeliveryAddress: builder.mutation<
+      { id: string; deleted: boolean },
+      { addressId: string }
+    >({
+      query: ({ addressId }) => ({
+        url: `/app/digital-metals/delivery-addresses/${addressId}`,
+        method: "DELETE",
+      }),
+      transformResponse: (raw: unknown) => {
+        if (raw && typeof raw === "object" && "data" in raw) {
+          return (raw as { data: { id: string; deleted: boolean } }).data;
+        }
+        return raw as { id: string; deleted: boolean };
+      },
+      invalidatesTags: ["DigitalMetalsDeliveryAddresses", "ShopAddresses"],
     }),
     getCustomerDigitalMetalsRedemptionCatalogue: builder.query<{ items: Record<string, unknown>[] }, void>({
       query: () => "/app/digital-metals/redemption/catalogue",
@@ -2322,6 +2425,8 @@ export const {
   useGetCustomerDigitalMetalsRedemptionCatalogueQuery,
   useGetCustomerDigitalMetalsDeliveryAddressesQuery,
   useCreateCustomerDigitalMetalsDeliveryAddressMutation,
+  useUpdateCustomerDigitalMetalsDeliveryAddressMutation,
+  useDeleteCustomerDigitalMetalsDeliveryAddressMutation,
   useCreateCustomerDigitalMetalsRedemptionQuoteMutation,
   useCreateCustomerDigitalMetalsRedemptionOrderMutation,
   useGetCustomerDigitalMetalsRedemptionOrderQuery,
@@ -2347,6 +2452,8 @@ export const {
   useGetShopFulfilmentOptionsQuery,
   useGetShopAddressesQuery,
   useCreateShopAddressMutation,
+  useUpdateShopAddressMutation,
+  useDeleteShopAddressMutation,
   useCreateShopQuoteMutation,
   useGetShopQuoteQuery,
   useCancelShopQuoteMutation,

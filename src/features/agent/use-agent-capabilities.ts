@@ -4,7 +4,7 @@ import { useAppSelector } from "@/src/store/hooks";
 import { useGetAgentMeQuery } from "@/src/store/api/agent-api";
 import type { AgentCapabilities } from "@/src/types/agent";
 
-const NONE: AgentCapabilities = { registerCustomers: false, enrolSchemes: false };
+const NONE: AgentCapabilities = { registerCustomers: false, enrolSchemes: false, kycMandatory: false };
 
 /** Tenant-controlled agent capabilities; the backend enforces them on every /staff request. */
 export function useAgentCapabilities(): AgentCapabilities & { loading: boolean } {

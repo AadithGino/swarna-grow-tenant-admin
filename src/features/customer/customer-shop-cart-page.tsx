@@ -14,12 +14,14 @@ import {
   customerApi,
   useCreateShopAddressMutation,
   useCreateShopQuoteMutation,
+  useDeleteShopAddressMutation,
   useGetShopAddressesQuery,
   useGetShopAvailabilityQuery,
   useGetShopCartQuery,
   useGetShopFulfilmentOptionsQuery,
   useGetShopProductQuery,
   usePutShopCartMutation,
+  useUpdateShopAddressMutation,
 } from "@/src/store/api/customer-api";
 import { useAppSelector } from "@/src/store/hooks";
 import { parseApiError, toastApiError } from "@/src/lib/api-error";
@@ -30,6 +32,15 @@ import { customerPath } from "@/src/lib/customer-tenant";
 import { customerShopOrdersPath, customerShopQuotePath } from "@/src/lib/customer-shop-paths";
 import { customerBrandStyle } from "@/src/lib/customer-brand-styles";
 import { CustomerShopPoliciesLinks } from "@/src/features/customer/customer-shop-policies";
+import {
+  DeleteDeliveryAddressDialog,
+  DeliveryAddressCardActions,
+  DeliveryAddressFormFields,
+  deliveryAddressToForm,
+  emptyDeliveryAddressForm,
+  formatDeliveryAddressDetail,
+  type DeliveryAddressFormState,
+} from "@/src/features/customer/customer-delivery-address-book";
 import {
   ChoiceCard,
   formatShopInr,
@@ -127,6 +138,8 @@ export function CustomerShopCartPage() {
   const addresses = useGetShopAddressesQuery(undefined, { skip: !availability.data?.available });
   const [createQuote, createState] = useCreateShopQuoteMutation();
   const [createAddress, createAddressState] = useCreateShopAddressMutation();
+  const [updateAddress, updateAddressState] = useUpdateShopAddressMutation();
+  const [deleteAddress, deleteAddressState] = useDeleteShopAddressMutation();
   const [putCart, putCartState] = usePutShopCartMutation();
 
   const [mode, setMode] = useState<FulfilmentChoice>("BRANCH_PICKUP");
@@ -135,14 +148,9 @@ export function CustomerShopCartPage() {
   const [addressId, setAddressId] = useState("");
   const [pincode, setPincode] = useState("");
   const [showAddressForm, setShowAddressForm] = useState(false);
-  const [addressForm, setAddressForm] = useState({
-    line1: "",
-    city: "",
-    state: "Kerala",
-    pincode: "",
-    recipientName: "",
-    mobile: "",
-  });
+  const [editingAddressId, setEditingAddressId] = useState<string | null>(null);
+  const [deleteAddressId, setDeleteAddressId] = useState<string | null>(null);
+  const [addressForm, setAddressForm] = useState<DeliveryAddressFormState>(emptyDeliveryAddressForm);
 
   const pickup = fulfilment.data?.pickup as {
     enabled?: boolean;
@@ -310,20 +318,83 @@ export function CustomerShopCartPage() {
     }
   }
 
+  function openCreateAddress() {
+    setEditingAddressId(null);
+    setAddressForm(emptyDeliveryAddressForm());
+    setShowAddressForm(true);
+  }
+
+  function openEditAddress(row: Record<string, unknown>) {
+    setEditingAddressId(String(row.id));
+    setAddressForm(deliveryAddressToForm(row));
+    setShowAddressForm(true);
+    setAddressId(String(row.id));
+  }
+
+  function closeAddressForm() {
+    setShowAddressForm(false);
+    setEditingAddressId(null);
+    setAddressForm(emptyDeliveryAddressForm());
+  }
+
   async function onSaveAddress() {
+    if (!addressForm.line1.trim() || !addressForm.city.trim() || !addressForm.state.trim() || !addressForm.pincode.trim()) {
+      toast.error("Fill house/street, city, state and pincode.");
+      return;
+    }
     try {
-      const created = await createAddress({
-        ...addressForm,
-        idempotencyKey: newIdempotencyKey(),
-        isDefault: addressItems.length === 0,
-      }).unwrap();
-      setAddressId(String(created.id));
-      setShowAddressForm(false);
-      toast.success("Address saved");
+      if (editingAddressId) {
+        const current = addressItems.find((row) => String(row.id) === editingAddressId);
+        const updated = await updateAddress({
+          addressId: editingAddressId,
+          line1: addressForm.line1,
+          line2: addressForm.line2 || undefined,
+          city: addressForm.city,
+          state: addressForm.state,
+          pincode: addressForm.pincode,
+          recipientName: addressForm.recipientName || undefined,
+          mobile: addressForm.mobile || undefined,
+          label: addressForm.label || undefined,
+          ...(typeof current?.version === "number" ? { expectedVersion: Number(current.version) } : {}),
+        }).unwrap();
+        setAddressId(String(updated.id ?? editingAddressId));
+        toast.success("Address updated");
+      } else {
+        const created = await createAddress({
+          line1: addressForm.line1,
+          line2: addressForm.line2 || undefined,
+          city: addressForm.city,
+          state: addressForm.state,
+          pincode: addressForm.pincode,
+          recipientName: addressForm.recipientName || undefined,
+          mobile: addressForm.mobile || undefined,
+          label: addressForm.label || undefined,
+          idempotencyKey: newIdempotencyKey(),
+          isDefault: addressItems.length === 0,
+        }).unwrap();
+        setAddressId(String(created.id));
+        toast.success("Address saved");
+      }
+      closeAddressForm();
     } catch (err) {
       toastApiError(err);
     }
   }
+
+  async function onConfirmDeleteAddress() {
+    if (!deleteAddressId) return;
+    try {
+      await deleteAddress({ addressId: deleteAddressId }).unwrap();
+      if (addressId === deleteAddressId) setAddressId("");
+      if (editingAddressId === deleteAddressId) closeAddressForm();
+      setDeleteAddressId(null);
+      toast.success("Address removed");
+    } catch (err) {
+      toastApiError(err);
+    }
+  }
+
+  const addressBusy = createAddressState.isLoading || updateAddressState.isLoading;
 
   const shopHref = customerPath(tenantSlug, "shop");
 
@@ -435,7 +506,13 @@ export function CustomerShopCartPage() {
                                 {a.isDefault ? <span className="rounded-full bg-[#f3ebe7] px-2 py-0.5 text-[10px] font-semibold text-[#6d5f62]">Default</span> : null}
                               </span>
                             }
-                            detail={[a.recipientName, a.line1, a.line2, [a.city, a.state, a.pincode].filter(Boolean).join(", ")].filter(Boolean).map(String).join(" · ")}
+                            detail={formatDeliveryAddressDetail(a)}
+                            aside={
+                              <DeliveryAddressCardActions
+                                onEdit={() => openEditAddress(a)}
+                                onDelete={() => setDeleteAddressId(String(a.id))}
+                              />
+                            }
                           />
                         ))}
                       </div>
@@ -446,50 +523,35 @@ export function CustomerShopCartPage() {
                         <p className={cn("text-xs", SHOP_MUTED)}>We check this against the store&apos;s delivery area.</p>
                       </div>
                     )}
-                    <button
-                      type="button"
-                      className="mt-3 inline-flex items-center gap-1.5 text-sm font-semibold text-[var(--customer-primary,#730321)] underline-offset-4 hover:underline"
-                      onClick={() => setShowAddressForm((v) => !v)}
-                      aria-expanded={showAddressForm}
-                    >
-                      <Plus className="size-4" />
-                      {showAddressForm ? "Close new address" : "Add a new address"}
-                    </button>
-                    {showAddressForm ? (
-                      <div className={cn("mt-3 grid gap-3 rounded-2xl border bg-[#fcfaf8] p-4 sm:grid-cols-2", SHOP_HAIRLINE)}>
-                        <div className="space-y-1.5 sm:col-span-2">
-                          <Label htmlFor="addr-line1">House, street and area</Label>
-                          <Input id="addr-line1" value={addressForm.line1} onChange={(e) => setAddressForm((f) => ({ ...f, line1: e.target.value }))} className="h-11 rounded-xl bg-white" />
-                        </div>
-                        <div className="space-y-1.5">
-                          <Label htmlFor="addr-name">Recipient name</Label>
-                          <Input id="addr-name" value={addressForm.recipientName} onChange={(e) => setAddressForm((f) => ({ ...f, recipientName: e.target.value }))} className="h-11 rounded-xl bg-white" />
-                        </div>
-                        <div className="space-y-1.5">
-                          <Label htmlFor="addr-mobile">Mobile</Label>
-                          <Input id="addr-mobile" inputMode="tel" value={addressForm.mobile} onChange={(e) => setAddressForm((f) => ({ ...f, mobile: e.target.value }))} className="h-11 rounded-xl bg-white" />
-                        </div>
-                        <div className="space-y-1.5">
-                          <Label htmlFor="addr-city">City</Label>
-                          <Input id="addr-city" value={addressForm.city} onChange={(e) => setAddressForm((f) => ({ ...f, city: e.target.value }))} className="h-11 rounded-xl bg-white" />
-                        </div>
-                        <div className="grid grid-cols-2 gap-3">
-                          <div className="space-y-1.5">
-                            <Label htmlFor="addr-state">State</Label>
-                            <Input id="addr-state" value={addressForm.state} onChange={(e) => setAddressForm((f) => ({ ...f, state: e.target.value }))} className="h-11 rounded-xl bg-white" />
-                          </div>
-                          <div className="space-y-1.5">
-                            <Label htmlFor="addr-pin">Pincode</Label>
-                            <Input id="addr-pin" inputMode="numeric" value={addressForm.pincode} onChange={(e) => setAddressForm((f) => ({ ...f, pincode: e.target.value }))} className="h-11 rounded-xl bg-white" />
-                          </div>
-                        </div>
-                        <div className="sm:col-span-2">
-                          <Button type="button" className="h-10 rounded-full px-5 text-white" style={customerBrandStyle.primaryBg} disabled={createAddressState.isLoading} onClick={() => void onSaveAddress()}>
-                            {createAddressState.isLoading ? "Saving…" : "Save address"}
-                          </Button>
-                        </div>
-                      </div>
-                    ) : null}
+                    {!showAddressForm ? (
+                      <button
+                        type="button"
+                        className="mt-3 inline-flex items-center gap-1.5 text-sm font-semibold text-[var(--customer-primary,#730321)] underline-offset-4 hover:underline"
+                        onClick={openCreateAddress}
+                      >
+                        <Plus className="size-4" />
+                        Add a new address
+                      </button>
+                    ) : (
+                      <DeliveryAddressFormFields
+                        form={addressForm}
+                        setForm={setAddressForm}
+                        idPrefix="cart-addr"
+                        showLabel
+                        busy={addressBusy}
+                        submitLabel={editingAddressId ? "Save changes" : "Save address"}
+                        onSubmit={() => void onSaveAddress()}
+                        onCancel={closeAddressForm}
+                      />
+                    )}
+                    <DeleteDeliveryAddressDialog
+                      open={Boolean(deleteAddressId)}
+                      onOpenChange={(open) => {
+                        if (!open) setDeleteAddressId(null);
+                      }}
+                      busy={deleteAddressState.isLoading}
+                      onConfirm={() => void onConfirmDeleteAddress()}
+                    />
                     {supportedStates.length > 0 ? (
                       <p className={cn("mt-3 text-xs", SHOP_MUTED)}>This store delivers to addresses in {supportedStates.join(", ")}.</p>
                     ) : null}

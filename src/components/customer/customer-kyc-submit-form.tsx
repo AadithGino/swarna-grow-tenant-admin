@@ -22,6 +22,13 @@ import {
 } from "@/src/store/api/customer-api";
 import { toast } from "sonner";
 
+type PresignInput = {
+  purpose: string;
+  fileName: string;
+  contentType: string;
+  sizeBytes: number;
+};
+
 type Props = {
   onSubmit: (payload: {
     type: string;
@@ -31,9 +38,14 @@ type Props = {
     backUploadId?: string;
   }) => Promise<void>;
   submitting?: boolean;
+  /** Override upload transport (agent/staff portal uses /staff/uploads). */
+  uploadViaPresign?: (
+    file: File,
+    purpose: string,
+  ) => Promise<string>;
 };
 
-export function CustomerKycSubmitForm({ onSubmit, submitting }: Props) {
+export function CustomerKycSubmitForm({ onSubmit, submitting, uploadViaPresign }: Props) {
   const [presignUpload] = usePresignCustomerUploadMutation();
   const [completeUpload] = useCompleteCustomerUploadMutation();
   const [uploadType, setUploadType] = useState<KycUploadType>("AADHAAR");
@@ -57,12 +69,20 @@ export function CustomerKycSubmitForm({ onSubmit, submitting }: Props) {
   const handleUpload = async (file: File, target: "front" | "back" | "pan") => {
     setUploadBusy(true);
     try {
-      const uploadId = await uploadFileViaPresign(
-        file,
-        (input) => presignUpload(input).unwrap(),
-        "KYC_DOCUMENT",
-        (id) => completeUpload(id).unwrap(),
-      );
+      const uploadId = uploadViaPresign
+        ? await uploadViaPresign(file, "KYC_DOCUMENT")
+        : await uploadFileViaPresign(
+            file,
+            (input: PresignInput) =>
+              presignUpload({
+                purpose: input.purpose,
+                fileName: input.fileName,
+                contentType: input.contentType,
+                sizeBytes: input.sizeBytes,
+              }).unwrap(),
+            "KYC_DOCUMENT",
+            (id) => completeUpload(id).unwrap(),
+          );
       if (target === "front") setFrontUploadId(uploadId);
       if (target === "back") setBackUploadId(uploadId);
       if (target === "pan") setPanUploadId(uploadId);

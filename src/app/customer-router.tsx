@@ -25,6 +25,8 @@ const CustomerNotificationsPage = dynamic(() => import("@/src/features/customer/
 const CustomerGoldRatePage = dynamic(() => import("@/src/features/customer/customer-activity-pages").then((m) => m.CustomerGoldRatePage), options);
 const CustomerBranchesPage = dynamic(() => import("@/src/features/customer/customer-activity-pages").then((m) => m.CustomerBranchesPage), options);
 const CustomerProfilePage = dynamic(() => import("@/src/features/customer/customer-profile-pages").then((m) => m.CustomerProfilePage), options);
+const CustomerProfileEditPage = dynamic(() => import("@/src/features/customer/customer-profile-edit-page").then((m) => m.CustomerProfileEditPage), options);
+const CustomerProfileAddressesPage = dynamic(() => import("@/src/features/customer/customer-profile-addresses-page").then((m) => m.CustomerProfileAddressesPage), options);
 const CustomerProfileKycPage = dynamic(() => import("@/src/features/customer/customer-profile-kyc-page").then((m) => m.CustomerProfileKycPage), options);
 const CustomerProfileNomineePage = dynamic(() => import("@/src/features/customer/customer-profile-nominee-page").then((m) => m.CustomerProfileNomineePage), options);
 const CustomerSecurityPage = dynamic(() => import("@/src/features/customer/customer-profile-pages").then((m) => m.CustomerSecurityPage), options);
@@ -80,6 +82,8 @@ function CustomerRoutes({ slug }: { slug: string[] }) {
   }
   if (section === "notifications") return <CustomerNotificationsPage />;
   if (section === "profile") {
+    if (id === "edit") return <CustomerProfileEditPage />;
+    if (id === "addresses") return <CustomerProfileAddressesPage />;
     if (id === "kyc") return <CustomerProfileKycPage />;
     if (id === "nominee") return <CustomerProfileNomineePage />;
     return <CustomerProfilePage />;

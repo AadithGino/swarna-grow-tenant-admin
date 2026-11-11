@@ -118,6 +118,7 @@ function mapAgentCapabilities(raw: unknown): AgentCapabilities | undefined {
   return {
     registerCustomers: row.registerCustomers === true,
     enrolSchemes: row.enrolSchemes === true,
+    kycMandatory: row.kycMandatory === true,
   };
 }
 
@@ -747,6 +748,34 @@ export const agentApi = createApi({
       query: (body) => ({ url: "/staff/customers", method: "POST", body }),
       transformResponse: (raw: Record<string, unknown>) => normalizeCustomer(raw),
     }),
+    presignAgentUpload: builder.mutation<
+      { uploadId: string; uploadUrl: string; method: string; headers: Record<string, string>; expiresAt: string },
+      { purpose: string; fileName: string; contentType: string; sizeBytes: number }
+    >({
+      query: (body) => ({ url: "/staff/uploads/presign", method: "POST", body }),
+    }),
+    completeAgentUpload: builder.mutation<{ uploadId: string; status: string }, string>({
+      query: (uploadId) => ({ url: `/staff/uploads/${uploadId}/complete`, method: "POST", body: {} }),
+    }),
+    submitAgentCustomerKyc: builder.mutation<
+      AgentCustomer,
+      {
+        customerId: string;
+        type: "AADHAAR" | "PAN";
+        number?: string;
+        numberMasked?: string;
+        frontUploadId?: string;
+        backUploadId?: string;
+      }
+    >({
+      query: ({ customerId, ...body }) => ({
+        url: `/staff/customers/${customerId}/kyc`,
+        method: "PUT",
+        body,
+      }),
+      transformResponse: (raw: Record<string, unknown>) => normalizeCustomer(raw),
+      invalidatesTags: (_r, _e, arg) => [{ type: "AgentCustomer", id: arg.customerId }],
+    }),
     getAgentPlans: builder.query<AgentPlan[], void>({
       query: () => ({ url: "/staff/scheme-plans", params: { limit: 100 } }),
       transformResponse: (rows: unknown) => asList(rows, mapAgentPlan),
@@ -937,6 +966,9 @@ export const {
   useGetAgentCustomerQuery,
   useLazyCheckAgentCustomerMobileQuery,
   useCreateAgentCustomerMutation,
+  usePresignAgentUploadMutation,
+  useCompleteAgentUploadMutation,
+  useSubmitAgentCustomerKycMutation,
   useGetAgentPlansQuery,
   useValidateAgentEnrolmentMutation,
   useEnrolAgentCustomerMutation,

@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, CheckCircle2, Gem, UserPlus, WalletCards } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Gem, ShieldCheck, UserPlus, WalletCards } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,18 +14,29 @@ import { cn } from "@/lib/utils";
 import { apiErrorMessage } from "@/src/lib/api-error";
 import { useDebouncedValue } from "@/src/hooks/use-debounced-value";
 import { EnrolValidationPanel } from "@/src/components/common/enrol-validation-panel";
+import { CustomerKycSubmitForm } from "@/src/components/customer/customer-kyc-submit-form";
 import { AgentCard, AgentEmpty, AgentLoadingCards, AgentPageHeader, formatAgentMoney } from "@/src/components/agent/agent-ui";
 import { PortalBackLink } from "@/src/components/common/portal-back-link";
+import { uploadFileViaPresign } from "@/src/lib/upload-via-presign";
 import {
+  useCompleteAgentUploadMutation,
   useCreateAgentCustomerMutation,
   useEnrolAgentCustomerMutation,
   useGetAgentCustomerQuery,
   useGetAgentPlansQuery,
   useLazyCheckAgentCustomerMobileQuery,
+  usePresignAgentUploadMutation,
+  useSubmitAgentCustomerKycMutation,
   useValidateAgentEnrolmentMutation,
 } from "@/src/store/api/agent-api";
 import type { AgentPlan } from "@/src/types/agent";
 import { useAgentCapabilities } from "./use-agent-capabilities";
+
+function agentEnrolActionPath(actionPath: string) {
+  const match = actionPath.match(/^\/customers\/([^/?#]+)\/kyc\/?$/);
+  if (match) return `/agent/customers/${match[1]}/kyc`;
+  return actionPath.startsWith("/agent/") ? actionPath : `/agent${actionPath.startsWith("/") ? "" : "/"}${actionPath}`;
+}
 
 const MOBILE_PATTERN = /^[6-9]\d{9}$/;
 
@@ -39,7 +51,7 @@ function CapabilityDisabled({ title }: { title: string }) {
 
 export function AgentNewCustomerPage() {
   const router = useRouter();
-  const { registerCustomers, enrolSchemes, loading } = useAgentCapabilities();
+  const { registerCustomers, enrolSchemes, kycMandatory, loading } = useAgentCapabilities();
   const [createCustomer, createState] = useCreateAgentCustomerMutation();
   const [checkMobile, mobileCheck] = useLazyCheckAgentCustomerMobileQuery();
   const [form, setForm] = useState({ name: "", mobile: "", address: "", email: "", passbookNumber: "" });
@@ -72,7 +84,11 @@ export function AgentNewCustomerPage() {
         ...(form.passbookNumber.trim() ? { passbookNumber: form.passbookNumber.trim() } : {}),
       }).unwrap();
       toast.success(`${customer.name || "Customer"} registered`);
-      router.replace(enrolSchemes ? `/agent/customers/${customer.id}/enrol` : `/agent/customers/${customer.id}`);
+      if (kycMandatory) {
+        router.replace(`/agent/customers/${customer.id}/kyc`);
+      } else {
+        router.replace(enrolSchemes ? `/agent/customers/${customer.id}/enrol` : `/agent/customers/${customer.id}`);
+      }
     } catch (error) {
       toast.error(apiErrorMessage(error, "Could not register this customer."));
     }
@@ -83,7 +99,15 @@ export function AgentNewCustomerPage() {
       <PortalBackLink fallbackHref="/agent/collect" variant="agent">
         <ArrowLeft className="size-4" />Back
       </PortalBackLink>
-      <AgentPageHeader eyebrow="New customer" title="Register a customer" description="The customer is added to your branch. They can sign in to the app with this mobile number." />
+      <AgentPageHeader
+        eyebrow="New customer"
+        title="Register a customer"
+        description={
+          kycMandatory
+            ? "The customer is added to your branch. Next you will upload KYC documents before enrolment."
+            : "The customer is added to your branch. They can sign in to the app with this mobile number."
+        }
+      />
       <AgentCard className="space-y-4 p-5 sm:p-6">
         <Field label="Full name" error={show("name")}>
           <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} onBlur={() => setTouched({ ...touched, name: true })} className="h-12 rounded-xl" autoFocus />
@@ -117,9 +141,131 @@ export function AgentNewCustomerPage() {
         </div>
         <Button onClick={() => void submit()} disabled={createState.isLoading} className="h-12 w-full rounded-xl text-base font-black">
           <UserPlus className="mr-2 size-5" />
-          {createState.isLoading ? "Registering…" : enrolSchemes ? "Register and choose scheme" : "Register customer"}
+          {createState.isLoading
+            ? "Registering…"
+            : kycMandatory
+              ? "Register and continue to KYC"
+              : enrolSchemes
+                ? "Register and choose scheme"
+                : "Register customer"}
         </Button>
       </AgentCard>
+    </div>
+  );
+}
+
+export function AgentCustomerKycPage({ customerId }: { customerId: string }) {
+  const router = useRouter();
+  const { enrolSchemes, kycMandatory, loading } = useAgentCapabilities();
+  const customer = useGetAgentCustomerQuery(customerId);
+  const [presignUpload] = usePresignAgentUploadMutation();
+  const [completeUpload] = useCompleteAgentUploadMutation();
+  const [submitKyc, submitState] = useSubmitAgentCustomerKycMutation();
+
+  const uploadViaPresign = useCallback(
+    async (file: File, purpose: string) =>
+      uploadFileViaPresign(
+        file,
+        (input) =>
+          presignUpload({
+            purpose: input.purpose,
+            fileName: input.fileName,
+            contentType: input.contentType,
+            sizeBytes: input.sizeBytes,
+          }).unwrap(),
+        purpose,
+        (id) => completeUpload(id).unwrap(),
+      ),
+    [completeUpload, presignUpload],
+  );
+
+  if (loading || customer.isLoading) return <AgentLoadingCards />;
+  if (!customer.data) {
+    return <AgentEmpty title="Customer unavailable" description="This customer is outside your branch or could not be loaded." />;
+  }
+
+  const status = customer.data.kyc?.status ?? "NOT_SUBMITTED";
+  const verified = status === "VERIFIED";
+  const submitted = status === "SUBMITTED";
+  const canUpload = !verified && (status === "NOT_SUBMITTED" || status === "REJECTED");
+
+  return (
+    <div className="mx-auto max-w-2xl space-y-6">
+      <PortalBackLink fallbackHref={`/agent/customers/${customerId}`} variant="agent">
+        <ArrowLeft className="size-4" />
+        Back
+      </PortalBackLink>
+      <AgentPageHeader
+        eyebrow="KYC documents"
+        title={customer.data.name}
+        description={
+          kycMandatory
+            ? "KYC is required before enrolment. Upload documents here — the branch verifies them before you can enrol."
+            : "Upload identity documents for this customer."
+        }
+      />
+
+      {verified ? (
+        <AgentCard className="space-y-4 p-5 sm:p-6">
+          <div className="flex items-start gap-3 rounded-xl bg-emerald-50 p-4 text-sm text-emerald-900">
+            <ShieldCheck className="mt-0.5 size-5 shrink-0" />
+            <div>
+              <p className="font-black">KYC verified</p>
+              <p className="mt-1 text-emerald-800/80">You can enrol this customer into a scheme.</p>
+            </div>
+          </div>
+          {enrolSchemes ? (
+            <Button asChild className="h-12 w-full rounded-xl font-black">
+              <Link href={`/agent/customers/${customerId}/enrol`}>Continue to enrol</Link>
+            </Button>
+          ) : null}
+        </AgentCard>
+      ) : null}
+
+      {submitted ? (
+        <AgentCard className="space-y-4 p-5 sm:p-6">
+          <div className="flex items-start gap-3 rounded-xl bg-amber-50 p-4 text-sm text-amber-950">
+            <ShieldCheck className="mt-0.5 size-5 shrink-0" />
+            <div>
+              <p className="font-black">KYC submitted — waiting for branch verification</p>
+              <p className="mt-1 text-amber-900/75">
+                Documents are with the showroom. Enrolment stays blocked until KYC is verified.
+              </p>
+            </div>
+          </div>
+          <Button
+            variant="outline"
+            className="h-12 w-full rounded-xl font-black"
+            onClick={() => router.replace(`/agent/customers/${customerId}`)}
+          >
+            Back to customer
+          </Button>
+        </AgentCard>
+      ) : null}
+
+      {canUpload ? (
+        <AgentCard className="p-5 sm:p-6">
+          <CustomerKycSubmitForm
+            submitting={submitState.isLoading}
+            uploadViaPresign={uploadViaPresign}
+            onSubmit={async (payload) => {
+              try {
+                await submitKyc({
+                  customerId,
+                  type: payload.type as "AADHAAR" | "PAN",
+                  ...(payload.number ? { number: payload.number, numberMasked: payload.numberMasked } : {}),
+                  ...(payload.frontUploadId ? { frontUploadId: payload.frontUploadId } : {}),
+                  ...(payload.backUploadId ? { backUploadId: payload.backUploadId } : {}),
+                }).unwrap();
+                toast.success("KYC submitted for branch verification");
+              } catch (error) {
+                toast.error(apiErrorMessage(error, "Could not submit KYC."));
+                throw error;
+              }
+            }}
+          />
+        </AgentCard>
+      ) : null}
     </div>
   );
 }
@@ -333,7 +479,11 @@ function EnrolForm({
         </AgentCard>
 
         <div className="space-y-4">
-          <EnrolValidationPanel validation={preview} loading={!preview && validation.isLoading} />
+          <EnrolValidationPanel
+            validation={preview}
+            loading={!preview && validation.isLoading}
+            resolveActionPath={agentEnrolActionPath}
+          />
           <Button onClick={() => void submit()} disabled={blocked || enrolState.isLoading} className="h-12 w-full rounded-xl text-base font-black">
             {enrolState.isLoading ? "Enrolling…" : firstInstallmentMode === "COLLECT_NOW" ? "Enrol and collect first installment" : "Enrol customer"}
           </Button>

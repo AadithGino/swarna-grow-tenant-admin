@@ -22,6 +22,8 @@ export type AgentUser = {
 export type AgentCapabilities = {
   registerCustomers: boolean;
   enrolSchemes: boolean;
+  /** When true, agents must capture KYC docs before enrolment can proceed (admin still verifies). */
+  kycMandatory: boolean;
 };
 
 export type AgentPlan = {

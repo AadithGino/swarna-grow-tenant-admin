@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { cn } from "@/lib/utils";
 import { useDebouncedValue } from "@/src/hooks/use-debounced-value";
 import { useCreateAgentPaymentLinkMutation, useGetAgentCustomerQuery, useGetAgentGoldRateQuery, useGetAgentPassbookQuery, useGetAgentPayableRangeQuery, useGetAgentSchemeQuery, useRecordAgentPaymentMutation, useSearchAgentCustomersQuery } from "@/src/store/api/agent-api";
 import { AgentCard, AgentEmpty, AgentLoadingCards, AgentPageHeader, AgentSchemeCard, AgentStatus, formatAgentDate, formatAgentMoney, formatAgentTime, formatAgentWeight } from "@/src/components/agent/agent-ui";
@@ -82,10 +83,13 @@ export function AgentCustomerSearchPage() {
 
 export function AgentCustomerDetailPage({ id }: { id: string }) {
   const customer = useGetAgentCustomerQuery(id);
-  const { enrolSchemes } = useAgentCapabilities();
+  const { enrolSchemes, kycMandatory, registerCustomers } = useAgentCapabilities();
   if (customer.isLoading) return <AgentLoadingCards />;
   if (!customer.data) return <AgentEmpty title="Customer unavailable" description="This customer is outside your branch or could not be loaded." />;
   const item = customer.data;
+  const kycStatus = item.kyc?.status ?? "NOT_SUBMITTED";
+  const kycNeedsAction = kycMandatory && kycStatus !== "VERIFIED";
+  const canCaptureKyc = registerCustomers && kycStatus !== "VERIFIED";
   return <div className="space-y-6">
 <PortalBackLink fallbackHref="/agent/collect" variant="agent">
 <ArrowLeft className="size-4" />Back</PortalBackLink>
@@ -107,7 +111,12 @@ export function AgentCustomerDetailPage({ id }: { id: string }) {
 </div>
 <div>
 <p className="text-xs font-bold text-[#91878a]">KYC</p>
-<p className="mt-1 font-black text-[#087a50]">{item.kyc?.status ?? "Not available"}</p>
+<p className={cn("mt-1 font-black", kycStatus === "VERIFIED" ? "text-[#087a50]" : "text-[#a16207]")}>{item.kyc?.status ?? "Not available"}</p>
+{canCaptureKyc ? (
+  <Link href={`/agent/customers/${item.id}/kyc`} className="mt-2 inline-flex text-xs font-bold text-[var(--customer-primary,#730321)] underline-offset-2 hover:underline">
+    {kycStatus === "SUBMITTED" ? "View KYC status" : "Upload KYC documents"}
+  </Link>
+) : null}
 </div>
 <div>
 <p className="text-xs font-bold text-[#91878a]">Active schemes</p>
@@ -115,6 +124,21 @@ export function AgentCustomerDetailPage({ id }: { id: string }) {
 </div>
 </div>
 </AgentCard>
+{kycNeedsAction ? (
+  <AgentCard className="border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
+    <p className="font-black">KYC required before enrolment</p>
+    <p className="mt-1 text-amber-900/80">
+      {kycStatus === "SUBMITTED"
+        ? "Documents are waiting for branch verification."
+        : "Capture KYC documents in the agent app, then wait for the branch to verify."}
+    </p>
+    {canCaptureKyc && kycStatus !== "SUBMITTED" ? (
+      <Button asChild className="mt-3 h-10 rounded-xl font-black">
+        <Link href={`/agent/customers/${item.id}/kyc`}>Upload KYC</Link>
+      </Button>
+    ) : null}
+  </AgentCard>
+) : null}
 <div>
 <AgentPageHeader eyebrow="Choose scheme" title="What are you collecting for?" description="The payable amount is checked again before the receipt is created." action={enrolSchemes ? <Button asChild variant="outline" className="h-11 rounded-xl font-black"><Link href={`/agent/customers/${item.id}/enrol`}><PlusCircle className="mr-2 size-4" />Enrol in scheme</Link></Button> : undefined} />
 {item.schemes?.length ? <div className="mt-4 grid gap-3 lg:grid-cols-2">{item.schemes.map((scheme) => <AgentSchemeCard key={scheme.id} scheme={scheme} href={`/agent/collect/${scheme.id}`} />)}</div> : <div className="mt-4"><AgentEmpty title="No active schemes" description={enrolSchemes ? "Enrol this customer in a scheme to start collecting." : "Ask the branch to enrol this customer in a scheme."} /></div>}
