@@ -220,6 +220,28 @@ export type AgentPaymentLink = {
   positionVersion?: number;
 };
 
+export type AgentPaymentQrSession = AgentPaymentLink & {
+  amountPaise: number;
+  paymentId?: string | null;
+  gatewayUrl?: string | null;
+  qrPayload: string;
+  providerOrderId?: string | null;
+};
+
+export type AgentPaymentQrStatus = {
+  linkId?: string;
+  status: string;
+  processing?: boolean;
+  paid?: boolean;
+  failed?: boolean;
+  receipt?: {
+    paymentId?: string;
+    receiptNumber?: string;
+    paidAt?: string;
+  } | null;
+  retryAfterSeconds?: number | null;
+};
+
 export type AgentNotification = {
   id: string;
   type: string;
@@ -282,5 +304,6 @@ export type AgentReport = {
   count: number;
   goldWeightMg: number;
   averageCollectionPaise: number;
+  byMode?: Array<{ mode: string; label: string; amountPaise: number; count: number }>;
   days: Array<{ date: string; amountPaise: number; count: number; goldWeightMg: number }>;
 };

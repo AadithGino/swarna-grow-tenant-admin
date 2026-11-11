@@ -118,34 +118,42 @@ export function AgentShell({ children }: { children: React.ReactNode }) {
           </button>
         </div>
       </header>
-      <main className="mx-auto min-h-[calc(100vh-72px)] max-w-[1180px] px-4 pb-28 pt-6 sm:px-6 sm:pt-8 lg:pb-12">
+      <main className="mx-auto min-h-[calc(100vh-72px)] max-w-[1180px] px-4 pb-[7.5rem] pt-6 sm:px-6 sm:pt-8 lg:pb-12">
         {children}
       </main>
-      <nav className="agent-safe-bottom fixed inset-x-0 bottom-0 z-40 border-t border-[#e8ded8] bg-[#fffefa]/97 px-2 pt-2 shadow-[0_-12px_32px_rgba(63,28,38,.08)] backdrop-blur-xl lg:hidden">
-        <div className="mx-auto grid max-w-lg grid-cols-5">
-          {nav.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={cn(
-                "flex min-w-0 flex-col items-center gap-1 rounded-xl py-1.5 text-[.66rem] font-bold",
-                active(item) ? "text-[#730321]" : "text-[#857b7e]",
-              )}
-            >
-              <span
+      <nav
+        className="agent-safe-bottom fixed inset-x-0 bottom-0 z-40 isolate border-t border-[#e8ded8] bg-[#fffefa] px-1 pt-1.5 shadow-[0_-12px_32px_rgba(63,28,38,.08)] lg:hidden"
+        aria-label="Primary navigation"
+      >
+        <div className="mx-auto flex h-14 max-w-lg items-center justify-between">
+          {nav.map((item) => {
+            const isActive = active(item);
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                aria-current={isActive ? "page" : undefined}
                 className={cn(
-                  "grid size-9 place-items-center rounded-full",
-                  active(item) && "bg-[#fff0c8]",
+                  "flex h-full min-w-0 flex-1 flex-col items-center justify-center gap-0.5 px-0.5 text-[0.65rem] font-bold leading-none",
+                  isActive ? "text-[#730321]" : "text-[#857b7e]",
                 )}
               >
-                <item.icon
-                  className="size-5"
-                  strokeWidth={active(item) ? 2.4 : 2}
-                />
-              </span>
-              <span>{item.label}</span>
-            </Link>
-          ))}
+                <span
+                  className={cn(
+                    "flex h-8 w-8 shrink-0 items-center justify-center rounded-full",
+                    isActive && "bg-[#fff0c8]",
+                  )}
+                >
+                  <item.icon
+                    className="h-[1.15rem] w-[1.15rem] shrink-0"
+                    strokeWidth={isActive ? 2.4 : 2}
+                    aria-hidden
+                  />
+                </span>
+                <span className="max-w-full truncate">{item.label}</span>
+              </Link>
+            );
+          })}
         </div>
       </nav>
     </div>

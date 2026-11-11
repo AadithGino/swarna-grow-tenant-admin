@@ -62,6 +62,8 @@ import type {
   AgentPayableRange,
   AgentPayment,
   AgentPaymentLink,
+  AgentPaymentQrSession,
+  AgentPaymentQrStatus,
   AgentNotification,
   AgentReport,
   AgentScheme,
@@ -536,9 +538,14 @@ const mockBaseQuery: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQueryErro
     const customer = agentCustomers.find((item) => item.id === scheme.customerId) ?? agentCustomers[0];
     const amountPaise = Number(body.amountPaise ?? 0);
     const weightMg = scheme.valueBasis === "GOLD_WEIGHT" ? Math.floor((amountPaise * 1000) / agentGoldRate.ratePerGramPaise) : undefined;
-    const payment: AgentPayment = { id: `agt_pay_${Date.now()}`, receiptNumber: `RCP-2026-${String(Date.now()).slice(-7)}`, amountPaise, weightMg, ratePerGramPaise: weightMg ? agentGoldRate.ratePerGramPaise : undefined, mode: "CASH", status: "SUCCESS", source: "STAFF_APP", paidAt: new Date().toISOString(), targetCycle: body.targetCycle ? String(body.targetCycle) : undefined, customer: { id: customer.id, name: customer.name }, scheme: { id: scheme.id, enrollmentNumber: scheme.enrollmentNumber, planName: scheme.planName } };
+    const mode = String(body.mode ?? "CASH");
+    const payment: AgentPayment = { id: `agt_pay_${Date.now()}`, receiptNumber: `RCP-2026-${String(Date.now()).slice(-7)}`, amountPaise, weightMg, ratePerGramPaise: weightMg ? agentGoldRate.ratePerGramPaise : undefined, mode, status: "SUCCESS", source: "STAFF_APP", paidAt: new Date().toISOString(), targetCycle: body.targetCycle ? String(body.targetCycle) : undefined, customer: { id: customer.id, name: customer.name }, scheme: { id: scheme.id, enrollmentNumber: scheme.enrollmentNumber, planName: scheme.planName } };
     agentPayments.unshift(payment);
-    updateMockCashSummary({ ...agentCashSummary, cashCollectedPaise: agentCashSummary.cashCollectedPaise + amountPaise, cashInHandPaise: agentCashSummary.cashInHandPaise + amountPaise, collectedPaise: agentCashSummary.collectedPaise + amountPaise });
+    if (mode === "CASH") {
+      updateMockCashSummary({ ...agentCashSummary, cashCollectedPaise: agentCashSummary.cashCollectedPaise + amountPaise, cashInHandPaise: agentCashSummary.cashInHandPaise + amountPaise, collectedPaise: agentCashSummary.collectedPaise + amountPaise });
+    } else {
+      updateMockCashSummary({ ...agentCashSummary, collectedPaise: agentCashSummary.collectedPaise + amountPaise });
+    }
     return ok(payment);
   }
   if (url === "/staff/cash/handovers" && method === "GET") return ok(agentHandovers);
@@ -580,6 +587,35 @@ const mockBaseQuery: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQueryErro
   if (url === "/staff/payment-links" && method === "POST") {
     return ok({ id: "plink_demo", token: "demo-token", url: "/pay/demo-token", status: "ACTIVE", expiresAt: new Date(Date.now() + 30 * 60_000).toISOString() });
   }
+  if (url === "/staff/payment-qr-sessions" && method === "POST") {
+    const amountPaise = Number(body.amountPaise ?? 10000);
+    const token = `demo-qr-${Date.now()}`;
+    const gatewayUrl = `https://mercury-uat.phonepe.com/transact/pg?token=${token}`;
+    return ok({
+      id: "plink_qr_demo",
+      token,
+      url: `/pay/${token}`,
+      status: "ACTIVE",
+      expiresAt: new Date(Date.now() + 30 * 60_000).toISOString(),
+      amountPaise,
+      paymentId: "pay_qr_demo",
+      gatewayUrl,
+      qrPayload: gatewayUrl,
+      providerOrderId: `mock_${token}`,
+    });
+  }
+  const qrStatusMatch = url.match(/^\/staff\/payment-qr-sessions\/([^/]+)\/status$/);
+  if (qrStatusMatch && method === "GET") {
+    return ok({
+      linkId: "plink_qr_demo",
+      status: "PROCESSING",
+      processing: true,
+      paid: false,
+      failed: false,
+      receipt: null,
+      retryAfterSeconds: 3,
+    });
+  }
   return ok({});
 };
 
@@ -612,7 +648,15 @@ function unwrap(result: { data?: unknown; error?: FetchBaseQueryError; meta?: un
   }
   const raw = result.data as Envelope<unknown> | AgentError | undefined;
   if (raw && typeof raw === "object" && "success" in raw) {
-    if (raw.success) return rtkDataResult(raw.data, raw.meta ?? result.meta);
+    if (raw.success) {
+      const contractMeta = raw.meta;
+      const fetchMeta = result.meta && typeof result.meta === "object"
+        ? { ...(result.meta as object), ...(contractMeta ? { contractMeta } : {}) }
+        : contractMeta
+          ? { contractMeta }
+          : result.meta;
+      return rtkDataResult(raw.data, fetchMeta);
+    }
     return rtkErrorResult(
       normalizeFetchBaseQueryError({
         status: "CUSTOM_ERROR",
@@ -634,11 +678,21 @@ export type AgentPaymentListPage = {
 const AGENT_HISTORY_PAGE_SIZE = 20;
 
 function paymentListMeta(meta: unknown): Pick<AgentPaymentListPage, "nextCursor" | "hasMore"> {
-  const row = meta as Envelope<unknown>["meta"] | undefined;
+  const row = meta as { contractMeta?: Envelope<unknown>["meta"] } & Envelope<unknown>["meta"] | undefined;
+  const contract = row?.contractMeta ?? row;
   return {
-    nextCursor: row?.nextCursor ?? null,
-    hasMore: Boolean(row?.hasMore),
+    nextCursor: contract?.nextCursor ?? null,
+    hasMore: Boolean(contract?.hasMore),
   };
+}
+
+function paidAtIstDate(paidAt: string) {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Kolkata",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date(paidAt));
 }
 
 type AgentBaseQueryExtra = { _authRetry?: boolean };
@@ -857,6 +911,62 @@ export const agentApi = createApi({
       query: (body) => ({ url: "/staff/payment-links", method: "POST", body }),
       invalidatesTags: (_r, _e, arg) => [{ type: "AgentScheme", id: arg.schemeId }],
     }),
+    createAgentPaymentQrSession: builder.mutation<AgentPaymentQrSession, {
+      schemeId: string;
+      amountPaise: number;
+      targetCycle?: string;
+      expectedPositionVersion?: number;
+      positionVersion?: number;
+      expiresInMinutes?: number;
+      redirectUrl?: string;
+    }>({
+      query: (body) => ({ url: "/staff/payment-qr-sessions", method: "POST", body }),
+      transformResponse: (raw: Record<string, unknown>) => {
+        const row = peelAgentPayload(raw);
+        const token = String(row.token ?? "");
+        const gatewayUrl = row.gatewayUrl != null ? String(row.gatewayUrl) : null;
+        const qrPayload = String(row.qrPayload ?? gatewayUrl ?? row.url ?? "");
+        return {
+          id: idOf(row),
+          token,
+          url: String(row.url ?? (token ? `/pay/${token}` : "")),
+          status: String(row.status ?? "ACTIVE"),
+          expiresAt: String(row.expiresAt ?? new Date(Date.now() + 30 * 60_000).toISOString()),
+          paymentIntentId: row.paymentIntentId != null ? String(row.paymentIntentId) : undefined,
+          positionVersion: row.positionVersion != null ? Number(row.positionVersion) : undefined,
+          amountPaise: Number(row.amountPaise ?? 0),
+          paymentId: row.paymentId != null ? String(row.paymentId) : null,
+          gatewayUrl,
+          qrPayload,
+          providerOrderId: row.providerOrderId != null ? String(row.providerOrderId) : null,
+        };
+      },
+      invalidatesTags: (_r, _e, arg) => [{ type: "AgentScheme", id: arg.schemeId }],
+    }),
+    getAgentPaymentQrStatus: builder.query<AgentPaymentQrStatus, string>({
+      query: (linkToken) => `/staff/payment-qr-sessions/${encodeURIComponent(linkToken)}/status`,
+      transformResponse: (raw: Record<string, unknown>) => {
+        const row = peelAgentPayload(raw);
+        const receiptRaw = row.receipt && typeof row.receipt === "object"
+          ? (row.receipt as Record<string, unknown>)
+          : null;
+        return {
+          linkId: row.linkId != null ? String(row.linkId) : undefined,
+          status: String(row.status ?? "PROCESSING"),
+          processing: Boolean(row.processing ?? row.status === "PROCESSING"),
+          paid: Boolean(row.paid ?? row.status === "PAID"),
+          failed: Boolean(row.failed ?? row.status === "FAILED"),
+          receipt: receiptRaw
+            ? {
+                paymentId: receiptRaw.paymentId != null ? String(receiptRaw.paymentId) : undefined,
+                receiptNumber: receiptRaw.receiptNumber != null ? String(receiptRaw.receiptNumber) : undefined,
+                paidAt: receiptRaw.paidAt != null ? String(receiptRaw.paidAt) : undefined,
+              }
+            : null,
+          retryAfterSeconds: row.retryAfterSeconds != null ? Number(row.retryAfterSeconds) : null,
+        };
+      },
+    }),
     getAgentNotifications: builder.query<AgentNotification[], void>({
       query: () => "/staff/notifications",
       transformResponse: (rows: unknown) => asList(rows, (raw) => ({
@@ -934,17 +1044,44 @@ export const agentApi = createApi({
           if (result.error) return { error: result.error };
           const pageRows = Array.isArray(result.data) ? result.data as Record<string, unknown>[] : [];
           rows.push(...pageRows.map(normalizePayment));
-          const pageMeta = result.meta as Envelope<unknown>["meta"] | undefined;
-          const next = pageMeta?.hasMore && pageMeta.nextCursor ? pageMeta.nextCursor : undefined;
+          const pageMeta = paymentListMeta(result.meta);
+          const next = pageMeta.hasMore && pageMeta.nextCursor ? pageMeta.nextCursor : undefined;
           if (!next || seenCursors.has(next)) break;
           seenCursors.add(next);
           cursor = next;
         }
         const byDay = new Map<string, { amountPaise: number; count: number; goldWeightMg: number }>();
-        rows.forEach((row) => { const date = row.paidAt.slice(0, 10); const item = byDay.get(date) ?? { amountPaise: 0, count: 0, goldWeightMg: 0 }; item.amountPaise += row.amountPaise; item.count += 1; item.goldWeightMg += row.weightMg ?? 0; byDay.set(date, item); });
+        rows.forEach((row) => {
+          const date = paidAtIstDate(row.paidAt);
+          const item = byDay.get(date) ?? { amountPaise: 0, count: 0, goldWeightMg: 0 };
+          item.amountPaise += row.amountPaise;
+          item.count += 1;
+          item.goldWeightMg += row.weightMg ?? 0;
+          byDay.set(date, item);
+        });
         const amountPaise = Number(summary.amountPaise ?? 0);
         const count = Number(summary.count ?? 0);
-        return { data: { amountPaise, count, goldWeightMg: rows.reduce((sum, row) => sum + (row.weightMg ?? 0), 0), averageCollectionPaise: count ? Math.round(amountPaise / count) : 0, days: [...byDay.entries()].map(([date, item]) => ({ date, ...item })).sort((a, b) => a.date.localeCompare(b.date)) } };
+        const byMode = (summary.byMode ?? [])
+          .filter((row) => Number(row.amountPaise ?? 0) > 0 || Number(row.count ?? 0) > 0)
+          .map((row) => ({
+            mode: String(row.mode ?? ""),
+            label: String(row.label ?? row.mode ?? ""),
+            amountPaise: Number(row.amountPaise ?? 0),
+            count: Number(row.count ?? 0),
+          }));
+        return {
+          data: {
+            amountPaise,
+            count,
+            goldWeightMg: rows.reduce((sum, row) => sum + (row.weightMg ?? 0), 0),
+            averageCollectionPaise: count ? Math.round(amountPaise / count) : 0,
+            byMode,
+            days: [...byDay.entries()]
+              .map(([date, item]) => ({ date, ...item }))
+              .filter((day) => day.date >= arg.from && day.date <= arg.to)
+              .sort((a, b) => a.date.localeCompare(b.date)),
+          },
+        };
       },
       providesTags: ["AgentPayments"],
     }),
@@ -977,9 +1114,13 @@ export const {
   useGetAgentPassbookQuery,
   useRecordAgentPaymentMutation,
   useCreateAgentPaymentLinkMutation,
+  useCreateAgentPaymentQrSessionMutation,
+  useGetAgentPaymentQrStatusQuery,
+  useLazyGetAgentPaymentQrStatusQuery,
   useGetAgentNotificationsQuery,
   useGetAgentPaymentsQuery,
   useGetAgentPaymentQuery,
+  useLazyGetAgentPaymentQuery,
   useGetAgentPaymentsPageQuery,
   useGetAgentHandoversQuery,
   useGetAgentHandoverQuery,

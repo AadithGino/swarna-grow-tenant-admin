@@ -22,6 +22,7 @@ import {
   AgentLoadingCards,
   AgentStatus,
   formatAgentMoney,
+  formatAgentPaymentMode,
   formatAgentTime,
 } from "@/src/components/agent/agent-ui";
 import {
@@ -166,7 +167,15 @@ export function AgentDashboardPage() {
             <div className="rounded-2xl bg-white/12 p-4 ring-1 ring-white/15 backdrop-blur-[2px]">
               <p className="text-xs font-bold text-white/65">Collected today</p>
               <p className="mt-2 text-xl font-black">{formatAgentMoney(todaySummary.data?.amountPaise)}</p>
-              <p className="mt-1 text-xs text-white/55">{todaySummary.data?.count ?? 0} receipts</p>
+              <p className="mt-1 text-xs text-white/55">{todaySummary.data?.count ?? 0} receipts · all methods</p>
+              {(todaySummary.data?.byMode ?? []).some((row) => row.amountPaise > 0) ? (
+                <p className="mt-2 text-[0.65rem] leading-4 text-white/55">
+                  {(todaySummary.data?.byMode ?? [])
+                    .filter((row) => row.amountPaise > 0)
+                    .map((row) => `${formatAgentPaymentMode(row.mode)} ${formatAgentMoney(row.amountPaise)}`)
+                    .join(" · ")}
+                </p>
+              ) : null}
             </div>
             <div className="rounded-2xl bg-white/12 p-4 ring-1 ring-white/15 backdrop-blur-[2px]">
               <p className="text-xs font-bold text-white/65">Pending handover</p>
@@ -204,14 +213,14 @@ export function AgentDashboardPage() {
         />
       </div>
 
-      <div className="grid gap-5 lg:grid-cols-[1.35fr_.65fr]">
-        <AgentCard className="border-0 shadow-[0_10px_28px_rgba(69,24,35,.08)] ring-1 ring-[#ece2dc]">
-          <div className="flex items-center justify-between border-b border-[#eee5e0] px-5 py-4">
-            <div>
+      <div className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1.35fr)_minmax(0,0.65fr)]">
+        <AgentCard className="min-w-0 overflow-hidden border-0 shadow-[0_10px_28px_rgba(69,24,35,.08)] ring-1 ring-[#ece2dc]">
+          <div className="flex items-center justify-between gap-3 border-b border-[#eee5e0] px-5 py-4">
+            <div className="min-w-0">
               <h2 className="font-black">Recent collections</h2>
-              <p className="text-xs text-[#897f82]">Latest cash receipts recorded by you</p>
+              <p className="text-xs text-[#897f82]">Latest receipts across every payment method</p>
             </div>
-            <Link href="/agent/history" className="text-xs font-black text-[#730321]">
+            <Link href="/agent/history" className="shrink-0 text-xs font-black text-[#730321]">
               View all
             </Link>
           </div>
@@ -224,19 +233,22 @@ export function AgentDashboardPage() {
                   className="flex items-center gap-3 px-5 py-4 transition hover:bg-[#fdf9f6]"
                 >
                   <span
-                    className={`grid size-10 shrink-0 place-items-center rounded-full ${
+                    className={`flex size-10 shrink-0 items-center justify-center rounded-full ${
                       payment.weightMg ? "bg-[#fff1c8] text-[#956300]" : "bg-[#eaf9f1] text-[#087a50]"
                     }`}
                   >
-                    {payment.weightMg ? <Gem className="size-4" /> : <Banknote className="size-4" />}
+                    {payment.weightMg ? <Gem className="h-4 w-4" /> : <Banknote className="h-4 w-4" />}
                   </span>
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-black">{payment.customer.name}</p>
                     <p className="truncate text-xs text-[#8a8083]">
                       {payment.scheme.planName} · {payment.receiptNumber}
                     </p>
+                    <p className="mt-1 text-[0.68rem] font-black text-[#730321]">
+                      {formatAgentPaymentMode(payment.mode)}
+                    </p>
                   </div>
-                  <div className="text-right">
+                  <div className="shrink-0 text-right">
                     <p className="text-sm font-black">{formatAgentMoney(payment.amountPaise)}</p>
                     <p className="text-[.68rem] text-[#958b8d]">{formatAgentTime(payment.paidAt)}</p>
                   </div>
@@ -246,20 +258,20 @@ export function AgentDashboardPage() {
               <div className="p-6">
                 <AgentEmpty
                   title="No collections yet"
-                  description="Cash you record will show here with receipt numbers."
+                  description="Payments you record will show here with receipt numbers and method."
                 />
               </div>
             )}
           </div>
         </AgentCard>
 
-        <div className="space-y-4">
+        <div className="min-w-0 space-y-4">
           {pending[0] ? (
-            <Link href={`/agent/history/handovers/${pending[0].id}`}>
+            <Link href={`/agent/history/handovers/${pending[0].id}`} className="block">
               <AgentCard className="border-0 p-5 shadow-[0_10px_28px_rgba(69,24,35,.08)] ring-1 ring-[#efe3d2] transition hover:ring-[#d2b775]">
                 <div className="flex items-start gap-3">
-                  <Clock3 className="mt-0.5 size-5 text-[#a16e10]" />
-                  <div>
+                  <Clock3 className="mt-0.5 size-5 shrink-0 text-[#a16e10]" />
+                  <div className="min-w-0">
                     <AgentStatus value="PENDING" />
                     <p className="mt-2 text-lg font-black">{formatAgentMoney(pending[0].amountPaise)}</p>
                     <p className="mt-1 text-xs leading-5 text-[#81777a]">
@@ -272,8 +284,8 @@ export function AgentDashboardPage() {
           ) : (
             <AgentCard className="border-0 p-5 shadow-[0_10px_28px_rgba(69,24,35,.08)] ring-1 ring-[#e6ebe7]">
               <div className="flex items-start gap-3">
-                <ShieldCheck className="mt-0.5 size-5 text-[#087a50]" />
-                <div>
+                <ShieldCheck className="mt-0.5 size-5 shrink-0 text-[#087a50]" />
+                <div className="min-w-0">
                   <p className="font-black">No pending handovers</p>
                   <p className="mt-1 text-xs leading-5 text-[#81777a]">
                     Your submitted cash is fully reconciled.

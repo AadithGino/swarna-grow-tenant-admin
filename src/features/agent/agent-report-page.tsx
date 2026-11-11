@@ -12,6 +12,7 @@ import {
   AgentPageHeader,
   formatAgentDate,
   formatAgentMoney,
+  formatAgentPaymentMode,
   formatAgentWeight,
 } from "@/src/components/agent/agent-ui";
 
@@ -238,6 +239,24 @@ export function AgentReportPage() {
               </AgentCard>
             ))}
           </div>
+
+          {(report.data.byMode?.length ?? 0) > 0 ? (
+            <AgentCard className="p-4 sm:p-5">
+              <h2 className="font-black">By payment method</h2>
+              <p className="mt-1 text-xs text-[#897f82]">Cash in hand is custody only; UPI, card and online are included here too.</p>
+              <div className="mt-4 space-y-3">
+                {report.data.byMode?.map((row) => (
+                  <div key={row.mode} className="flex items-center justify-between gap-3 border-b border-[#f0e8e3] pb-3 last:border-0 last:pb-0">
+                    <div>
+                      <p className="text-sm font-black">{row.label || formatAgentPaymentMode(row.mode)}</p>
+                      <p className="text-xs text-[#8a8083]">{row.count} receipt{row.count === 1 ? "" : "s"}</p>
+                    </div>
+                    <p className="text-sm font-black">{formatAgentMoney(row.amountPaise)}</p>
+                  </div>
+                ))}
+              </div>
+            </AgentCard>
+          ) : null}
 
           <AgentCard className="p-4 sm:p-6">
             <div className="flex items-start justify-between gap-3">

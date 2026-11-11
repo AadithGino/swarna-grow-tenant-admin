@@ -11,6 +11,27 @@ export function formatAgentWeight(mg = 0) { return `${(mg / 1000).toFixed(3)} g`
 export function formatAgentDate(value?: string) { return value ? new Intl.DateTimeFormat("en-IN", { day: "2-digit", month: "short", year: "numeric" }).format(new Date(value)) : "—"; }
 export function formatAgentTime(value?: string) { return value ? new Intl.DateTimeFormat("en-IN", { day: "2-digit", month: "short", hour: "numeric", minute: "2-digit" }).format(new Date(value)) : "—"; }
 
+/** Cash is custody ("cash in hand"); other modes are payment channels. */
+export function formatAgentPaymentMode(mode?: string | null) {
+  const key = String(mode ?? "").trim().toUpperCase();
+  switch (key) {
+    case "CASH":
+      return "Cash in hand";
+    case "CARD":
+      return "Card / POS";
+    case "UPI":
+      return "UPI";
+    case "BANK_TRANSFER":
+      return "Bank transfer";
+    case "ONLINE_GATEWAY":
+      return "Online payment";
+    case "LEGACY_ONLINE":
+      return "Legacy online";
+    default:
+      return key ? key.replaceAll("_", " ") : "—";
+  }
+}
+
 export function AgentPageHeader({ eyebrow, title, description, action }: { eyebrow?: string; title: string; description?: string; action?: React.ReactNode }) {
   return (
     <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">

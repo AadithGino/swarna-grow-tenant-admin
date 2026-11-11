@@ -2189,7 +2189,7 @@ const DEFAULT_DASHBOARD_CHARTS = [
 ] as const;
 
 const PAYMENT_MODE_LABELS: Record<string, string> = {
-  CASH: "Cash",
+  CASH: "Cash in hand",
   CARD: "Card",
   UPI: "UPI",
   BANK_TRANSFER: "Bank transfer",

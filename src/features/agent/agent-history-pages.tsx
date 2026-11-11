@@ -44,6 +44,7 @@ import {
   AgentPageHeader,
   AgentStatus,
   formatAgentMoney,
+  formatAgentPaymentMode,
   formatAgentTime,
   formatAgentWeight,
 } from "@/src/components/agent/agent-ui";
@@ -104,6 +105,15 @@ function AgentPaymentHistoryRow({ payment }: { payment: AgentPayment }) {
               <ReceiptText className="size-3.5" />
               {payment.receiptNumber}
             </span>
+            <span
+              className={`rounded-full px-2 py-0.5 text-[0.68rem] font-black ${
+                payment.mode === "CASH"
+                  ? "bg-[#fff3d7] text-[#996800]"
+                  : "bg-[#f7edf0] text-[#730321]"
+              }`}
+            >
+              {formatAgentPaymentMode(payment.mode)}
+            </span>
             <span className="text-[#82787b]">{formatAgentTime(payment.paidAt)}</span>
             <AgentStatus value={payment.status} />
           </div>
@@ -134,7 +144,7 @@ function AgentCollectionsHistoryList() {
     return (
       <AgentEmpty
         title="No collections yet"
-        description="Successful cash collections will appear here with their receipt numbers."
+        description="Every payment you record — cash in hand, UPI, card, bank transfer, or online — appears here with its receipt."
       />
     );
   }
@@ -177,7 +187,7 @@ export function AgentHistoryPage() {
       <AgentPageHeader
         eyebrow="Your activity"
         title="Collection history"
-        description="Receipts and branch cash submissions recorded under your login."
+        description="All payment methods you collected, plus cash handovers to the branch. Only cash increases cash in hand."
       />
       <div className="inline-flex rounded-xl bg-[#eee9e6] p-1">
         <button
@@ -385,7 +395,7 @@ export function AgentPaymentDetailPage({ id }: { id: string }) {
             <DetailRow label="Scheme" value={item.scheme.planName ?? "Savings scheme"} />
             <DetailRow label="Enrollment" value={item.scheme.enrollmentNumber} />
             <DetailRow label="Paid on" value={formatAgentTime(item.paidAt)} />
-            <DetailRow label="Mode" value={item.mode.replaceAll("_", " ")} />
+            <DetailRow label="Payment method" value={formatAgentPaymentMode(item.mode)} />
             {item.targetCycle ? <DetailRow label="Cycle" value={item.targetCycle} /> : null}
             {item.branch?.name ? <DetailRow label="Branch" value={item.branch.name} /> : null}
             {collectorName ? <DetailRow label="Recorded by" value={collectorName} /> : null}

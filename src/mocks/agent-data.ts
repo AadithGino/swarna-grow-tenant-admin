@@ -64,9 +64,9 @@ export const agentSchemes = schemes;
 
 export const agentPayments: AgentPayment[] = [
   { id: "agt_pay_1", receiptNumber: "RCP-2026-0001234", amountPaise: 250000, mode: "CASH", status: "SUCCESS", source: "STAFF_APP", paidAt: "2026-09-17T11:05:22.000Z", customer: { id: "agt_cus_1", name: "Anjali Menon" }, scheme: { id: "agt_fixed", enrollmentNumber: "ENR-000456", planName: "Akshaya 12 Month" } },
-  { id: "agt_pay_2", receiptNumber: "RCP-2026-0001233", amountPaise: 300000, weightMg: 414, ratePerGramPaise: 724000, mode: "CASH", status: "SUCCESS", source: "STAFF_APP", paidAt: "2026-09-17T09:42:00.000Z", customer: { id: "agt_cus_1", name: "Anjali Menon" }, scheme: { id: "agt_gold", enrollmentNumber: "ENR-000462", planName: "Suvarna Gold 12" } },
-  { id: "agt_pay_3", receiptNumber: "RCP-2026-0001228", amountPaise: 150000, mode: "CASH", status: "SUCCESS", source: "STAFF_APP", paidAt: "2026-09-16T15:18:00.000Z", customer: { id: "agt_cus_3", name: "Priya Pillai" }, scheme: { id: "agt_flex_capped", enrollmentNumber: "ENR-000438", planName: "Suvarna Flexible" } },
-  { id: "agt_pay_4", receiptNumber: "RCP-2026-0001224", amountPaise: 100000, mode: "CASH", status: "SUCCESS", source: "STAFF_APP", paidAt: "2026-09-16T11:30:00.000Z", customer: { id: "agt_cus_2", name: "Ramesh Nair" }, scheme: { id: "agt_flex_free", enrollmentNumber: "ENR-000491", planName: "Sampoorna Flex 11" } },
+  { id: "agt_pay_2", receiptNumber: "RCP-2026-0001233", amountPaise: 300000, weightMg: 414, ratePerGramPaise: 724000, mode: "UPI", status: "SUCCESS", source: "STAFF_APP", paidAt: "2026-09-17T09:42:00.000Z", customer: { id: "agt_cus_1", name: "Anjali Menon" }, scheme: { id: "agt_gold", enrollmentNumber: "ENR-000462", planName: "Suvarna Gold 12" } },
+  { id: "agt_pay_3", receiptNumber: "RCP-2026-0001228", amountPaise: 150000, mode: "CARD", status: "SUCCESS", source: "STAFF_APP", paidAt: "2026-09-16T15:18:00.000Z", customer: { id: "agt_cus_3", name: "Priya Pillai" }, scheme: { id: "agt_flex_capped", enrollmentNumber: "ENR-000438", planName: "Suvarna Flexible" } },
+  { id: "agt_pay_4", receiptNumber: "RCP-2026-0001224", amountPaise: 100000, mode: "ONLINE_GATEWAY", status: "SUCCESS", source: "CUSTOMER_APP", paidAt: "2026-09-16T11:30:00.000Z", customer: { id: "agt_cus_2", name: "Ramesh Nair" }, scheme: { id: "agt_flex_free", enrollmentNumber: "ENR-000491", planName: "Sampoorna Flex 11" } },
 ];
 
 export let agentCashSummary: AgentCashSummary = {
@@ -78,7 +78,16 @@ export let agentCashSummary: AgentCashSummary = {
   handedOverPaise: 650000,
   adjustmentPaise: 0,
 };
-export const agentCollectionSummary: AgentCollectionSummary = { amountPaise: 700000, count: 4, byMode: [{ mode: "CASH", label: "Cash", amountPaise: 700000, count: 4 }] };
+export const agentCollectionSummary: AgentCollectionSummary = {
+  amountPaise: 800000,
+  count: 4,
+  byMode: [
+    { mode: "CASH", label: "Cash in hand", amountPaise: 250000, count: 1 },
+    { mode: "UPI", label: "UPI", amountPaise: 300000, count: 1 },
+    { mode: "CARD", label: "Card / POS", amountPaise: 150000, count: 1 },
+    { mode: "ONLINE_GATEWAY", label: "Online payment", amountPaise: 100000, count: 1 },
+  ],
+};
 export const agentHandovers: AgentHandover[] = [
   { id: "agt_ho_1", amountPaise: 650000, status: "ACCEPTED", initiator: "STAFF", remarks: "Closing handover", submittedAt: "2026-09-16T18:00:00.000Z", settledAt: "2026-09-16T19:15:00.000Z" },
   { id: "agt_ho_2", amountPaise: 400000, status: "PENDING", initiator: "STAFF", remarks: "Morning route collection", submittedAt: "2026-09-17T12:30:00.000Z", settledAt: null },

@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, ArrowRight, Banknote, CheckCircle2, Gem, Info, Link2, PlusCircle, ReceiptText, Search, ShieldCheck, Smartphone, UserPlus } from "lucide-react";
+import { ArrowLeft, ArrowRight, Banknote, CheckCircle2, Gem, Info, Link2, PlusCircle, QrCode, ReceiptText, Search, ShieldCheck, Smartphone, UserPlus, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,15 +12,31 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { useDebouncedValue } from "@/src/hooks/use-debounced-value";
-import { useCreateAgentPaymentLinkMutation, useGetAgentCustomerQuery, useGetAgentGoldRateQuery, useGetAgentPassbookQuery, useGetAgentPayableRangeQuery, useGetAgentSchemeQuery, useRecordAgentPaymentMutation, useSearchAgentCustomersQuery } from "@/src/store/api/agent-api";
+import {
+  useCreateAgentPaymentLinkMutation,
+  useCreateAgentPaymentQrSessionMutation,
+  useGetAgentCustomerQuery,
+  useGetAgentGoldRateQuery,
+  useGetAgentPassbookQuery,
+  useGetAgentPayableRangeQuery,
+  useGetAgentPaymentQrStatusQuery,
+  useGetAgentSchemeQuery,
+  useLazyGetAgentPaymentQuery,
+  useRecordAgentPaymentMutation,
+  useSearchAgentCustomersQuery,
+} from "@/src/store/api/agent-api";
 import { AgentCard, AgentEmpty, AgentLoadingCards, AgentPageHeader, AgentSchemeCard, AgentStatus, formatAgentDate, formatAgentMoney, formatAgentTime, formatAgentWeight } from "@/src/components/agent/agent-ui";
 import { PortalBackLink } from "@/src/components/common/portal-back-link";
 import { navigateBack } from "@/src/lib/navigate-back";
-import type { AgentManualPaymentMode, AgentPayment } from "@/src/types/agent";
+import type { AgentManualPaymentMode, AgentPayment, AgentPaymentQrSession } from "@/src/types/agent";
 import { useAgentCapabilities } from "./use-agent-capabilities";
 
+function agentQrImageUrl(payload: string) {
+  return `https://api.qrserver.com/v1/create-qr-code/?size=280x280&margin=12&data=${encodeURIComponent(payload)}`;
+}
+
 const AGENT_PAYMENT_MODES: Array<{ value: AgentManualPaymentMode; label: string; hint: string }> = [
-  { value: "CASH", label: "Cash", hint: "Counts toward your cash-in-hand balance" },
+  { value: "CASH", label: "Cash in hand", hint: "Counts toward your cash-in-hand balance for branch handover" },
   { value: "UPI", label: "UPI", hint: "Customer paid via UPI — add reference if available" },
   { value: "CARD", label: "Card / POS", hint: "Card or POS terminal payment" },
   { value: "BANK_TRANSFER", label: "Bank transfer", hint: "NEFT / IMPS / RTGS" },
@@ -156,15 +172,88 @@ export function AgentCollectPaymentPage({ schemeId }: { schemeId: string }) {
   const passbook = useGetAgentPassbookQuery(schemeId);
   const [recordPayment, paymentState] = useRecordAgentPaymentMutation();
   const [createPaymentLink, linkState] = useCreateAgentPaymentLinkMutation();
+  const [createQrSession, qrCreateState] = useCreateAgentPaymentQrSessionMutation();
+  const [fetchPayment] = useLazyGetAgentPaymentQuery();
   const [amount, setAmount] = useState("");
   const [paymentMode, setPaymentMode] = useState<AgentManualPaymentMode>("CASH");
   const [reference, setReference] = useState("");
   const [remarks, setRemarks] = useState("");
   const [receipt, setReceipt] = useState<AgentPayment | null>(null);
+  const [qrSession, setQrSession] = useState<AgentPaymentQrSession | null>(null);
   const amountPaise = Math.round(Number(amount || (range.data ? range.data.suggestedPaise / 100 : 0)) * 100);
   const estimatedWeightMg = scheme.data?.valueBasis === "GOLD_WEIGHT" && goldRate.data?.ratePerGramPaise ? Math.floor((amountPaise * 1000) / goldRate.data.ratePerGramPaise) : 0;
   const validAmount = agentAmountIsAllowed(amountPaise, range.data);
   const goldBlocked = scheme.data?.valueBasis === "GOLD_WEIGHT" && !goldRate.data;
+  const qrStatus = useGetAgentPaymentQrStatusQuery(qrSession?.token ?? "", {
+    skip: !qrSession?.token,
+    pollingInterval: qrSession ? 3_000 : 0,
+  });
+
+  useEffect(() => {
+    if (!qrSession || !qrStatus.data?.paid) return;
+    let cancelled = false;
+    void (async () => {
+      const paymentId = qrStatus.data.receipt?.paymentId ?? qrSession.paymentId ?? undefined;
+      if (paymentId) {
+        try {
+          const payment = await fetchPayment(paymentId).unwrap();
+          if (cancelled) return;
+          setReceipt(payment);
+          setQrSession(null);
+          toast.success("Online payment received");
+          void range.refetch();
+          return;
+        } catch {
+          /* fall through to lightweight receipt */
+        }
+      }
+      if (cancelled) return;
+      setReceipt({
+        id: paymentId ?? qrSession.id,
+        receiptNumber: qrStatus.data.receipt?.receiptNumber ?? "ONLINE",
+        amountPaise: qrSession.amountPaise,
+        mode: "ONLINE_GATEWAY",
+        status: "SUCCESS",
+        source: "CUSTOMER_APP",
+        paidAt: qrStatus.data.receipt?.paidAt ?? new Date().toISOString(),
+        customer: {
+          id: customer.data?.id ?? "",
+          name: customer.data?.name ?? "Customer",
+          mobile: customer.data?.mobile,
+          customerNumber: customer.data?.customerNumber,
+        },
+        scheme: {
+          id: schemeId,
+          enrollmentNumber: scheme.data?.enrollmentNumber ?? "",
+          planName: scheme.data?.planName,
+        },
+      });
+      setQrSession(null);
+      toast.success("Online payment received");
+      void range.refetch();
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    customer.data?.customerNumber,
+    customer.data?.id,
+    customer.data?.mobile,
+    customer.data?.name,
+    fetchPayment,
+    qrSession,
+    qrStatus.data,
+    range,
+    scheme.data?.enrollmentNumber,
+    scheme.data?.planName,
+    schemeId,
+  ]);
+
+  useEffect(() => {
+    if (!qrSession || !qrStatus.data?.failed) return;
+    toast.error("Online payment failed or expired. Try again or record a manual collection.");
+    setQrSession(null);
+  }, [qrSession, qrStatus.data?.failed]);
 
   const submit = async () => {
     const fresh = await range.refetch();
@@ -217,6 +306,31 @@ export function AgentCollectPaymentPage({ schemeId }: { schemeId: string }) {
     } catch (error) {
       if ((error as { name?: string })?.name === "AbortError") return;
       toast.error("Could not create the payment link. Refresh the payable position and try again.");
+    }
+  };
+
+  const showPhonePeQr = async () => {
+    const fresh = await range.refetch();
+    const quote = fresh.data;
+    if (!quote || !agentAmountIsAllowed(amountPaise, quote)) {
+      toast.error("The payable position changed. Review the refreshed amount.");
+      return;
+    }
+    try {
+      const session = await createQrSession({
+        schemeId,
+        amountPaise,
+        targetCycle: quote.model === "FLEXIBLE" ? quote.targetCycle : undefined,
+        expectedPositionVersion: quote.positionVersion,
+        positionVersion: quote.positionVersion,
+        expiresInMinutes: 30,
+      }).unwrap();
+      setQrSession(session);
+      toast.message("Show this QR to the customer", {
+        description: "Waiting for PhonePe payment…",
+      });
+    } catch {
+      toast.error("Could not start PhonePe QR. Refresh the payable position and try again.");
     }
   };
 
@@ -348,9 +462,41 @@ export function AgentCollectPaymentPage({ schemeId }: { schemeId: string }) {
 </div>
 <div className="mt-5 flex items-center gap-2 rounded-xl bg-[#f7f4f2] px-3 py-2.5 text-xs font-semibold text-[#746a6d]">
 <ShieldCheck className="size-4 text-[#087a50]" />Only cash increases your in-hand balance for branch submission.</div>
-<Button disabled={!validAmount || goldBlocked || paymentState.isLoading} onClick={submit} className="mt-5 h-13 w-full rounded-xl bg-[#730321] text-base font-black hover:bg-[#5d0219]">{paymentState.isLoading ? "Recording collection…" : <>Confirm {modeMeta.label.toLowerCase()} collection <ArrowRight className="ml-2 size-4" />
+<Button disabled={!validAmount || goldBlocked || paymentState.isLoading || Boolean(qrSession)} onClick={submit} className="mt-5 h-13 w-full rounded-xl bg-[#730321] text-base font-black hover:bg-[#5d0219]">{paymentState.isLoading ? "Recording collection…" : <>Confirm {modeMeta.label.toLowerCase()} collection <ArrowRight className="ml-2 size-4" />
 </>}</Button>
-<Button disabled={!validAmount || goldBlocked || linkState.isLoading} onClick={() => void shareOnlinePaymentLink()} variant="outline" className="mt-3 h-12 w-full rounded-xl border-[#730321] font-black text-[#730321]"><Link2 className="mr-2 size-4" />{linkState.isLoading ? "Creating secure link…" : "Create 30-minute online payment link"}</Button>
+<Button disabled={!validAmount || goldBlocked || qrCreateState.isLoading || Boolean(qrSession)} onClick={() => void showPhonePeQr()} variant="outline" className="mt-3 h-12 w-full rounded-xl border-[#730321] font-black text-[#730321]"><QrCode className="mr-2 size-4" />{qrCreateState.isLoading ? "Starting PhonePe QR…" : "Show PhonePe QR"}</Button>
+<Button disabled={!validAmount || goldBlocked || linkState.isLoading || Boolean(qrSession)} onClick={() => void shareOnlinePaymentLink()} variant="outline" className="mt-3 h-12 w-full rounded-xl border-[#d9cbc5] font-black text-[#5c5255]"><Link2 className="mr-2 size-4" />{linkState.isLoading ? "Creating secure link…" : "Create 30-minute online payment link"}</Button>
+{qrSession ? (
+  <div className="mt-5 rounded-2xl border border-[#ead9ab] bg-[#fffdf7] p-4">
+    <div className="flex items-start justify-between gap-3">
+      <div>
+        <p className="text-xs font-black uppercase tracking-[.14em] text-[#9b6a10]">PhonePe QR</p>
+        <h3 className="mt-1 text-lg font-black">{formatAgentMoney(qrSession.amountPaise)}</h3>
+        <p className="mt-1 text-xs leading-5 text-[#7f652d]">Ask the customer to scan with any UPI app. This screen updates when PhonePe confirms payment.</p>
+      </div>
+      <button type="button" aria-label="Close QR" onClick={() => setQrSession(null)} className="grid size-9 place-items-center rounded-full border border-[#e3d8d2] bg-white text-[#5c5255]">
+        <X className="size-4" />
+      </button>
+    </div>
+    <div className="mt-4 flex justify-center">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={agentQrImageUrl(qrSession.qrPayload)}
+        alt="PhonePe payment QR"
+        width={280}
+        height={280}
+        className="rounded-2xl border border-[#ead9ab] bg-white p-3 shadow-sm"
+      />
+    </div>
+    <p className="mt-4 text-center text-xs font-semibold text-[#087a50]">
+      {qrStatus.isFetching || qrStatus.data?.processing
+        ? "Waiting for payment…"
+        : qrStatus.data?.paid
+          ? "Payment received"
+          : "Listening for PhonePe confirmation"}
+    </p>
+  </div>
+) : null}
 </AgentCard>
 </div>
 <div className="space-y-5">

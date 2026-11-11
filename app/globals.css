@@ -284,6 +284,16 @@ button {
   padding-bottom: max(0.55rem, env(safe-area-inset-bottom));
 }
 
+/* Keep bottom-tab icons in normal flow (no absolute / overflow jump on mobile WebKit). */
+.agent-theme .agent-safe-bottom a {
+  position: relative;
+  overflow: visible;
+}
+.agent-theme .agent-safe-bottom a svg {
+  display: block;
+  flex-shrink: 0;
+}
+
 @media (max-width: 639px) {
   .agent-theme { font-size: 15px; }
 }

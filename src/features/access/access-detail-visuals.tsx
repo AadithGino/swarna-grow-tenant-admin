@@ -948,17 +948,21 @@ export function PerformanceExtendedInsights({
         ) : null}
 
         {modes.length > 0 ? (
-          <Surface title="Collections by mode" description="Cash vs digital split">
+          <Surface title="Collections by mode" description="Every payment method; cash is cash in hand only">
             <div className="space-y-4 p-5">
               {modes.map((row) => {
                 const paise = row.amount?.amountPaise ?? 0;
                 const pct =
                   modeTotalPaise > 0 ? Math.round((paise / modeTotalPaise) * 100) : 0;
+                const modeLabel =
+                  row.mode === "CASH"
+                    ? "Cash in hand"
+                    : String(row.mode ?? "—").replaceAll("_", " ");
                 return (
                   <div key={String(row.mode)}>
                     <div className="mb-1.5 flex items-center justify-between gap-3 text-sm">
                       <span className="font-semibold text-[#2d191d]">
-                        {String(row.mode ?? "—").replaceAll("_", " ")}
+                        {modeLabel}
                       </span>
                       <span className="shrink-0 font-bold">
                         <MoneyPair block={row.amount} fallback="₹0" />

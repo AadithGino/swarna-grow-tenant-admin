@@ -213,7 +213,9 @@ export function StaffPerformanceTab({ staffId }: { staffId: string }) {
           ) : (
             "—"
           ),
-          String(row.mode ?? "—").replace(/_/g, " "),
+          row.mode === "CASH"
+            ? "Cash in hand"
+            : String(row.mode ?? "—").replace(/_/g, " "),
           String(row.source ?? "—").replace(/_/g, " "),
           <MoneyPair key="a" block={row.amount} fallback="₹0" />,
         ])}

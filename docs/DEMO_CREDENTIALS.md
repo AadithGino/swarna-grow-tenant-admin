@@ -65,6 +65,8 @@ From `SEED_PLATFORM_EMAIL` / `SEED_PLATFORM_PASSWORD` in backend `.env` (default
 
 Only users with role `COLLECTION_AGENT` and an assigned `branchId` can use this portal.
 
+**Flutter / staff API integration:** [`FLUTTER_STAFF_AGENT_API_GUIDE.md`](./FLUTTER_STAFF_AGENT_API_GUIDE.md)
+
 ---
 
 ## Digital gold & silver (KAIRALI)
