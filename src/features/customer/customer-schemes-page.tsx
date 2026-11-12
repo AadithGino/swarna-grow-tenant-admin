@@ -1,5 +1,6 @@
 "use client";
 
+import { CkCard, CkSegmented } from "@/src/components/customer/customer-kit";
 import Link from "next/link";
 import { useState } from "react";
 import { ChevronRight } from "lucide-react";
@@ -12,7 +13,6 @@ import {
 } from "@/src/store/api/customer-api";
 import { useCustomerTenant } from "@/src/components/customer/customer-tenant-context";
 import { customerPath } from "@/src/lib/customer-tenant";
-import { cn } from "@/lib/utils";
 import { CUSTOMER_MOBILE_NAV_DOCK } from "@/src/features/customer/customer-scheme-detail-views";
 import type { CustomerPastScheme, SchemeCard } from "@/src/types/customer";
 
@@ -50,47 +50,37 @@ export function CustomerSchemesPage() {
       className="mx-auto max-w-lg"
       style={{ paddingBottom: `calc(${CUSTOMER_MOBILE_NAV_DOCK} + 0.5rem + env(safe-area-inset-bottom, 0px))` }}
     >
-      <h1 className="text-[1.65rem] font-black tracking-[-.03em] text-[#11111b]">My schemes</h1>
+      <h1 className="text-[1.65rem] font-bold tracking-[-.03em] text-[var(--ck-ink)]">My schemes</h1>
 
-      <div
-        className="mt-5 grid w-full grid-cols-2 gap-0 rounded-full border bg-[#fffefd] p-1"
-        style={{ borderColor: "rgba(var(--customer-accent-rgb, 201, 162, 39), 0.55)" }}
-      >
-        <button
-          type="button"
-          onClick={() => setTab("ACTIVE")}
-          className={cn(
-            "rounded-full py-2.5 text-sm font-bold transition",
-            tab === "ACTIVE" ? "text-white shadow-sm" : "text-[#8a8490]",
-          )}
-          style={tab === "ACTIVE" ? { background: "var(--customer-primary, #730321)" } : undefined}
-        >
-          Active ({active.length})
-        </button>
-        <button
-          type="button"
-          onClick={() => setTab("PAST")}
-          className={cn(
-            "rounded-full py-2.5 text-sm font-bold transition",
-            tab === "PAST" ? "text-white shadow-sm" : "text-[#8a8490]",
-          )}
-          style={tab === "PAST" ? { background: "var(--customer-primary, #730321)" } : undefined}
-        >
-          Past ({past.length})
-        </button>
-      </div>
+      <CkSegmented
+        className="mt-4"
+        value={tab}
+        onChange={setTab}
+        options={[
+          { value: "ACTIVE", label: `Active (${active.length})` },
+          { value: "PAST", label: `Past (${past.length})` },
+        ]}
+      />
 
       {tab === "ACTIVE" ? (
-        <p className="mt-4 leading-tight">
-          <span className="text-[1.65rem] font-black tracking-tight text-[#11111b]">{totalSaved}</span>
-          <span className="ml-2 text-[0.9375rem] font-medium text-[#777280]">total saved</span>
-        </p>
+        <CkCard className="mt-3 flex divide-x divide-[var(--ck-line-soft)] px-0 py-3.5">
+          <div className="flex-1 px-4">
+            <p className="text-xs text-[var(--ck-muted)]">Total saved</p>
+            <p className="mt-0.5 text-[1.4rem] font-bold tracking-[-0.03em] tabular-nums text-[var(--ck-ink)]">{totalSaved}</p>
+          </div>
+          {home?.summary?.goldAccumulated?.weightDisplay ? (
+            <div className="flex-1 px-4">
+              <p className="text-xs text-[var(--ck-muted)]">Gold accumulated</p>
+              <p className="mt-0.5 text-[1.4rem] font-bold tracking-[-0.03em] tabular-nums text-[var(--ck-ink)]">{home.summary.goldAccumulated.weightDisplay}</p>
+            </div>
+          ) : null}
+        </CkCard>
       ) : null}
 
       {tab === "ACTIVE" ? (
         <>
           {active.length ? (
-            <div className="mt-4 space-y-3">
+            <div className="mt-3 space-y-2.5">
               {active.map((scheme) => (
                 <CustomerSchemesActiveCard key={scheme.id} scheme={scheme} />
               ))}
@@ -111,11 +101,11 @@ export function CustomerSchemesPage() {
           {past.length > 0 ? (
             <section className="mt-7">
               <div className="mb-3 flex items-center justify-between gap-3">
-                <h2 className="text-[1.05rem] font-black text-[#171722]">Past schemes</h2>
+                <h2 className="text-base font-bold tracking-[-0.015em] text-[var(--ck-ink)]">Past schemes</h2>
                 <button
                   type="button"
                   onClick={() => setTab("PAST")}
-                  className="inline-flex items-center gap-0.5 text-sm font-bold text-[var(--customer-primary,#730321)]"
+                  className="inline-flex items-center gap-0.5 text-[0.8rem] font-semibold text-[var(--customer-primary,#730321)]"
                 >
                   View all
                   <ChevronRight className="size-4" />

@@ -9,6 +9,15 @@ export function resolveCustomerNotificationHref(
   if (!deepLink?.trim()) return null;
   if (deepLink.startsWith("http://") || deepLink.startsWith("https://")) return deepLink;
   if (deepLink.startsWith("/customer/")) return deepLink;
+  // Redemption handover OTP → open home with reveal query (global drawer).
+  const redemptionOtp = deepLink.match(
+    /^\/schemes\/redemptions\/([^/]+)\/handover-otp\/?$/i,
+  );
+  if (redemptionOtp?.[1]) {
+    const base = customerPath(tenantSlug, "");
+    const sep = base.includes("?") ? "&" : "?";
+    return `${base}${sep}handoverOtp=${encodeURIComponent(redemptionOtp[1])}`;
+  }
   const relative = deepLink.replace(/^\//, "");
   return customerPath(tenantSlug, relative);
 }

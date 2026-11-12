@@ -137,7 +137,7 @@ export function PlatformDemoInstanceDetailPage({ instanceId }: { instanceId: str
         <StatCard icon={RefreshCw} label="Record version" value={instance.version} detail="Optimistic concurrency version" />
       </div>
 
-      <Surface title="Share link" description="The secret is only recoverable if it was saved at creation time — otherwise, rotate to get a new one.">
+      <Surface title="Share link" description="Copy recovers the saved secret from the server. Rotate issues a new secret (old links stop working) and saves it for later copy.">
         <div className="space-y-3 p-5">
           {revealedLink ? (
             <div className="flex gap-2">

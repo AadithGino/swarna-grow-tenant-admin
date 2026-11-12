@@ -3598,6 +3598,11 @@ export type RedemptionDetailView = {
     handoverRatePerGram?: number;
     handoverRateDate?: string;
   };
+  handoverOtpActive?: boolean;
+  handoverOtpExpiresAt?: string | null;
+  handoverOtpFailedAttempts?: number;
+  handoverOtpReleasedAt?: string | null;
+  handoverOtpMaxAttempts?: number;
 };
 
 export function adaptRedemptionDetail(raw: unknown): RedemptionDetailView {
@@ -3721,6 +3726,15 @@ export function adaptRedemptionDetail(raw: unknown): RedemptionDetailView {
     rejectionReason: item.rejectionReason,
     branchName: branch.name ? String(branch.name) : undefined,
     requestReason,
+    handoverOtpActive: item.handoverOtpActive === true,
+    handoverOtpExpiresAt: item.handoverOtpExpiresAt
+      ? String(item.handoverOtpExpiresAt)
+      : null,
+    handoverOtpFailedAttempts: Number(item.handoverOtpFailedAttempts ?? 0),
+    handoverOtpReleasedAt: item.handoverOtpReleasedAt
+      ? String(item.handoverOtpReleasedAt)
+      : null,
+    handoverOtpMaxAttempts: Number(item.handoverOtpMaxAttempts ?? 5),
     customer: {
       id: entityId(item.customer) || String(item.customerId ?? ""),
       name: customerName(item),

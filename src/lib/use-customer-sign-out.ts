@@ -7,6 +7,7 @@ import { useCustomerTenant } from "@/src/components/customer/customer-tenant-con
 import { customerApi, useCustomerLogoutMutation } from "@/src/store/api/customer-api";
 import { customerSignedOut } from "@/src/store/slices/customer-session-slice";
 import { useAppDispatch } from "@/src/store/hooks";
+import { disconnectCustomerRealtime } from "@/src/lib/customer-realtime";
 
 export function useCustomerSignOut() {
   const router = useRouter();
@@ -15,6 +16,7 @@ export function useCustomerSignOut() {
   const [logout, { isLoading }] = useCustomerLogoutMutation();
 
   const signOut = async () => {
+    disconnectCustomerRealtime();
     const refreshToken = readStoredRefreshToken("customer") ?? undefined;
     try {
       await logout({ refreshToken }).unwrap();

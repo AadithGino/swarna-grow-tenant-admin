@@ -48,6 +48,7 @@ import { downloadText } from "@/src/lib/download";
 import { money } from "@/src/lib/format";
 import { cn } from "@/lib/utils";
 import type { RedemptionDetailView } from "@/src/store/api/contract-adapters";
+import { newIdempotencyKey } from "@/src/lib/idempotency";
 import {
   useApproveRedemptionMutation,
   useCompleteRedemptionMutation,
@@ -55,7 +56,10 @@ import {
   useGetRedemptionQuery,
   useLazyGetRedemptionReceiptQuery,
   useRejectRedemptionMutation,
+  useReleaseRedemptionHandoverOtpMutation,
 } from "@/src/store/api/admin-api";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 const WORKFLOW_STEPS = [
   { key: "submitted", label: "Submitted" },
@@ -205,11 +209,15 @@ function RedemptionDetailBody({
   setCompleteRemarks,
   completeRemarksTouched,
   setCompleteRemarksTouched,
+  handoverOtp,
+  setHandoverOtp,
   showRejectForm,
   setShowRejectForm,
   busy,
+  releasingOtp,
   onApprove,
   onReject,
+  onReleaseOtp,
   onCompleteClick,
 }: {
   d: RedemptionDetailView;
@@ -221,11 +229,15 @@ function RedemptionDetailBody({
   setCompleteRemarks: (v: string) => void;
   completeRemarksTouched: boolean;
   setCompleteRemarksTouched: (v: boolean) => void;
+  handoverOtp: string;
+  setHandoverOtp: (v: string) => void;
   showRejectForm: boolean;
   setShowRejectForm: (v: boolean) => void;
   busy: boolean;
+  releasingOtp: boolean;
   onApprove: () => void;
   onReject: () => void;
+  onReleaseOtp: () => void;
   onCompleteClick: () => void;
 }) {
   const rejectReasonError =
@@ -237,8 +249,11 @@ function RedemptionDetailBody({
       ? liveRedemptionCompleteRemarksError(completeRemarks)
       : undefined;
   const canConfirmReject = redemptionRejectReasonReady(rejectReason);
+  const otpReady = /^\d{6}$/.test(handoverOtp.trim());
   const canCompleteHandover =
-    validateRedemptionCompleteRemarks(completeRemarks) === undefined;
+    validateRedemptionCompleteRemarks(completeRemarks) === undefined
+    && Boolean(d.handoverOtpActive)
+    && otpReady;
   const [fetchReceipt, receiptState] = useLazyGetRedemptionReceiptQuery();
   const settlementPreview = {
     ...d.settlementPreview,
@@ -414,25 +429,72 @@ function RedemptionDetailBody({
         ) : null}
 
         {approved ? (
-          <DetailBlock title="Handover notes">
-            <FieldLabel>Optional remarks for audit trail</FieldLabel>
-            <Textarea
-              placeholder="e.g. Cash paid at counter · Gold weighed and handed over"
-              value={completeRemarks}
-              onChange={(e) => {
-                setCompleteRemarksTouched(true);
-                setCompleteRemarks(e.target.value);
-              }}
-              onBlur={() => setCompleteRemarksTouched(true)}
-              rows={3}
-              className={cn(
-                "resize-none border-[#e4d7d2] bg-[#faf7f5]",
-                completeRemarksError && "border-red-600",
+          <>
+            <DetailBlock title="Customer handover OTP">
+              <p className="mb-3 text-sm text-muted-foreground">
+                Release a code to the customer app (push + live). Enter the code
+                they show at the counter to complete.
+              </p>
+              {d.handoverOtpActive ? (
+                <p className="mb-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900">
+                  OTP active
+                  {d.handoverOtpExpiresAt
+                    ? ` · expires ${new Date(d.handoverOtpExpiresAt).toLocaleString("en-IN")}`
+                    : ""}
+                  {(d.handoverOtpFailedAttempts ?? 0) > 0
+                    ? ` · ${Math.max(0, (d.handoverOtpMaxAttempts ?? 5) - (d.handoverOtpFailedAttempts ?? 0))} attempts left`
+                    : ""}
+                </p>
+              ) : (
+                <p className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                  No active OTP — release one before completing handover.
+                </p>
               )}
-              aria-invalid={Boolean(completeRemarksError)}
-            />
-            <FormFieldError message={completeRemarksError} />
-          </DetailBlock>
+              <div className="mb-3 flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={busy || releasingOtp}
+                  onClick={onReleaseOtp}
+                >
+                  {releasingOtp ? <Loader2 className="animate-spin" /> : null}
+                  {d.handoverOtpActive ? "Resend OTP to customer" : "Release OTP to customer"}
+                </Button>
+              </div>
+              <Label htmlFor="redemption-handover-otp">Code from customer</Label>
+              <Input
+                id="redemption-handover-otp"
+                inputMode="numeric"
+                autoComplete="off"
+                maxLength={6}
+                className="mt-1 font-mono tracking-widest"
+                placeholder="6 digits"
+                value={handoverOtp}
+                onChange={(e) =>
+                  setHandoverOtp(e.target.value.replace(/\D/g, "").slice(0, 6))
+                }
+              />
+            </DetailBlock>
+            <DetailBlock title="Handover notes">
+              <FieldLabel>Optional remarks for audit trail</FieldLabel>
+              <Textarea
+                placeholder="e.g. Cash paid at counter · Gold weighed and handed over"
+                value={completeRemarks}
+                onChange={(e) => {
+                  setCompleteRemarksTouched(true);
+                  setCompleteRemarks(e.target.value);
+                }}
+                onBlur={() => setCompleteRemarksTouched(true)}
+                rows={3}
+                className={cn(
+                  "resize-none border-[#e4d7d2] bg-[#faf7f5]",
+                  completeRemarksError && "border-red-600",
+                )}
+                aria-invalid={Boolean(completeRemarksError)}
+              />
+              <FormFieldError message={completeRemarksError} />
+            </DetailBlock>
+          </>
         ) : null}
 
         {d.status === "COMPLETED" ? (
@@ -802,16 +864,21 @@ export function RedemptionDetailSheet({
   const [approve, approveState] = useApproveRedemptionMutation();
   const [reject, rejectState] = useRejectRedemptionMutation();
   const [complete, completeState] = useCompleteRedemptionMutation();
+  const [releaseOtp, releaseOtpState] = useReleaseRedemptionHandoverOtpMutation();
   const [rejectReason, setRejectReason] = useState("");
   const [rejectReasonTouched, setRejectReasonTouched] = useState(false);
   const [completeRemarks, setCompleteRemarks] = useState("");
   const [completeRemarksTouched, setCompleteRemarksTouched] = useState(false);
+  const [handoverOtp, setHandoverOtp] = useState("");
   const [confirmCompleteOpen, setConfirmCompleteOpen] = useState(false);
   const [showRejectForm, setShowRejectForm] = useState(false);
 
   const d = detailQuery.data;
   const busy =
-    approveState.isLoading || rejectState.isLoading || completeState.isLoading;
+    approveState.isLoading
+    || rejectState.isLoading
+    || completeState.isLoading
+    || releaseOtpState.isLoading;
 
   async function afterAction(message: string) {
     toast.success(message);
@@ -827,6 +894,7 @@ export function RedemptionDetailSheet({
     setRejectReasonTouched(false);
     setCompleteRemarks("");
     setCompleteRemarksTouched(false);
+    setHandoverOtp("");
     setConfirmCompleteOpen(false);
     setShowRejectForm(false);
   }
@@ -866,9 +934,12 @@ export function RedemptionDetailSheet({
               setCompleteRemarks={setCompleteRemarks}
               completeRemarksTouched={completeRemarksTouched}
               setCompleteRemarksTouched={setCompleteRemarksTouched}
+              handoverOtp={handoverOtp}
+              setHandoverOtp={setHandoverOtp}
               showRejectForm={showRejectForm}
               setShowRejectForm={setShowRejectForm}
               busy={busy}
+              releasingOtp={releaseOtpState.isLoading}
               onApprove={async () => {
                 try {
                   await approve({
@@ -878,6 +949,22 @@ export function RedemptionDetailSheet({
                   await afterAction("Redemption approved");
                 } catch (err) {
                   toastApiError(err, "Could not approve redemption");
+                }
+              }}
+              onReleaseOtp={async () => {
+                try {
+                  const res = await releaseOtp({
+                    id: d.id,
+                    idempotencyKey: newIdempotencyKey(),
+                  }).unwrap();
+                  setHandoverOtp("");
+                  await detailQuery.refetch();
+                  toast.success(
+                    res.shareHint
+                      ?? "Handover OTP sent to the customer app.",
+                  );
+                } catch (err) {
+                  toastApiError(err, "Could not release handover OTP");
                 }
               }}
               onReject={async () => {
@@ -905,6 +992,14 @@ export function RedemptionDetailSheet({
                   toast.error(remarksErr);
                   return;
                 }
+                if (!d.handoverOtpActive) {
+                  toast.error("Release the customer handover OTP first.");
+                  return;
+                }
+                if (!/^\d{6}$/.test(handoverOtp.trim())) {
+                  toast.error("Enter the 6-digit OTP the customer shows you.");
+                  return;
+                }
                 setConfirmCompleteOpen(true);
               }}
             />
@@ -923,7 +1018,8 @@ export function RedemptionDetailSheet({
                   <strong className="text-foreground">
                     {d?.scheme.enrollmentNumber}
                   </strong>{" "}
-                  and posts ledger entries. Only continue if settlement is done.
+                  and posts ledger entries. Only continue if settlement is done
+                  and the customer OTP is verified.
                 </p>
                 {d ? (
                   <div className="rounded-xl border border-[#eaded9] bg-[#faf7f5] px-4 py-3">
@@ -934,6 +1030,9 @@ export function RedemptionDetailSheet({
                       {money(d.settlementPreview.finalValue)} · {d.modeLabel}
                     </p>
                     <p className="mt-1 text-sm">{d.customer.name}</p>
+                    <p className="mt-2 font-mono text-sm tracking-widest text-foreground">
+                      OTP · {handoverOtp}
+                    </p>
                   </div>
                 ) : null}
               </div>
@@ -947,7 +1046,8 @@ export function RedemptionDetailSheet({
               disabled={
                 completeState.isLoading ||
                 !d ||
-                validateRedemptionCompleteRemarks(completeRemarks) !== undefined
+                validateRedemptionCompleteRemarks(completeRemarks) !== undefined ||
+                !/^\d{6}$/.test(handoverOtp.trim())
               }
               className="bg-[#730321] hover:bg-[#5a021a]"
               onClick={async (e) => {
@@ -963,11 +1063,13 @@ export function RedemptionDetailSheet({
                   await complete({
                     id: d.id,
                     remarks: completeRemarks.trim() || undefined,
+                    handoverOtp: handoverOtp.trim(),
                   }).unwrap();
                   setConfirmCompleteOpen(false);
                   await afterAction("Redemption completed");
                 } catch (err) {
                   toastApiError(err, "Could not complete redemption");
+                  await detailQuery.refetch();
                 }
               }}
             >

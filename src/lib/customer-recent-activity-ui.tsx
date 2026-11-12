@@ -77,25 +77,29 @@ export function ActivityRowIcon({
 
 export function activityIconStyles(item: CustomerRecentActivityItem): {
   circleClass: string;
+  /** Soft tile used by the v2 activity row. */
+  tileClass: string;
   iconClass: string;
 } {
   const dir = activityDirection(item);
   if (dir === "IN") {
     return {
       circleClass: "bg-emerald-600 text-white shadow-[0_4px_12px_rgba(11,152,96,0.28)]",
+      tileClass: "bg-[var(--ck-ok-soft,#e6f2ec)] text-[var(--ck-ok,#1f6b4c)]",
       iconClass: "",
     };
   }
   return {
     circleClass: "bg-red-600 text-white shadow-[0_4px_12px_rgba(220,38,38,0.25)]",
+    tileClass: "bg-[#f4eee7] text-[var(--ck-ink-2,#4f4246)]",
     iconClass: "",
   };
 }
 
 export function activityAmountClass(item: CustomerRecentActivityItem): string {
   return activityDirection(item) === "IN"
-    ? "font-bold text-emerald-700"
-    : "font-bold text-red-700";
+    ? "text-[var(--ck-ok,#1f6b4c)]"
+    : "text-[var(--ck-ink,#1d1417)]";
 }
 
 function formatActivityMetalAmount(item: CustomerRecentActivityItem): string {

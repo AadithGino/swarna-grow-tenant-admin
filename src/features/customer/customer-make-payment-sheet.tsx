@@ -73,10 +73,13 @@ export function CustomerMakePaymentSheet({
   scheme,
   open,
   onOpenChange,
+  initialAmountPaise,
 }: {
   scheme: CustomerSchemeDetail;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** Pre-fills the amount (e.g. a quick amount tapped on the scheme page). */
+  initialAmountPaise?: number | null;
 }) {
   const router = useRouter();
   const { tenantSlug } = useCustomerTenant();
@@ -113,19 +116,19 @@ export function CustomerMakePaymentSheet({
         if (cancelled) return;
         setRange(next);
         setTargetCycle(next.targetCycle ?? "");
-        setAmount(String(customerPayableDefaultPaise(next, fallbackPaise) / 100));
+        setAmount(String((initialAmountPaise ?? customerPayableDefaultPaise(next, fallbackPaise)) / 100));
       } catch {
         if (cancelled) return;
         setRange(initialRange);
         setTargetCycle(initialRange?.targetCycle ?? "");
-        setAmount(String(customerPayableDefaultPaise(initialRange, fallbackPaise) / 100));
+        setAmount(String((initialAmountPaise ?? customerPayableDefaultPaise(initialRange, fallbackPaise)) / 100));
         toast.error("Could not refresh payment limits. Showing last known quote.");
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [open, scheme.id, initialRange, fetchRange]);
+  }, [open, scheme.id, initialRange, fetchRange, initialAmountPaise]);
 
   useEffect(() => {
     if (!open || !targetCycle || targetCycle === initialRange?.targetCycle) return;

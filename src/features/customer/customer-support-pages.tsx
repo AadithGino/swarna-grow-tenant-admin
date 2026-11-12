@@ -330,7 +330,10 @@ const customerTenantFallbackPhone = "+91 98470 22110";
 
 export function CustomerGrievanceDetailPage({ id }: { id: string }) {
   const { tenantSlug, tenant } = useCustomerTenant();
-  const { data, isLoading, isError, refetch } = useGetCustomerGrievanceQuery(id);
+  const { data, isLoading, isError, refetch } = useGetCustomerGrievanceQuery(id, {
+    // Staff may reply while this screen is open.
+    pollingInterval: 15_000,
+  });
   const [message, setMessage] = useState("");
   const [reply, state] = useReplyCustomerGrievanceMutation();
 

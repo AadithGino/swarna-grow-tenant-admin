@@ -747,6 +747,16 @@ const mockBaseQuery: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQueryErro
   if (url === "/app/gold-rate/history") return ok([{ ...customerHome.goldRate, effectiveDate: "2026-09-16" }, { ...customerHome.goldRate, ratePerGramPaise: 721000, ratePerGramDisplay: "₹7,210 / g", effectiveDate: "2026-09-15", movement: -0.18 }, { ...customerHome.goldRate, ratePerGramPaise: 722500, ratePerGramDisplay: "₹7,225 / g", effectiveDate: "2026-09-14", movement: 0.31 }]);
   if (url === "/app/branches") return ok([customerProfile.branch, { id: "br_thrissur", code: "TSR", name: "Thrissur", address: "Round South, Thrissur", mobile: "+91 487 2211900" }]);
   if (url.includes("/redemption-request")) return ok({ id: "red_001", schemeId: url.split("/")[3], status: "REQUESTED", preferredMode: body?.preferredMode, preferredDate: body?.preferredDate, version: Number(body?.expectedVersion ?? 1) + 1 });
+  const handoverOtpMatch = url.match(/^\/app\/redemptions\/([^/]+)\/handover-otp$/);
+  if (handoverOtpMatch && method === "GET") {
+    return ok({
+      redemptionId: handoverOtpMatch[1],
+      schemeId: "sch_capped",
+      handoverOtp: "482910",
+      expiresAt: new Date(Date.now() + 30 * 60_000).toISOString(),
+      handoverOtpActive: true,
+    });
+  }
   return ok({});
 };
 
@@ -1210,11 +1220,16 @@ export const customerApi = createApi({
       query: () => "/app/grievances",
       transformResponse: (raw: unknown) => adaptCustomerGrievanceList(raw),
       providesTags: ["CustomerGrievance"],
+      // Staff replies land out-of-band; always revalidate when opening Support.
+      refetchOnMountOrArgChange: true,
+      refetchOnFocus: true,
     }),
     getCustomerGrievance: builder.query<CustomerGrievance, string>({
       query: (id) => `/app/grievances/${id}`,
       transformResponse: (raw: unknown) => adaptCustomerGrievance(raw),
       providesTags: (_r, _e, id) => [{ type: "CustomerGrievance", id }],
+      refetchOnMountOrArgChange: true,
+      refetchOnFocus: true,
     }),
     createCustomerGrievance: builder.mutation<
       CustomerGrievance,
@@ -1264,6 +1279,39 @@ export const customerApi = createApi({
     getCustomerGoldHistory: builder.query<Array<CustomerHome["goldRate"]>, void>({ query: () => "/app/gold-rate/history" }),
     getCustomerBranches: builder.query<Array<CustomerProfile["branch"]>, void>({ query: () => "/app/branches" }),
     requestCustomerRedemption: builder.mutation<Record<string, unknown>, { schemeId: string; preferredMode: string; preferredDate?: string; remarks?: string; expectedVersion: number; modeDetails?: { billNumber?: string } }>({ query: ({ schemeId, ...body }) => ({ url: `/app/schemes/${schemeId}/redemption-request`, method: "POST", body }), invalidatesTags: ["CustomerScheme"] }),
+    revealCustomerRedemptionHandoverOtp: builder.query<
+      {
+        redemptionId: string;
+        schemeId?: string;
+        handoverOtp: string;
+        expiresAt?: string | null;
+        handoverOtpActive?: boolean;
+      },
+      string
+    >({
+      query: (redemptionId) => ({
+        url: `/app/redemptions/${encodeURIComponent(redemptionId)}/handover-otp`,
+        mockKey: "revealCustomerRedemptionHandoverOtp",
+      }),
+      transformResponse: (raw: unknown) => {
+        if (raw && typeof raw === "object" && "data" in raw) {
+          return (raw as { data: {
+            redemptionId: string;
+            schemeId?: string;
+            handoverOtp: string;
+            expiresAt?: string | null;
+            handoverOtpActive?: boolean;
+          } }).data;
+        }
+        return raw as {
+          redemptionId: string;
+          schemeId?: string;
+          handoverOtp: string;
+          expiresAt?: string | null;
+          handoverOtpActive?: boolean;
+        };
+      },
+    }),
     registerCustomerFcmToken: builder.mutation<
       { registered: boolean; deviceId: string },
       { fcmToken: string; deviceId: string; platform: "android" | "ios" }
@@ -2439,6 +2487,8 @@ export const {
   useGetShopCategoriesQuery,
   useGetCustomerGoldRateQuery, useGetCustomerGoldHistoryQuery, useGetCustomerBranchesQuery,
   useRequestCustomerRedemptionMutation,
+  useLazyRevealCustomerRedemptionHandoverOtpQuery,
+  useRevealCustomerRedemptionHandoverOtpQuery,
   useRegisterCustomerFcmTokenMutation,
   useGetHomeBannersQuery,
   useGetShopBannersQuery,
@@ -2460,6 +2510,7 @@ export const {
   useCreateShopOrderMutation,
   useListShopOrdersQuery,
   useGetShopOrderQuery,
+  useLazyGetShopOrderQuery,
   useCreateShopOrderPaymentIntentMutation,
   useLazyPollShopOrderPaymentIntentQuery,
   useCompleteShopTestHarnessPaymentMutation,

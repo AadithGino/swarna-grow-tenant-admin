@@ -1,8 +1,9 @@
 "use client";
 
+import { CkBadge, CkCard, CkSegmented } from "@/src/components/customer/customer-kit";
 import Link from "next/link";
 import { useMemo, useState, type ReactNode } from "react";
-import { Check, ChevronRight, Download, LoaderCircle, Lock } from "lucide-react";
+import { Check, Download, LoaderCircle, Lock } from "lucide-react";
 import { PageSkeleton, QueryError } from "@/src/components/common/query-state";
 import { useCustomerTenant } from "@/src/components/customer/customer-tenant-context";
 import { customerPath } from "@/src/lib/customer-tenant";
@@ -20,17 +21,6 @@ import { toast } from "sonner";
 
 type MainTab = "payments" | "passbook";
 type PayFilter = "ALL" | "PAID" | "PENDING";
-
-const paymentListCardClass =
-  "flex items-start gap-2 rounded-2xl border border-[#e8e2dc] bg-white p-4 shadow-[0_4px_16px_rgba(var(--customer-primary-rgb,115,3,33),0.05)] transition active:scale-[0.99]";
-
-function formatPaymentDate(iso: string) {
-  return new Date(iso).toLocaleDateString("en-IN", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
-}
 
 function formatPaymentDateTime(iso: string) {
   const d = new Date(iso);
@@ -113,75 +103,66 @@ function channelDisplayName(payment: PaymentListItem) {
   return payment.channelLabel ?? "Payment";
 }
 
-function StatusPill({ payment }: { payment: PaymentListItem }) {
-  const isPaid = payment.status === "SUCCESS";
-  const isPartiallyRefunded = payment.status === "PARTIALLY_REFUNDED";
-  const isPending = payment.status === "PENDING";
-  const isFailed = payment.status === "FAILED" || payment.status === "REVERSED";
-  const label = isPaid
-    ? "Paid"
-    : isPending
-      ? "Pending"
-      : isFailed
-        ? "Failed"
-        : isPartiallyRefunded
-          ? "Partially refunded"
-          : (payment.statusLabel ?? payment.status);
-  return (
-    <span
-      className={cn(
-        "rounded-full px-2.5 py-0.5 text-[10px] font-extrabold uppercase tracking-wide",
-        isPaid && "bg-[#eafbf3] text-[#0b9860]",
-        isPending && "bg-amber-50 text-amber-800",
-        isPartiallyRefunded && "bg-amber-50 text-amber-800",
-        isFailed && "bg-[#fdecec] text-[#c62828]",
-        !isPaid && !isPending && !isFailed && !isPartiallyRefunded && "bg-red-50 text-red-700",
-      )}
-    >
-      {label}
-    </span>
-  );
+function ChannelTile({ payment }: { payment: PaymentListItem }) {
+  if (payment.channel === "PHONEPE") {
+    return <span className="grid size-9 shrink-0 place-items-center rounded-[10px] bg-[#5f259f] text-[0.66rem] font-extrabold text-white">Pe</span>;
+  }
+  if (payment.channel === "CASH") {
+    return <span className="grid size-9 shrink-0 place-items-center rounded-[10px] bg-[var(--ck-ok)] text-xs font-bold text-white">₹</span>;
+  }
+  if (payment.channel === "UPI") {
+    return <span className="grid size-9 shrink-0 place-items-center rounded-[10px] bg-[#2e7d32] text-[0.55rem] font-extrabold text-white">UPI</span>;
+  }
+  return <span className="grid size-9 shrink-0 place-items-center rounded-[10px] bg-[#f1ece6] text-xs font-bold text-[var(--ck-ink-2)]">₹</span>;
+}
+
+function statusBadge(payment: PaymentListItem) {
+  if (payment.status === "SUCCESS") return <CkBadge tone="ok" dot>Paid</CkBadge>;
+  if (payment.status === "PENDING") return <CkBadge tone="warn" dot>Pending</CkBadge>;
+  if (payment.status === "PARTIALLY_REFUNDED") return <CkBadge tone="warn" dot>Part refunded</CkBadge>;
+  if (payment.status === "FAILED" || payment.status === "REVERSED") return <CkBadge tone="bad" dot>Failed</CkBadge>;
+  return <CkBadge tone="muted">{payment.statusLabel ?? payment.status}</CkBadge>;
 }
 
 function PaymentListCard({ payment, tenantSlug }: { payment: PaymentListItem; tenantSlug: string | null }) {
-  const when = payment.paidAt ?? payment.createdAt;
-  const receipt = payment.receiptNumber?.trim();
-
+  const when = new Date(payment.paidAt ?? payment.createdAt);
+  const day = when.toLocaleDateString("en-IN", { day: "numeric", month: "short" });
+  const channel = payment.channel === "CASH" ? "Cash at counter" : channelDisplayName(payment);
+  const sub = [day, channel, payment.receiptNumber?.trim()].filter(Boolean).join(" · ");
   return (
-    <Link href={customerPath(tenantSlug, "payments", payment.id)} className={paymentListCardClass}>
-      <div className="grid min-w-0 flex-1 grid-cols-[1fr_auto] gap-x-3 gap-y-2">
-        <p className="text-xs font-semibold text-[#8a8490]">{formatPaymentDate(when)}</p>
-        <p className="text-right text-sm font-black text-[#171722]">{payment.amount.amountDisplay}</p>
-
-        <p className="min-w-0 truncate text-[0.9375rem] font-bold leading-snug text-[#171722]">
-          {payment.schemeName}
-        </p>
-        <div className="flex justify-end">
-          <StatusPill payment={payment} />
-        </div>
-
-        <p className="flex min-w-0 items-center gap-1.5 text-[11px] font-medium text-[#777280]">
-          <ChannelMark channel={payment.channel} />
-          <span className="truncate">{channelDisplayName(payment)}</span>
-        </p>
-        {receipt ? (
-          <p className="max-w-[9.5rem] truncate text-right text-[10px] font-semibold text-[#8a8490]">{receipt}</p>
-        ) : (
-          <span aria-hidden />
-        )}
-
+    <Link
+      href={customerPath(tenantSlug, "payments", payment.id)}
+      className="flex items-center gap-3 border-b border-[var(--ck-line-soft)] px-3.5 py-3 last:border-b-0 active:bg-[#fdfbf8]"
+    >
+      <ChannelTile payment={payment} />
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-[0.9rem] font-semibold text-[var(--ck-ink)]">{payment.schemeName}</p>
+        <p className="mt-0.5 truncate text-xs text-[var(--ck-muted)]">{sub}</p>
         {paymentHasGoldAccrual(payment) && payment.goldAccrual ? (
-          <p className="col-span-2 text-[10px] font-semibold text-[var(--customer-accent,#8b5f08)]">
-            {payment.goldAccrual.weightDisplay} gold booked
-            {payment.goldAccrual.ratePerGramDisplay
-              ? ` · ${payment.goldAccrual.ratePerGramDisplay.replace(/\s*\/\s*g/i, "")}/g`
-              : ""}
-          </p>
+          <p className="mt-0.5 truncate text-[0.68rem] font-semibold text-[#8a6a24]">{payment.goldAccrual.weightDisplay} gold booked</p>
         ) : null}
       </div>
-      <ChevronRight className="size-4 shrink-0 self-center text-[#b0a9b3]" strokeWidth={2.5} />
+      <div className="flex shrink-0 flex-col items-end gap-1">
+        <span className="text-[0.9rem] font-semibold tabular-nums text-[var(--ck-ink)]">{payment.amount.amountDisplay}</span>
+        {statusBadge(payment)}
+      </div>
     </Link>
   );
+}
+
+function groupByMonth(rows: PaymentListItem[]) {
+  const groups: { key: string; label: string; rows: PaymentListItem[] }[] = [];
+  for (const p of rows) {
+    const d = new Date(p.paidAt ?? p.createdAt);
+    const key = `${d.getFullYear()}-${d.getMonth()}`;
+    let g = groups.find((x) => x.key === key);
+    if (!g) {
+      g = { key, label: d.toLocaleDateString("en-IN", { month: "long", year: "numeric" }).toUpperCase(), rows: [] };
+      groups.push(g);
+    }
+    g.rows.push(p);
+  }
+  return groups;
 }
 
 async function downloadReceipt(payment: PaymentListItem) {
@@ -206,6 +187,13 @@ export function CustomerPaymentsPage() {
 
   const items = useMemo(() => data ?? [], [data]);
   const yearSummary = useMemo(() => paidThisYear(items), [items]);
+  const lastPaid = useMemo(
+    () =>
+      [...items]
+        .filter((p) => p.status === "SUCCESS" || p.status === "PARTIALLY_REFUNDED")
+        .sort((a, b) => new Date(b.paidAt ?? b.createdAt).getTime() - new Date(a.paidAt ?? a.createdAt).getTime())[0],
+    [items],
+  );
 
   const filtered = useMemo(() => {
     let rows = [...items].sort(
@@ -236,48 +224,49 @@ export function CustomerPaymentsPage() {
       className="mx-auto max-w-lg"
       style={{ paddingBottom: `calc(${CUSTOMER_MOBILE_NAV_DOCK} + 0.75rem + env(safe-area-inset-bottom, 0px))` }}
     >
-      <h1 className="text-[1.65rem] font-black tracking-[-.03em] text-[#11111b]">Payments</h1>
-      <p className="mt-1 text-sm text-[#777280]">Track your payments and gold savings</p>
+      <h1 className="text-[1.65rem] font-bold tracking-[-.03em] text-[var(--ck-ink)]">Payments</h1>
+      <p className="mt-1 text-[0.82rem] text-[var(--ck-muted)]">Track your payments and gold savings</p>
 
-      <div
-        className="mt-5 grid grid-cols-2 gap-1 rounded-full p-1"
-        style={{ background: "rgba(var(--customer-accent-rgb, 201, 162, 39), 0.12)" }}
-      >
-        {(
-          [
-            { key: "payments", label: "Payments" },
-            { key: "passbook", label: "Contributions" },
-          ] as const
-        ).map((tab) => (
-          <button
-            key={tab.key}
-            type="button"
-            onClick={() => setMainTab(tab.key)}
-            className={cn(
-              "rounded-full py-2.5 text-sm font-bold transition",
-              mainTab === tab.key ? "text-white shadow-sm" : "text-[#8a8490]",
-            )}
-            style={mainTab === tab.key ? { background: "var(--customer-primary, #730321)" } : undefined}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </div>
+      <CkSegmented
+        className="mt-4"
+        value={mainTab}
+        onChange={setMainTab}
+        options={[
+          { value: "payments", label: "Payments" },
+          { value: "passbook", label: "Contributions" },
+        ]}
+      />
+
+      <CkCard className="mt-3 flex divide-x divide-[var(--ck-line-soft)] py-3.5">
+        <div className="flex-1 px-4">
+          <p className="text-xs text-[var(--ck-muted)]">Paid this year</p>
+          <p className="mt-0.5 text-[1.5rem] font-bold tracking-[-0.03em] tabular-nums text-[var(--ck-ink)]">{formatInrDisplay(yearSummary.totalPaise)}</p>
+          <p className="text-xs text-[var(--ck-muted)]">
+            {yearSummary.count} transaction{yearSummary.count === 1 ? "" : "s"}
+          </p>
+        </div>
+        {lastPaid ? (
+          <div className="flex-1 px-4">
+            <p className="text-xs text-[var(--ck-muted)]">Last payment</p>
+            <p className="mt-0.5 text-[1.5rem] font-bold tracking-[-0.03em] tabular-nums text-[var(--ck-ink)]">
+              {new Date(lastPaid.paidAt ?? lastPaid.createdAt).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
+            </p>
+            <p className="truncate text-xs text-[var(--ck-muted)]">{lastPaid.schemeName}</p>
+          </div>
+        ) : null}
+      </CkCard>
 
       {mainTab === "payments" ? (
-        <div className="mt-4 flex flex-wrap gap-2">
+        <div className="mt-3.5 flex flex-wrap gap-2">
           {filters.map((item) => (
             <button
               key={item.key}
               type="button"
               onClick={() => setFilter(item.key)}
               className={cn(
-                "rounded-full border px-4 py-1.5 text-xs font-bold transition",
-                filter === item.key
-                  ? "border-transparent text-white shadow-sm"
-                  : "border-[#e5ddd7] bg-white text-[#706b77]",
+                "rounded-full border px-3.5 py-1.5 text-[0.8rem] font-semibold transition",
+                filter === item.key ? "border-[var(--ck-ink)] bg-[var(--ck-ink)] text-white" : "border-[var(--ck-line)] bg-white text-[var(--ck-ink-2)]",
               )}
-              style={filter === item.key ? { background: "var(--customer-primary, #730321)" } : undefined}
             >
               {item.label}
             </button>
@@ -285,34 +274,7 @@ export function CustomerPaymentsPage() {
         </div>
       ) : null}
 
-      <section
-        className="relative mt-5 overflow-hidden rounded-[1.35rem] p-5 text-white shadow-[0_16px_40px_rgba(var(--customer-primary-rgb,115,3,33),0.28)]"
-        style={{ background: "var(--customer-primary, #730321)" }}
-      >
-        <svg
-          className="pointer-events-none absolute -bottom-6 -right-3 h-32 w-32 opacity-[0.16]"
-          viewBox="0 0 120 120"
-          fill="none"
-          aria-hidden
-        >
-          <circle cx="62" cy="62" r="44" stroke="var(--customer-accent, #c9a227)" strokeWidth="1" />
-          <path
-            d="M62 28c7 12 16 18 26 20-9 4-16 11-26 20-10-9-17-16-26-20 10-2 19-8 26-20Z"
-            stroke="var(--customer-accent, #c9a227)"
-            strokeWidth="1.1"
-            fill="none"
-          />
-        </svg>
-        <p className="relative z-10 text-sm font-semibold text-white/85">Paid this year</p>
-        <p className="relative z-10 mt-1 text-[2rem] font-black leading-none tracking-[-.03em]">
-          {formatInrDisplay(yearSummary.totalPaise)}
-        </p>
-        <p className="relative z-10 mt-2 text-xs font-medium text-white/80">
-          {yearSummary.count} transaction{yearSummary.count === 1 ? "" : "s"}
-        </p>
-      </section>
-
-      <div className="mt-4 space-y-3">
+      <div className="mt-1">
         {filtered.length === 0 ? (
           <div className="rounded-2xl border border-[#e8e2dc] bg-white p-10 text-center shadow-sm">
             <p className="font-black text-[#171722]">No entries yet</p>
@@ -323,8 +285,15 @@ export function CustomerPaymentsPage() {
             </p>
           </div>
         ) : (
-          filtered.map((payment) => (
-            <PaymentListCard key={payment.id} payment={payment} tenantSlug={tenantSlug} />
+          groupByMonth(filtered).map((group) => (
+            <section key={group.key}>
+              <p className="px-0.5 pb-2 pt-5 text-[0.68rem] font-semibold tracking-[0.06em] text-[var(--ck-muted)]">{group.label}</p>
+              <div className="overflow-hidden rounded-[1.15rem] border border-[var(--ck-line)] bg-white">
+                {group.rows.map((payment) => (
+                  <PaymentListCard key={payment.id} payment={payment} tenantSlug={tenantSlug} />
+                ))}
+              </div>
+            </section>
           ))
         )}
       </div>

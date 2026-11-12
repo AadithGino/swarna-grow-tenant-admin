@@ -132,7 +132,7 @@ export function CustomerDigitalMetalsRedeemCatalogPage() {
           <p className="text-sm text-[#5c4f52]">No coins or bars are listed right now. Check back later.</p>
         </CustomerDmSurface>
       ) : (
-        <ul className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+        <ul className="grid grid-cols-2 gap-2.5 lg:grid-cols-3">
           {items.map((item) => {
             const metal = String(item.metal);
             const finish = dmFinish(metal);
@@ -141,8 +141,8 @@ export function CustomerDigitalMetalsRedeemCatalogPage() {
             const gramsShort = item.unitQuantityUg ? `${Number((Number(item.unitQuantityUg) / 1_000_000).toFixed(3))}g` : undefined;
             const isBar = /bar/i.test(String(item.label ?? ""));
             return (
-              <li key={String(item.id)} className="group flex flex-col overflow-hidden rounded-[1.4rem] border border-[#ecdfd8] bg-white transition hover:border-[#d9c6bd] hover:shadow-[0_12px_30px_rgba(60,30,35,0.07)]">
-                <div className="relative grid aspect-[4/3] place-items-center" style={{ background: `radial-gradient(circle at 50% 40%, #ffffff 0%, ${finish.soft} 70%)` }}>
+              <li key={String(item.id)} className="group flex flex-col overflow-hidden rounded-[1.15rem] border border-[var(--ck-line)] bg-white p-2.5 transition hover:bg-[#fdfbf8]">
+                <div className="relative grid h-[7.25rem] place-items-center overflow-hidden rounded-xl" style={{ background: `radial-gradient(circle at 50% 42%, #ffffff 0%, ${finish.soft} 75%)` }}>
                   {item.imageUploadId ? (
                     <EcommerceCatalogImage uploadId={String(item.imageUploadId)} channel="customer" alt="" fill className="object-cover" />
                   ) : item.imageUrl ? (
@@ -150,33 +150,32 @@ export function CustomerDigitalMetalsRedeemCatalogPage() {
                     <img src={String(item.imageUrl)} alt="" className="absolute inset-0 h-full w-full object-cover" />
                   ) : isBar ? (
                     <span
-                      className="grid h-16 w-32 place-items-center rounded-md font-serif text-sm font-semibold shadow-[0_12px_24px_rgba(60,40,10,.18)]"
+                      className="grid h-12 w-24 place-items-center rounded-md text-xs font-bold shadow-[0_8px_16px_rgba(60,40,10,.18)]"
                       style={{ background: finish.face, color: finish.ink, clipPath: "polygon(10% 0, 90% 0, 100% 100%, 0 100%)" }}
                     >
                       {gramsShort}
                     </span>
                   ) : (
-                    <DmCoinArt metal={metal} size={112} label={gramsShort} />
+                    <DmCoinArt metal={metal} size={76} label={gramsShort} />
                   )}
-                  <span className="absolute left-3 top-3 rounded-full bg-white/90 px-2.5 py-1 text-[11px] font-semibold text-[#3a2f33] shadow-sm">
+                  <span className="absolute left-2 top-2 rounded-[7px] bg-white/95 px-2 py-[3px] text-[0.66rem] font-semibold text-[var(--ck-ink-2)]">
                     {dmAssetName(metal, Number(item.finenessPpm))}
                   </span>
                 </div>
-                <div className="flex flex-1 flex-col p-5">
-                  <p className="font-serif text-lg leading-snug text-[#221a1d]">{String(item.label)}</p>
-                  <p className="mt-1 text-xs text-[#7a6f72]">
-                    Uses {grams ?? "metal"} from your wallet
+                <div className="flex flex-1 flex-col px-0.5 pt-2.5">
+                  <p className="text-[0.9rem] font-semibold leading-snug text-[var(--ck-ink)]">{String(item.label)}</p>
+                  <p className="mt-0.5 text-[0.7rem] leading-snug text-[var(--ck-muted)]">
+                    Uses {grams ?? "metal"}
+                    {item.leadTimeDays != null ? ` · ready in ~${String(item.leadTimeDays)} days` : ""}
                   </p>
-                  <p className="mt-3 text-sm font-semibold text-[#221a1d]">{formatCatalogueCharge(charge)}</p>
-                  <div className="mt-2 flex flex-wrap gap-1.5 text-[11px] font-medium text-[#5c4f52]">
-                    {item.pickupEnabled !== false ? <span className="rounded-full bg-[#f5eee9] px-2 py-0.5">Branch pickup</span> : null}
-                    {item.deliveryEnabled !== false ? <span className="rounded-full bg-[#f5eee9] px-2 py-0.5">Home delivery</span> : null}
-                    {item.leadTimeDays != null ? <span className="rounded-full bg-[#f5eee9] px-2 py-0.5">Ready in ~{String(item.leadTimeDays)} days</span> : null}
-                  </div>
-                  <div className="mt-auto pt-5">
+                  <p className="mt-0.5 text-[0.7rem] leading-snug text-[var(--ck-muted)]">
+                    {[item.pickupEnabled !== false ? "Pickup" : null, item.deliveryEnabled !== false ? "Delivery" : null].filter(Boolean).join(" or ")}
+                  </p>
+                  <p className="mt-2 text-[0.8rem] font-semibold text-[var(--ck-ink)]">{formatCatalogueCharge(charge)}</p>
+                  <div className="mt-auto pt-2.5">
                     <Button
                       type="button"
-                      className="h-11 w-full rounded-full text-white"
+                      className="h-9 w-full rounded-xl text-[0.8rem] text-white"
                       style={{ background: "var(--customer-primary, #730321)" }}
                       onClick={() => startRedeem(item)}
                     >

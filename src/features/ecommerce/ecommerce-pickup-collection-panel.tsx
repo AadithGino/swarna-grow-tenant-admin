@@ -85,9 +85,9 @@ export function EcommercePickupCollectionPanel({
           </p>
         ) : null}
         {reissueCode ? <Button type="button" variant="outline" disabled={isReissuing || isConfirming} onClick={() => {
-          void reissueCode().then(() => { setPickupCode(""); setAttested(false); toast.success("New pickup code issued. Ask the customer to refresh their order."); onSuccess(); })
+          void reissueCode().then(() => { setPickupCode(""); setAttested(false); toast.success("Pickup code released to the customer app (push + live). Ask them to open their order."); onSuccess(); })
             .catch(err => { toastEcommerceOrderMutationError(err, { onVersionConflict: onSuccess }); onError(err); });
-        }}>{isReissuing ? "Issuing…" : "Reissue pickup code"}</Button> : null}
+        }}>{isReissuing ? "Releasing…" : "Release / reissue pickup code"}</Button> : null}
         <div className="grid gap-3 sm:grid-cols-2">
           <div>
             <Label htmlFor="pickup-code">Customer pickup code</Label>

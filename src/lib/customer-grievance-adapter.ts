@@ -32,6 +32,11 @@ function normalizeStatus(
   return "OPEN";
 }
 
+function isInternalOrSystemMessage(raw: any): boolean {
+  const type = String(raw?.messageType ?? raw?.type ?? "").toUpperCase();
+  return type === "INTERNAL_NOTE" || type === "SYSTEM_EVENT";
+}
+
 function adaptMessage(raw: any, index: number): GrievanceMessage {
   const authorRaw =
     raw?.authorType ??
@@ -54,7 +59,9 @@ export function adaptCustomerGrievance(raw: unknown): CustomerGrievance {
   const status = normalizeStatus(row.status);
   const id = String(row.id ?? row._id ?? "");
   const messages = Array.isArray(row.messages)
-    ? row.messages.map(adaptMessage)
+    ? row.messages
+        .filter((message) => !isInternalOrSystemMessage(message))
+        .map(adaptMessage)
     : [];
   const allowedActions = Array.isArray(row.allowedActions)
     ? row.allowedActions.map(String)

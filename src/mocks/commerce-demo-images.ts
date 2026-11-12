@@ -90,7 +90,20 @@ export function demoArtDataUri(kind: string, tone = "#f7ead6"): string {
 /** Upload ids used by the demo catalog map to artwork: `demo_<kind>_<tone index>`. */
 const TONES = ["#f7ead6", "#f3e3e8", "#e9efe6", "#efe7f6", "#f6eedc", "#e6eef4"];
 
+/** Mock-only: a few demo uploads use real product photography so previews look like a live store. */
+const DEMO_PHOTOS: Record<string, string> = {
+  "demo_necklace_0": "/demo-jewellery/necklace-leaf.jpg",
+  "demo_necklace_2": "/demo-jewellery/necklace-peacock.jpg",
+  "demo_bangle_4": "/demo-jewellery/kada-twist.jpg",
+  "demo_bangle_0": "/demo-jewellery/bangle-floral.jpg",
+  "demo_earrings_2": "/demo-jewellery/earring.jpg",
+  "demo_pendant_1": "/demo-jewellery/haram-pendant.jpg",
+  "demo_banner-festive": "/demo-jewellery/model.jpg",
+  "demo_banner-coins": "/demo-jewellery/coins-banner.svg",
+};
+
 export function demoUploadUrl(uploadId: string): string | null {
+  if (DEMO_PHOTOS[uploadId]) return DEMO_PHOTOS[uploadId];
   const m = /^demo_([a-z-]+?)(?:_(\d+))?$/.exec(uploadId);
   if (!m) return null;
   const tone = TONES[Number(m[2] ?? 0) % TONES.length];

@@ -577,6 +577,34 @@ function sellQuote(body: Body) {
 
 /* ───────────────────────── Router ───────────────────────── */
 
+const DEMO_MODULES_KEY = "swarnagrow.demo.modules";
+
+/**
+ * Mock-only module preset so the customer app can be previewed as a jeweller with
+ * schemes only, schemes + online store, or schemes + store + digital gold.
+ * Set with `?modules=schemes|schemes-shop|all` (remembered for the tab session).
+ */
+function demoModulePresetRaw(): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    return new URLSearchParams(window.location.search).get("modules") ?? sessionStorage.getItem(DEMO_MODULES_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export function demoModulePreset(): "all" | "schemes" | "schemes-shop" {
+  if (typeof window === "undefined") return "all";
+  try {
+    const fromUrl = new URLSearchParams(window.location.search).get("modules");
+    if (fromUrl) sessionStorage.setItem(DEMO_MODULES_KEY, fromUrl);
+    const v = fromUrl ?? sessionStorage.getItem(DEMO_MODULES_KEY);
+    return v === "schemes" || v === "schemes-shop" ? v : "all";
+  } catch {
+    return "all";
+  }
+}
+
 export function customerCommerceMock({
   url,
   method,
@@ -599,8 +627,15 @@ export function customerCommerceMock({
   }
 
   /* online store */
+  const preset = demoModulePreset();
+  const shopOn = preset !== "schemes";
+  const metalsOn = preset === "all";
   if (url === "/app/shop/availability") {
+    if (!shopOn) return { data: { available: false, hasOrderHistory: false, orderHistoryAvailable: false, ecommerce: { active: false } } };
     return { data: { available: true, hasOrderHistory: true, orderHistoryAvailable: true, ecommerce: { active: true } } };
+  }
+  if ((url === "/app/shop/banners" || url === "/app/home/banners") && !shopOn) {
+    return { data: { items: [], meta: { nextVisibilityChangeAt: null, serverTime: new Date().toISOString() } } };
   }
   if (url === "/app/shop/banners" || url === "/app/home/banners") {
     const placement = url === "/app/home/banners" ? "HOME" : "SHOP";
@@ -707,8 +742,15 @@ export function customerCommerceMock({
   }
 
   /* Digital Gold & Silver */
-  if (url === "/app/digital-metals/capability") return { data: demoDmCapability };
-  if (url === "/app/digital-metals/portfolio") return { data: portfolio() };
+  if (url === "/app/digital-metals/capability") {
+    if (!metalsOn) return { data: { ...demoDmCapability, enabled: false, active: false, canViewHoldings: false, canViewHistory: false, canPlaceNewBuy: false, canPlaceNewSell: false } };
+    return { data: demoDmCapability };
+  }
+  if (url === "/app/digital-metals/portfolio") {
+    // Mock-only: `?modules=all-new` previews a customer who hasn't bought any digital metal yet.
+    if (demoModulePresetRaw() === "all-new") return { data: { ...portfolio(), items: [] } };
+    return { data: portfolio() };
+  }
   if (url === "/app/digital-metals/passbook") return { data: passbook() };
   if (url === "/app/digital-metals/statements/metal") return { data: { activity: passbook().items } };
   if (url === "/app/digital-metals/orders/open-summary") {

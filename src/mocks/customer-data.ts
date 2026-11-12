@@ -20,6 +20,7 @@ export const money = (amountPaise: number): MoneyRef => ({
 });
 
 export const customerTenant: TenantBranding = {
+  id: "ten_kai",
   tenantCode: "KAI",
   displayName: "Kairali Jewellers",
   appDisplayName: "Kairali Gold Savings",
@@ -40,6 +41,7 @@ export const customerTenant: TenantBranding = {
 
 export const customerProfile: CustomerProfile = {
   id: "cus_10482",
+  tenantId: "ten_kai",
   customerNumber: "CUS-10482",
   passbookNumber: "KAI/2026/00128",
   name: "Anjali Nair",

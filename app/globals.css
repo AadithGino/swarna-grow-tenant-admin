@@ -189,6 +189,38 @@ button {
   color: #171722;
 }
 
+/* ── Customer portal design layer (v2): flat surfaces, hairlines, Inter only ── */
+.customer-theme {
+  --ck-bg: #f7f3ee;
+  --ck-line: #ebe2d7;
+  --ck-line-soft: #f1eae1;
+  --ck-ink: #1d1417;
+  --ck-ink-2: #4f4246;
+  --ck-muted: #87787c;
+  --ck-track: #efe7dc;
+  --ck-gold: #b8913f;
+  --ck-gold-soft: #f6eedf;
+  --ck-ok: #1f6b4c;
+  --ck-ok-soft: #e6f2ec;
+  --ck-warn: #9a6a12;
+  --ck-warn-soft: #fbf1dd;
+  --ck-bad: #a8382d;
+  --ck-bad-soft: #fbebe8;
+  --ck-blue: #2d5c86;
+  --ck-blue-soft: #e8eff6;
+  background: var(--ck-bg);
+  letter-spacing: -0.006em;
+}
+/* One typeface across the portal: headings that used the serif stack render in bold Inter. */
+.customer-theme .font-serif {
+  font-family: var(--font-inter), Inter, ui-sans-serif, system-ui, sans-serif;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+}
+.customer-theme .font-black,
+.customer-theme .font-extrabold { font-weight: 700; }
+.customer-theme .tabular-nums, .customer-theme .ck-num { font-variant-numeric: tabular-nums; }
+
 .customer-theme input,
 .customer-theme textarea,
 .customer-theme button,
@@ -197,16 +229,16 @@ button {
 }
 
 .customer-theme .customer-surface {
-  border: 1px solid rgba(var(--customer-primary-rgb, 115, 3, 33), 0.16);
-  border-radius: 1.35rem;
-  background: rgba(255, 254, 253, 0.96);
-  box-shadow: 0 12px 34px rgba(var(--customer-primary-rgb, 115, 3, 33), 0.09);
+  border: 1px solid var(--ck-line);
+  border-radius: 1.15rem;
+  background: #fff;
+  box-shadow: none;
 }
 
 .customer-theme .customer-surface-soft {
-  border: 1px solid rgba(var(--customer-primary-rgb, 115, 3, 33), 0.12);
-  border-radius: 1.1rem;
-  background: rgba(var(--customer-accent-rgb, 201, 162, 39), 0.08);
+  border: 1px solid var(--ck-line);
+  border-radius: 1rem;
+  background: var(--ck-gold-soft);
 }
 
 .customer-theme .customer-gold-copy {
@@ -255,7 +287,7 @@ button {
   }
 
   .customer-theme .customer-surface {
-    border-radius: 1.2rem;
+    border-radius: 1.1rem;
   }
 }
 

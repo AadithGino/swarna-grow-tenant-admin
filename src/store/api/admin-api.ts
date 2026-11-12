@@ -5902,7 +5902,7 @@ export const adminApi = createApi({
     }),
     completeRedemption: builder.mutation<
       unknown,
-      { id: string; remarks?: string }
+      { id: string; remarks?: string; handoverOtp: string }
     >({
       query: ({ id, ...body }) => ({
         url: `/admin/redemptions/${id}/complete`,
@@ -5912,6 +5912,25 @@ export const adminApi = createApi({
         mockKey: "completeRedemption",
       }),
       invalidatesTags: ["Enrollment", "Dashboard", "Report"],
+    }),
+    releaseRedemptionHandoverOtp: builder.mutation<
+      {
+        redemptionId?: string;
+        expiresAt?: string;
+        handoverOtpActive?: boolean;
+        shareHint?: string;
+      },
+      { id: string; idempotencyKey: string }
+    >({
+      query: ({ id, idempotencyKey }) => ({
+        url: `/admin/redemptions/${id}/release-handover-otp`,
+        method: "POST",
+        params: { id },
+        body: {},
+        headers: { "X-Idempotency-Key": idempotencyKey },
+        mockKey: "releaseRedemptionHandoverOtp",
+      }),
+      invalidatesTags: ["Enrollment"],
     }),
     getRedemption: builder.query<RedemptionDetailView, string>({
       query: (id) => ({
@@ -6701,6 +6720,7 @@ export const {
   useGetRedemptionsQuery,
   useApproveRedemptionMutation,
   useCompleteRedemptionMutation,
+  useReleaseRedemptionHandoverOtpMutation,
   useGetRedemptionQuery,
   useRejectRedemptionMutation,
   useGetRedemptionReceiptQuery,

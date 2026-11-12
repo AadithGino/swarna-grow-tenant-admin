@@ -26,6 +26,7 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import { formatCustomerDate } from "@/src/components/customer/customer-ui";
+import { CkBadge, CkBar, CkCard, CkSegments, CkStats } from "@/src/components/customer/customer-kit";
 import { CustomerPayableSummary } from "@/src/components/customer/customer-payable-summary";
 import type {
   CustomerDisplayMode,
@@ -53,35 +54,15 @@ function progressWidth(percent: number) {
   return `${Math.min(100, Math.max(0, Math.round(percent)))}%`;
 }
 
-const detailSurfaceClass =
-  "rounded-2xl border border-[#e8e2dc] bg-white p-4 shadow-[0_4px_16px_rgba(var(--customer-primary-rgb,115,3,33),0.05)] sm:p-5";
+const detailSurfaceClass = "rounded-[1.15rem] border border-[var(--ck-line)] bg-white p-4 sm:p-5";
 
 function displaySchemeNumber(schemeNumber: string) {
   return schemeNumber.replace(/^Scheme\s+/i, "").replace(/^Scheme no\.\s*/i, "").trim();
 }
 
-function heroLotus() {
-  return (
-    <svg
-      className="pointer-events-none absolute -bottom-6 -right-3 h-36 w-36 opacity-[0.14]"
-      viewBox="0 0 120 120"
-      fill="none"
-      aria-hidden
-    >
-      <circle cx="62" cy="62" r="44" stroke="var(--customer-accent, #c9a227)" strokeWidth="1" />
-      <path
-        d="M62 28c7 12 16 18 26 20-9 4-16 11-26 20-10-9-17-16-26-20 10-2 19-8 26-20Z"
-        stroke="var(--customer-accent, #c9a227)"
-        strokeWidth="1.1"
-        fill="none"
-      />
-    </svg>
-  );
-}
-
 function scheduleStatusPill(status: ScheduleStatus) {
   if (status === "PAID") return "bg-[#eafbf3] text-[#0b9860]";
-  if (status === "DUE") return "bg-[#fdecec] text-[#c62828]";
+  if (status === "DUE") return "bg-[var(--ck-warn-soft)] text-[var(--ck-warn)]";
   if (status === "BENEFIT") return "bg-[#fff2cf] text-[#6b4e32]";
   return "bg-[#f0ece8] text-[#8a8490]";
 }
@@ -128,109 +109,173 @@ function scheduleIconWrap(status: ScheduleStatus) {
   );
 }
 
-function FixedHero({ scheme, schemeIsGold }: { scheme: CustomerSchemeDetail; schemeIsGold?: boolean }) {
+function HeroIdentity({ scheme, badges }: { scheme: CustomerSchemeDetail; badges: React.ReactNode }) {
+  return (
+    <div className="flex items-center gap-1.5">
+      {badges}
+      <span className="ml-auto truncate text-[0.72rem] text-[var(--ck-muted)]">{displaySchemeNumber(scheme.schemeNumber)}</span>
+    </div>
+  );
+}
+
+function StatusBadge({ scheme }: { scheme: CustomerSchemeDetail }) {
+  const label = scheme.statusLabel ?? "Active";
+  const tone = /active/i.test(label) ? "ok" : /matur|redeem|close/i.test(label) ? "gold" : "muted";
+  return (
+    <CkBadge tone={tone} dot>
+      {label}
+    </CkBadge>
+  );
+}
+
+export function FixedHero({ scheme, schemeIsGold }: { scheme: CustomerSchemeDetail; schemeIsGold?: boolean }) {
   const paid = scheme.progressCard.installmentsPaid ?? 0;
   const total = scheme.progressCard.installmentsTotal ?? 0;
   const totalPaid = scheme.totalPaid?.amountDisplay ?? "₹0";
   const goldBalance =
     scheme.goldAccumulated ?? scheme.goldAccrued ?? scheme.progressCard.goldAccumulated ?? scheme.progressCard.goldAccrued;
   const progress = total ? (paid / total) * 100 : scheme.progressPercent ?? 0;
-  const paidLabel = schemeIsGold && goldBalance ? goldBalance.weightDisplay : totalPaid;
-  const paidSuffix = schemeIsGold && goldBalance ? "gold saved" : "paid";
-
-  const statusUpper = (scheme.statusLabel ?? "Active").toUpperCase().replace(/\s+/g, " ");
+  const showGold = Boolean(schemeIsGold && goldBalance);
+  const dueIndex = scheme.canPay && paid < total ? paid + 1 : null;
+  const instPaise = scheme.nextActionAmount?.amountPaise ?? 0;
+  const remainingCount = Math.max(0, total - paid);
+  const remainingDisplay = instPaise
+    ? new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format((remainingCount * instPaise) / 100)
+    : null;
+  const upcoming = Math.max(0, remainingCount - (dueIndex ? 1 : 0));
 
   return (
-    <section
-      className="relative overflow-hidden rounded-[1.35rem] p-5 text-white shadow-[0_16px_40px_rgba(var(--customer-primary-rgb,115,3,33),0.28)] sm:p-6"
-      style={{ background: "var(--customer-primary, #730321)" }}
-    >
-      {heroLotus()}
-      <span className="relative z-10 inline-flex rounded-full bg-white/15 px-2.5 py-0.5 text-[0.62rem] font-extrabold tracking-[0.06em]">
-        {statusUpper} • FIXED
-      </span>
-      <h2 className="relative z-10 mt-3 text-xl font-black leading-snug sm:text-[1.35rem]">{scheme.planName}</h2>
-      <p className="relative z-10 mt-1 text-sm text-white/75">Scheme no. {displaySchemeNumber(scheme.schemeNumber)}</p>
-
-      <div className="relative z-10 mt-5 grid grid-cols-2 gap-4">
-        <div className="min-w-0">
-          <p className="text-[1.75rem] font-black leading-none tracking-tight sm:text-[2rem]">{paidLabel}</p>
-          <p className="mt-1 text-sm font-semibold text-white/80">{paidSuffix}</p>
-        </div>
-        <div className="min-w-0 text-right">
-          <p className="text-xs font-medium text-white/85">
-            {scheme.progressLabel || `${paid} of ${total} instalments`}
-          </p>
-          <div className="mt-2 h-2 overflow-hidden rounded-full bg-white/20">
-            <div className="h-full rounded-full bg-[#f4a9b8]" style={{ width: progressWidth(progress) }} />
-          </div>
-          <p className="mt-2 text-[0.65rem] leading-snug text-white/75">
-            Maturity on{" "}
-            <span className="font-bold text-white">{formatCustomerDate(scheme.maturityDate)}</span>
-          </p>
-        </div>
-      </div>
-    </section>
+    <CkCard as="section" className="p-[1.1rem]">
+      <HeroIdentity
+        scheme={scheme}
+        badges={
+          <>
+            <CkBadge tone={schemeIsGold ? "gold" : "brand"}>{schemeIsGold ? "Gold weight" : "Fixed"}</CkBadge>
+            <StatusBadge scheme={scheme} />
+          </>
+        }
+      />
+      <h2 className="mt-3 truncate text-base font-semibold text-[var(--ck-ink)]">{scheme.planName}</h2>
+      <p className="mt-3 text-[0.8rem] text-[var(--ck-muted)]">{showGold ? "Gold balance" : "Paid so far"}</p>
+      <p
+        className="mt-0.5 text-[2.35rem] font-bold leading-none tracking-[-0.035em] tabular-nums"
+        style={{ color: showGold ? "#7a5a17" : "var(--ck-ink)" }}
+      >
+        {showGold ? goldBalance!.weightDisplay : totalPaid}
+      </p>
+      <p className="mt-1.5 text-[0.82rem] text-[var(--ck-ink-2)]">
+        {showGold
+          ? `Credited from ${totalPaid} of verified contributions`
+          : `${Math.round(progress)}% complete${remainingDisplay ? ` · ${remainingDisplay} remaining` : ` · ${remainingCount} left`}`}
+      </p>
+      {total > 0 ? (
+        <>
+          <CkSegments
+            className="mt-4"
+            height={8}
+            total={total}
+            filled={paid}
+            due={dueIndex}
+          />
+          {showGold ? (
+            <div className="mt-2 flex justify-between text-[0.72rem] text-[var(--ck-muted)]">
+              <span className="flex items-center gap-1.5"><i className="size-2 rounded-sm" style={{ background: "var(--customer-primary, #5e1622)" }} />{paid} of {total} months</span>
+              <span>Matures {formatCustomerDate(scheme.maturityDate)}</span>
+            </div>
+          ) : (
+            <div className="mt-2 flex justify-between text-[0.72rem] text-[var(--ck-muted)]">
+              <span className="flex items-center gap-1.5"><i className="size-2 rounded-sm" style={{ background: "var(--customer-primary, #5e1622)" }} />{paid} paid</span>
+              {dueIndex ? <span className="flex items-center gap-1.5"><i className="size-2 rounded-sm bg-[var(--ck-gold)]" />1 due</span> : null}
+              <span className="flex items-center gap-1.5"><i className="size-2 rounded-sm bg-[var(--ck-track)]" />{upcoming} upcoming</span>
+            </div>
+          )}
+        </>
+      ) : (
+        <CkBar className="mt-4" percent={progress} />
+      )}
+      {scheme.nextActionAmount ? (
+        <CkStats
+          className="mt-4"
+          items={
+            showGold
+              ? [
+                  { label: "Value", value: (scheme.currentValuation ?? scheme.totalPaid)?.amountDisplay ?? totalPaid },
+                  { label: "Contributed", value: totalPaid },
+                  ...(remainingDisplay ? [{ label: "Remaining", value: remainingDisplay }] : []),
+                ]
+              : [
+                  { label: "Monthly instalment", value: scheme.nextActionAmount.amountDisplay },
+                  { label: "Matures", value: formatCustomerDate(scheme.maturityDate) },
+                ]
+          }
+        />
+      ) : null}
+    </CkCard>
   );
 }
 
-function FlexibleFreeHero({ scheme }: { scheme: CustomerSchemeDetail }) {
+export function FlexibleFreeHero({ scheme }: { scheme: CustomerSchemeDetail }) {
   const totalPaid = scheme.totalPaid?.amountDisplay ?? "₹0";
   const month = scheme.progressCard.freeWindowMonth ?? scheme.freeWindowMonth ?? 0;
   const months = scheme.progressCard.freeWindowMonths ?? scheme.freeWindowMonths ?? 0;
 
   return (
-    <section
-      className="relative overflow-hidden rounded-[1.35rem] p-5 text-white sm:p-6"
-      style={{ background: "var(--customer-primary, #730321)" }}
-    >
-      {heroLotus()}
-      <span className="relative z-10 inline-flex rounded-md bg-white/15 px-2.5 py-1 text-[0.62rem] font-extrabold tracking-[0.08em]">
-        FLEXIBLE · FREE WINDOW
-      </span>
-      <h2 className="relative z-10 mt-4 text-xl font-black">{scheme.planName}</h2>
-      <p className="relative z-10 mt-1 text-sm text-white/75">Scheme no. {displaySchemeNumber(scheme.schemeNumber)}</p>
-      <p className="relative z-10 mt-5 text-[2rem] font-black tracking-tight">
-        {totalPaid}
-        <span className="ml-2 text-base font-semibold text-white/80">saved</span>
-      </p>
-      {month && months ? (
-        <p className="relative z-10 mt-4 text-xs font-semibold text-white/85">
-          Month {month} of {months}
-        </p>
-      ) : (
-        <p className="relative z-10 mt-4 text-xs font-semibold text-white/85">{scheme.progressLabel}</p>
-      )}
-    </section>
+    <CkCard as="section" className="p-[1.1rem]">
+      <HeroIdentity
+        scheme={scheme}
+        badges={
+          <>
+            <CkBadge tone="blue">Flexible</CkBadge>
+            <CkBadge tone="ok" dot>
+              Free window
+            </CkBadge>
+          </>
+        }
+      />
+      <h2 className="mt-3 truncate text-base font-semibold text-[var(--ck-ink)]">{scheme.planName}</h2>
+      <p className="mt-3 text-[0.8rem] text-[var(--ck-muted)]">Saved so far</p>
+      <p className="mt-0.5 text-[2.35rem] font-bold leading-none tracking-[-0.035em] tabular-nums text-[var(--ck-ink)]">{totalPaid}</p>
+      <p className="mt-1.5 text-[0.82rem] text-[var(--ck-ink-2)]">Contribute any permitted amount. Contributions are optional.</p>
+      <CkStats
+        className="mt-4"
+        items={[
+          { label: "Free window", value: month && months ? `Month ${month} of ${months}` : scheme.progressLabel },
+          { label: "Matures", value: formatCustomerDate(scheme.maturityDate) },
+        ]}
+      />
+    </CkCard>
   );
 }
 
-function FlexibleLockedHero({ scheme }: { scheme: CustomerSchemeDetail }) {
+export function FlexibleLockedHero({ scheme }: { scheme: CustomerSchemeDetail }) {
   const totalPaid = scheme.totalPaid?.amountDisplay ?? "₹0";
+  const locked = scheme.progressCard.lockedAverage ?? scheme.progressCard.cycleCap;
 
   return (
-    <section
-      className="relative overflow-hidden rounded-[1.35rem] p-5 text-white sm:p-6"
-      style={{ background: "var(--customer-primary, #730321)" }}
-    >
-      {heroLotus()}
-      <span className="relative z-10 inline-flex items-center gap-1 rounded-md bg-[rgba(var(--customer-accent-rgb,201,162,39),0.35)] px-2.5 py-1 text-[0.62rem] font-extrabold tracking-[0.06em] text-[#fff8e6]">
-        <LockKeyhole className="size-3" />
-        FLEXIBLE · LOCKED
-      </span>
-      <h2 className="relative z-10 mt-4 text-xl font-black">{scheme.planName}</h2>
-      <p className="relative z-10 mt-1 text-sm text-white/75">Scheme no. {displaySchemeNumber(scheme.schemeNumber)}</p>
-      <div className="relative z-10 mt-5 grid grid-cols-2 gap-4 border-t border-white/20 pt-4">
-        <div>
-          <p className="text-xs text-white/75">Total saved</p>
-          <p className="mt-1 text-xl font-black">{totalPaid}</p>
-        </div>
-        <div className="border-l border-white/20 pl-4">
-          <p className="text-xs text-white/75">Matures</p>
-          <p className="mt-1 text-xl font-black">{formatCustomerDate(scheme.maturityDate)}</p>
-        </div>
-      </div>
-    </section>
+    <CkCard as="section" className="p-[1.1rem]">
+      <HeroIdentity
+        scheme={scheme}
+        badges={
+          <>
+            <CkBadge tone="blue">Flexible</CkBadge>
+            <CkBadge tone="warn" dot>
+              Capped phase
+            </CkBadge>
+          </>
+        }
+      />
+      <h2 className="mt-3 truncate text-base font-semibold text-[var(--ck-ink)]">{scheme.planName}</h2>
+      <p className="mt-3 text-[0.8rem] text-[var(--ck-muted)]">Total saved</p>
+      <p className="mt-0.5 text-[2.35rem] font-bold leading-none tracking-[-0.035em] tabular-nums text-[var(--ck-ink)]">{totalPaid}</p>
+      <p className="mt-1.5 text-[0.82rem] text-[var(--ck-ink-2)]">Your monthly limit uses your snapshotted free-window average.</p>
+      <CkStats
+        className="mt-4"
+        items={[
+          ...(locked ? [{ label: "Monthly limit", value: locked.amountDisplay }] : []),
+          { label: "Matures", value: formatCustomerDate(scheme.maturityDate) },
+        ]}
+      />
+    </CkCard>
   );
 }
 
@@ -628,30 +673,34 @@ function FreeWindowBlocks({
         </div>
       </section>
 
-      <section className="customer-surface mt-4 p-4 sm:p-5">
-        <div className="flex items-center justify-between gap-2 overflow-x-auto pb-2">
-          {Array.from({ length: Math.min(months, 8) }).map((_, index) => {
+      <section className="customer-surface mt-3 p-4">
+        <p className="text-[0.8rem] font-semibold text-[var(--ck-ink)]">Free window</p>
+        <div className="mt-3 flex gap-1.5">
+          {Array.from({ length: Math.min(months, 12) }).map((_, index) => {
             const done = index < completed;
             const current = index === completed;
             return (
-              <div key={index} className="flex min-w-[3.25rem] flex-col items-center gap-1">
+              <div key={index} className="flex-1 text-center">
                 <span
-                  className={cn(
-                    "grid size-8 place-items-center rounded-full border-2",
-                    done && "border-[var(--customer-primary,#730321)] bg-[var(--customer-primary,#730321)] text-white",
-                    current && "size-10 border-[var(--customer-primary,#730321)] bg-[var(--customer-primary,#730321)] text-white shadow-[0_0_0_4px_rgba(var(--customer-primary-rgb,115,3,33),0.15)]",
-                    !done && !current && "border-[#ddd6cf] bg-white text-[#b0a9b3]",
-                  )}
-                >
-                  {done ? <Check className="size-3.5" strokeWidth={3} /> : null}
-                </span>
-                <span className={cn("text-[0.6rem] font-bold", current ? "text-[var(--customer-primary,#730321)]" : "text-[#8a8490]")}>
-                  {current ? "Current" : index < completed ? "Done" : "Upcoming"}
+                  className="mb-1.5 block h-2 rounded"
+                  style={{
+                    background: done
+                      ? "var(--ck-blue)"
+                      : current
+                        ? "repeating-linear-gradient(-45deg, var(--ck-blue) 0 3px, #bcd0e3 3px 6px)"
+                        : "var(--ck-track)",
+                  }}
+                />
+                <span className={cn("text-[0.66rem] font-semibold", current ? "text-[var(--ck-blue)]" : "text-[var(--ck-muted)]")}>
+                  M{index + 1}
                 </span>
               </div>
             );
           })}
         </div>
+        <p className="mt-2.5 text-xs text-[var(--ck-muted)]">
+          {completed} of {months} months completed · month {Math.min(months, completed + 1)} is open now
+        </p>
       </section>
 
       {lockedAverage ? (
@@ -840,7 +889,7 @@ export function FixedSchemeTotalsCard({ scheme }: { scheme: CustomerSchemeDetail
   );
 }
 
-function PassbookList({
+export function PassbookList({
   payments,
   onDownloadReceipt,
 }: {
@@ -902,7 +951,7 @@ function PassbookList({
   );
 }
 
-function AuthoritativePassbookList({ rows }: { rows: CustomerPassbookRow[] }) {
+export function AuthoritativePassbookList({ rows }: { rows: CustomerPassbookRow[] }) {
   if (!rows.length) return <p className="py-8 text-center text-sm text-[#77727c]">No passbook entries yet.</p>;
   return (
     <ul className="divide-y divide-[#ece6e0]">
@@ -937,7 +986,7 @@ function AuthoritativePassbookList({ rows }: { rows: CustomerPassbookRow[] }) {
   );
 }
 
-function RulesBlock({ section }: { section: CustomerPlanRulesSection }) {
+export function RulesBlock({ section }: { section: CustomerPlanRulesSection }) {
   return (
     <div className="customer-surface p-5">
       <h3 className="text-sm font-black text-[var(--customer-primary,#730321)]">{section.title}</h3>

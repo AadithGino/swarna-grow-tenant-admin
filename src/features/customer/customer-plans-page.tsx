@@ -2,16 +2,8 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import {
-  BarChart3,
-  CalendarDays,
-  ChevronRight,
-  Coins,
-  Filter,
-  Gift,
-  Info,
-} from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { CircleCheck, Info, Sparkles } from "lucide-react";
+import { CkBadge, CkCard, CkStats } from "@/src/components/customer/customer-kit";
 import { PageSkeleton, QueryError } from "@/src/components/common/query-state";
 import { useCustomerTenant } from "@/src/components/customer/customer-tenant-context";
 import { customerPath } from "@/src/lib/customer-tenant";
@@ -30,86 +22,64 @@ function isGoldPlan(plan: SchemePlan) {
   );
 }
 
-function planBadge(plan: SchemePlan) {
-  if (plan.model === "FLEXIBLE") return { label: "FLEXIBLE", className: "bg-[#fff2cf] text-[#6b4e32]" };
-  return { label: "FIXED", className: "bg-[#f6edf0] text-[var(--customer-primary,#730321)]" };
-}
-
-function planHighlight(plan: SchemePlan) {
-  if (plan.model === "FLEXIBLE" && plan.flexibleSummary?.freeWindowMonths) {
-    return {
-      icon: BarChart3,
-      text: `Pay freely for the first ${plan.flexibleSummary.freeWindowMonths} months`,
-    };
-  }
-  if (plan.benefitType === "ONE_FREE_INSTALLMENT" || /making charge|free instalment/i.test(plan.benefitSummary)) {
-    return { icon: Gift, text: plan.benefitSummary };
-  }
-  if (isGoldPlan(plan)) {
-    return { icon: Gift, text: plan.benefitSummary || "Gold-linked maturity benefit" };
-  }
-  return { icon: Gift, text: plan.benefitSummary || "Maturity benefit on completion" };
-}
-
-function contributionLine(plan: SchemePlan) {
-  const summary = plan.amountSummary ?? "";
-  if (plan.model === "FIXED" && /every|month|monthly/i.test(summary) === false && summary.includes("₹")) {
-    return `${summary} every month`;
-  }
-  return summary;
-}
-
 function PlanExploreCard({ plan, tenantSlug }: { plan: SchemePlan; tenantSlug: string | null }) {
-  const badge = planBadge(plan);
-  const highlight = planHighlight(plan);
-  const HighlightIcon = highlight.icon;
-
+  const gold = isGoldPlan(plan);
+  const typeBadge =
+    plan.model === "FLEXIBLE" ? (
+      <CkBadge tone="blue">Flexible</CkBadge>
+    ) : gold ? (
+      <CkBadge tone="gold">Gold benefit</CkBadge>
+    ) : (
+      <CkBadge tone="brand">Fixed</CkBadge>
+    );
+  const href = customerPath(tenantSlug, "plans", plan.id);
   return (
-    <article className="customer-surface relative overflow-hidden p-4 sm:p-5">
-      <svg
-        className="pointer-events-none absolute -bottom-4 -right-2 h-24 w-24 opacity-[0.12]"
-        viewBox="0 0 120 120"
-        fill="none"
-        aria-hidden
-      >
-        <circle cx="60" cy="60" r="48" stroke="var(--customer-accent, #c9a227)" strokeWidth="1.2" />
-      </svg>
-      <span className={cn("relative z-10 inline-flex rounded-md px-2.5 py-1 text-[0.62rem] font-extrabold tracking-[0.12em]", badge.className)}>
-        {badge.label}
-      </span>
-      <div className="relative z-10 mt-3 flex items-baseline justify-between gap-2">
-        <h2 className="text-lg font-black text-[#171722]">{plan.name}</h2>
-        <span className="shrink-0 text-xs font-semibold text-[#77727c]">{plan.durationMonths} months</span>
+    <CkCard as="article" className={cn("p-4", plan.featured && "border-[1.5px] border-[var(--ck-gold)]")}>
+      <div className="flex items-center gap-1.5">
+        {typeBadge}
+        {plan.featured ? (
+          <CkBadge tone="gold">
+            <Sparkles className="size-3" />
+            Featured
+          </CkBadge>
+        ) : null}
+        <span className="ml-auto text-xs text-[var(--ck-muted)]">{plan.durationMonths} months</span>
       </div>
-      <p className="relative z-10 mt-2 flex items-center gap-2 text-sm text-[#5c5763]">
-        {plan.model === "FLEXIBLE" ? (
-          <Coins className="size-4 shrink-0 text-[var(--customer-accent,#8b5f08)]" strokeWidth={2} />
-        ) : (
-          <CalendarDays className="size-4 shrink-0 text-[var(--customer-accent,#8b5f08)]" strokeWidth={2} />
-        )}
-        {contributionLine(plan)}
-      </p>
-      <div
-        className="relative z-10 mt-4 flex items-start gap-2 rounded-xl px-3 py-2.5 text-xs leading-snug text-[#6b4e32]"
-        style={{ background: "rgba(var(--customer-accent-rgb, 201, 162, 39), 0.14)" }}
-      >
-        <HighlightIcon className="mt-0.5 size-4 shrink-0 text-[var(--customer-accent,#8b5f08)]" strokeWidth={2} />
-        <span className="font-semibold">{highlight.text}</span>
-      </div>
-      {!plan.canEnrol && plan.blockedReason ? (
-        <p className="relative z-10 mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900">{plan.blockedReason}</p>
+      <h2 className="mt-3 text-[1.35rem] font-bold leading-tight tracking-[-0.03em] text-[var(--ck-ink)]">{plan.name}</h2>
+      {plan.tagline ? <p className="mt-1 text-[0.82rem] text-[var(--ck-muted)]">{plan.tagline}</p> : null}
+      <CkStats
+        className="mt-3.5"
+        items={[
+          { label: "Amount", value: <span className="whitespace-normal text-[0.85rem] leading-snug">{plan.amountSummary}</span> },
+          { label: "Benefit", value: <span className="whitespace-normal text-[0.85rem] leading-snug">{plan.benefitSummary || "On completion"}</span> },
+        ]}
+      />
+      {plan.rules?.length ? (
+        <ul className="mt-3.5 grid gap-2">
+          {plan.rules.slice(0, 3).map((rule) => (
+            <li key={rule} className="flex items-start gap-2 text-[0.8rem] text-[var(--ck-ink-2)]">
+              <CircleCheck className="mt-0.5 size-3.5 shrink-0 text-[var(--ck-ok)]" />
+              {rule}
+            </li>
+          ))}
+        </ul>
       ) : null}
-      <Button
-        asChild
-        className="relative z-10 mt-4 h-11 w-full rounded-xl font-bold text-white"
-        style={{ background: "var(--customer-primary, #730321)" }}
-      >
-        <Link href={customerPath(tenantSlug, "plans", plan.id)}>
+      {!plan.canEnrol && plan.blockedReason ? (
+        <p className="mt-3 rounded-lg bg-[var(--ck-warn-soft)] px-3 py-2 text-xs text-[var(--ck-warn)]">{plan.blockedReason}</p>
+      ) : null}
+      <div className="mt-4 grid grid-cols-[1fr_1.3fr] gap-2">
+        <Link href={href} className="flex h-10 items-center justify-center rounded-xl border border-[var(--ck-line)] bg-white text-[0.82rem] font-semibold text-[var(--ck-ink)]">
           View plan
-          <ChevronRight className="ml-1 size-4" />
         </Link>
-      </Button>
-    </article>
+        {plan.canEnrol ? (
+          <Link href={`${href}#enrol`} className="flex h-10 items-center justify-center rounded-xl text-[0.82rem] font-semibold text-white" style={{ background: "var(--customer-primary, #730321)" }}>
+            Enrol now
+          </Link>
+        ) : (
+          <span className="flex h-10 items-center justify-center rounded-xl bg-[#efe8df] text-[0.82rem] font-semibold text-[var(--ck-muted)]">Not available</span>
+        )}
+      </div>
+    </CkCard>
   );
 }
 
@@ -139,18 +109,8 @@ export function CustomerPlansPage() {
 
   return (
     <div className="mx-auto max-w-lg pb-4">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h1 className="text-[1.65rem] font-black tracking-[-.03em] text-[#11111b]">Explore plans</h1>
-          <p className="mt-1 text-sm text-[#777280]">Choose a savings journey that fits you</p>
-        </div>
-        <span
-          className="grid size-10 shrink-0 place-items-center rounded-full border border-[#e8dfd9] text-[#706b77]"
-          aria-hidden
-        >
-          <Filter className="size-[1.1rem]" strokeWidth={2} />
-        </span>
-      </div>
+      <h1 className="text-[1.65rem] font-bold tracking-[-.03em] text-[var(--ck-ink)]">Explore plans</h1>
+      <p className="mt-1 text-[0.82rem] text-[var(--ck-muted)]">Choose a savings journey that fits you</p>
 
       <div className="mt-4 flex gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {filters.map((item) => (
@@ -159,12 +119,9 @@ export function CustomerPlansPage() {
             type="button"
             onClick={() => setFilter(item.key)}
             className={cn(
-              "shrink-0 rounded-full border px-4 py-2 text-sm font-bold transition",
-              filter === item.key
-                ? "border-transparent text-white shadow-sm"
-                : "border-[#e5ddd7] bg-white text-[#706b77]",
+              "shrink-0 rounded-full border px-3.5 py-1.5 text-[0.8rem] font-semibold transition",
+              filter === item.key ? "border-[var(--ck-ink)] bg-[var(--ck-ink)] text-white" : "border-[var(--ck-line)] bg-white text-[var(--ck-ink-2)]",
             )}
-            style={filter === item.key ? { background: "var(--customer-primary, #730321)" } : undefined}
           >
             {item.label}
           </button>
@@ -177,7 +134,7 @@ export function CustomerPlansPage() {
           <p className="mt-2 text-sm text-[#706b77]">Try another filter or check back later.</p>
         </div>
       ) : (
-        <div className="mt-5 space-y-3">
+        <div className="mt-4 space-y-3">
           {filtered.map((plan) => (
             <PlanExploreCard key={plan.id} plan={plan} tenantSlug={tenantSlug} />
           ))}

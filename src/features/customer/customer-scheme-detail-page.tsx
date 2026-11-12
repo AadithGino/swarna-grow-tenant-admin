@@ -15,15 +15,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  CUSTOMER_MOBILE_NAV_DOCK,
-  FixedSchemeSummaryDock,
-  NextInstalmentCard,
-  normalizeSchemeMode,
-  PaymentScheduleBlock,
-  SchemeDetailModeBody,
-  SchemeDetailTabs,
-} from "@/src/features/customer/customer-scheme-detail-views";
+import { CUSTOMER_MOBILE_NAV_DOCK } from "@/src/features/customer/customer-scheme-detail-views";
+import { CkNavBar } from "@/src/components/customer/customer-kit";
+import { SchemeDetailPlanView } from "@/src/features/customer/customer-scheme-detail-plan";
 import { downloadCustomerPaymentReceipt } from "@/src/lib/customer-receipt";
 import { PageSkeleton, QueryError } from "@/src/components/common/query-state";
 import {
@@ -42,10 +36,12 @@ import { toast } from "sonner";
 import { toastApiError } from "@/src/lib/api-error";
 import { isGoldWeightScheme } from "@/src/lib/customer-gold-ui";
 export function CustomerSchemeDetailPage({ id }: { id: string }) {
+  const { tenantSlug } = useCustomerTenant();
   const { customerAppPaymentsEnabled } = useCustomerPortalCapabilities();
   const { data: scheme, isLoading, isError, refetch } = useGetCustomerSchemeQuery(id);
   const passbook = useGetCustomerPassbookQuery(id);
   const [payOpen, setPayOpen] = useState(false);
+  const [payAmount, setPayAmount] = useState<number | null>(null);
   const [redeemOpen, setRedeemOpen] = useState(false);
   const [redemptionMode, setRedemptionMode] = useState("");
   const [billNumber, setBillNumber] = useState("");
@@ -68,7 +64,6 @@ export function CustomerSchemeDetailPage({ id }: { id: string }) {
   if (isError) return <QueryError onRetry={refetch} />;
 
   const payButtonRaw = scheme.payButton ?? { visible: scheme.canPay, enabled: scheme.canPay, label: "Pay" };
-  const displayMode = normalizeSchemeMode(scheme.displayMode);
   const payButton = customerAppPaymentsEnabled
     ? payButtonRaw
     : {
@@ -131,65 +126,33 @@ export function CustomerSchemeDetailPage({ id }: { id: string }) {
     }
   };
 
-  const payLabel =
-    payButton.label ??
-    (displayMode === "FIXED" && scheme.nextActionAmount
-      ? `Pay ${scheme.nextActionAmount.amountDisplay}`
-      : displayMode === "FLEXIBLE_LOCK_WINDOW" && scheme.progressCard.remainingThisCycle
-        ? `Pay up to ${scheme.progressCard.remainingThisCycle.amountDisplay}`
-        : "Add payment");
-
   return (
     <div
       className="mx-auto max-w-lg lg:pb-8"
       style={{
-        paddingBottom:
-          displayMode === "FIXED"
-            ? `calc(${CUSTOMER_MOBILE_NAV_DOCK} + 6.5rem + 1.5rem + env(safe-area-inset-bottom, 0px))`
-            : `calc(${CUSTOMER_MOBILE_NAV_DOCK} + 0.75rem + env(safe-area-inset-bottom, 0px))`,
+        paddingBottom: `calc(${CUSTOMER_MOBILE_NAV_DOCK} + 0.75rem + env(safe-area-inset-bottom, 0px))`,
       }}
     >
-      <SchemeDetailModeBody
+      <CkNavBar title={scheme.planName} backHref={customerPath(tenantSlug, "schemes")} />
+      <SchemeDetailPlanView
         scheme={scheme}
-        mode={scheme.displayMode}
         schemeIsGold={schemeIsGold}
-        onPay={() => setPayOpen(true)}
         payEnabled={payButton.visible !== false && payButton.enabled}
-        payLabel={payLabel}
-      />
-      <SchemeDetailTabs
-        scheme={scheme}
+        onPay={(amountPaise) => {
+          setPayAmount(amountPaise ?? null);
+          setPayOpen(true);
+        }}
         maturityBenefit={maturityBenefit}
-        schemeIsGold={schemeIsGold}
         planRuleSections={planRuleSections}
         payments={payments}
+        passbookRows={passbook.data?.rows}
         redemptionEligible={redemption.eligible}
         redemptionBlocker={redemption.blocker}
+        redemptionModes={redemptionModeOptions.map((o) => o.label)}
         onRedeem={() => setRedeemOpen(true)}
         onDownloadReceipt={downloadReceipt}
-        passbookLayout={displayMode === "FIXED" ? "fixed" : "default"}
-        passbookRows={passbook.data?.rows}
-        passbookExtra={
-          displayMode === "FIXED" ? (
-            <>
-              <NextInstalmentCard
-                scheme={scheme}
-                onPay={() => setPayOpen(true)}
-                payEnabled={payButton.visible !== false && payButton.enabled}
-                payLabel={payLabel}
-                helperText={payButton.helperText}
-              />
-              <PaymentScheduleBlock
-                scheme={scheme}
-                schemeIsGold={schemeIsGold}
-                onDownloadReceipt={downloadReceipt}
-              />
-            </>
-          ) : undefined
-        }
       />
-      {displayMode === "FIXED" ? <FixedSchemeSummaryDock scheme={scheme} /> : null}
-      <CustomerMakePaymentSheet scheme={scheme} open={payOpen} onOpenChange={setPayOpen} />
+      <CustomerMakePaymentSheet scheme={scheme} open={payOpen} onOpenChange={setPayOpen} initialAmountPaise={payAmount} />
       <Dialog open={redeemOpen} onOpenChange={setRedeemOpen}>
         <DialogContent>
           <DialogHeader>

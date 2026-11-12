@@ -1,5 +1,6 @@
 "use client";
 
+import { CkNavBar } from "@/src/components/customer/customer-kit";
 import Link from "next/link";
 import type { LucideIcon } from "lucide-react";
 import {
@@ -128,23 +129,25 @@ export function CustomerDmPageShell({
 }) {
   return (
     <div className={cn(CUSTOMER_DM_PAGE, narrow && "max-w-2xl")} data-testid={testId}>
+      <CkNavBar title={title} backHref={backHref} right={actions ? <span className="shrink-0">{actions}</span> : undefined} />
       {backHref ? (
         <Link
           href={backHref}
-          className="inline-flex min-h-9 items-center gap-1.5 text-sm font-medium text-[var(--customer-primary,#730321)] underline-offset-4 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--customer-primary,#730321)]"
+          className="hidden min-h-9 items-center gap-1.5 text-sm font-medium text-[var(--customer-primary,#730321)] underline-offset-4 hover:underline lg:inline-flex focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--customer-primary,#730321)]"
         >
           <ArrowLeft className="size-4" aria-hidden />
           {backLabel}
         </Link>
       ) : null}
-      <div className={cn("flex flex-wrap items-end justify-between gap-3", backHref && "mt-2")}>
+      <div className={cn("hidden flex-wrap items-end justify-between gap-3 lg:flex", backHref && "mt-2")}>
         <div className="min-w-0">
           <h1 className={cn("font-serif text-[1.85rem] leading-tight sm:text-[2.1rem]", DM_INK)}>{title}</h1>
           {subtitle ? <p className={cn("mt-1.5 max-w-2xl text-sm leading-6", DM_MUTED)}>{subtitle}</p> : null}
         </div>
         {actions}
       </div>
-      <div className="mt-7">{children}</div>
+      {subtitle ? <p className={cn("mb-4 text-[0.82rem] leading-relaxed lg:hidden", DM_MUTED)}>{subtitle}</p> : null}
+      <div className="lg:mt-7">{children}</div>
     </div>
   );
 }
@@ -159,14 +162,14 @@ export function CustomerDmSurface({
   testId?: string;
 }) {
   return (
-    <section className={cn("rounded-[1.25rem] border border-[#ecdfd8] bg-white p-5 sm:p-6", className)} data-testid={testId}>
+    <section className={cn("rounded-[1.15rem] border border-[var(--ck-line)] bg-white p-4 sm:p-6", className)} data-testid={testId}>
       {children}
     </section>
   );
 }
 
 export function CustomerDmSectionTitle({ children }: { children: React.ReactNode }) {
-  return <h2 className={cn("text-[15px] font-semibold", DM_INK)}>{children}</h2>;
+  return <h2 className={cn("text-base font-bold tracking-[-0.015em]", DM_INK)}>{children}</h2>;
 }
 
 export function CustomerDmQuickActionGrid({
@@ -193,14 +196,14 @@ export function CustomerDmQuickActionGrid({
           <>
             <span
               className={cn(
-                "grid size-12 place-items-center rounded-2xl transition sm:size-14",
+                "grid size-[3.25rem] place-items-center rounded-2xl transition sm:size-14",
                 tone === "dark"
                   ? primary
                     ? "text-[#3d2a08]"
                     : "bg-white/12 text-white ring-1 ring-white/20 group-hover:bg-white/20"
                   : primary
                     ? "text-white"
-                    : "bg-[rgba(var(--customer-primary-rgb,115,3,33),0.07)] text-[var(--customer-primary,#730321)] group-hover:bg-[rgba(var(--customer-primary-rgb,115,3,33),0.12)]",
+                    : "border border-[var(--ck-line)] bg-white text-[var(--customer-primary,#730321)] group-hover:bg-[#fdfbf8]",
               )}
               style={
                 primary
@@ -210,9 +213,9 @@ export function CustomerDmQuickActionGrid({
                   : undefined
               }
             >
-              <Icon className="size-5" strokeWidth={2} aria-hidden />
+              <Icon className="size-5" strokeWidth={1.8} aria-hidden />
             </span>
-            <span className={cn("text-xs font-semibold", tone === "dark" ? "text-white/90" : "text-[#3a2f33]")}>{action.label}</span>
+            <span className={cn("text-xs font-medium", tone === "dark" ? "text-white/90" : "text-[var(--ck-ink-2)]")}>{action.label}</span>
           </>
         );
         if (action.disabled || !action.href) {
@@ -247,51 +250,57 @@ export type PortfolioWalletRow = {
   estimatedSaleValue?: { amountPaise?: number; ratePerGramPaise?: number } | null;
 };
 
-/** One wallet as a bullion card: metal finish, grams, available vs reserved and today's value. */
+/** One wallet: grams held, available vs reserved, and today's indicative value. */
 export function CustomerDmAssetCard({ wallet }: { wallet: PortfolioWalletRow }) {
   const metal = String(wallet.metal);
-  const f = dmFinish(metal);
+  const silver = metal.toUpperCase() === "SILVER";
   const valuationOk = wallet.valuationStatus === "OK" && wallet.estimatedSaleValue?.amountPaise != null;
-  const reserved = Number(wallet.reservedUg) > 0;
+  const held = Number(wallet.heldUg) || 0;
+  const available = Number(wallet.availableUg) || 0;
+  const reserved = Number(wallet.reservedUg) || 0;
+  const availPct = held > 0 ? (available / held) * 100 : 0;
 
   return (
     <li
-      className="relative overflow-hidden rounded-[1.4rem] border bg-white"
-      style={{ borderColor: f.ring }}
+      className="rounded-[1.15rem] border border-[var(--ck-line)] bg-white p-4"
       data-testid={`customer-dm-asset-${wallet.metal}-${wallet.finenessPpm}`}
     >
-      <div className="relative px-5 pb-5 pt-5" style={{ background: f.face, color: f.ink }}>
-        <div className="pointer-events-none absolute inset-0 opacity-[.18]" style={{ backgroundImage: "repeating-linear-gradient(115deg, #fff 0 1px, transparent 1px 14px)" }} aria-hidden />
-        <div className="relative flex items-start justify-between gap-3">
-          <p className="text-sm font-semibold">{dmAssetName(metal, Number(wallet.finenessPpm))}</p>
-          <DmCoinArt metal={metal} size={34} />
+      <div className="flex items-center gap-3">
+        <DmCoinArt metal={metal} size={38} />
+        <div className="min-w-0 flex-1">
+          <p className={cn("truncate text-[0.92rem] font-semibold", DM_INK)}>{dmAssetName(metal, Number(wallet.finenessPpm))}</p>
+          <p className={cn("truncate text-xs", DM_MUTED)}>
+            {wallet.estimatedSaleValue?.ratePerGramPaise != null
+              ? `Sell ${formatInrFromPaise(Number(wallet.estimatedSaleValue.ratePerGramPaise))}/g`
+              : "Held in your wallet"}
+          </p>
         </div>
-        <p className="relative mt-5 font-serif text-[2.1rem] leading-none tabular-nums">{ugToGramsDisplay(wallet.heldUg)}</p>
-        <p className="relative mt-1.5 text-xs font-medium opacity-75">held in your wallet</p>
+        <p className={cn("text-[1.45rem] font-bold leading-none tracking-[-0.03em] tabular-nums", DM_INK)}>{ugToGramsDisplay(wallet.heldUg)}</p>
       </div>
-      <dl className="grid grid-cols-2 divide-x divide-[#efe5df] text-sm">
-        <div className="px-5 py-3.5">
-          <dt className={cn("text-xs", DM_MUTED)}>Available to sell</dt>
-          <dd className={cn("mt-0.5 font-semibold tabular-nums", DM_INK)}>{ugToGramsDisplay(wallet.availableUg)}</dd>
+      <div className="mt-3.5 flex h-2 overflow-hidden rounded-full bg-[var(--ck-track,#efe7dc)]">
+        <span className="h-full" style={{ width: `${availPct}%`, background: silver ? "#9aa1aa" : "var(--ck-gold, #b8913f)" }} />
+      </div>
+      <dl className="mt-2 flex justify-between text-xs">
+        <div className="flex items-center gap-1.5">
+          <span className="size-2 rounded-sm" style={{ background: silver ? "#9aa1aa" : "var(--ck-gold, #b8913f)" }} aria-hidden />
+          <dt className={DM_MUTED}>Available</dt>
+          <dd className={cn("font-semibold tabular-nums", DM_INK)}>{ugToGramsDisplay(wallet.availableUg)}</dd>
         </div>
-        <div className="px-5 py-3.5">
-          <dt className={cn("text-xs", DM_MUTED)}>Reserved</dt>
-          <dd className={cn("mt-0.5 font-semibold tabular-nums", reserved ? "text-amber-700" : DM_INK)}>{ugToGramsDisplay(wallet.reservedUg)}</dd>
+        <div className="flex items-center gap-1.5">
+          <dt className={DM_MUTED}>Reserved</dt>
+          <dd className={cn("font-semibold tabular-nums", reserved > 0 ? "text-[var(--ck-warn,#9a6a12)]" : DM_INK)}>{ugToGramsDisplay(wallet.reservedUg)}</dd>
         </div>
       </dl>
-      <div className="border-t border-[#efe5df] px-5 py-3.5 text-xs leading-5">
+      <div className="mt-3 flex items-center justify-between border-t border-[var(--ck-line-soft,#f1eae1)] pt-3 text-xs">
         {valuationOk ? (
-          <p className={DM_MUTED}>
-            Worth about <strong className={cn("text-sm", DM_INK)}>{formatInrFromPaise(Number(wallet.estimatedSaleValue!.amountPaise))}</strong>
-            {wallet.estimatedSaleValue?.ratePerGramPaise != null ? (
-              <> at today&apos;s sell rate of {formatInrFromPaise(Number(wallet.estimatedSaleValue.ratePerGramPaise))}/g</>
-            ) : null}
-            . Not a guaranteed quote.
-          </p>
+          <>
+            <span className={DM_MUTED}>Worth at sell rate · not a quote</span>
+            <strong className={cn("text-[0.9rem] font-semibold tabular-nums", DM_INK)}>{formatInrFromPaise(Number(wallet.estimatedSaleValue!.amountPaise))}</strong>
+          </>
         ) : wallet.valuationStatus === "STALE_RATE" ? (
-          <p className="text-amber-800">Sell rate is being refreshed — the rupee estimate returns once rates update.</p>
+          <span className="text-[var(--ck-warn,#9a6a12)]">Sell rate is being refreshed — the rupee estimate returns once rates update.</span>
         ) : (
-          <p className={DM_MUTED}>A rupee estimate isn&apos;t available for this wallet right now.</p>
+          <span className={DM_MUTED}>A rupee estimate isn&apos;t available for this wallet right now.</span>
         )}
       </div>
     </li>
