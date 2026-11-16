@@ -84,7 +84,7 @@ export function PlanDetailBanner({
   amountLabel: string;
   benefitLabel: string;
   tenureMonths: number;
-  installmentCount: number;
+  installmentCount?: number;
   activeSchemes: number;
   totalEnrolments: number;
   visibleInApp: boolean;
@@ -112,7 +112,7 @@ export function PlanDetailBanner({
     {
       icon: CalendarClock,
       label: "Tenure",
-      value: `${tenureMonths} months · ${installmentCount} ${instalmentWord}`,
+      value: installmentCount == null ? `${tenureMonths} months` : `${tenureMonths} months · ${installmentCount} ${instalmentWord}`,
       tone: "text-[#2d191d]",
       bg: "bg-[#f3eef0]",
     },
@@ -712,11 +712,15 @@ export function PlanScheduleSection({
   preview,
   loading,
   isFlexible,
+  isOneTime,
+  error,
   className,
 }: {
   preview?: PlanSchedulePreviewData;
   loading?: boolean;
   isFlexible: boolean;
+  isOneTime?: boolean;
+  error?: string;
   className?: string;
 }) {
   const summary = preview?.summary;
@@ -745,15 +749,17 @@ export function PlanScheduleSection({
       ) : null}
 
       <Surface
-        title={isFlexible ? "Enrolment timeline" : "Instalment schedule preview"}
+        title={isOneTime ? "One-time gold preview" : isFlexible ? "Enrolment timeline" : "Instalment schedule preview"}
         description={
           isFlexible
             ? "Phase dates for a new enrolment starting today"
-            : "Sample schedule at minimum contribution · first payment at enrolment"
+            : isOneTime ? "Payment and bonus dates if funded today" : "Sample schedule at the minimum eligible contribution"
         }
       >
         <div className="space-y-6 p-6">
-          {loading ? (
+          {error || isOneTime ? (
+            <PlanSchedulePreviewPanel data={preview} loading={loading} error={error} />
+          ) : loading ? (
             <div className="space-y-4">
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                 {Array.from({ length: 4 }).map((_, i) => (
@@ -1215,8 +1221,15 @@ export function PlanPerformanceDashboard({
                 {label}
               </dt>
               <dd className="mt-2 text-xl font-extrabold tracking-tight text-[#28161a]">
-                {displayMoneyOrWeight(financials?.[key], kind)}
+                {key === "benefitLiability" && financials?.benefitLiabilityGold
+                  ? displayMoneyOrWeight(financials.benefitLiabilityGold, "weight")
+                  : displayMoneyOrWeight(financials?.[key], kind)}
               </dd>
+              {key === "benefitLiability" && Boolean(financials?.benefitLiabilityGold) && (
+                <dd className="mt-1 text-xs text-muted-foreground">
+                  {financials?.benefitLiabilityAwaitingRate ? "Valuation awaiting gold rate" : displayMoneyOrWeight(financials?.[key], "money")}
+                </dd>
+              )}
             </div>
           ))}
         </dl>

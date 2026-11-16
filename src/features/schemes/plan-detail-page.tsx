@@ -1,6 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import { EnrolFrequencyControl } from "@/src/components/common/enrol-frequency-control";
+import { oneTimeBonusLabel, type OneTimeGoldRules } from "@/src/types/one-time-gold";
+import { COLLECTION_FREQUENCY_LABELS, MATURITY_GOLD_BASIS_LABELS, resolveMaturityGoldRules, type CollectionRules, type CollectionFrequency } from "@/src/types/collection";
 import { PortalBackLink } from "@/src/components/common/portal-back-link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
@@ -73,6 +76,7 @@ import {
 import {
   amountSummaryLabel,
   planDetailToForm,
+  buildPreviewScheduleBody,
 } from "@/src/features/schemes/plan-builder-form";
 import {
   cashSettlementBasisLabel,
@@ -81,7 +85,7 @@ import {
   resolvePaidAmountBenefitTreatment,
 } from "@/src/lib/cash-settlement-basis";
 import { PlanAvailabilityDialog } from "@/src/features/schemes/plan-availability-dialog";
-import { istBusinessDateToday } from "@/src/lib/ist-business-date";
+import { parseApiError } from "@/src/lib/api-error";
 
 export function PlanDetailPage({ planId }: { planId: string }) {
   const router = useRouter();
@@ -92,27 +96,19 @@ export function PlanDetailPage({ planId }: { planId: string }) {
   const [duplicatePlan] = useDuplicatePlanMutation();
   const [activatePlan] = useActivatePlanMutation();
   const [deactivatePlan] = useDeactivatePlanMutation();
+  const [previewFrequency, setPreviewFrequency] = useState<CollectionFrequency>();
   const [previewSchedule, previewState] = usePreviewPlanScheduleMutation();
 
   useEffect(() => {
     if (!planQuery.data) return;
     const p = planQuery.data as Record<string, unknown>;
-    const rules = (p.amountRules ?? {}) as Record<string, unknown>;
-    const minPaise = Number(rules.minInstallmentPaise ?? rules.fixedAmountPaise ?? 0);
-    void previewSchedule({
+    const form = planDetailToForm(p);
+    void previewSchedule(buildPreviewScheduleBody(form, {
       planId,
-      ...(String(p.paymentPattern ?? "").includes("FLEXIBLE")
-        ? {}
-        : {
-            installmentAmountPaise: minPaise || 300000,
-            firstInstallmentMode:
-              (p.scheduleRules as Record<string, unknown> | null)
-                ?.firstInstallmentModeDefault ?? "COLLECT_NOW",
-          }),
-      startDate: istBusinessDateToday(),
-    });
-     
-  }, [planId, planQuery.data]);
+      collectionFrequency: previewFrequency && form.collectionRules?.frequencies.includes(previewFrequency)
+        ? previewFrequency : undefined,
+    }));
+  }, [planId, planQuery.data, previewFrequency, previewSchedule]);
 
   const ruleSections = useMemo(() => {
     const planData = planQuery.data as Record<string, unknown> | undefined;
@@ -123,7 +119,7 @@ export function PlanDetailPage({ planId }: { planId: string }) {
     const sections = [
       { id: "rules-amount", label: "Amount rules", icon: IndianRupee },
       { id: "rules-schedule", label: "Schedule", icon: CalendarClock },
-      { id: "rules-payments", label: "Payments", icon: Layers3 },
+      ...(planData?.oneTimeRules ? [] : [{ id: "rules-payments", label: "Payments", icon: Layers3 }]),
     ];
     if (flexibleRules) {
       sections.push({ id: "rules-flexible", label: "Flexible phases", icon: CalendarClock });
@@ -157,6 +153,7 @@ export function PlanDetailPage({ planId }: { planId: string }) {
 
   const plan = planQuery.data as Record<string, unknown>;
   const amountRules = (plan.amountRules ?? {}) as Record<string, unknown>;
+  const collectionRules = plan.collectionRules as CollectionRules | undefined;
   const scheduleRules = plan.scheduleRules as Record<string, unknown> | null;
   const paymentRules = (plan.paymentRules ?? {}) as Record<string, unknown>;
   const flexibleRules = (plan.flexibleRules ?? null) as Record<string, unknown> | null;
@@ -173,12 +170,16 @@ export function PlanDetailPage({ planId }: { planId: string }) {
   const isFlexible = pattern.includes("FLEXIBLE");
   const displayName = String(plan.displayName ?? plan.name);
   const internalName = String(plan.name ?? displayName);
-  const benefitLabel = String(benefit.displayLabel ?? benefit.type ?? "—");
+  const maturityGold = resolveMaturityGoldRules(benefit, collectionRules);
+  const oneTimeRules = plan.oneTimeRules as OneTimeGoldRules | undefined;
+  const benefitLabel = oneTimeRules ? oneTimeBonusLabel(oneTimeRules) : maturityGold
+    ? `${maturityGold.bonusPercent}% additional gold at maturity`
+    : String(benefit.displayLabel ?? benefit.type ?? "—");
   const description =
     String(plan.description ?? "").trim() ||
     "Add a customer-facing description in the plan builder.";
   const amountLabel =
-    String(amountSummary.label ?? "").trim() ||
+    (!oneTimeRules && String(amountSummary.label ?? "").trim()) ||
     amountSummaryLabel(planDetailToForm(plan));
   const redemptionModes = Array.isArray(redemption.allowedModes)
     ? (redemption.allowedModes as string[])
@@ -328,12 +329,12 @@ export function PlanDetailPage({ planId }: { planId: string }) {
         status={status}
         version={Number(plan.version ?? 1)}
         editLocked={editLocked}
-        pattern={pattern}
+        pattern={oneTimeRules ? "One-time gold" : pattern}
         valueBasis={String(plan.valueBasis)}
         amountLabel={amountLabel}
         benefitLabel={benefitLabel}
         tenureMonths={Number(plan.durationMonths ?? 0)}
-        installmentCount={Number(plan.installmentCount ?? 0)}
+        installmentCount={collectionRules || oneTimeRules ? undefined : Number(plan.installmentCount ?? 0)}
         activeSchemes={activeSchemes}
         totalEnrolments={totalEnrolments}
         visibleInApp={Boolean(avail.visibleInCustomerApp)}
@@ -441,10 +442,24 @@ export function PlanDetailPage({ planId }: { planId: string }) {
                 cappedCycles={cappedCycles}
               />
             ) : null}
+            {collectionRules && (
+              <div className="max-w-xs">
+                <EnrolFrequencyControl
+                  label="Preview frequency"
+                  frequencies={collectionRules.frequencies}
+                  value={previewFrequency && collectionRules.frequencies.includes(previewFrequency)
+                    ? previewFrequency
+                    : collectionRules.frequencies[0]}
+                  onChange={setPreviewFrequency}
+                />
+              </div>
+            )}
             <PlanScheduleSection
               preview={previewState.data}
               loading={previewState.isLoading}
               isFlexible={isFlexible}
+              isOneTime={Boolean(oneTimeRules)}
+              error={previewState.error ? parseApiError(previewState.error, "Could not load schedule preview.").message : undefined}
             />
           </div>
         </PageTabsPanel>
@@ -471,8 +486,15 @@ export function PlanDetailPage({ planId }: { planId: string }) {
                 id="rules-schedule"
                 icon={CalendarClock}
                 title="Schedule"
-                description="Due dates, grace period, and first-instalment behaviour"
-                entries={scheduleRulesFields(scheduleRules)}
+                description={oneTimeRules ? "Funding and maturity" : "Due dates, grace period, and first-instalment behaviour"}
+                entries={oneTimeRules ? [
+                  { label: "Funding", value: "Full payment at enrolment" },
+                  { label: "Maturity", value: "Tenure starts on the verified payment date" },
+                ] : collectionRules ? [
+                  { label: "Collection choices", value: collectionRules.frequencies.map((frequency) => COLLECTION_FREQUENCY_LABELS[frequency]).join(", ") },
+                  { label: "Maturity", value: collectionRules.maturityRule.replaceAll("_", " ").toLowerCase() },
+                  { label: "Grace days", value: String(scheduleRules?.graceDays ?? 0) },
+                ] : scheduleRulesFields(scheduleRules)}
                 {...ruleSectionMeta}
               />
             ) : null}
@@ -514,7 +536,18 @@ export function PlanDetailPage({ planId }: { planId: string }) {
                 icon={Gift}
                 title="Benefit"
                 description="What the customer earns at maturity"
-                entries={benefitFields(benefit)}
+                entries={oneTimeRules ? [
+                  { label: "Payment", value: "One verified payment" },
+                  { label: "Bonus", value: oneTimeBonusLabel(oneTimeRules) },
+                  { label: "Available to redeem", value: "At maturity" },
+                ] : maturityGold ? [
+                  { label: "Maturity bonus", value: `${maturityGold.bonusPercent}% additional gold` },
+                  { label: "Calculate on", value: MATURITY_GOLD_BASIS_LABELS[maturityGold.bonusBasis] },
+                  { label: "Credit", value: "Automatic at maturity" },
+                  { label: "Eligibility", value: plan.paymentPattern === "FLEXIBLE"
+                    ? "Required contribution cycles"
+                    : maturityGold.requireAllCollections ? "All scheduled payments" : "Eligible contributions received" },
+                ] : benefitFields(benefit)}
                 {...ruleSectionMeta}
               />
             ) : null}

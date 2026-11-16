@@ -465,3 +465,7 @@ POST /admin/exports
 ```
 
 `reportKey` values for this file: `DUE_LIST`, `OVERDUE_LIST`, `DEFAULTER_LIST`, `MATURITY_LIST`, `FLEXIBLE_LOCK_LIST`, `COLLECTION_SUMMARY`.
+
+## Collection plan filters
+
+Enrollment, dues and maturity list responses accept `planId`, `collectionFrequency` and `bonusStatus` filters. The maturity calendar accepts the same filters. For a collection enrollment, `PENDING` means it has no recorded award outcome. The recorded award contains a status and weight in milligrams. A rupee-based award missing a usable gold rate remains `PENDING_RATE` until retried. Plan stats expose `benefitLiabilityGold` for collection plans and show the rupee valuation when a usable rate is available.

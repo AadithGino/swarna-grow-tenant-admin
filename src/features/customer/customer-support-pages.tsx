@@ -131,7 +131,7 @@ function SupportLotusMark() {
 
 export function CustomerSupportPage() {
   const { tenantSlug, tenant } = useCustomerTenant();
-  const { data, isLoading, isError, refetch } = useGetCustomerGrievancesQuery();
+  const { data, isLoading, isError, refetch } = useGetCustomerGrievancesQuery(undefined, { refetchOnMountOrArgChange: true, refetchOnFocus: true });
   const [tab, setTab] = useState<TicketTab>("open");
   const [open, setOpen] = useState(false);
   const [subject, setSubject] = useState("");
@@ -333,6 +333,8 @@ export function CustomerGrievanceDetailPage({ id }: { id: string }) {
   const { data, isLoading, isError, refetch } = useGetCustomerGrievanceQuery(id, {
     // Staff may reply while this screen is open.
     pollingInterval: 15_000,
+    refetchOnMountOrArgChange: true,
+    refetchOnFocus: true,
   });
   const [message, setMessage] = useState("");
   const [reply, state] = useReplyCustomerGrievanceMutation();

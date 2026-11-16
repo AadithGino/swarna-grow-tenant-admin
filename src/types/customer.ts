@@ -1,3 +1,5 @@
+import type { OneTimeGoldProgress, OneTimeGoldRules } from "./one-time-gold";
+import type { CollectionBonus, CollectionFrequency, CollectionRules, MaturityGoldRules } from "./collection";
 export type MoneyRef = { amountPaise: number; amountDisplay: string };
 export type WeightRef = { weightMg: number; weightDisplay: string };
 
@@ -127,6 +129,9 @@ export type SchemeCardRecentPayment = {
 };
 
 export type SchemeCard = {
+  collectionFrequency?: CollectionFrequency;
+  oneTimeProgress?: OneTimeGoldProgress;
+  collectionBonus?: CollectionBonus;
   id: string;
   schemeNumber: string;
   passbookNumber?: string;
@@ -242,6 +247,9 @@ export type CustomerInstallmentScheduleRow = {
 };
 
 export type SchemePlan = {
+  oneTimeRules?: OneTimeGoldRules;
+  collectionRules?: CollectionRules;
+  maturityGoldBonus?: MaturityGoldRules;
   id: string;
   name: string;
   code: string;

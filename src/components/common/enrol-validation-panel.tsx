@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { AlertTriangle, CheckCircle2, Loader2 } from "lucide-react";
-import { money, formatIsoDate } from "@/src/lib/format";
+import { money, preciseMoney, formatIsoDate } from "@/src/lib/format";
 import { portalPathFromContract } from "@/src/lib/contract-paths";
 import { cn } from "@/lib/utils";
 
@@ -12,6 +12,8 @@ export type EnrolValidationPreview = {
   preview?: {
     installmentAmount?: number;
     installmentCount?: number;
+    maturityDateProvisional?: boolean;
+    collectionFrequency?: import("@/src/types/collection").CollectionFrequency;
     phaseSummary?: string;
     illustrativeCapPerCycle?: number;
     totalCommitment?: number;
@@ -69,6 +71,7 @@ export function EnrolValidationPanel({
   }
 
   const p = validation.preview;
+  const amountDisplay = p?.collectionFrequency ? preciseMoney : money;
   const hasPreview = p && (p.installmentAmount != null || p.schedulePreview?.length);
   const canEnrol = !(validation.blockers?.length);
 
@@ -126,7 +129,7 @@ export function EnrolValidationPanel({
                 <dt className="text-muted-foreground">
                   {p!.isFlexible ? "Reference payment" : "Installment"}
                 </dt>
-                <dd className="font-medium">{money(p!.installmentAmount)}</dd>
+                <dd className="font-medium">{amountDisplay(p!.installmentAmount)}</dd>
               </>
             )}
             {p!.phaseSummary ? (
@@ -151,7 +154,7 @@ export function EnrolValidationPanel({
                 <dt className="text-muted-foreground">
                   {p!.isFlexible ? "Illustrative max" : "Total payable"}
                 </dt>
-                <dd className="font-medium">{money(p!.totalCommitment)}</dd>
+                <dd className="font-medium">{amountDisplay(p!.totalCommitment)}</dd>
               </>
             )}
             {p!.firstDueDate && (
@@ -162,7 +165,7 @@ export function EnrolValidationPanel({
             )}
             {p!.maturityDate && (
               <>
-                <dt className="text-muted-foreground">Maturity</dt>
+                <dt className="text-muted-foreground">{p!.maturityDateProvisional ? "Estimated maturity" : "Maturity"}</dt>
                 <dd className="font-medium">{formatIsoDate(p!.maturityDate)}</dd>
               </>
             )}

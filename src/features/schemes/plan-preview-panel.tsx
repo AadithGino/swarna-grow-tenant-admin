@@ -1,5 +1,7 @@
 "use client";
 
+import { COLLECTION_FREQUENCY_LABELS } from "@/src/types/collection";
+import { oneTimeBonusLabel } from "@/src/types/one-time-gold";
 import type { PlanSchedulePreviewData } from "@/src/features/schemes/plan-preview-types";
 
 function normalizePreviewData(
@@ -42,6 +44,35 @@ export function PlanSchedulePreviewPanel({
   }
 
   const { summary, schedule } = preview;
+
+  if (summary.oneTimeRules && summary.oneTimeSchedule) {
+    return (
+      <div className="space-y-3 text-sm">
+        <dl className="grid grid-cols-2 gap-2">
+          {[
+            ["One-time payment", summary.totalPayable?.amountDisplay],
+            ["Funded on (sample)", summary.firstDueDate],
+            ["Maturity", summary.maturityDate],
+          ].map(([label, value]) => value && (
+            <div key={label} className="rounded-lg border bg-[#faf7f5] px-3 py-2">
+              <dt className="text-xs text-muted-foreground">{label}</dt>
+              <dd className="mt-1 font-semibold">{value}</dd>
+            </div>
+          ))}
+        </dl>
+        <p className="font-medium">{oneTimeBonusLabel(summary.oneTimeRules)}</p>
+        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Bonus credit dates</p>
+        <ol className="max-h-48 overflow-y-auto rounded-xl border">
+          {summary.oneTimeSchedule.map(({ period, dueDate }) => (
+            <li key={period} className="flex justify-between gap-2 border-b px-3 py-2 last:border-0">
+              <span>{summary.oneTimeRules?.timing === "MONTHLY" ? `Month ${period}` : "At maturity"}</span>
+              <span>{dueDate}</span>
+            </li>
+          ))}
+        </ol>
+      </div>
+    );
+  }
 
   if (summary.freeWindow) {
     return (
@@ -86,6 +117,12 @@ export function PlanSchedulePreviewPanel({
   return (
     <div className="space-y-3 text-sm">
       <dl className="grid gap-2">
+        {summary.collectionFrequency && (
+          <div className="flex justify-between gap-2">
+            <dt className="text-muted-foreground">Collection frequency</dt>
+            <dd>{COLLECTION_FREQUENCY_LABELS[summary.collectionFrequency]}</dd>
+          </div>
+        )}
         {summary.installmentAmount ? (
           <div className="flex justify-between gap-2">
             <dt className="text-muted-foreground">Installment</dt>

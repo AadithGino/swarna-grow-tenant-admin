@@ -1,5 +1,7 @@
 "use client";
 
+import { oneTimeBonusLabel } from "@/src/types/one-time-gold";
+
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState, type ReactNode } from "react";
@@ -16,10 +18,13 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { EnrolFrequencyControl } from "@/src/components/common/enrol-frequency-control";
+import { MATURITY_GOLD_BASIS_LABELS, type CollectionFrequency } from "@/src/types/collection";
 import { EnrolAmountControl } from "@/src/components/common/enrol-amount-control";
 import { PageSkeleton, QueryError } from "@/src/components/common/query-state";
 import { useCustomerTenant } from "@/src/components/customer/customer-tenant-context";
 import {
+  useValidateCustomerEnrolmentMutation,
   useEnrolCustomerSchemeMutation,
   useGetCustomerPlanQuery,
   useGetCustomerProfileQuery,
@@ -38,11 +43,11 @@ import {
 } from "@/src/lib/enrol-plan-rules";
 import { openCustomerPaymentTarget } from "@/src/lib/customer-payment-redirect";
 import { useCustomerKycEnabled } from "@/src/lib/customer-kyc-enabled";
-import { money } from "@/src/lib/format";
+import { formatIsoDate, money, preciseMoney } from "@/src/lib/format";
 import { cn } from "@/lib/utils";
 import { CUSTOMER_MOBILE_NAV_DOCK } from "@/src/features/customer/customer-scheme-detail-views";
 import { toast } from "sonner";
-import { toastApiError } from "@/src/lib/api-error";
+import { parseApiError, toastApiError } from "@/src/lib/api-error";
 
 type ExpandSection = "benefit" | "rules" | "terms" | null;
 
@@ -198,6 +203,9 @@ export function CustomerPlanDetailPage({ id }: { id: string }) {
   const [payNow, setPayNow] = useState(true);
   const [agreed, setAgreed] = useState(false);
   const [expanded, setExpanded] = useState<ExpandSection>(null);
+  const [frequency, setFrequency] = useState<CollectionFrequency>();
+  const [validateSchedule, scheduleState] = useValidateCustomerEnrolmentMutation();
+  const [previewKey, setPreviewKey] = useState("");
   const [enrol, enrolState] = useEnrolCustomerSchemeMutation();
   const [initiatePublicLink] = useInitiatePublicPaymentLinkMutation();
 
@@ -211,6 +219,8 @@ export function CustomerPlanDetailPage({ id }: { id: string }) {
       setAmount(undefined);
     }
     setPayNow(plan.firstInstallmentRequired !== false);
+    setFrequency(undefined);
+    setPreviewKey("");
   }
 
   if (isLoading || !plan) return <PageSkeleton cards={3} />;
@@ -241,13 +251,29 @@ export function CustomerPlanDetailPage({ id }: { id: string }) {
     : [];
   const kycVerified = kycEnabled && profile?.kyc?.status === "VERIFIED";
   const lockedContribution = amountFieldLocked(enrolRules);
-  const nextDateLabel = nextCyclePayDateLabel();
+  const collection = plan.collectionRules;
+  const currentPreviewKey = JSON.stringify([plan.id, frequency, amountValue, effectivePayNow]);
+  const schedulePreview = previewKey === currentPreviewKey ? scheduleState.data?.preview : undefined;
+  const scheduleBlocker = previewKey === currentPreviewKey ? scheduleState.data?.blockers?.[0]?.message : undefined;
+  const nextDateLabel = collection ? (schedulePreview?.firstDueDate ?? "the first scheduled due date") : nextCyclePayDateLabel();
+  const reviewSchedule = async () => {
+    if (!frequency || !hasValidAmount || amountValue == null) return;
+    setPreviewKey(currentPreviewKey);
+    try {
+      await validateSchedule({ planId: plan.id, installmentAmountPaise: Math.round(amountValue * 100),
+        payNow: effectivePayNow, collectionFrequency: frequency }).unwrap();
+    } catch (err) {
+      setPreviewKey("");
+      toast.error(parseApiError(err, "Could not preview the collection schedule.").message);
+    }
+  };
   const modelBadge = plan.model === "FLEXIBLE" ? "FLEXIBLE" : "FIXED";
 
   const submit = async () => {
     if (hardBlocked) {
       return toast.error(plan.blockedReason ?? "You cannot enrol in this plan right now");
     }
+    if (collection && (!frequency || !schedulePreview?.maturityDate || scheduleBlocker)) return toast.error("Review your collection schedule first.");
     if (!agreed) return toast.error("Please agree to the plan terms to continue");
     if (!hasValidAmount || amountValue == null) {
       return toast.error(amountError ?? "Enter a valid amount");
@@ -259,6 +285,11 @@ export function CustomerPlanDetailPage({ id }: { id: string }) {
         planId: plan.id,
         installmentAmountPaise: Math.round(amountValue * 100),
         payNow: effectivePayNow,
+        ...(collection && schedulePreview ? {
+          collectionFrequency: frequency,
+          expectedFirstCollectionPaise: Math.round((schedulePreview.installmentAmount ?? 0) * 100),
+          expectedMaturityDate: schedulePreview.maturityDate,
+        } : {}),
         redirectUrl: statusRedirectFull,
       }).unwrap();
       toast.success("Your scheme has been created");
@@ -295,6 +326,7 @@ export function CustomerPlanDetailPage({ id }: { id: string }) {
         },
       );
     } catch (err) {
+      if (collection) setPreviewKey("");
       toastApiError(err, "We couldn’t create the scheme. Check KYC, plan limits, and payment settings.");
     }
   };
@@ -302,11 +334,12 @@ export function CustomerPlanDetailPage({ id }: { id: string }) {
   const enrolCtaLabel = enrolState.isLoading
     ? null
     : effectivePayNow && hasValidAmount && amountValue != null
-      ? `Enrol & pay ${money(amountValue)}`
+      ? `Enrol & pay ${(collection ? preciseMoney : money)(schedulePreview?.installmentAmount ?? amountValue)}`
       : "Enrol & create scheme";
 
   const submitDisabled =
-    enrolState.isLoading || !hasValidAmount || hardBlocked || !agreed;
+    enrolState.isLoading || !hasValidAmount || hardBlocked || !agreed ||
+    Boolean(collection && (!frequency || !schedulePreview?.maturityDate || scheduleBlocker || scheduleState.isLoading));
 
   const submitHint = (() => {
     if (enrolState.isLoading || hardBlocked) return null;
@@ -324,8 +357,9 @@ export function CustomerPlanDetailPage({ id }: { id: string }) {
 
       <section className="customer-surface p-5">
         <span className="inline-flex rounded-md bg-[#f6edf0] px-2.5 py-1 text-[0.62rem] font-extrabold tracking-[0.12em] text-[var(--customer-primary,#730321)]">
-          {modelBadge}
+          {plan.oneTimeRules ? "ONE-TIME GOLD" : modelBadge}
         </span>
+        {plan.oneTimeRules && <p className="mt-2 text-sm">Pay once · {oneTimeBonusLabel(plan.oneTimeRules)}</p>}
         <h2 className="mt-3 text-xl font-black tracking-[-.02em] text-[#171722]">{plan.name}</h2>
         <p className="mt-2 text-sm leading-relaxed text-[#706b77]">
           {plan.tagline ||
@@ -354,15 +388,54 @@ export function CustomerPlanDetailPage({ id }: { id: string }) {
 
       <section className="customer-surface mt-4 p-5">
         <p className="text-sm font-bold text-[#171722]">Choose your contribution</p>
-        <div className="mt-3 [&_label]:sr-only">
+        {collection && (
+          <div className="mt-4">
+            <EnrolFrequencyControl
+              frequencies={collection.frequencies}
+              triggerClassName="h-11 rounded-xl bg-[#faf7f5]"
+              value={frequency}
+              onChange={setFrequency}
+            />
+          </div>
+        )}
+        <div className={cn("mt-3", !collection && "[&_label]:sr-only")}>
           <EnrolAmountControl
             plan={enrolRules}
+            label={collection ? (collection.amountBasis === "TOTAL_TARGET" ? "Total collection target" : "Amount per collection") : undefined}
             amount={amountValue}
             onAmountChange={setAmount}
             invalid={amountValue != null && Boolean(amountError)}
           />
         </div>
-        {lockedContribution ? (
+        {collection && (
+          <div className="mt-4 space-y-3">
+            <Button
+              type="button"
+              variant="outline"
+              className="h-11 w-full rounded-xl"
+              onClick={reviewSchedule}
+              disabled={!frequency || !hasValidAmount || hardBlocked || scheduleState.isLoading}
+            >
+              {scheduleState.isLoading ? "Loading schedule" : "Review schedule"}
+            </Button>
+            {scheduleBlocker && <p role="alert" className="text-sm text-red-700">{scheduleBlocker}</p>}
+            {schedulePreview?.maturityDate && (
+              <dl className="grid grid-cols-2 gap-2 [&>div]:rounded-xl [&>div]:bg-[#faf6f3] [&>div]:p-3 [&_dd]:mt-1 [&_dd]:text-sm [&_dd]:font-semibold [&_dd]:tabular-nums [&_dt]:text-xs [&_dt]:text-muted-foreground">
+                <div><dt>Collections</dt><dd>{schedulePreview.installmentCount}</dd></div>
+                <div><dt>Total payable</dt><dd>{preciseMoney(schedulePreview.totalCommitment ?? 0)}</dd></div>
+                <div>
+                  <dt>First collection</dt>
+                  <dd>{preciseMoney(schedulePreview.installmentAmount ?? 0)} · {formatIsoDate(schedulePreview.firstDueDate)}</dd>
+                </div>
+                <div>
+                  <dt>{schedulePreview.maturityDateProvisional ? "Estimated maturity" : "Maturity"}</dt>
+                  <dd>{formatIsoDate(schedulePreview.maturityDate)}</dd>
+                </div>
+              </dl>
+            )}
+          </div>
+        )}
+        {lockedContribution && !collection ? (
           <p className="mt-2 text-xs text-[#777280]">This plan has a fixed monthly contribution.</p>
         ) : null}
         {!hasValidAmount && amountValue != null && amountError ? (
@@ -399,6 +472,14 @@ export function CustomerPlanDetailPage({ id }: { id: string }) {
           onToggle={() => setExpanded((s) => (s === "benefit" ? null : "benefit"))}
         >
           <p className="font-semibold text-[#171722]">{benefitText}</p>
+          {plan.maturityGoldBonus && (
+            <dl className="mt-3 space-y-2 rounded-xl bg-[#faf6f3] p-3">
+              <div><dt className="font-medium text-[#171722]">Calculation basis</dt><dd>{MATURITY_GOLD_BASIS_LABELS[plan.maturityGoldBonus.bonusBasis]}</dd></div>
+              <div><dt className="font-medium text-[#171722]">Eligibility</dt><dd>{plan.model === "FLEXIBLE"
+                ? "Meet the required contribution cycles for your plan."
+                : plan.maturityGoldBonus.requireAllCollections ? "Complete all scheduled payments." : "Based on eligible contributions received."}</dd></div>
+            </dl>
+          )}
           {plan.flexibleSummary?.explainer ? <p className="mt-2">{plan.flexibleSummary.explainer}</p> : null}
         </DetailLinkRow>
         <DetailLinkRow

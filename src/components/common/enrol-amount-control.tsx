@@ -21,11 +21,13 @@ import type { EnrolPlanRules } from "@/src/lib/enrol-plan-rules";
 export function EnrolAmountControl({
   plan,
   amount,
+  label,
   onAmountChange,
   invalid,
 }: {
   plan?: EnrolPlanRules;
   amount?: number;
+  label?: string;
   onAmountChange: (amount: number | undefined) => void;
   invalid?: boolean;
 }) {
@@ -36,9 +38,9 @@ export function EnrolAmountControl({
   return (
     <div>
       <FieldLabel>
-        {plan?.paymentPattern === "FLEXIBLE_AVERAGE"
+        {label ?? (plan?.paymentPattern === "FLEXIBLE_AVERAGE"
           ? "Reference payment amount"
-          : "Installment amount"}
+          : "Installment amount")}
       </FieldLabel>
       {slabs ? (
         <Select

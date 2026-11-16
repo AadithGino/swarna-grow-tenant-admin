@@ -172,6 +172,9 @@ export function adaptCustomerSchemePlan(raw: unknown): SchemePlan {
     ).trim(),
     model: planModel(plan),
     durationMonths: Number(plan.durationMonths ?? 0),
+    oneTimeRules: plan.oneTimeRules as SchemePlan["oneTimeRules"],
+    collectionRules: plan.collectionRules as SchemePlan["collectionRules"],
+    maturityGoldBonus: plan.maturityGoldBonus as SchemePlan["maturityGoldBonus"],
     amountSummary: cardAmountSummary(amountSummaryRaw, flexibleSummary),
     contributionDetail: contributionDetail !== "See contribution details" ? contributionDetail : undefined,
     benefitSummary,
@@ -236,4 +239,31 @@ export function validateEnrolAmountRupee(plan: SchemePlan, amountRupee: number):
     return `Amount must be in multiples of ₹${Math.round(step / 100).toLocaleString("en-IN")}`;
   }
   return null;
+}
+
+type CustomerCollectionPreview = {
+  blockers?: { code: string; message: string }[];
+  preview?: {
+    installmentCount: number;
+    installmentAmount: { amountPaise: number };
+    totalPayable: { amountPaise: number };
+    firstDueDate: string;
+    maturityDate: string;
+    maturityDateProvisional?: boolean;
+  } | null;
+};
+
+export function adaptCustomerCollectionPreview(raw: unknown) {
+  const { blockers, preview } = (raw ?? {}) as CustomerCollectionPreview;
+  return {
+    blockers,
+    preview: preview ? {
+      installmentCount: preview.installmentCount,
+      installmentAmount: preview.installmentAmount.amountPaise / 100,
+      totalCommitment: preview.totalPayable.amountPaise / 100,
+      firstDueDate: preview.firstDueDate,
+      maturityDate: preview.maturityDate,
+      maturityDateProvisional: preview.maturityDateProvisional,
+    } : undefined,
+  };
 }

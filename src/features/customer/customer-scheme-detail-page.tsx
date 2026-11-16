@@ -1,5 +1,7 @@
 "use client";
 
+import { OneTimeGoldProgressPanel } from "@/src/components/common/one-time-gold-progress";
+
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
@@ -134,6 +136,7 @@ export function CustomerSchemeDetailPage({ id }: { id: string }) {
       }}
     >
       <CkNavBar title={scheme.planName} backHref={customerPath(tenantSlug, "schemes")} />
+      {scheme.oneTimeProgress && <OneTimeGoldProgressPanel progress={scheme.oneTimeProgress} />}
       <SchemeDetailPlanView
         scheme={scheme}
         schemeIsGold={schemeIsGold}

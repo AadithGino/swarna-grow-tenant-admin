@@ -14,8 +14,10 @@ import {
   Sparkles,
   Wallet,
 } from "lucide-react";
+import { COLLECTION_FREQUENCY_LABELS } from "@/src/types/collection";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import { FieldLabel, Surface } from "@/src/components/common/page-parts";
 import {
   amountSummaryLabel,
@@ -230,6 +232,32 @@ export function FormSection({
       </div>
       {children}
     </section>
+  );
+}
+
+export function ToggleRow({
+  label,
+  detail,
+  checked,
+  disabled,
+  onCheckedChange,
+}: {
+  label: string;
+  detail?: string;
+  checked: boolean;
+  disabled?: boolean;
+  onCheckedChange: (v: boolean) => void;
+}) {
+  return (
+    <div data-field-row="" className="flex items-center justify-between gap-4 rounded-xl border p-4">
+      <div>
+        <strong data-field-label="" className="text-sm">{label}</strong>
+        {detail ? (
+          <p className="text-sm text-muted-foreground">{detail}</p>
+        ) : null}
+      </div>
+      <Switch aria-label={label} checked={checked} disabled={disabled} onCheckedChange={onCheckedChange} />
+    </div>
   );
 }
 
@@ -487,6 +515,7 @@ export function PlanBuilderCustomerPreview({
   isEdit,
   preview,
   loading,
+  error,
 }: {
   form: PlanBuilderFormState;
   steps: PlanBuilderStep[];
@@ -494,6 +523,7 @@ export function PlanBuilderCustomerPreview({
   isEdit: boolean;
   preview?: PlanSchedulePreviewData;
   loading?: boolean;
+  error?: string;
 }) {
   const isFlexible = form.paymentPattern === "FLEXIBLE_AVERAGE";
   const gateIndex = previewGateStepIndex(steps, form);
@@ -514,7 +544,7 @@ export function PlanBuilderCustomerPreview({
           </div>
           <p className="text-sm leading-relaxed text-muted-foreground">
             Finish <strong className="text-[#28161a]">{nextLabel}</strong>{" "}
-            to generate instalment dates, totals, and maturity.
+            {form.oneTimeRules ? "to see the one-time payment, bonus credit dates, and maturity." : "to see payment dates, totals, and maturity."}
           </p>
           {stepIndex < gateIndex ? (
             <p className="text-xs text-muted-foreground">
@@ -534,7 +564,7 @@ export function PlanBuilderCustomerPreview({
     <div className="space-y-4">
       <AmountSummaryStrip label={amountSummaryLabel(form)} />
       <Surface
-        title={isFlexible ? "Enrolment timeline" : "Sample schedule"}
+        title={form.oneTimeRules ? "One-time gold preview" : isFlexible ? "Enrolment timeline" : "Sample schedule"}
         description={
           isFlexible
             ? "Starting today · free then capped phases"
@@ -542,7 +572,9 @@ export function PlanBuilderCustomerPreview({
         }
       >
         <div className="space-y-4 p-4">
-          {loading ? (
+          {error || form.oneTimeRules ? (
+            <PlanSchedulePreviewPanel data={preview} loading={loading} error={error} />
+          ) : loading ? (
             <div className="space-y-2">
               <div className="h-10 animate-pulse rounded-lg bg-muted" />
               <div className="h-24 animate-pulse rounded-lg bg-muted" />
@@ -557,8 +589,12 @@ export function PlanBuilderCustomerPreview({
               {summary && !summary.freeWindow ? (
                 <div className="grid grid-cols-2 gap-2">
                   {[
+                    summary.collectionFrequency && {
+                      label: "Collection frequency",
+                      value: COLLECTION_FREQUENCY_LABELS[summary.collectionFrequency],
+                    },
                     summary.installmentAmount?.amountDisplay && {
-                      label: "Installment",
+                      label: summary.collectionFrequency ? "First collection" : "Installment",
                       value: summary.installmentAmount.amountDisplay,
                     },
                     summary.totalPayable?.amountDisplay && {
@@ -593,6 +629,9 @@ export function PlanBuilderCustomerPreview({
                     ))}
                 </div>
               ) : null}
+              {!isFlexible && schedule.length > 0 && summary?.benefit?.displayLabel && (
+                <p className="text-sm font-medium">{summary.benefit.displayLabel}</p>
+              )}
               {isFlexible ? (
                 <PlanSchedulePreviewPanel
                   data={preview}

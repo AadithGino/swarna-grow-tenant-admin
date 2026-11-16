@@ -1,5 +1,11 @@
 "use client";
 
+import { OneTimeGoldFields } from "./one-time-gold-fields";
+
+import { CollectionRulesFields } from "./collection-rules-fields";
+import { MaturityGoldBenefitFields } from "./maturity-gold-benefit-fields";
+import { EnrolFrequencyControl } from "@/src/components/common/enrol-frequency-control";
+import { COLLECTION_FREQUENCIES, type CollectionFrequency } from "@/src/types/collection";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -14,7 +20,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { FormFieldError } from "@/src/components/common/form-field-error";
 import {
@@ -50,6 +55,7 @@ import {
   ReviewSummaryCard,
   STEP_COPY,
   StepIntro,
+  ToggleRow,
 } from "@/src/features/schemes/plan-builder-ui";
 import type { StepId } from "@/src/features/schemes/plan-builder-wizard-types";
 import { useAppSelector } from "@/src/store/hooks";
@@ -63,7 +69,6 @@ import {
   coerceBenefitForPattern,
   defaultPlanBuilderForm,
   isPlanPreviewReady,
-  planPreviewInputKey,
   paymentPatternLabel,
   penaltyModeLabel,
   planDetailToDuplicateForm,
@@ -86,7 +91,7 @@ const REDEMPTION_MODE_OPTIONS: { id: RedemptionMode; label: string }[] = [
   { id: "PURCHASE_ADJUSTMENT", label: "Purchase adjustment" },
 ];
 
-function buildSteps(paymentPattern: string): { id: StepId; label: string }[] {
+function buildSteps(paymentPattern: string, isOneTime: boolean): { id: StepId; label: string }[] {
   const steps: { id: StepId; label: string }[] = [
     { id: "basics", label: "Basics" },
     { id: "type", label: "Type" },
@@ -94,7 +99,7 @@ function buildSteps(paymentPattern: string): { id: StepId; label: string }[] {
   ];
   if (paymentPattern === "FIXED_DATE") {
     steps.push({ id: "amount", label: "Amount rules" });
-    steps.push({ id: "schedule", label: "Schedule & payments" });
+    steps.push({ id: "schedule", label: isOneTime ? "Funding" : "Schedule & payments" });
   }
   if (paymentPattern === "FLEXIBLE_AVERAGE") {
     steps.push({ id: "flexible", label: "Flexible rules" });
@@ -108,29 +113,7 @@ function buildSteps(paymentPattern: string): { id: StepId; label: string }[] {
   return steps;
 }
 
-function ToggleRow({
-  label,
-  detail,
-  checked,
-  onCheckedChange,
-}: {
-  label: string;
-  detail?: string;
-  checked: boolean;
-  onCheckedChange: (v: boolean) => void;
-}) {
-  return (
-    <div data-field-row="" className="flex items-center justify-between gap-4 rounded-xl border p-4">
-      <div>
-        <strong data-field-label="" className="text-sm">{label}</strong>
-        {detail ? (
-          <p className="text-sm text-muted-foreground">{detail}</p>
-        ) : null}
-      </div>
-      <Switch checked={checked} onCheckedChange={onCheckedChange} />
-    </div>
-  );
-}
+const ONE_TIME_TERMS = "Pay the full amount at enrolment. Bonus gold becomes redeemable at maturity under the plan’s redemption rules.";
 
 const LOCKED_FINANCIAL_STEPS: StepId[] = [
   "type",
@@ -157,14 +140,15 @@ export function PlanBuilderWizard({
   const [stepIndex, setStepIndex] = useState(0);
   const [createPlan] = useCreatePlanMutation();
   const [patchPlan] = usePatchPlanMutation();
+  const [previewFrequency, setPreviewFrequency] = useState<CollectionFrequency>();
   const [previewSchedule, previewState] = usePreviewPlanScheduleMutation();
   const branchesQuery = useGetBranchesQuery({ limit: 100 });
   const branches = branchesQuery.data?.items ?? [];
   const caps = useAppSelector((s) => s.session.session?.capabilities);
   const [form, setForm] = useState<PlanBuilderFormState>(defaultPlanBuilderForm);
+  const firstPaymentAnniversary = form.collectionRules?.maturityRule === "FIRST_PAYMENT_ANNIVERSARY";
   const [hydrated, setHydrated] = useState(!loadPlanId);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
-  const [previewError, setPreviewError] = useState<string | undefined>();
 
   if (planQuery.data && !hydrated) {
     const detail = planQuery.data as Record<string, unknown>;
@@ -189,8 +173,8 @@ export function PlanBuilderWizard({
   };
 
   const steps = useMemo(
-    () => buildSteps(form.paymentPattern),
-    [form.paymentPattern],
+    () => buildSteps(form.paymentPattern, Boolean(form.oneTimeRules)),
+    [form.paymentPattern, form.oneTimeRules],
   );
 
   const resolvedStepIndex = useMemo(() => {
@@ -215,34 +199,35 @@ export function PlanBuilderWizard({
   const go = (delta: number) =>
     setStepIndex((i) => Math.max(0, Math.min(steps.length - 1, i + delta)));
 
+  const previewBody = buildPreviewScheduleBody(form, {
+    planId: isEdit && form.editLocked ? planId : undefined,
+    collectionFrequency: previewFrequency && form.collectionRules?.frequencies.includes(previewFrequency)
+      ? previewFrequency : undefined,
+  });
+  const previewInputKey = JSON.stringify(previewBody);
+  const previewMatches = JSON.stringify(previewState.originalArgs) === previewInputKey;
+  const preview = previewMatches ? previewState.data : undefined;
+  const previewError = previewMatches && previewState.error
+    ? parseApiError(previewState.error, "Could not load sample schedule. Check the plan rules.").message
+    : undefined;
+
   const onPreview = async (opts?: { silent?: boolean }) => {
     try {
-      await previewSchedule(
-        buildPreviewScheduleBody(form, { planId: isEdit ? planId : undefined }),
-      ).unwrap();
-      setPreviewError(undefined);
+      await previewSchedule(previewBody).unwrap();
     } catch (err) {
-      const message = parseApiError(
-        err,
-        "Could not load schedule preview. Check amount and duration.",
-      ).message;
-      setPreviewError(message);
       if (!opts?.silent) {
-        toast.error(message);
+        toast.error(parseApiError(err, "Could not load sample schedule. Check the plan rules.").message);
       }
     }
   };
 
-  const previewInputKey = planPreviewInputKey(form);
   const gateStepIndex =
     form.paymentPattern === "FLEXIBLE_AVERAGE"
       ? steps.findIndex((s) => s.id === "flexible")
       : steps.findIndex((s) => s.id === "amount");
-  const previewFetchAllowed =
-    isEdit ||
-    (gateStepIndex >= 0 &&
-      resolvedStepIndex >= gateStepIndex &&
-      isPlanPreviewReady(form));
+  const previewFetchAllowed = isPlanPreviewReady(form) &&
+    (isEdit || (gateStepIndex >= 0 && resolvedStepIndex >= gateStepIndex));
+  const previewLoading = previewFetchAllowed && (!previewMatches || previewState.isLoading);
 
   useEffect(() => {
     if (!hydrated || !previewFetchAllowed) return;
@@ -285,7 +270,7 @@ export function PlanBuilderWizard({
     });
   };
 
-  const showCashSettlementBasisFields = planShowsCashSettlementBasis(
+  const showCashSettlementBasisFields = !form.oneTimeRules && planShowsCashSettlementBasis(
     form.valueBasis,
     form.allowedRedemptionModes,
   );
@@ -354,13 +339,17 @@ export function PlanBuilderWizard({
         </Surface>
       ) : null}
       <div className="grid gap-5 lg:grid-cols-[1fr_minmax(280px,340px)]">
-        <Surface title={stepCopy.title} description={stepCopy.description}>
+        <Surface
+          title={form.oneTimeRules && current.id === "schedule" ? "Funding" : stepCopy.title}
+          description={form.oneTimeRules && ["type", "amount", "schedule"].includes(current.id) ? undefined : stepCopy.description}
+        >
           <fieldset
             data-tour="plan-wizard-form"
             disabled={financialLocked}
             className="space-y-5 p-6 disabled:opacity-60"
           >
-            <StepIntro stepId={current.id} />
+            {form.oneTimeRules && ["type", "duration", "amount", "schedule"].includes(current.id)
+              ? null : <StepIntro stepId={current.id} />}
             {financialLocked && (
               <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950">
                 Financial rules are locked while schemes are active. Update
@@ -421,19 +410,40 @@ export function PlanBuilderWizard({
                 >
                   <div className="grid gap-3 sm:grid-cols-2">
                     <ChoiceCard
-                      selected={form.valueBasis === "CASH"}
+                      selected={form.valueBasis === "CASH" && !form.oneTimeRules}
                       title="Cash"
                       description="Fixed rupee installments or ranges. Simple for traditional chit-style savings."
-                      onClick={() => set({ valueBasis: "CASH" })}
+                      onClick={() => set({ valueBasis: "CASH", collectionRules: undefined, oneTimeRules: undefined,
+                        ...(form.termsText === ONE_TIME_TERMS ? { termsText: defaultPlanBuilderForm().termsText } : {}),
+                        ...(form.benefitType === "MATURITY_GOLD_CREDIT" ? {
+                          benefitType: "FIXED_BONUS_AMOUNT", benefitDisplayLabel: "Bonus at maturity",
+                        } : {}),
+                      })}
                     />
                     <PermissionGate capability="goldWeightScheme">
                       <ChoiceCard
-                        selected={form.valueBasis === "GOLD_WEIGHT"}
+                        selected={form.valueBasis === "GOLD_WEIGHT" && !form.oneTimeRules}
                         title="Gold weight"
                         description="Payments convert to grams at your daily rate. Ideal for gold accumulation schemes."
-                        onClick={() => set({ valueBasis: "GOLD_WEIGHT" })}
+                        onClick={() => set({
+                          valueBasis: "GOLD_WEIGHT", oneTimeRules: undefined,
+                          ...(form.termsText === ONE_TIME_TERMS ? { termsText: defaultPlanBuilderForm().termsText } : {}),
+                        })}
                       />
                     </PermissionGate>
+                    {!form.editLocked && <PermissionGate capability="goldWeightScheme">
+                      <ChoiceCard selected={Boolean(form.oneTimeRules)} title="One-time gold"
+                        description="One verified payment with monthly or maturity-only gold credits."
+                        onClick={() => set({ valueBasis: "GOLD_WEIGHT", paymentPattern: "FIXED_DATE",
+                          collectionRules: undefined, installmentCount: 1, firstInstallmentCollectNow: true,
+                          ...(form.termsText === defaultPlanBuilderForm().termsText ? {
+                            termsText: ONE_TIME_TERMS,
+                          } : {}),
+                          firstInstallmentModeEditable: false, partialPaymentAllowed: false, advancePaymentAllowed: false,
+                          maxAdvanceInstallments: 0, cashSettlementBasis: "GOLD_VALUE",
+                          oneTimeRules: form.oneTimeRules ?? { timing: "AT_MATURITY", basis: "PRINCIPAL_PERCENT", value: 5, amountPeriod: "TERM_TOTAL" },
+                        })} />
+                    </PermissionGate>}
                   </div>
                 </FormSection>
                 {form.valueBasis === "GOLD_WEIGHT" && (
@@ -483,7 +493,7 @@ export function PlanBuilderWizard({
                     </div>
                   </FormSection>
                 )}
-                <FormSection
+                {!form.oneTimeRules && <FormSection
                   title="Payment pattern"
                   hint="Fixed plans use equal installments on due dates. Flexible plans use a free window then capped months."
                 >
@@ -511,6 +521,7 @@ export function PlanBuilderWizard({
                             coerceBenefitForPattern({
                               ...form,
                               paymentPattern: "FLEXIBLE_AVERAGE",
+                            collectionRules: undefined, oneTimeRules: undefined,
                             }),
                           )
                         }
@@ -526,14 +537,14 @@ export function PlanBuilderWizard({
                       />
                     )}
                   </div>
-                </FormSection>
+                </FormSection>}
               </>
             )}
 
             {current.id === "duration" && (
               <FormSection
                 title="Scheme length"
-                hint="Usually duration and installment count match (e.g. 11 months, 11 installments)."
+                hint={form.oneTimeRules ? "Tenure starts on the verified payment date." : "Usually duration and installment count match (e.g. 11 months, 11 installments)."}
               >
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div>
@@ -549,7 +560,7 @@ export function PlanBuilderWizard({
                     />
                   </div>
                   <div>
-                    <FieldLabel>Installment count</FieldLabel>
+                    {!form.collectionRules && !form.oneTimeRules && <><FieldLabel>Installment count</FieldLabel>
                     <FieldHint>
                       Number of collection periods (installments or cycles).
                     </FieldHint>
@@ -560,7 +571,7 @@ export function PlanBuilderWizard({
                       onChange={(e) =>
                         set({ installmentCount: Number(e.target.value) })
                       }
-                    />
+                    /></>}
                   </div>
                 </div>
                 {form.paymentPattern === "FLEXIBLE_AVERAGE" &&
@@ -603,7 +614,7 @@ export function PlanBuilderWizard({
                     </Select>
                     {form.amountMode === "JEWELLER_FIXED" && (
                       <>
-                        <FieldLabel>Fixed installment (₹)</FieldLabel>
+                        <FieldLabel>{form.oneTimeRules ? "One-time payment (₹)" : form.collectionRules?.amountBasis === "TOTAL_TARGET" ? "Fixed total target (₹)" : "Fixed installment (₹)"}</FieldLabel>
                         <Input
                           type="number"
                           value={form.fixedAmount}
@@ -615,7 +626,7 @@ export function PlanBuilderWizard({
                     )}
                     {form.amountMode === "JEWELLER_SLABS" && (
                       <>
-                        <FieldLabel>Slab amounts (₹, comma-separated)</FieldLabel>
+                        <FieldLabel>{form.collectionRules?.amountBasis === "TOTAL_TARGET" ? "Total target slabs (₹, comma-separated)" : "Slab amounts (₹, comma-separated)"}</FieldLabel>
                         <Input
                           value={form.slabsCsv}
                           onChange={(e) => set({ slabsCsv: e.target.value })}
@@ -658,19 +669,63 @@ export function PlanBuilderWizard({
                       </div>
                     )}
                 <AmountSummaryStrip label={amountSummaryLabel(form)} />
+                {!form.oneTimeRules && form.valueBasis === "GOLD_WEIGHT" && form.paymentPattern === "FIXED_DATE" && (
+                  <FormSection title="Collection schedules">
+                    <ToggleRow label="Let customers choose a collection frequency"
+                      checked={Boolean(form.collectionRules)} disabled={form.editLocked}
+                      onCheckedChange={(enabled) => set({ collectionRules: enabled ? {
+                        frequencies: [...COLLECTION_FREQUENCIES], amountBasis: "PER_COLLECTION",
+                        maturityRule: "FIRST_PAYMENT_ANNIVERSARY",
+                      } : undefined, ...(enabled ? {
+                        benefitType: "MATURITY_GOLD_CREDIT" as const,
+                        firstInstallmentCollectNow: true,
+                        firstInstallmentModeEditable: false, partialPaymentAllowed: false,
+                        prematureClosureAllowed: false, benefitTreatment: "FORFEIT" as const, cashSettlementBasis: "GOLD_VALUE" as const,
+                      } : {}) })} />
+                    {form.collectionRules && (
+                      <>
+                        <CollectionRulesFields
+                          rules={form.collectionRules}
+                          disabled={form.editLocked}
+                          onChange={(collectionRules) => set({
+                            collectionRules,
+                            ...(collectionRules.maturityRule === "FIRST_PAYMENT_ANNIVERSARY"
+                              ? { firstInstallmentCollectNow: true, firstInstallmentModeEditable: false, partialPaymentAllowed: false }
+                              : {}),
+                          })}
+                        />
+                        <div className="border-t border-[#eaded9] pt-4 sm:max-w-xs">
+                          <EnrolFrequencyControl
+                            label="Preview frequency"
+                            frequencies={form.collectionRules.frequencies}
+                            value={previewFrequency && form.collectionRules.frequencies.includes(previewFrequency)
+                              ? previewFrequency
+                              : form.collectionRules.frequencies[0]}
+                            onChange={setPreviewFrequency}
+                          />
+                        </div>
+                      </>
+                    )}
+                  </FormSection>
+                )}
               </>
             )}
 
-            {current.id === "schedule" && (
+            {current.id === "schedule" && form.oneTimeRules && (
+              <FormSection title="One-time payment">
+                <p className="text-sm text-muted-foreground">Collect the full amount at enrolment. The verified payment date starts the tenure.</p>
+              </FormSection>
+            )}
+            {current.id === "schedule" && !form.oneTimeRules && (
               <>
-                <FieldLabel>Due day of month</FieldLabel>
+                {!form.collectionRules && <><FieldLabel>Due day of month</FieldLabel>
                 <Input
                   type="number"
                   min={1}
                   max={28}
                   value={form.dueDay}
                   onChange={(e) => set({ dueDay: Number(e.target.value) })}
-                />
+                /></>}
                 <FieldLabel>Grace days</FieldLabel>
                 <Input
                   type="number"
@@ -681,6 +736,7 @@ export function PlanBuilderWizard({
                 <ToggleRow
                   label="Default: collect first installment at enrolment"
                   checked={form.firstInstallmentCollectNow}
+                  disabled={firstPaymentAnniversary}
                   onCheckedChange={(v) =>
                     set({ firstInstallmentCollectNow: v })
                   }
@@ -689,6 +745,7 @@ export function PlanBuilderWizard({
                   label="Staff can change first-instalment mode at enrolment"
                   detail="When off, enrolment always uses the default above."
                   checked={form.firstInstallmentModeEditable}
+                  disabled={firstPaymentAnniversary}
                   onCheckedChange={(v) =>
                     set({ firstInstallmentModeEditable: v })
                   }
@@ -699,6 +756,7 @@ export function PlanBuilderWizard({
                 <ToggleRow
                   label="Partial payments allowed"
                   checked={form.partialPaymentAllowed}
+                  disabled={firstPaymentAnniversary}
                   onCheckedChange={(v) =>
                     set({ partialPaymentAllowed: v })
                   }
@@ -1122,21 +1180,27 @@ export function PlanBuilderWizard({
               </div>
             )}
 
-            {current.id === "benefit" && (
+            {current.id === "benefit" && form.oneTimeRules && (
+              <FormSection title="Scheduled gold bonus" hint="Posted gold becomes redeemable at maturity, subject to the early-closure rules.">
+                <OneTimeGoldFields rules={form.oneTimeRules} onChange={(oneTimeRules) => set({ oneTimeRules })} disabled={form.editLocked} />
+                <FormFieldError message={fieldErrors.goldBonus} />
+              </FormSection>
+            )}
+
+            {current.id === "benefit" && !form.oneTimeRules && (
               <div className="space-y-4">
-                {form.paymentPattern === "FLEXIBLE_AVERAGE" ? (
+                {form.paymentPattern === "FLEXIBLE_AVERAGE" && form.benefitType !== "MATURITY_GOLD_CREDIT" ? (
                   <p className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950">
                     Flexible schemes have no fixed installments, so
                     &quot;one free installment&quot; does not apply. Choose a
-                    computed bonus (% or flat ₹) or a text benefit your team
+                    computed bonus or a text benefit your team
                     honours at redemption.
                   </p>
                 ) : null}
-                {!form.editLocked && (
-                <>
-                <FieldLabel>Benefit type</FieldLabel>
+                <FieldLabel htmlFor="plan-benefit-type">Benefit type</FieldLabel>
                 <Select
                   value={form.benefitType}
+                  disabled={form.editLocked || Boolean(form.collectionRules)}
                   onValueChange={(v) => {
                     const type = v as PlanBuilderFormState["benefitType"];
                     const labels: Record<string, string> = {
@@ -1147,13 +1211,20 @@ export function PlanBuilderWizard({
                     set({
                       benefitType: type,
                       benefitDisplayLabel: labels[type] ?? form.benefitDisplayLabel,
+                      ...(type === "MATURITY_GOLD_CREDIT" ? {
+                        benefitTreatment: "FORFEIT", cashSettlementBasis: "GOLD_VALUE",
+                        includeMonetaryBenefitInPaidAmountCash: false,
+                      } : {}),
                     });
                   }}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger id="plan-benefit-type">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
+                    {form.valueBasis === "GOLD_WEIGHT" && (
+                      <SelectItem value="MATURITY_GOLD_CREDIT">Gold bonus at maturity</SelectItem>
+                    )}
                     {allowedBenefitTypes(form.paymentPattern).includes(
                       "ONE_FREE_INSTALLMENT",
                     ) ? (
@@ -1169,10 +1240,17 @@ export function PlanBuilderWizard({
                     </SelectItem>
                   </SelectContent>
                 </Select>
-                </>
-                )}
+                {form.benefitType === "MATURITY_GOLD_CREDIT" ? (
+                  <>
+                    <MaturityGoldBenefitFields rules={form.goldBonus} isFixed={form.paymentPattern === "FIXED_DATE"}
+                      disabled={form.editLocked} onChange={(goldBonus) => set({ goldBonus })} />
+                    <FormFieldError message={fieldErrors.goldBonus} />
+                  </>
+                ) : (
+                <>
                 <FieldLabel>Display label</FieldLabel>
                 <Input
+                  disabled={form.editLocked}
                   value={form.benefitDisplayLabel}
                   onChange={(e) =>
                     set({ benefitDisplayLabel: e.target.value })
@@ -1280,9 +1358,9 @@ export function PlanBuilderWizard({
                     />
                   </>
                 )}
-                <p className="rounded-lg bg-[#fff8e8] p-3 text-sm">
-                  {benefitSummaryLabel(form)}
-                </p>
+                </>
+                )}
+                <AmountSummaryStrip label={benefitSummaryLabel(form)} />
               </div>
             )}
 
@@ -1296,6 +1374,7 @@ export function PlanBuilderWizard({
                     set({ prematureClosureAllowed: v })
                   }
                 />
+                {(!form.oneTimeRules || form.prematureClosureAllowed) && <>
                 <div>
                   <FieldLabel>Lock-in months</FieldLabel>
                   <Input
@@ -1354,6 +1433,7 @@ export function PlanBuilderWizard({
                 <FieldLabel>Benefit treatment on premature close</FieldLabel>
                 <Select
                   value={form.benefitTreatment}
+                  disabled={!form.oneTimeRules && form.benefitType === "MATURITY_GOLD_CREDIT"}
                   onValueChange={(v) =>
                     set({
                       benefitTreatment:
@@ -1366,9 +1446,11 @@ export function PlanBuilderWizard({
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="FORFEIT">Forfeit benefit</SelectItem>
-                    <SelectItem value="FULL">Full benefit</SelectItem>
+                    <SelectItem value="FULL">{form.oneTimeRules ? "Keep posted bonus only" : "Full benefit"}</SelectItem>
                   </SelectContent>
                 </Select>
+                </>}
+                <FormFieldError message={fieldErrors.lockInMonths} />
                 <FieldLabel>Allowed redemption modes</FieldLabel>
                 <div className="grid gap-2 sm:grid-cols-2">
                   {REDEMPTION_MODE_OPTIONS.map(({ id, label }) => (
@@ -1407,6 +1489,7 @@ export function PlanBuilderWizard({
                             name="cashSettlementBasis"
                             className="mt-1"
                             checked={form.cashSettlementBasis === opt.value}
+                            disabled={form.benefitType === "MATURITY_GOLD_CREDIT" && opt.value === "PAID_AMOUNT"}
                             onChange={() =>
                               set({
                                 cashSettlementBasis: opt.value,
@@ -1561,14 +1644,16 @@ export function PlanBuilderWizard({
                     },
                     {
                       label: "Type",
-                      value: `${paymentPatternLabel(form.paymentPattern)} · ${valueBasisLabel(form.valueBasis)}`,
+                      value: form.oneTimeRules ? "One-time gold" : `${paymentPatternLabel(form.paymentPattern)} · ${valueBasisLabel(form.valueBasis)}`,
                     },
                     {
                       label: "Tenure",
-                      value: `${form.durationMonths} months · ${form.installmentCount} periods`,
+                      value: form.oneTimeRules ? `${form.durationMonths} months` : form.collectionRules
+                        ? `${form.durationMonths} months · ${form.collectionRules.frequencies.map((frequency) => frequency.toLowerCase()).join(", ")}`
+                        : `${form.durationMonths} months · ${form.installmentCount} periods`,
                     },
                     {
-                      label: "Contributions",
+                      label: form.oneTimeRules ? "One-time payment" : "Contributions",
                       value: amountSummaryLabel(form),
                     },
                     {
@@ -1604,13 +1689,14 @@ export function PlanBuilderWizard({
                 <Button
                   type="button"
                   variant="outline"
+                  disabled={!previewFetchAllowed || previewState.isLoading}
                   onClick={() => void onPreview()}
                 >
                   Refresh preview
                 </Button>
                 <PlanSchedulePreviewPanel
-                  data={previewState.data}
-                  loading={previewState.isLoading}
+                  data={preview}
+                  loading={previewLoading}
                   error={previewError}
                 />
               </div>
@@ -1638,13 +1724,6 @@ export function PlanBuilderWizard({
                   }
                   setFieldErrors({});
                   go(1);
-                  if (
-                    ["duration", "amount", "schedule", "flexible"].includes(
-                      current.id,
-                    )
-                  ) {
-                    void onPreview();
-                  }
                 }}
               >
                 Continue
@@ -1693,10 +1772,11 @@ export function PlanBuilderWizard({
           <PlanBuilderCustomerPreview
             form={form}
             steps={steps}
-            stepIndex={stepIndex}
+            stepIndex={resolvedStepIndex}
             isEdit={isEdit}
-            preview={previewState.data}
-            loading={previewState.isLoading}
+            preview={preview}
+            loading={previewLoading}
+            error={previewError}
           />
         </div>
       </div>

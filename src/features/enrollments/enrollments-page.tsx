@@ -1,5 +1,6 @@
 "use client";
 
+import { CollectionBoardFilters, type CollectionBoardFilterValues } from "@/src/components/common/collection-board-filters";
 import {
   PageTab,
   PageTabs,
@@ -72,12 +73,14 @@ const ENROLLMENT_STATUS_FILTERS: FilterOption[] = [
 
 export function EnrollmentsPage() {
   const router = useRouter();
+  const [collectionFilters, setCollectionFilters] = useState<CollectionBoardFilterValues>({});
+  const collectionFilterKey = JSON.stringify(collectionFilters);
   const branchKey = useActingBranchKey();
   const branchId = useActingBranchId();
   const [status, setStatus] = useState("ACTIVE");
   const [q, setQ] = useState("");
   const debouncedQ = useDebouncedValue(q, 350);
-  const pager = useCursorPagination(8, `${debouncedQ}|${status}|${branchKey}`);
+  const pager = useCursorPagination(8, `${debouncedQ}|${status}|${branchKey}|${collectionFilterKey}`);
   const query = useGetEnrollmentsQuery(
     {
       q: listSearchQueryForApi(debouncedQ),
@@ -85,6 +88,7 @@ export function EnrollmentsPage() {
       group:
         status === "PAST" ? "PAST" : status === "OPEN" ? "OPEN" : undefined,
       branchId,
+      ...collectionFilters,
       ...pager.queryParams,
     },
     { skip: shouldSkipListSearchQuery(debouncedQ) },
@@ -127,7 +131,7 @@ export function EnrollmentsPage() {
               <span className="font-semibold">{r.enrollmentNo}</span>
             </EnrollmentLink>
           }
-          secondary={`${r.plan} · ${r.paymentPattern === "FLEXIBLE" ? "Flexible" : "Fixed date"}`}
+          secondary={`${r.plan} · ${r.collectionFrequency ? `${String(r.collectionFrequency).toLowerCase()} collection` : r.paymentPattern === "FLEXIBLE" ? "Flexible" : "Fixed date"}`}
         />
       ),
       sortValue: (r) => String(r.enrollmentNo ?? ""),
@@ -269,6 +273,7 @@ export function EnrollmentsPage() {
                     placeholder="Enrollment number, customer or phone"
                   />
                 }
+                filters={<CollectionBoardFilters filters={collectionFilters} onChange={setCollectionFilters} showBonus />}
                 activeFilters={
                   q.trim()
                     ? [

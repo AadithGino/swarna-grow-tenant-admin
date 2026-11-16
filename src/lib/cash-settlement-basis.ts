@@ -73,6 +73,7 @@ export function paidAmountCashFormulaNote(
 export type PlanBenefitType =
   | "ONE_FREE_INSTALLMENT"
   | "FIXED_BONUS_AMOUNT"
+  | "MATURITY_GOLD_CREDIT"
   | "TEXT_ONLY";
 
 /** Client-side guard aligned with backend plan validation (server remains authoritative). */
@@ -90,6 +91,9 @@ export function validatePlanCashSettlementFields(input: {
     )
   ) {
     return null;
+  }
+  if (input.cashSettlementBasis === "PAID_AMOUNT" && input.benefitType === "MATURITY_GOLD_CREDIT") {
+    return "Gold bonus at maturity requires cash payout based on gold value.";
   }
   if (
     input.cashSettlementBasis === "PAID_AMOUNT" &&

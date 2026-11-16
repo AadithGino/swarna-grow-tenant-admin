@@ -12,6 +12,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { ActionDialog } from "@/src/components/common/action-dialog";
+import { EnrolFrequencyControl } from "@/src/components/common/enrol-frequency-control";
+import type { CollectionFrequency } from "@/src/types/collection";
 import { EnrolAmountControl } from "@/src/components/common/enrol-amount-control";
 import { EnrolFirstInstallmentControl } from "@/src/components/common/enrol-first-installment-control";
 import { EnrolFormShell } from "@/src/components/common/enrol-form-shell";
@@ -90,6 +92,7 @@ function CreateEnrollmentDialogInner({
   const [createPaymentLink] = useCreatePaymentLinkMutation();
   const [form, setForm] = useState({
     planId: "",
+    collectionFrequency: undefined as CollectionFrequency | undefined,
     amount: 0,
     firstInstallmentMode: "COLLECT_NOW" as "COLLECT_NOW" | "START_NEXT_CYCLE",
     firstInstallmentAction: "RECORD_MANUAL_PAYMENT" as
@@ -118,6 +121,7 @@ function CreateEnrollmentDialogInner({
     void validateEnrolment({
       customerId: customer.id,
       planId: form.planId,
+      collectionFrequency: form.collectionFrequency,
       amount: debouncedAmount,
       firstInstallmentMode: effectiveFirstMode,
     });
@@ -125,6 +129,7 @@ function CreateEnrollmentDialogInner({
     open,
     customer.id,
     debouncedAmount,
+    form.collectionFrequency,
     effectiveFirstMode,
     form.planId,
     selectedPlan,
@@ -135,6 +140,7 @@ function CreateEnrollmentDialogInner({
     if (!next) {
       setForm({
         planId: "",
+        collectionFrequency: undefined,
         amount: 0,
         firstInstallmentMode: "COLLECT_NOW",
         firstInstallmentAction: "RECORD_MANUAL_PAYMENT",
@@ -204,6 +210,10 @@ function CreateEnrollmentDialogInner({
         if (planErr) clientErrors.planId = planErr;
         const amountErr = validateEnrolAmount(selectedPlan, debouncedAmount);
         if (amountErr) clientErrors.amount = amountErr;
+        if (selectedPlan?.collectionRules && !form.collectionFrequency) {
+          toast.error("Choose a collection frequency.");
+          return false;
+        }
         if (Object.keys(clientErrors).length) {
           setFieldErrors(clientErrors);
           toast.error("Fix the highlighted fields.");
@@ -218,6 +228,7 @@ function CreateEnrollmentDialogInner({
         const row = await createEnrollment({
           customerId: customer.id,
           planId: form.planId,
+          collectionFrequency: form.collectionFrequency,
           amount: debouncedAmount,
           firstInstallmentMode: effectiveFirstMode,
           firstInstallmentAction: form.firstInstallmentAction,
@@ -225,7 +236,7 @@ function CreateEnrollmentDialogInner({
           form.firstInstallmentAction === "RECORD_MANUAL_PAYMENT"
             ? {
                 payment: {
-                  amountPaise: Math.round(debouncedAmount * 100),
+                  ...(selectedPlan?.collectionRules ? {} : { amountPaise: Math.round(debouncedAmount * 100) }),
                   mode: form.paymentMode,
                   ...(form.paymentReference.trim()
                     ? { reference: form.paymentReference.trim() }
@@ -243,7 +254,7 @@ function CreateEnrollmentDialogInner({
         ) {
           const link = await createPaymentLink({
             schemeId: row.id,
-            amount: debouncedAmount,
+            amount: selectedPlan.collectionRules ? row.installment : debouncedAmount,
             expectedPositionVersion: row.positionVersion,
             idempotencyKey: idempotencyKey(),
           }).unwrap();
@@ -283,6 +294,7 @@ function CreateEnrollmentDialogInner({
                 setForm({
                   ...form,
                   planId: value,
+                collectionFrequency: undefined,
                   amount: defaultAmountForPlan(plan),
                   firstInstallmentMode:
                     plan.firstInstallmentModeDefault ?? "COLLECT_NOW",
@@ -319,8 +331,15 @@ function CreateEnrollmentDialogInner({
             </Select>
             <FormFieldError message={displayPlanError()} />
           </div>
+          {selectedPlan?.collectionRules && <EnrolFrequencyControl
+            frequencies={selectedPlan.collectionRules.frequencies}
+            triggerClassName="h-11 rounded-xl bg-[#faf7f5]"
+            value={form.collectionFrequency}
+            onChange={(collectionFrequency) => setForm({ ...form, collectionFrequency })}
+          />}
           <EnrolAmountControl
             plan={selectedPlan}
+            label={selectedPlan?.oneTimeRules ? "One-time payment" : selectedPlan?.collectionRules?.amountBasis === "TOTAL_TARGET" ? "Total collection target" : undefined}
             amount={form.amount}
             invalid={Boolean(displayAmountError())}
             onAmountChange={(amount) => {

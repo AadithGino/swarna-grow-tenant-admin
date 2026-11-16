@@ -101,6 +101,12 @@ function buildAmountSummaryLabel(
   return `₹${form.minAmount.toLocaleString("en-IN")} – ₹${form.maxAmount.toLocaleString("en-IN")} (in multiples of ₹${form.multipleOf.toLocaleString("en-IN")})`;
 }
 
+const savedPlanRules = new Map<string, Record<string, unknown>>();
+
+export function saveMockPlanRules(planId: string, rules: Record<string, unknown>) {
+  savedPlanRules.set(planId, { ...savedPlanRules.get(planId), ...rules });
+}
+
 export function synthesizePlanDetail(plan: SchemePlan) {
   const profile = PROFILES[plan.id] ?? {};
   const form = defaultPlanBuilderForm();
@@ -154,6 +160,9 @@ export function synthesizePlanDetail(plan: SchemePlan) {
 
   return {
     ...body,
+    ...savedPlanRules.get(plan.id),
+    name: plan.name,
+    code: plan.code,
     id: plan.id,
     status: plan.status,
     version: plan.id === "pln_01" ? 3 : 1,

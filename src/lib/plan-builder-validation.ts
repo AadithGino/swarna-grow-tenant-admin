@@ -1,4 +1,4 @@
-import type { PlanBuilderFormState } from "@/src/features/schemes/plan-builder-form";
+import { validGoldBonusPercent, type PlanBuilderFormState } from "@/src/features/schemes/plan-builder-form";
 import { validatePlanCashSettlementFields } from "@/src/lib/cash-settlement-basis";
 import type { StepId } from "@/src/features/schemes/plan-builder-wizard-types";
 
@@ -99,7 +99,7 @@ export function validatePlanSchedule(
   form: PlanBuilderFormState,
 ): Record<string, string> {
   const errors: Record<string, string> = {};
-  if (form.paymentPattern !== "FIXED_DATE") return errors;
+  if (form.paymentPattern !== "FIXED_DATE" || form.oneTimeRules) return errors;
   if (form.dueDay < 1 || form.dueDay > 31) {
     errors.dueDay = "Due day must be between 1 and 31.";
   }
@@ -158,6 +158,17 @@ export function validatePlanBenefit(
   form: PlanBuilderFormState,
 ): Record<string, string> {
   const errors: Record<string, string> = {};
+  if (form.oneTimeRules) {
+    const { basis, value } = form.oneTimeRules;
+    if (!Number.isSafeInteger(value) || value <= 0 || (basis === "PRINCIPAL_PERCENT" && value > 100)) {
+      errors.goldBonus = "Enter a valid positive bonus amount.";
+    }
+    return errors;
+  }
+  if (form.benefitType === "MATURITY_GOLD_CREDIT") {
+    if (!validGoldBonusPercent(form.goldBonus.bonusPercent)) errors.goldBonus = "Enter a whole percentage from 1 to 100.";
+    return errors;
+  }
   const label = form.benefitDisplayLabel.trim();
   if (!label) {
     errors.benefitDisplayLabel = "Benefit display label is required.";
@@ -185,8 +196,8 @@ export function validatePlanRedemption(
   if (form.allowedRedemptionModes.length === 0) {
     errors.allowedRedemptionModes = "Select at least one redemption mode.";
   }
-  if (form.prematureClosureAllowed && form.lockInMonths < 0) {
-    errors.lockInMonths = "Lock-in months cannot be negative.";
+  if (form.prematureClosureAllowed && (form.lockInMonths < 0 || form.lockInMonths > form.durationMonths)) {
+    errors.lockInMonths = "Lock-in must be between zero and the plan duration.";
   }
   const cashSettlementMessage = validatePlanCashSettlementFields({
     valueBasis: form.valueBasis,
@@ -194,7 +205,7 @@ export function validatePlanRedemption(
     cashSettlementBasis: form.cashSettlementBasis,
     includeMonetaryBenefitInPaidAmountCash:
       form.includeMonetaryBenefitInPaidAmountCash,
-    benefitType: form.benefitType,
+    benefitType: form.oneTimeRules ? "TEXT_ONLY" : form.benefitType,
   });
   if (cashSettlementMessage) {
     errors.cashSettlementBasis = cashSettlementMessage;

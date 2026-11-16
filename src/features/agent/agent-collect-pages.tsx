@@ -190,10 +190,11 @@ export function AgentCollectPaymentPage({ schemeId }: { schemeId: string }) {
   });
 
   useEffect(() => {
-    if (!qrSession || !qrStatus.data?.paid) return;
+    const paidStatus = qrStatus.data;
+    if (!qrSession || !paidStatus?.paid) return;
     let cancelled = false;
     void (async () => {
-      const paymentId = qrStatus.data.receipt?.paymentId ?? qrSession.paymentId ?? undefined;
+      const paymentId = paidStatus.receipt?.paymentId ?? qrSession.paymentId ?? undefined;
       if (paymentId) {
         try {
           const payment = await fetchPayment(paymentId).unwrap();
@@ -210,12 +211,12 @@ export function AgentCollectPaymentPage({ schemeId }: { schemeId: string }) {
       if (cancelled) return;
       setReceipt({
         id: paymentId ?? qrSession.id,
-        receiptNumber: qrStatus.data.receipt?.receiptNumber ?? "ONLINE",
+        receiptNumber: paidStatus.receipt?.receiptNumber ?? "ONLINE",
         amountPaise: qrSession.amountPaise,
         mode: "ONLINE_GATEWAY",
         status: "SUCCESS",
         source: "CUSTOMER_APP",
-        paidAt: qrStatus.data.receipt?.paidAt ?? new Date().toISOString(),
+        paidAt: paidStatus.receipt?.paidAt ?? new Date().toISOString(),
         customer: {
           id: customer.data?.id ?? "",
           name: customer.data?.name ?? "Customer",

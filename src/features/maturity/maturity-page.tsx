@@ -1,5 +1,7 @@
 "use client";
 
+import { MaturityGoldCredit } from "@/src/components/common/maturity-gold-credit";
+import { CollectionBoardFilters, type CollectionBoardFilterValues } from "@/src/components/common/collection-board-filters";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -110,6 +112,8 @@ function maturitySettlementAction(
 
 export function MaturityPage() {
   const router = useRouter();
+  const [collectionFilters, setCollectionFilters] = useState<CollectionBoardFilterValues>({});
+  const collectionFilterKey = JSON.stringify(collectionFilters);
   const searchParams = useSearchParams();
   const reviewRedemptionId = searchParams.get("review");
   const { from, setFrom, to, setTo, dateRangeError, skipForBadDates } =
@@ -137,13 +141,14 @@ export function MaturityPage() {
   const branchKey = useActingBranchKey();
   const pager = useCursorPagination(
     8,
-    `${view}|${queryFrom}|${queryTo}|${branchKey}`,
+    `${view}|${queryFrom}|${queryTo}|${branchKey}|${collectionFilterKey}`,
   );
   const statsQuery = useGetMaturitiesQuery(
     {
       from: queryFrom,
       to: queryTo,
       branchId,
+      ...collectionFilters,
       limit: 1,
     },
     { skip: view === "redemptions" },
@@ -154,13 +159,14 @@ export function MaturityPage() {
       from,
       to,
       branchId,
+      ...collectionFilters,
       ...pager.queryParams,
     },
     { skip: view !== "list" || skipForBadDates },
   );
 
   const calendarQuery = useGetMaturitiesCalendarQuery(
-    { month: calendarMonth, branchId },
+    { month: calendarMonth, branchId, ...collectionFilters },
     { skip: view !== "month" },
   );
 
@@ -407,6 +413,7 @@ export function MaturityPage() {
             description="Schemes maturing in the chosen dates"
             action={
               <div className="space-y-1">
+                <CollectionBoardFilters filters={collectionFilters} onChange={setCollectionFilters} showBonus />
                 <DateRangeFilter
                   label="Maturity"
                   from={from}
@@ -470,8 +477,17 @@ export function MaturityPage() {
                 {
                   key: "gold",
                   header: "Gold",
-                  render: (r: any) =>
-                    r.accumulatedGold ? grams(r.accumulatedGold) : "—",
+                  render: (r: any) => (
+                    <div className="space-y-1">
+                      <span>{r.accumulatedGold ? grams(r.accumulatedGold) : "—"}</span>
+                      {r.collectionBonus && <MaturityGoldCredit bonus={r.collectionBonus} />}
+                      {r.oneTimeProgress?.fundedOn && (
+                        <p className="text-sm text-muted-foreground">
+                          {grams(r.oneTimeProgress.creditedWeightMg / 1000)} bonus credited
+                        </p>
+                      )}
+                    </div>
+                  ),
                 },
                 {
                   key: "status",

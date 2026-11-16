@@ -521,3 +521,18 @@ For a flexible plan the preview returns the two-phase structure instead:
 ```
 
 **Plan count limit** — creating beyond the tier cap returns `LIMIT_SCHEME_PLANS`. Creating a `FLEXIBLE` plan on a tier without that feature returns `FEATURE_NOT_IN_PLAN` with `details.featureKey: "flexibleScheme"`.
+
+## Collection schedules and automatic maturity gold
+
+For a new fixed gold-weight plan, supply a `collectionRules` object with the fields below. The existing `amountRules` describe either the collection amount or the total target, according to `amountBasis`.
+
+| Field | Values |
+| --- | --- |
+| `frequencies` | A nonempty subset of `DAILY`, `WEEKLY`, `MONTHLY` |
+| `amountBasis` | `PER_COLLECTION` or `TOTAL_TARGET` |
+| `maturityRule` | `ENROLMENT_ANNIVERSARY`, `FIRST_PAYMENT_ANNIVERSARY`, `CALENDAR_MONTH_END` |
+| `bonusBasis` | `NET_GOLD_WEIGHT` or `NET_PAID_AT_MATURITY_RATE` |
+| `bonusPercent` | Whole percent from 1 to 100 |
+| `requireAllCollections` | Boolean. If false, maturity can proceed with a funded schedule and the bonus uses net allocated contributions. |
+
+For collection plans, `installmentCount` on the plan is the compatibility field. Preview and enrollment return the generated installment count. Set `collectionFrequency` in the plan schedule preview to select a cadence. The first-payment anniversary option requires a full first installment at enrollment. Early closure forfeits the maturity award. Cash settlement, when allowed, uses gold value.

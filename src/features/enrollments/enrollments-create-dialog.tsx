@@ -11,6 +11,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { ActionDialog } from "@/src/components/common/action-dialog";
+import { EnrolFrequencyControl } from "@/src/components/common/enrol-frequency-control";
+import type { CollectionFrequency } from "@/src/types/collection";
 import { EnrolAmountControl } from "@/src/components/common/enrol-amount-control";
 import { EnrolFirstInstallmentControl } from "@/src/components/common/enrol-first-installment-control";
 import { EnrolFormShell } from "@/src/components/common/enrol-form-shell";
@@ -82,6 +84,7 @@ export function EnrollmentsCreateDialog({
   const [form, setForm] = useState({
     customerId: "",
     planId: "",
+    collectionFrequency: undefined as CollectionFrequency | undefined,
     amount: 0,
     firstInstallmentMode: "COLLECT_NOW" as "COLLECT_NOW" | "START_NEXT_CYCLE",
     paymentMode: "CASH" as "CASH" | "CARD" | "UPI" | "BANK_TRANSFER",
@@ -103,6 +106,7 @@ export function EnrollmentsCreateDialog({
     void validateEnrolment({
       customerId: form.customerId,
       planId: form.planId,
+      collectionFrequency: form.collectionFrequency,
       amount: debouncedAmount,
       firstInstallmentMode: effectiveFirstMode,
     });
@@ -111,6 +115,7 @@ export function EnrollmentsCreateDialog({
     form.customerId,
     form.planId,
     debouncedAmount,
+    form.collectionFrequency,
     effectiveFirstMode,
     validateEnrolment,
   ]);
@@ -183,6 +188,10 @@ export function EnrollmentsCreateDialog({
         if (planErr) clientErrors.planId = planErr;
         const amountErr = validateEnrolAmount(selectedPlan, debouncedAmount);
         if (amountErr) clientErrors.amount = amountErr;
+        if (selectedPlan?.collectionRules && !form.collectionFrequency) {
+          toast.error("Choose a collection frequency.");
+          return false;
+        }
         if (Object.keys(clientErrors).length) {
           setFieldErrors(clientErrors);
           toast.error("Fix the highlighted fields.");
@@ -195,13 +204,14 @@ export function EnrollmentsCreateDialog({
         const row = await createEnrollment({
           customerId: form.customerId,
           planId: form.planId,
+          collectionFrequency: form.collectionFrequency,
           amount: debouncedAmount,
           firstInstallmentMode: effectiveFirstMode,
           ...(effectiveFirstMode === "COLLECT_NOW"
             ? {
                 firstInstallmentAction: "RECORD_MANUAL_PAYMENT" as const,
                 payment: {
-                  amountPaise: Math.round(debouncedAmount * 100),
+                  ...(selectedPlan?.collectionRules ? {} : { amountPaise: Math.round(debouncedAmount * 100) }),
                   mode: form.paymentMode,
                   ...(form.paymentReference.trim()
                     ? { reference: form.paymentReference.trim() }
@@ -276,6 +286,7 @@ export function EnrollmentsCreateDialog({
               setForm({
                 ...form,
                 planId: value,
+                collectionFrequency: undefined,
                 amount: defaultAmountForPlan(plan),
                 firstInstallmentMode:
                   plan.firstInstallmentModeDefault ?? "COLLECT_NOW",
@@ -312,8 +323,15 @@ export function EnrollmentsCreateDialog({
           </Select>
           <FormFieldError message={displayPlanError()} />
         </div>
-        <EnrolAmountControl
+        {selectedPlan?.collectionRules && <EnrolFrequencyControl
+            frequencies={selectedPlan.collectionRules.frequencies}
+            triggerClassName="h-11 rounded-xl bg-[#faf7f5]"
+            value={form.collectionFrequency}
+            onChange={(collectionFrequency) => setForm({ ...form, collectionFrequency })}
+          />}
+          <EnrolAmountControl
           plan={selectedPlan}
+          label={selectedPlan?.oneTimeRules ? "One-time payment" : selectedPlan?.collectionRules?.amountBasis === "TOTAL_TARGET" ? "Total collection target" : undefined}
           amount={form.amount}
           invalid={Boolean(displayAmountError())}
           onAmountChange={(amount) => {

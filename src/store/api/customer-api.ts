@@ -1,3 +1,4 @@
+import type { CollectionFrequency } from "@/src/types/collection";
 import { createApi, fetchBaseQuery } from "@reduxjs/toolkit/query/react";
 import type {
   BaseQueryFn,
@@ -53,7 +54,7 @@ import { buildCustomerEnrolMockResponse } from "@/src/lib/customer-enrol-mock";
 import { ensureMutationJsonBody } from "@/src/lib/rtk-mutation-body";
 import type { AppDispatch } from "@/src/store";
 import { customerIdentityConfirmed } from "@/src/store/slices/customer-session-slice";
-import { adaptCustomerSchemePlan, adaptCustomerSchemePlanList } from "@/src/lib/customer-plan-adapter";
+import { adaptCustomerSchemePlan, adaptCustomerSchemePlanList, adaptCustomerCollectionPreview } from "@/src/lib/customer-plan-adapter";
 import {
   adaptCustomerPayment,
   adaptCustomerPaymentList,
@@ -89,6 +90,11 @@ function ok<T>(data: T): { data: ApiEnvelope<T> } {
 
 function routeOf(args: string | FetchArgs) {
   return typeof args === "string" ? args : args.url;
+}
+
+function noStore(args: string | FetchArgs): FetchArgs {
+  if (typeof args === "string") return { url: args, cache: "no-store" };
+  return { ...args, cache: "no-store" };
 }
 
 function withIdempotencyHeader(args: string | FetchArgs): string | FetchArgs {
@@ -814,7 +820,7 @@ const dynamicBaseQuery: BaseQueryFn<
   CustomerBaseQueryExtra,
   FetchBaseQueryMeta
 > = async (args, api, extra) => {
-  const requestArgs = env.useMocks ? args : withIdempotencyHeader(args);
+  const requestArgs = env.useMocks ? args : withIdempotencyHeader(noStore(args));
   const url = routeOf(requestArgs);
   const guard = authRefreshGuard(url, extra, [
     "/app/auth/refresh",
@@ -1130,7 +1136,16 @@ export const customerApi = createApi({
       }),
       transformResponse: (raw: unknown) => adaptCustomerSettlementPreview(raw),
     }),
-    enrolCustomerScheme: builder.mutation<Record<string, unknown>, { planId: string; installmentAmountPaise?: number; payNow: boolean; redirectUrl?: string }>({ query: (body) => ({ url: "/app/schemes/enrol", method: "POST", body }), invalidatesTags: ["CustomerScheme", "CustomerHome"] }),
+    validateCustomerEnrolment: builder.mutation<ReturnType<typeof adaptCustomerCollectionPreview>, {
+      planId: string; installmentAmountPaise?: number; payNow: boolean; collectionFrequency?: CollectionFrequency;
+    }>({
+      query: (body) => ({ url: "/app/schemes/enrol/validate", method: "POST", body }),
+      transformResponse: adaptCustomerCollectionPreview,
+    }),
+    enrolCustomerScheme: builder.mutation<Record<string, unknown>, {
+      planId: string; installmentAmountPaise?: number; payNow: boolean; redirectUrl?: string;
+      collectionFrequency?: CollectionFrequency; expectedFirstCollectionPaise?: number; expectedMaturityDate?: string;
+    }>({ query: (body) => ({ url: "/app/schemes/enrol", method: "POST", body }), invalidatesTags: ["CustomerScheme", "CustomerHome"] }),
     initiatePublicPaymentLink: builder.mutation<
       { gatewayUrl?: string; redirectUrl?: string; paymentId?: string },
       { linkToken: string; redirectUrl: string }
@@ -1220,16 +1235,11 @@ export const customerApi = createApi({
       query: () => "/app/grievances",
       transformResponse: (raw: unknown) => adaptCustomerGrievanceList(raw),
       providesTags: ["CustomerGrievance"],
-      // Staff replies land out-of-band; always revalidate when opening Support.
-      refetchOnMountOrArgChange: true,
-      refetchOnFocus: true,
     }),
     getCustomerGrievance: builder.query<CustomerGrievance, string>({
       query: (id) => `/app/grievances/${id}`,
       transformResponse: (raw: unknown) => adaptCustomerGrievance(raw),
       providesTags: (_r, _e, id) => [{ type: "CustomerGrievance", id }],
-      refetchOnMountOrArgChange: true,
-      refetchOnFocus: true,
     }),
     createCustomerGrievance: builder.mutation<
       CustomerGrievance,
@@ -2435,7 +2445,7 @@ export const {
   useCompleteCustomerProfileMutation, usePresignCustomerUploadMutation, useCompleteCustomerUploadMutation, useGetCustomerUploadDownloadQuery, useLazyGetCustomerUploadDownloadQuery, useGetPublicCustomerUploadDownloadQuery, useSubmitCustomerKycMutation,
   useUpdateCustomerNomineeMutation, useRemoveCustomerNomineeMutation,
   useGetCustomerPlansQuery, useGetCustomerPlanQuery, useGetCustomerSchemesQuery, useGetCustomerPastSchemesQuery, useGetCustomerSchemeQuery, useGetCustomerPassbookQuery, useGetCustomerPayableRangeQuery, useLazyGetCustomerPayableRangeQuery, useGetCustomerSettlementPreviewQuery,
-  useEnrolCustomerSchemeMutation, useInitiateCustomerPaymentMutation, useInitiatePublicPaymentLinkMutation,
+  useValidateCustomerEnrolmentMutation, useEnrolCustomerSchemeMutation, useInitiateCustomerPaymentMutation, useInitiatePublicPaymentLinkMutation,
   useLazyPollCustomerPaymentIntentQuery, useLazyPollCustomerPaymentLinkQuery, useLazyPollPublicPaymentLinkQuery,
   useGetCustomerPaymentsQuery, useGetCustomerPaymentQuery, useListCustomerActivityQuery,
   useGetCustomerNotificationsQuery, useMarkCustomerNotificationReadMutation, useMarkAllCustomerNotificationsReadMutation,

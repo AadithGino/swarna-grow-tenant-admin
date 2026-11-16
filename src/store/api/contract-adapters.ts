@@ -27,7 +27,7 @@ import type {
   StaffPerformanceEnrolmentsSection,
   StaffPerformanceHandoversSection,
 } from "@/src/types/staff-performance";
-import { initials, money } from "@/src/lib/format";
+import { initials, money, preciseMoney } from "@/src/lib/format";
 import { adaptEnrollmentStatusBreakdown } from "@/src/lib/enrollment-status-counts";
 import { mergePageMeta, type ListPageMeta } from "@/src/lib/cursor-pagination";
 import {
@@ -433,12 +433,16 @@ export function adaptEnrollmentList(
       ),
       customer: item.customer?.name ?? item.customerName ?? customerFallback,
       plan: plan.name ?? item.planName ?? "—",
+      collectionFrequency: item.collectionFrequency,
+      collectionBonus: item.collectionBonus,
+      oneTimeProgress: item.oneTimeProgress,
       branch: branchName(item),
       progress:
         item.progress?.installmentsPaid ??
         item.progress?.paidCycles ??
         paidInstallments,
       tenure:
+        (item.collectionFrequency && installments.length ? installments.length : undefined) ??
         item.progress?.installmentsTotal ??
         item.durationMonths ??
         plan.durationMonths ??
@@ -618,6 +622,8 @@ export function adaptEnrollment(raw: any): Enrollment {
   }
   return {
     ...row,
+    collectionFrequency: item.collectionFrequency,
+    collectionBonus: item.collectionBonus,
     version: item.version ?? item.audit?.version ?? row.version ?? 1,
     helperText: item.pendingRedemption
       ? "Redemption is in progress. Collections are blocked until it is completed or rejected."
@@ -811,6 +817,8 @@ export function adaptEnrolValidation(raw: any): {
   preview?: {
     installmentAmount?: number;
     installmentCount?: number;
+    maturityDateProvisional?: boolean;
+    collectionFrequency?: import("@/src/types/collection").CollectionFrequency;
     phaseSummary?: string;
     illustrativeCapPerCycle?: number;
     totalCommitment?: number;
@@ -842,6 +850,8 @@ export function adaptEnrolValidation(raw: any): {
         preview.referencePaymentAmount ?? preview.installmentAmount,
       ),
       installmentCount: preview.installmentCount,
+      maturityDateProvisional: preview.maturityDateProvisional,
+      collectionFrequency: preview.collectionFrequency,
       phaseSummary: preview.phaseSummary,
       illustrativeCapPerCycle: moneyToRupees(preview.illustrativeCapPerCycle),
       totalCommitment: moneyToRupees(
@@ -863,6 +873,8 @@ export function adaptEnrolValidation(raw: any): {
           sequence: row.installmentNumber ?? row.sequence ?? index + 1,
           dueDate: row.dueDate,
           amountDisplay:
+            (preview.collectionFrequency && typeof row.amount?.amountPaise === "number"
+              ? preciseMoney(row.amount.amountPaise / 100) : undefined) ??
             row.amount?.amountDisplay ??
             row.amountDisplay ??
             (row.amount?.amountPaise != null
@@ -1354,6 +1366,8 @@ export function adaptPlans(raw: any) {
       minAmount,
       maxAmount: fromPaise(rules.maxInstallmentPaise) || undefined,
       amountStep: fromPaise(rules.multipleOfPaise) || undefined,
+      collectionRules: item.collectionRules,
+      oneTimeRules: item.oneTimeRules,
       firstInstallmentModeDefault:
         schedule.firstInstallmentModeDefault ?? "COLLECT_NOW",
       firstInstallmentModeEditable:
@@ -2859,6 +2873,9 @@ function mapAdaptListItem(item: any): any {
       customerId: String(
         item.customerId ?? item.customer?._id ?? item.customer?.id ?? "",
       ),
+      collectionFrequency: item.collectionFrequency,
+      collectionBonus: item.collectionBonus,
+      oneTimeProgress: item.oneTimeProgress,
       plan:
         (typeof plan === "object" && plan?.name) ||
         item.planName ||
@@ -3055,6 +3072,7 @@ function mapDueWorkboardRow(
     phone: context.phone,
     enrollmentNo: context.enrollmentNo,
     plan: context.plan,
+    collectionFrequency: scheme.collectionFrequency,
     branch: context.branch,
     dueDate: date(dueDateRaw) !== "—" ? date(dueDateRaw) : dueDateRaw || "—",
     amount,

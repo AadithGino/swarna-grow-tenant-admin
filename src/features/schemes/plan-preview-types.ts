@@ -1,3 +1,6 @@
+import type { CollectionFrequency } from "@/src/types/collection";
+import type { OneTimeGoldRules } from "@/src/types/one-time-gold";
+
 /** Response shape from POST /admin/scheme-plans/preview-schedule (05 §9). */
 
 export type MoneyDisplay = {
@@ -7,16 +10,19 @@ export type MoneyDisplay = {
 
 export type PlanSchedulePreviewSummary = {
   installmentCount?: number;
+  collectionFrequency?: CollectionFrequency;
   installmentAmount?: MoneyDisplay;
   totalPayable?: MoneyDisplay;
   firstDueDate?: string;
   maturityDate?: string;
+  oneTimeRules?: OneTimeGoldRules;
+  oneTimeSchedule?: Array<{ period: number; dueDate: string }>;
   benefit?: {
     type?: string;
     displayLabel?: string;
     estimatedValue?: MoneyDisplay;
   };
-  estimatedMaturityValue?: MoneyDisplay;
+  estimatedMaturityValue?: MoneyDisplay | null;
   estimatedGoldAtCurrentRate?: MoneyDisplay | null;
   freeWindow?: {
     months?: number;

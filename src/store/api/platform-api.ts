@@ -115,8 +115,8 @@ export function normalizeTenantDetail(raw: Record<string, unknown>): PlatformTen
 }
 
 /** Demo Builder APIs may return Mongo `_id`; UI contracts use `id`. */
-function withEntityId<T extends { id?: string }>(raw: T | null | undefined): T {
-  if (!raw || typeof raw !== "object") return raw as T;
+function withEntityId<T extends { id?: string }>(raw: T): T {
+  if (!raw || typeof raw !== "object") return raw;
   const record = raw as T & { _id?: string };
   const id = String(record.id ?? record._id ?? "");
   const { _id: _ignored, ...rest } = record;

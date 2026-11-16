@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import { MaturityGoldCredit } from "@/src/components/common/maturity-gold-credit";
+import { COLLECTION_FREQUENCY_LABELS } from "@/src/types/collection";
 import { useState } from "react";
 import {
   BarChart3,
@@ -156,6 +158,9 @@ export function FixedHero({ scheme, schemeIsGold }: { scheme: CustomerSchemeDeta
         }
       />
       <h2 className="mt-3 truncate text-base font-semibold text-[var(--ck-ink)]">{scheme.planName}</h2>
+      {scheme.collectionFrequency && (
+        <p className="mt-2 text-xs">{COLLECTION_FREQUENCY_LABELS[scheme.collectionFrequency]} collection</p>
+      )}
       <p className="mt-3 text-[0.8rem] text-[var(--ck-muted)]">{showGold ? "Gold balance" : "Paid so far"}</p>
       <p
         className="mt-0.5 text-[2.35rem] font-bold leading-none tracking-[-0.035em] tabular-nums"
@@ -1004,12 +1009,14 @@ export function RulesBlock({ section }: { section: CustomerPlanRulesSection }) {
 
 function BenefitTab({
   maturityBenefit,
+  goldBonus,
   schemeIsGold,
   redemptionEligible,
   redemptionBlocker,
   onRedeem,
 }: {
   maturityBenefit: CustomerMaturityBenefit;
+  goldBonus?: CustomerSchemeDetail["collectionBonus"];
   schemeIsGold: boolean;
   redemptionEligible: boolean;
   redemptionBlocker?: string;
@@ -1032,9 +1039,10 @@ function BenefitTab({
           </p>
         </div>
       </div>
-      {maturityBenefit.details.length > 0 && (
+      {goldBonus && <MaturityGoldCredit bonus={goldBonus} className="mt-5 rounded-xl border bg-[#faf6f3] p-4" />}
+      {(maturityBenefit.details.length > 0 || (goldBonus && maturityBenefit.eligibility.length > 0)) && (
         <ul className="mt-5 space-y-2 rounded-2xl bg-[#fbf7f4] p-4 text-sm">
-          {maturityBenefit.details.map((line) => (
+          {[...maturityBenefit.details, ...(goldBonus ? maturityBenefit.eligibility : [])].map((line) => (
             <li key={line} className="flex gap-2 text-[#706b77]">
               <Sparkles className="mt-0.5 size-4 shrink-0 text-[#9a6f2a]" />
               {line}
@@ -1139,6 +1147,7 @@ export function SchemeDetailTabs({
       <TabsContent value="benefit" className="mt-4">
         <BenefitTab
           maturityBenefit={maturityBenefit}
+          goldBonus={scheme.collectionBonus}
           schemeIsGold={schemeIsGold}
           redemptionEligible={redemptionEligible}
           redemptionBlocker={redemptionBlocker}

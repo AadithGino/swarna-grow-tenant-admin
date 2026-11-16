@@ -16,7 +16,7 @@ export const agentUser = {
   tenantName: "Kairali Jewellers",
   tenantCode: "KAIRALI",
   permissions: ["CUSTOMER_READ", "SCHEME_READ", "PAYMENT_READ", "PAYMENT_RECORD", "CASH_READ", "CASH_HANDOVER", "GOLD_RATE_READ"],
-  agentCapabilities: { registerCustomers: true, enrolSchemes: true },
+  agentCapabilities: { registerCustomers: true, enrolSchemes: true, kycMandatory: false },
   mustSetPassword: false,
 };
 

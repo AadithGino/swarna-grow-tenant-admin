@@ -273,9 +273,9 @@ export function StatCard({
   return <div className={shell}>{body}</div>;
 }
 
-export function FieldLabel({ children }: { children: React.ReactNode }) {
+export function FieldLabel({ children, htmlFor }: { children: React.ReactNode; htmlFor?: string }) {
   return (
-    <label data-field-label="" className="mb-1.5 block text-sm font-medium text-[#4f3d41]">
+    <label htmlFor={htmlFor} data-field-label="" className="mb-1.5 block text-sm font-medium text-[#4f3d41]">
       {children}
     </label>
   );

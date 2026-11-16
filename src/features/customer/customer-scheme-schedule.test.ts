@@ -51,6 +51,22 @@ function baseScheme(
 }
 
 describe("buildFixedSchedule", () => {
+  it("keeps the daily collection dates from the API", () => {
+    const amount = { amountPaise: 50_000, amountDisplay: "₹500" };
+    const rows = buildFixedSchedule(baseScheme({
+      collectionFrequency: "DAILY",
+      installmentSchedule: [
+        { number: 1, dueDate: "2026-11-06", status: "PAID", amount, remaining: { amountPaise: 0, amountDisplay: "₹0" } },
+        { number: 2, dueDate: "2026-11-07", status: "DUE", amount, remaining: amount },
+        { number: 3, dueDate: "2026-11-08", status: "PENDING", amount, remaining: amount },
+      ],
+    }));
+    expect(rows).toHaveLength(3);
+    expect(rows[1].label).toContain("7 Nov");
+    expect(rows[2].label).toContain("8 Nov");
+    expect(buildFixedSchedule(baseScheme({ collectionFrequency: "DAILY" }))).toEqual([]);
+  });
+
   it("uses API installment due dates in chronological order", () => {
     const scheme = baseScheme({
       installmentSchedule: [

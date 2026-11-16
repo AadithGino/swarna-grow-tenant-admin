@@ -913,3 +913,9 @@ Terminal states (`REDEEMED`, `CLOSED_PREMATURE`) reject every write with `SCHEME
 The example above is fixed-date. For a flexible-average self-enrolment with `payNow: true`, the response uses `paymentIntent` (including `paymentIntentId`, `targetCycle`, `position.positionVersion` and the canonical `statusPollUrl`) instead of `paymentLink`. The server creates that first reservation immediately after creating the new scheme, so no client-supplied `expectedPositionVersion` exists for this one compound enrolment request. Every later flexible-average payment uses `POST /app/schemes/:schemeId/payment-intents` with the quoted version.
 
 Blocked when `customerSelfEnrolAllowed` is false on the plan or `customerSelfEnrolEnabled` is off for the tenant → `403 FEATURE_NOT_IN_PLAN`.
+
+## Collection schedule enrollment
+
+Supply `collectionFrequency` when the selected plan has `collectionRules`. Enrollment stores the frequency and snapshots the rules. The preview returns the first collection amount, total payable, first due date, maturity date and whether maturity is provisional. The original amount input field is `installmentAmountPaise`. For `TOTAL_TARGET`, that field carries the total target and the backend calculates actual collections.
+
+When maturity is anchored to verified payment, the server preserves the agreed installment dates and amounts and sets the maturity anniversary from the confirmation date. Gateway reservations retain the 22K rate validated at reservation. Enrollment validates that scheduled amounts can credit positive gold at the applicable current rate. Maturity waits for open grace on unpaid collections to end. Collection awards are written to the scheme ledger at maturity. The redemption flow consumes the posted weight. Refunds before settlement can generate a signed bonus adjustment.

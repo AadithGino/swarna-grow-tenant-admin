@@ -1,12 +1,12 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Image from "next/image";
 import { ShieldAlert } from "lucide-react";
-import { persistCustomerTokens } from "@/src/lib/auth-token-storage";
 import { customerPath, tenantCodeToSlug } from "@/src/lib/customer-tenant";
-import { customerSignedIn } from "@/src/store/slices/customer-session-slice";
+import { customerApi } from "@/src/store/api/customer-api";
+import { customerSignedIn, customerSignedOut } from "@/src/store/slices/customer-session-slice";
 import { customerPortalCapabilitiesFromTenant } from "@/src/lib/customer-portal-capabilities";
 import { useAppDispatch } from "@/src/store/hooks";
 import {
@@ -27,6 +27,24 @@ function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/** Static Netlify serves one HTML shell, so Next's search-param context is empty even when the address bar has `?s=`. */
+function readDemoSecret(): string {
+  if (typeof window === "undefined") return "";
+  const params = new URLSearchParams(window.location.search);
+  return params.get("s") ?? params.get("secret") ?? "";
+}
+
+function subscribeToLocation(onChange: () => void) {
+  window.addEventListener("popstate", onChange);
+  return () => window.removeEventListener("popstate", onChange);
+}
+
+function useDemoLinkSecret(routerSecret: string): { secret: string; ready: boolean } {
+  const fromAddressBar = useSyncExternalStore(subscribeToLocation, readDemoSecret, () => "");
+  const ready = useSyncExternalStore(subscribeToLocation, () => true, () => false);
+  return { secret: fromAddressBar || routerSecret, ready };
+}
+
 function FiligreeCorner({ accent, className }: { accent: string; className?: string }) {
   return (
     <svg aria-hidden className={className} viewBox="0 0 80 80" fill="none">
@@ -45,7 +63,8 @@ export function DemoEntryPage({ publicId }: { publicId: string }) {
   const router = useRouter();
   const dispatch = useAppDispatch();
   const searchParams = useSearchParams();
-  const secret = searchParams.get("s") ?? searchParams.get("secret") ?? "";
+  const routerSecret = searchParams.get("s") ?? searchParams.get("secret") ?? "";
+  const { secret, ready: secretReady } = useDemoLinkSecret(routerSecret);
 
   const [exchangeError, setExchangeError] = useState<string | null>(null);
   const [phase, setPhase] = useState<"loading" | "splash" | "handoff" | "error">("loading");
@@ -96,6 +115,9 @@ export function DemoEntryPage({ publicId }: { publicId: string }) {
 
     attempted.current = true;
     setPhase("splash");
+    // A rotated link must not keep calling /app/profile with the previous demo token.
+    dispatch(customerSignedOut());
+    dispatch(customerApi.util.resetApiState());
     const startedAt = Date.now();
 
     (async () => {
@@ -124,7 +146,6 @@ export function DemoEntryPage({ publicId }: { publicId: string }) {
             customerAppPaymentsEnabled: caps.customerAppPaymentsEnabled,
           }),
         );
-        persistCustomerTokens(result.accessToken, result.refreshToken);
         const slug = result.tenant.tenantCode ? tenantCodeToSlug(result.tenant.tenantCode) : null;
         router.replace(customerPath(slug));
       } catch (err) {
@@ -150,7 +171,7 @@ export function DemoEntryPage({ publicId }: { publicId: string }) {
 
   const problem =
     exchangeError
-    ?? (!secret ? "This demo link is missing its access code. Ask for a fresh link." : null)
+    ?? (secretReady && !secret ? "This demo link is missing its access code. Ask for a fresh link." : null)
     ?? (brandingQuery.isError ? "This demo link is not valid or has expired." : null)
     ?? (branding && !canExchange && !waitingOnProvision
       ? "This demo is not currently available. Ask for a fresh link."

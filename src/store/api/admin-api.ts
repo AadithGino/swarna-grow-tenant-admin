@@ -114,6 +114,9 @@ import {
 } from "./contract-adapters";
 
 export type ListQueryParams = {
+  planId?: string;
+  collectionFrequency?: string;
+  bonusStatus?: string;
   cursor?: string;
   limit?: number;
   branchId?: string;
@@ -1367,12 +1370,13 @@ export const adminApi = createApi({
         customerId: string;
         planId: string;
         amount: number;
+        collectionFrequency?: import("@/src/types/collection").CollectionFrequency;
         firstInstallmentMode: "COLLECT_NOW" | "START_NEXT_CYCLE";
         firstInstallmentAction?:
           | "RECORD_MANUAL_PAYMENT"
           | "CREATE_PAYMENT_LINK";
         payment?: {
-          amountPaise: number;
+          amountPaise?: number;
           mode: "CASH" | "CARD" | "UPI" | "BANK_TRANSFER";
           reference?: string;
           remarks?: string;
@@ -1386,6 +1390,7 @@ export const adminApi = createApi({
           customerId: body.customerId,
           planId: body.planId,
           installmentAmountPaise: Math.round(body.amount * 100),
+          collectionFrequency: body.collectionFrequency,
           firstInstallmentMode: body.firstInstallmentMode,
           firstInstallmentAction: body.firstInstallmentAction,
           ...(body.payment ? { payment: body.payment } : {}),
@@ -6242,7 +6247,7 @@ export const adminApi = createApi({
     }),
     getMaturitiesCalendar: builder.query<
       { month?: string; days: { date: string; count: number }[]; items: any[] },
-      { month?: string; branchId?: string } | void
+      { month?: string; branchId?: string; planId?: string; collectionFrequency?: string; bonusStatus?: string } | void
     >({
       query: (params) => ({
         url: "/admin/maturities/calendar",

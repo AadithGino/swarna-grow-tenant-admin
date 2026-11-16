@@ -226,6 +226,14 @@ function buildFixedScheduleLegacy(scheme: CustomerSchemeDetail): ScheduleRow[] {
 }
 
 export function buildFixedSchedule(scheme: CustomerSchemeDetail): ScheduleRow[] {
+  if (scheme.collectionFrequency) {
+    return [...(scheme.installmentSchedule ?? [])].sort((a, b) => a.number - b.number).map((row) => ({
+      ...scheduleRowFromInstallment(row, scheme, undefined, defaultAmountDisplay(scheme)),
+      key: `inst-${row.number}`,
+      stepLabel: String(row.number),
+      isBenefit: false,
+    }));
+  }
   if (scheme.installmentSchedule?.length) {
     return buildFixedScheduleFromApi(scheme);
   }

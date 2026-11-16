@@ -139,6 +139,8 @@ function mapAgentPlan(raw: Record<string, unknown>): AgentPlan {
     valueBasis: raw.valueBasis === "GOLD_WEIGHT" ? "GOLD_WEIGHT" : "CASH",
     paymentPattern: raw.paymentPattern === "FLEXIBLE" ? "FLEXIBLE" : "FIXED",
     durationMonths: Number(raw.durationMonths ?? 0),
+    oneTimeRules: raw.oneTimeRules as AgentPlan["oneTimeRules"],
+    collectionRules: raw.collectionRules as AgentPlan["collectionRules"],
     amountMode: amount.amountMode as AgentPlan["amountMode"],
     fixedAmountPaise: optionalPaise(amount.fixedAmountPaise),
     slabsPaise: Array.isArray(amount.slabsPaise) ? (amount.slabsPaise as number[]).filter((value) => typeof value === "number") : [],

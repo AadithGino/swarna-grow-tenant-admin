@@ -1,3 +1,4 @@
+import type { CollectionFrequency, CollectionRules } from "./collection";
 export type AgentTenantChoice = {
   tenantCode: string;
   displayName: string;
@@ -27,6 +28,8 @@ export type AgentCapabilities = {
 };
 
 export type AgentPlan = {
+  oneTimeRules?: import("./one-time-gold").OneTimeGoldRules;
+  collectionRules?: CollectionRules;
   id: string;
   name: string;
   code: string;
@@ -53,6 +56,7 @@ export type AgentCreateCustomerInput = {
 };
 
 export type AgentEnrolInput = {
+  collectionFrequency?: CollectionFrequency;
   customerId: string;
   planId: string;
   installmentAmountPaise?: number;

@@ -192,7 +192,7 @@ function CreateDemoInstanceDialog({
       description="Clones the template's published snapshot into a new, isolated tenant and returns a shareable branded link."
       actionLabel="Create demo"
       submitDisabled={!templateId || !prospectName.trim()}
-      onSubmit={async () => {
+      onSubmit={async (): Promise<false> => {
         if (!templateId || !prospectName.trim()) return false;
         try {
           const response = await create({

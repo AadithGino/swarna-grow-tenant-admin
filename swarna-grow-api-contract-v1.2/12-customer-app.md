@@ -680,3 +680,9 @@ Contrast safety is the server's job: the branding response includes computed for
   }
 }
 ```
+
+## Customer collection schedules
+
+When a scheme plan returns `collectionRules`, let the customer select one of its `frequencies`. Call `POST /app/schemes/enrol/validate` with the enrollment request to show the server-generated schedule summary. Use the preview's first amount and maturity date as `expectedFirstCollectionPaise` and `expectedMaturityDate` when calling `POST /app/schemes/enrol`. A changed schedule returns `COLLECTION_SCHEDULE_CHANGED` and should be previewed again.
+
+Use the enrollment's stored `installmentSchedule` for customer displays. `collectionFrequency` is the chosen cadence. `goldAccumulated` is contribution gold. `collectionBonus` contains the separate maturity award state, posted timestamp and weight in milligrams.

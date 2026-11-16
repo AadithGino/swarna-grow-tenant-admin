@@ -1,5 +1,6 @@
 "use client";
 
+import { CollectionBoardFilters, type CollectionBoardFilterValues } from "@/src/components/common/collection-board-filters";
 import { useMemo, useState } from "react";
 import {
   CalendarClock,
@@ -73,6 +74,8 @@ const DUE_KIND_FILTERS: FilterOption[] = [
 
 export function DuesPage() {
   const router = useRouter();
+  const [collectionFilters, setCollectionFilters] = useState<CollectionBoardFilterValues>({});
+  const collectionFilterKey = JSON.stringify(collectionFilters);
   const [board, setBoard] = useState<"dues" | "overdues" | "defaulters">(
     "dues",
   );
@@ -89,12 +92,13 @@ export function DuesPage() {
   const branchKey = useActingBranchKey();
   const pager = useCursorPagination(
     8,
-    `${board}|${kind}|${rangeMode}|${debouncedQ}|${from}|${to}|${branchKey}`,
+    `${board}|${kind}|${rangeMode}|${debouncedQ}|${from}|${to}|${branchKey}|${collectionFilterKey}`,
   );
   const listQueryParams = useMemo(() => {
     const base = {
       q: listSearchQueryForApi(debouncedQ),
       branchId,
+      ...collectionFilters,
       ...pager.queryParams,
     };
     if (preset) {
@@ -108,6 +112,7 @@ export function DuesPage() {
     };
   }, [
     branchId,
+    collectionFilters,
     debouncedQ,
     kind,
     pager.queryParams,
@@ -128,6 +133,7 @@ export function DuesPage() {
     {
       q: listSearchQueryForApi(debouncedQ),
       branchId,
+      ...collectionFilters,
       ...pager.queryParams,
     },
     { skip: board !== "defaulters" || skipForSearch },
@@ -304,6 +310,7 @@ export function DuesPage() {
             filters={
               board !== "defaulters" ? (
                 <div className="space-y-1">
+                  <CollectionBoardFilters filters={collectionFilters} onChange={setCollectionFilters} />
                   <WorkboardDateRangeFilter
                     label="Due"
                     mode={rangeMode}
@@ -315,7 +322,7 @@ export function DuesPage() {
                   />
                   {rangeMode === "CUSTOM" ? <FormFieldError message={dateRangeError} /> : null}
                 </div>
-              ) : null
+              ) : <CollectionBoardFilters filters={collectionFilters} onChange={setCollectionFilters} />
             }
             resultLabel={
               board === "defaulters"
@@ -365,7 +372,7 @@ export function DuesPage() {
                   </EnrollmentLink>
                 ),
               },
-              { key: "plan", header: "Scheme", render: (r: any) => r.plan },
+              { key: "plan", header: "Scheme", render: (r: any) => r.collectionFrequency ? `${r.plan} · ${String(r.collectionFrequency).toLowerCase()}` : r.plan },
               { key: "branch", header: "Branch", render: (r: any) => r.branch },
               {
                 key: "date",

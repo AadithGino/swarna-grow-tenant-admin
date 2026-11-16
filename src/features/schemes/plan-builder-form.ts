@@ -1,9 +1,11 @@
+import { oneTimeBonusLabel, type OneTimeGoldRules } from "@/src/types/one-time-gold";
 /** Form state aligned with POST /admin/scheme-plans (05-scheme-plans.md). */
 import { istBusinessDateToday } from "@/src/lib/ist-business-date";
 
 export type BenefitType =
   | "ONE_FREE_INSTALLMENT"
   | "FIXED_BONUS_AMOUNT"
+  | "MATURITY_GOLD_CREDIT"
   | "TEXT_ONLY";
 
 export type BonusBasis = "FLAT" | "PERCENT_OF_PAID";
@@ -19,7 +21,11 @@ export type RedemptionMode =
 
 export type CashSettlementBasis = "GOLD_VALUE" | "PAID_AMOUNT";
 
+import { resolveMaturityGoldRules, type CollectionRules, type MaturityGoldRules } from "@/src/types/collection";
+
 export type PlanBuilderFormState = {
+  oneTimeRules?: OneTimeGoldRules;
+  collectionRules?: CollectionRules;
   name: string;
   code: string;
   displayName: string;
@@ -68,6 +74,7 @@ export type PlanBuilderFormState = {
   weightRoundingMode: "HALF_UP" | "ROUND_DOWN" | "ROUND_UP";
   weightPrecisionMg: number;
   benefitType: BenefitType;
+  goldBonus: MaturityGoldRules;
   benefitDisplayLabel: string;
   requireAllInstallmentsPaid: boolean;
   maxAllowedDefaults: number;
@@ -148,6 +155,7 @@ export const defaultPlanBuilderForm = (): PlanBuilderFormState => ({
   weightRoundingMode: "HALF_UP",
   weightPrecisionMg: 1,
   benefitType: "ONE_FREE_INSTALLMENT",
+  goldBonus: { bonusBasis: "NET_GOLD_WEIGHT", bonusPercent: 3, requireAllCollections: true },
   benefitDisplayLabel: "12th installment free",
   requireAllInstallmentsPaid: true,
   maxAllowedDefaults: 0,
@@ -239,6 +247,21 @@ const defaultBenefitEligibility = (form: PlanBuilderFormState) => ({
 });
 
 function benefitBlock(form: PlanBuilderFormState) {
+  if (form.benefitType === "MATURITY_GOLD_CREDIT") {
+    return {
+      type: form.benefitType,
+      goldBonus: {
+        ...form.goldBonus,
+        requireAllCollections: form.paymentPattern === "FIXED_DATE" ? form.goldBonus.requireAllCollections : true,
+      },
+      bonusBasis: null,
+      bonusValue: null,
+      textBenefit: null,
+      maxBonusPaise: null,
+      eligibility: { requireAllInstallmentsPaid: false, maxAllowedDefaults: 0, minMonthsCompleted: 0 },
+      displayLabel: benefitSummaryLabel(form),
+    };
+  }
   if (form.benefitType === "ONE_FREE_INSTALLMENT") {
     return {
       type: form.benefitType,
@@ -301,7 +324,16 @@ export function coerceBenefitForPattern(
   return form;
 }
 
-export function buildPlanCreatePayload(form: PlanBuilderFormState) {
+export function buildPlanCreatePayload(input: PlanBuilderFormState) {
+  const form = input.oneTimeRules ? {
+    ...input, valueBasis: "GOLD_WEIGHT" as const, paymentPattern: "FIXED_DATE" as const,
+    installmentCount: 1, collectionRules: undefined, firstInstallmentCollectNow: true,
+    firstInstallmentModeEditable: false, partialPaymentAllowed: false, advancePaymentAllowed: false,
+    maxAdvanceInstallments: 0, minPaymentPerTxn: 0, maxPaymentPerTxn: 0, benefitType: "TEXT_ONLY" as const,
+    benefitDisplayLabel: oneTimeBonusLabel(input.oneTimeRules), textBenefit: oneTimeBonusLabel(input.oneTimeRules),
+    requireAllInstallmentsPaid: false, maxAllowedDefaults: 0, minMonthsCompleted: 0,
+    cashSettlementBasis: "GOLD_VALUE" as const,
+  } : input;
   const normalized = coerceBenefitForPattern(form);
   const isFlexible = normalized.paymentPattern === "FLEXIBLE_AVERAGE";
   const paymentPatternApi = isFlexible ? "FLEXIBLE" : "FIXED";
@@ -317,7 +349,13 @@ export function buildPlanCreatePayload(form: PlanBuilderFormState) {
     valueBasis: normalized.valueBasis,
     paymentPattern: paymentPatternApi,
     durationMonths: normalized.durationMonths,
-    installmentCount: normalized.installmentCount,
+    ...(form.oneTimeRules ? { oneTimeRules: form.oneTimeRules } : {}),
+    installmentCount: normalized.collectionRules ? 1 : normalized.installmentCount,
+    ...(normalized.collectionRules ? { collectionRules: {
+      frequencies: normalized.collectionRules.frequencies,
+      amountBasis: normalized.collectionRules.amountBasis,
+      maturityRule: normalized.collectionRules.maturityRule,
+    } } : {}),
     amountRules: amountRules(normalized),
     scheduleRules: isFlexible
       ? {
@@ -330,9 +368,9 @@ export function buildPlanCreatePayload(form: PlanBuilderFormState) {
           firstInstallmentModeEditable: form.firstInstallmentModeEditable,
         }
       : {
-          dueDateRule: "FIXED_DAY_OF_MONTH",
-          dueDayOfMonth: form.dueDay,
-          graceDays: form.graceDays,
+          dueDateRule: form.oneTimeRules ? "JOIN_ANNIVERSARY" : "FIXED_DAY_OF_MONTH",
+          dueDayOfMonth: form.oneTimeRules ? null : form.dueDay,
+          graceDays: form.oneTimeRules ? 0 : form.graceDays,
           firstInstallmentModeDefault: form.firstInstallmentCollectNow
             ? "COLLECT_NOW"
             : "START_NEXT_CYCLE",
@@ -399,7 +437,7 @@ export function buildPlanCreatePayload(form: PlanBuilderFormState) {
     benefit: benefitBlock(normalized),
     redemptionRules: {
       prematureClosureAllowed: form.prematureClosureAllowed,
-      lockInMonths: form.lockInMonths,
+      lockInMonths: form.oneTimeRules && !form.prematureClosureAllowed ? 0 : form.lockInMonths,
       prematurePenalty: {
         mode: form.penaltyMode,
         value:
@@ -456,7 +494,16 @@ export function buildPlanCreatePayload(form: PlanBuilderFormState) {
 
 /** POST /admin/scheme-plans/preview-schedule (05 §9). */
 export function isPlanPreviewReady(form: PlanBuilderFormState): boolean {
-  if (form.durationMonths < 1 || form.installmentCount < 1) return false;
+  if (!Number.isInteger(form.durationMonths) || form.durationMonths < 1 || form.durationMonths > 120) return false;
+  if (!form.collectionRules && !form.oneTimeRules &&
+      (form.installmentCount < 1 || form.installmentCount > form.durationMonths)) return false;
+  if (form.oneTimeRules) {
+    const { timing, basis, value, amountPeriod } = form.oneTimeRules;
+    if (!Number.isSafeInteger(value) || value <= 0 || (basis === "PRINCIPAL_PERCENT" && value > 100) ||
+        (timing === "AT_MATURITY" && amountPeriod !== "TERM_TOTAL")) return false;
+  }
+  if (form.collectionRules && !form.collectionRules.frequencies.length) return false;
+  if (!form.oneTimeRules && form.benefitType === "MATURITY_GOLD_CREDIT" && !validGoldBonusPercent(form.goldBonus.bonusPercent)) return false;
   if (form.paymentPattern === "FLEXIBLE_AVERAGE") {
     return (
       form.flexiblePhaseCycles >= 1 &&
@@ -469,60 +516,30 @@ export function isPlanPreviewReady(form: PlanBuilderFormState): boolean {
     return form.fixedAmount > 0;
   }
   if (form.amountMode === "JEWELLER_SLABS") {
-    return parseSlabs(form.slabsCsv).length > 0;
+    return parseSlabs(form.slabsCsv).some((amount) => amount > 0);
   }
-  return form.minAmount > 0 && form.maxAmount >= form.minAmount;
-}
-
-/** Stable key for debounced preview refresh. */
-export function planPreviewInputKey(form: PlanBuilderFormState): string {
-  return [
-    form.paymentPattern,
-    form.durationMonths,
-    form.installmentCount,
-    form.amountMode,
-    form.fixedAmount,
-    form.minAmount,
-    form.maxAmount,
-    form.slabsCsv,
-    form.dueDay,
-    form.graceDays,
-    form.firstInstallmentCollectNow,
-    form.flexiblePhaseCycles,
-    form.cappedPhaseCycles,
-    form.averagingDivisor,
-    form.flexMinPayment,
-    form.flexMaxPayment,
-    form.flexMinTotal,
-    form.capRoundingMode,
-    form.capRoundToNearest,
-    form.capMinCycle,
-    form.capMaxCycle,
-    form.onZeroFlexibleTotal,
-    form.onBelowMinimumTotal,
-    form.cappedMinPayment,
-    form.benefitType,
-    form.benefitDisplayLabel,
-  ].join("|");
+  const multiple = paise(form.multipleOf) || 1;
+  const min = paise(form.minAmount);
+  return min > 0 && multiple > 0 && Math.ceil(min / multiple) * multiple <= paise(form.maxAmount);
 }
 
 export function buildPreviewScheduleBody(
   form: PlanBuilderFormState,
-  opts?: { planId?: string; startDate?: string },
+  opts?: { planId?: string; startDate?: string; collectionFrequency?: CollectionRules["frequencies"][number] },
 ) {
-  const amount =
-    form.amountMode === "JEWELLER_FIXED"
-      ? form.fixedAmount
-      : form.amountMode === "CUSTOMER_CHOSEN"
-        ? form.minAmount
-        : parseSlabs(form.slabsCsv)[0]
-          ? parseSlabs(form.slabsCsv)[0] / 100
-          : form.fixedAmount;
+  const rules = amountRules(form);
+  const multiple = rules.multipleOfPaise || 1;
+  const amount = form.paymentPattern === "FLEXIBLE_AVERAGE"
+    ? paise(form.flexMinPayment)
+    : rules.fixedAmountPaise ?? (rules.slabsPaise.length
+      ? Math.min(...rules.slabsPaise)
+      : Math.ceil(rules.minInstallmentPaise / multiple) * multiple);
 
   const core = {
-    installmentAmountPaise: paise(amount),
+    installmentAmountPaise: amount,
     startDate: opts?.startDate ?? istBusinessDateToday(),
-    firstInstallmentMode: form.firstInstallmentCollectNow
+    collectionFrequency: opts?.collectionFrequency,
+    firstInstallmentMode: form.oneTimeRules || form.firstInstallmentCollectNow
       ? "COLLECT_NOW"
       : "START_NEXT_CYCLE",
   };
@@ -532,12 +549,27 @@ export function buildPreviewScheduleBody(
   }
 
   const payload = buildPlanCreatePayload(form) as Record<string, unknown>;
-  const name = String(payload.name ?? "").trim();
-  const code = String(payload.code ?? "")
-    .trim()
-    .toUpperCase();
-  if (name.length < 2) payload.name = "Preview plan";
-  if (!/^[A-Z0-9_-]{2,20}$/.test(code)) payload.code = "DRAFT";
+  payload.name = "Preview plan";
+  payload.code = "DRAFT";
+  delete payload.displayName;
+  delete payload.description;
+  delete payload.termsText;
+
+  // Settlement and publication settings are edited later and do not affect sample dates.
+  payload.redemptionRules = {
+    prematureClosureAllowed: false,
+    lockInMonths: 0,
+    prematurePenalty: { mode: "NONE", value: 0, benefitTreatment: "FORFEIT" },
+    allowedModes: ["CASH"],
+    redeemAtAnyBranch: false,
+    ...(form.valueBasis === "GOLD_WEIGHT" || form.oneTimeRules ? { cashSettlementBasis: "GOLD_VALUE" } : {}),
+  };
+  const benefit = payload.benefit as Record<string, unknown>;
+  payload.benefit = {
+    ...benefit,
+    eligibility: { requireAllInstallmentsPaid: false, maxAllowedDefaults: 0, minMonthsCompleted: 0 },
+  };
+  payload.availability = { allBranches: true, branchIds: [], visibleInCustomerApp: false, customerSelfEnrolAllowed: false };
 
   return { ...payload, ...core };
 }
@@ -547,12 +579,17 @@ export function amountSummaryLabel(form: PlanBuilderFormState): string {
     return `Free window: ₹${form.flexMinPayment.toLocaleString("en-IN")}–₹${form.flexMaxPayment.toLocaleString("en-IN")} per payment · ${form.flexiblePhaseCycles} free + ${form.cappedPhaseCycles} capped months.`;
   }
   if (form.amountMode === "CUSTOMER_CHOSEN") {
-    return `Customers can choose ₹${form.minAmount.toLocaleString("en-IN")} – ₹${form.maxAmount.toLocaleString("en-IN")}, in multiples of ₹${form.multipleOf}.`;
+    const bounds = `₹${form.minAmount.toLocaleString("en-IN")} – ₹${form.maxAmount.toLocaleString("en-IN")}`;
+    const multiples = form.multipleOf > 0 ? `, in multiples of ₹${form.multipleOf.toLocaleString("en-IN")}` : "";
+    return `Customers can choose ${bounds}${multiples}${form.oneTimeRules ? " for their one-time payment" : ""}.`;
   }
   if (form.amountMode === "JEWELLER_FIXED") {
-    return `Fixed ₹${form.fixedAmount.toLocaleString("en-IN")} per installment. Min/max equal this amount on save.`;
+    return `Fixed ₹${form.fixedAmount.toLocaleString("en-IN")}${form.oneTimeRules ? " due at enrolment." : " per installment."}`;
   }
-  return `Slabs: ${form.slabsCsv} (min/max derived from slab list).`;
+  if (form.oneTimeRules) return `One-time payment slabs · ${form.slabsCsv}`;
+  return form.collectionRules?.amountBasis === "TOTAL_TARGET"
+    ? `Total target slabs · ${form.slabsCsv}`
+    : `Slabs: ${form.slabsCsv} (min/max derived from slab list).`;
 }
 
 const fromPaise = (v?: number | null) =>
@@ -601,6 +638,8 @@ export function planDetailToForm(detail: Record<string, unknown>): PlanBuilderFo
   const cap = (flex.capComputation ?? {}) as Record<string, unknown>;
   const capped = (flex.cappedPhase ?? {}) as Record<string, unknown>;
   const benefit = (detail.benefit ?? {}) as Record<string, unknown>;
+  const collectionRules = (detail.collectionRules ?? undefined) as CollectionRules | undefined;
+  const goldBonus = resolveMaturityGoldRules(benefit, collectionRules);
   const elig = (benefit.eligibility ?? {}) as Record<string, unknown>;
   const redemption = (detail.redemptionRules ?? {}) as Record<string, unknown>;
   const penalty = (redemption.prematurePenalty ?? {}) as Record<string, unknown>;
@@ -611,6 +650,8 @@ export function planDetailToForm(detail: Record<string, unknown>): PlanBuilderFo
 
   return {
     ...base,
+    oneTimeRules: detail.oneTimeRules as OneTimeGoldRules | undefined,
+    collectionRules,
     name: String(detail.name ?? base.name),
     code: String(detail.code ?? base.code),
     displayName: String(detail.displayName ?? detail.name ?? ""),
@@ -632,7 +673,7 @@ export function planDetailToForm(detail: Record<string, unknown>): PlanBuilderFo
       : base.slabsCsv,
     minAmount: fromPaise(rules.minInstallmentPaise as number) || base.minAmount,
     maxAmount: fromPaise(rules.maxInstallmentPaise as number) || base.maxAmount,
-    multipleOf: fromPaise(rules.multipleOfPaise as number) || base.multipleOf,
+    multipleOf: fromPaise(rules.multipleOfPaise as number),
     partialPaymentAllowed: Boolean(payment.partialPaymentAllowed),
     advancePaymentAllowed: Boolean(payment.advancePaymentAllowed ?? true),
     maxAdvanceInstallments: Number(payment.maxAdvanceInstallments ?? 3),
@@ -683,8 +724,8 @@ export function planDetailToForm(detail: Record<string, unknown>): PlanBuilderFo
     weightPrecisionMg: Number(
       gold.weightPrecisionMg ?? base.weightPrecisionMg,
     ),
-    benefitType:
-      (benefit.type as BenefitType) ?? base.benefitType,
+    benefitType: goldBonus ? "MATURITY_GOLD_CREDIT" : (benefit.type as BenefitType) ?? base.benefitType,
+    goldBonus: goldBonus ?? base.goldBonus,
     benefitDisplayLabel: String(benefit.displayLabel ?? base.benefitDisplayLabel),
     requireAllInstallmentsPaid: Boolean(
       elig.requireAllInstallmentsPaid ?? true,
@@ -750,9 +791,6 @@ export function buildPlanPatchPayload(form: PlanBuilderFormState) {
       displayName: form.displayName || form.name,
       description: form.description,
       termsText: form.termsText,
-      benefit: {
-        displayLabel: form.benefitDisplayLabel,
-      },
       availability: {
         allBranches: form.allBranches,
         branchIds: form.allBranches ? [] : form.branchIds,
@@ -767,6 +805,11 @@ export function buildPlanPatchPayload(form: PlanBuilderFormState) {
   }
   const rest = { ...buildPlanCreatePayload(form) } as Record<string, unknown>;
   delete rest.status;
+  if (!form.collectionRules) rest.collectionRules = null;
+  if (!form.oneTimeRules) rest.oneTimeRules = null;
+  if (form.benefitType !== "MATURITY_GOLD_CREDIT") {
+    rest.benefit = { ...(rest.benefit as object), goldBonus: null };
+  }
   if (form.paymentPattern === "FLEXIBLE_AVERAGE") {
     rest.paymentRules = {
       ...((rest.paymentRules as Record<string, unknown>) ?? {}),
@@ -853,7 +896,13 @@ export function redemptionModesLabel(modes: RedemptionMode[]): string {
   return modes.map((m) => labels[m] ?? m).join(" · ");
 }
 
+export function validGoldBonusPercent(percent: number): boolean {
+  return Number.isInteger(percent) && percent >= 1 && percent <= 100;
+}
+
 export function benefitSummaryLabel(form: PlanBuilderFormState): string {
+  if (form.oneTimeRules) return oneTimeBonusLabel(form.oneTimeRules);
+  if (form.benefitType === "MATURITY_GOLD_CREDIT") return `${form.goldBonus.bonusPercent}% additional gold at maturity`;
   if (form.benefitType === "FIXED_BONUS_AMOUNT") {
     if (form.bonusBasis === "FLAT") {
       return `Flat bonus ₹${form.bonusValue.toLocaleString("en-IN")} · ${form.benefitDisplayLabel}`;

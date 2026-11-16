@@ -29,6 +29,8 @@ import {
   useSubmitAgentCustomerKycMutation,
   useValidateAgentEnrolmentMutation,
 } from "@/src/store/api/agent-api";
+import { EnrolFrequencyControl } from "@/src/components/common/enrol-frequency-control";
+import type { CollectionFrequency } from "@/src/types/collection";
 import type { AgentPlan } from "@/src/types/agent";
 import { useAgentCapabilities } from "./use-agent-capabilities";
 
@@ -329,6 +331,8 @@ function EnrolForm({
 }) {
   const [planId, setPlanId] = useState(plans[0].id);
   const plan = plans.find((row) => row.id === planId) ?? plans[0];
+  const [frequenciesByPlan, setFrequenciesByPlan] = useState<Record<string, CollectionFrequency>>({});
+  const collectionFrequency = frequenciesByPlan[plan.id];
   const [amountByPlan, setAmountByPlan] = useState<Record<string, string>>({});
   const [modeByPlan, setModeByPlan] = useState<Record<string, "COLLECT_NOW" | "START_NEXT_CYCLE">>({});
   const [validate, validation] = useValidateAgentEnrolmentMutation();
@@ -347,9 +351,10 @@ function EnrolForm({
       customerId,
       planId: plan.id,
       firstInstallmentMode,
+      ...(plan.collectionRules && collectionFrequency ? { collectionFrequency } : {}),
       ...(amountPaise && Number.isSafeInteger(amountPaise) && amountPaise > 0 ? { installmentAmountPaise: amountPaise } : {}),
     }),
-    [customerId, plan.id, firstInstallmentMode, amountPaise],
+    [customerId, plan.id, plan.collectionRules, collectionFrequency, firstInstallmentMode, amountPaise],
   );
   const debouncedRequest = useDebouncedValue(request, 350);
 
@@ -358,7 +363,9 @@ function EnrolForm({
   }, [debouncedRequest, validate]);
 
   const preview = validation.originalArgs === request ? validation.data : undefined;
-  const blocked = Boolean(preview?.blockers?.length) || !preview;
+  const blocked = Boolean(preview?.blockers?.length) || !preview || Boolean(plan.collectionRules && !collectionFrequency);
+  const amountLabel = plan.oneTimeRules ? "One-time payment" : plan.collectionRules?.amountBasis === "TOTAL_TARGET" ? "Total collection target"
+    : plan.collectionRules ? "Amount per collection" : "Monthly installment";
 
   const submit = async () => {
     try {
@@ -407,9 +414,17 @@ function EnrolForm({
             </div>
           </div>
 
+          {plan.collectionRules && (
+            <EnrolFrequencyControl
+              frequencies={plan.collectionRules.frequencies}
+              triggerClassName="h-12 rounded-xl"
+              value={collectionFrequency}
+              onChange={(value) => setFrequenciesByPlan({ ...frequenciesByPlan, [plan.id]: value })}
+            />
+          )}
           {choices && choices.length > 1 ? (
             <div className="space-y-2">
-              <Label className="text-xs font-bold text-[#6f6568]">Monthly installment</Label>
+              <Label className="text-xs font-bold text-[#6f6568]">{amountLabel}</Label>
               <Select value={amountText} onValueChange={(value) => setAmountByPlan({ ...amountByPlan, [plan.id]: value })}>
                 <SelectTrigger className="h-12 rounded-xl"><SelectValue /></SelectTrigger>
                 <SelectContent>
@@ -421,12 +436,12 @@ function EnrolForm({
             </div>
           ) : choices ? (
             <p className="rounded-xl bg-[#faf6f3] px-4 py-3 text-sm">
-              Installment <span className="font-black">{formatAgentMoney(choices[0])}</span>
+              {plan.collectionRules || plan.oneTimeRules ? amountLabel : "Installment"} <span className="font-black">{formatAgentMoney(choices[0])}</span>
             </p>
           ) : (
             <div className="space-y-2">
               <Label className="text-xs font-bold text-[#6f6568]">
-                {plan.paymentPattern === "FLEXIBLE" ? "Reference amount (₹)" : "Monthly installment (₹)"}
+                {plan.paymentPattern === "FLEXIBLE" ? "Reference amount (₹)" : `${amountLabel} (₹)`}
               </Label>
               <Input
                 inputMode="numeric"
@@ -452,7 +467,7 @@ function EnrolForm({
                 {(
                   [
                     ["COLLECT_NOW", "Collect now"],
-                    ["START_NEXT_CYCLE", "Start next month"],
+                    ["START_NEXT_CYCLE", plan.collectionRules ? "Start next collection" : "Start next month"],
                   ] as const
                 ).map(([value, label]) => (
                   <button

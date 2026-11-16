@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { COLLECTION_FREQUENCY_LABELS } from "@/src/types/collection";
 import { CalendarDays, ChevronRight, CircleCheck, Info, Sparkles } from "lucide-react";
 import type { CustomerDisplayMode, CustomerPastScheme, CustomerSchemeDetail, SchemeCard } from "@/src/types/customer";
 import { useCustomerTenant } from "@/src/components/customer/customer-tenant-context";
@@ -42,6 +43,7 @@ export function schemeTypeBadges(scheme: SchemeCard) {
   const mode = normalizeMode(scheme.displayMode);
   const isGold = scheme.valueBasis === "GOLD_WEIGHT";
   if (mode === "FIXED") {
+    if (scheme.collectionFrequency) return [{ key: "frequency", label: `${COLLECTION_FREQUENCY_LABELS[scheme.collectionFrequency]} collection`, tone: "gold" as const, dot: false }];
     return isGold
       ? [{ key: "type", label: "Gold weight", tone: "gold" as const }]
       : [{ key: "type", label: "Fixed", tone: "brand" as const }];

@@ -19,7 +19,7 @@ import {
 } from "./grievance-mocks";
 import { matchesDemoDateRange } from "@/src/lib/demo-dates";
 import { fuzzyMatchAny } from "@/src/lib/fuzzy-search";
-import { synthesizePlanDetail, synthesizePlanStats } from "./plan-detail-mock";
+import { saveMockPlanRules, synthesizePlanDetail, synthesizePlanStats } from "./plan-detail-mock";
 import { buildPlanSchedulePreview } from "./plan-preview-mock";
 import {
   synthesizeBranchDetail,
@@ -1681,6 +1681,7 @@ export async function mockRequest<T>({
         editLocked: false,
       } as SchemePlan;
       mockDb.plans.push(row);
+      saveMockPlanRules(row.id, body);
       return {
         __contract: true,
         payload: {
@@ -1716,6 +1717,8 @@ export async function mockRequest<T>({
       if (idx < 0) throw { status: 404, data: { code: "NOT_FOUND" } };
       const existing = mockDb.plans[idx];
       const financialKeys = [
+        "oneTimeRules",
+        "collectionRules",
         "amountRules",
         "scheduleRules",
         "paymentRules",
@@ -1750,6 +1753,12 @@ export async function mockRequest<T>({
       if (body.name) existing.name = String(body.name);
       if (body.displayName) existing.name = String(body.displayName);
       mockDb.plans[idx] = { ...existing };
+      const { expectedVersion: _version, benefit, ...rules } = body;
+      if (benefit && typeof benefit === "object") {
+        const oldBenefit = synthesizePlanDetail(existing).benefit as Record<string, unknown> | undefined;
+        rules.benefit = { ...oldBenefit, ...benefit };
+      }
+      saveMockPlanRules(planId, rules);
       return {
         __contract: true,
         payload: {
@@ -1786,6 +1795,7 @@ export async function mockRequest<T>({
         editLocked: false,
       };
       mockDb.plans.push(row);
+      saveMockPlanRules(row.id, synthesizePlanDetail(source));
       return row as T;
     }
     case "access":

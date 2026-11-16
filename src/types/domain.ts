@@ -1,3 +1,5 @@
+import type { OneTimeGoldProgress, OneTimeGoldRules } from "./one-time-gold";
+import type { CollectionBonus, CollectionFrequency, CollectionRules } from "./collection";
 export type StatusTone = "success" | "warning" | "danger" | "info" | "neutral";
 
 export type GlobalSearchKind =
@@ -165,6 +167,9 @@ export interface PayableQuote {
 }
 
 export interface Enrollment {
+  collectionFrequency?: CollectionFrequency;
+  oneTimeProgress?: OneTimeGoldProgress;
+  collectionBonus?: CollectionBonus;
   id: string;
   enrollmentNo: string;
   customerId: string;
@@ -369,6 +374,8 @@ export interface GrievanceDetail extends Grievance {
   version: number;
 }
 export interface SchemePlan {
+  oneTimeRules?: OneTimeGoldRules;
+  collectionRules?: CollectionRules;
   id: string;
   code: string;
   name: string;

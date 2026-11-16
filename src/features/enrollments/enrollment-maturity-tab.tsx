@@ -1,6 +1,9 @@
 "use client";
 
+import { OneTimeGoldProgressPanel } from "@/src/components/common/one-time-gold-progress";
+
 import Link from "next/link";
+import { MaturityGoldCredit } from "@/src/components/common/maturity-gold-credit";
 import {
   ArrowRight,
   CircleCheck,
@@ -92,7 +95,14 @@ export function EnrollmentMaturityTab({
   const redemptionInProgress = Boolean(pending);
   const redemptionComplete =
     row.status === "REDEEMED" || row.status === "CLOSED_PREMATURE";
+  const bonusWaitingForRate = row.collectionBonus?.status === "PENDING_RATE";
+  const noGoldToRedeem = row.status === "MATURED" && Boolean(row.collectionBonus) && row.paid <= 0;
+  const redemptionUnavailable = bonusWaitingForRate
+    ? "Redemption opens after the maturity gold rate is available and the bonus is resolved."
+    : noGoldToRedeem ? "No gold remains to redeem."
+      : row.status === "MATURED" ? "The maturity settlement is unavailable. Open the preview for details." : null;
   const canCloseEarly =
+    !bonusWaitingForRate &&
     !redemptionInProgress &&
     !redemptionComplete &&
     (row.status === "ACTIVE" ||
@@ -101,7 +111,7 @@ export function EnrollmentMaturityTab({
   const canRedeem =
     !redemptionInProgress &&
     !redemptionComplete &&
-    (row.canRedeem === true || row.status === "MATURED");
+    (row.canRedeem === true || (!row.collectionBonus && row.status === "MATURED"));
   const step = workflowStepIndex(row);
   const progressPct = Math.min(
     100,
@@ -294,6 +304,8 @@ export function EnrollmentMaturityTab({
               })}
             </ol>
 
+            {enrollment.oneTimeProgress && <OneTimeGoldProgressPanel progress={enrollment.oneTimeProgress} />}
+            {enrollment.collectionBonus && <MaturityGoldCredit bonus={enrollment.collectionBonus} className="rounded-xl border border-[#eaded9] bg-[#faf7f5] p-4" />}
             {redemptionComplete && completed?.settlementPaise != null ? (
               <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 px-4 py-4">
                 <p className="text-xs font-semibold uppercase tracking-wide text-emerald-800">
@@ -334,14 +346,14 @@ export function EnrollmentMaturityTab({
                     ? "Settlement preview"
                     : redemptionComplete
                       ? "Enrollment closed"
-                      : "Not at maturity yet"}
+                      : redemptionUnavailable ? "Settlement unavailable" : "Not at maturity yet"}
                 </p>
                 <p className="mt-2 text-sm leading-6 text-muted-foreground">
                   {redemptionComplete
                     ? "Settlement was finalized at handover. See payment ledger and audit for entries."
                     : canRedeem
                       ? "Open the full preview to review line items before initiating redemption."
-                      : "When the scheme matures, the settlement computation appears here."}
+                      : redemptionUnavailable ?? "When the scheme matures, the settlement computation appears here."}
                 </p>
               </div>
             )}
@@ -365,7 +377,7 @@ export function EnrollmentMaturityTab({
                     . Initiate and collect are disabled until this request
                     completes or is rejected.
                   </div>
-                ) : (
+                ) : !redemptionUnavailable && (
                   <div className="rounded-xl border border-[#efe6ea] bg-white p-4 text-sm text-muted-foreground">
                     Initiate redemption is available once the scheme reaches{" "}
                     <strong className="text-foreground">Matured</strong> status.
