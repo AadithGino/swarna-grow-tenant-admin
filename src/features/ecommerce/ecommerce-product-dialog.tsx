@@ -387,6 +387,25 @@ function EcommerceProductDialogBody({
                 </Select>
               </div>
               <div>
+                <FieldLabel>Matured scheme purchases</FieldLabel>
+                <Select value={form.schemePurchasePolicy ?? "INHERIT"}
+                  onValueChange={(value) => patchForm({ schemePurchasePolicy: value as ProductFormInput["schemePurchasePolicy"] })}>
+                  <SelectTrigger aria-label="Matured scheme purchases"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="INHERIT">Use category setting</SelectItem>
+                    <SelectItem value="ALLOW">Allow</SelectItem>
+                    <SelectItem value="DISALLOW">Disallow</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {(form.schemePurchasePolicy ?? "INHERIT") === "INHERIT"
+                    ? activeCategories.some((category) => String(category.id) === form.categoryId && category.schemePurchaseAllowed === true)
+                      ? "Allowed by category."
+                      : "Disallowed by category or no category selected."
+                    : form.schemePurchasePolicy === "ALLOW" ? "Allowed by product override." : "Disallowed by product override."}
+                </p>
+              </div>
+              <div>
                 <FieldLabel>Status</FieldLabel>
                 <Select
                   value={serverStatus === "ARCHIVED" ? "DRAFT" : serverStatus}

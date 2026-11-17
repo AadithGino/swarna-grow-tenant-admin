@@ -1,5 +1,6 @@
 "use client";
 
+import { SchemePurchaseFields } from "./scheme-purchase-fields";
 import { OneTimeGoldFields } from "./one-time-gold-fields";
 
 import { CollectionRulesFields } from "./collection-rules-fields";
@@ -1362,6 +1363,15 @@ export function PlanBuilderWizard({
                 )}
                 <AmountSummaryStrip label={benefitSummaryLabel(form)} />
               </div>
+            )}
+
+            {current.id === "benefit" && form.allowedRedemptionModes.includes("PURCHASE_ADJUSTMENT") && (
+              <>
+                <SchemePurchaseFields rules={form.schemePurchaseRules}
+                  onChange={(schemePurchaseRules) => set({ schemePurchaseRules })}
+                  gold={form.valueBasis === "GOLD_WEIGHT"} locked={form.editLocked} />
+                <FormFieldError message={fieldErrors.schemePurchaseRules} />
+              </>
             )}
 
             {current.id === "redemption" && (

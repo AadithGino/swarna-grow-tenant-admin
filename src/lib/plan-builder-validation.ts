@@ -158,6 +158,13 @@ export function validatePlanBenefit(
   form: PlanBuilderFormState,
 ): Record<string, string> {
   const errors: Record<string, string> = {};
+  const rules = form.allowedRedemptionModes.includes("PURCHASE_ADJUSTMENT") ? form.schemePurchaseRules : undefined;
+  const waiver = rules?.makingChargeWaiver;
+  if ((waiver?.kind === "PERCENT" && (!Number.isSafeInteger(waiver.basisPoints) || waiver.basisPoints < 1 || waiver.basisPoints > 10000)) ||
+      (waiver?.kind === "FIXED" && (!Number.isSafeInteger(waiver.amountPaise) || waiver.amountPaise < 1)) ||
+      (rules?.waiverCapPaise !== undefined && (!Number.isSafeInteger(rules.waiverCapPaise) || rules.waiverCapPaise < 1))) {
+    errors.schemePurchaseRules = "Enter a positive waiver amount or cap and a percentage no greater than 100.";
+  }
   if (form.oneTimeRules) {
     const { basis, value } = form.oneTimeRules;
     if (!Number.isSafeInteger(value) || value <= 0 || (basis === "PRINCIPAL_PERCENT" && value > 100)) {

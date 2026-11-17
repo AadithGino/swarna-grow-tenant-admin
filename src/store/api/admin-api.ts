@@ -5217,11 +5217,12 @@ export const adminApi = createApi({
     }),
     initiateEcommerceOrderPaymentExceptionRefund: builder.mutation<
       Record<string, unknown>,
-      string
+      { orderId: string; refundId?: string }
     >({
-      query: (orderId) => ({
+      query: ({ orderId, refundId }) => ({
         url: `/admin/ecommerce/orders/${encodeURIComponent(orderId)}/payment-exception-refund/initiate`,
         method: "POST",
+        body: refundId ? { refundId } : {},
         mockKey: "initiateEcommerceOrderPaymentExceptionRefund",
       }),
       invalidatesTags: ["Ecommerce"],
@@ -5230,6 +5231,7 @@ export const adminApi = createApi({
       Record<string, unknown>,
       {
         orderId: string;
+        refundId?: string;
         providerRefundReference: string;
         reason: string;
         evidenceNote: string;

@@ -8,6 +8,7 @@ export type ProductFormInput = {
   sku: string;
   description: string;
   categoryId: string;
+  schemePurchasePolicy?: "INHERIT" | "ALLOW" | "DISALLOW";
   priceMode: "FIXED" | "GOLD_RATE_BASED";
   taxClassification: string;
   imageUploadIds: string[];
@@ -59,6 +60,7 @@ export function buildEcommerceProductBody(
     sku: form.sku.trim() || undefined,
     description: form.description.trim() || undefined,
     categoryId: form.categoryId || null,
+    ...(form.schemePurchasePolicy ? { schemePurchasePolicy: form.schemePurchasePolicy } : {}),
     priceMode: form.priceMode,
     taxClassification: form.taxClassification || undefined,
     imageUploadIds: form.imageUploadIds,
@@ -192,6 +194,7 @@ export function productRowToFormInput(
     sku: String(product?.sku ?? ""),
     description: String(product?.description ?? ""),
     categoryId: String(product?.categoryId ?? ""),
+    schemePurchasePolicy: product?.schemePurchasePolicy === "ALLOW" || product?.schemePurchasePolicy === "DISALLOW" ? product.schemePurchasePolicy : "INHERIT",
     priceMode: (product?.priceMode as ProductFormInput["priceMode"]) ?? "FIXED",
     taxClassification: String(product?.taxClassification ?? defaultTax ?? ""),
     imageUploadIds: (product?.imageUploadIds as string[]) ?? [],

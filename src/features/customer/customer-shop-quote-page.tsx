@@ -8,7 +8,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { PageSkeleton, QueryError } from "@/src/components/common/query-state";
-import { toastApiError } from "@/src/lib/api-error";
+import { parseApiError, toastApiError } from "@/src/lib/api-error";
 import { newIdempotencyKey } from "@/src/lib/idempotency";
 import { useCustomerTenant } from "@/src/components/customer/customer-tenant-context";
 import { customerPath } from "@/src/lib/customer-tenant";
@@ -18,6 +18,8 @@ import {
   useCancelShopQuoteMutation,
   useCreateShopOrderMutation,
   useGetShopQuoteQuery,
+  useGetCustomerSchemesQuery,
+  useLazyGetShopSchemePurchasePreviewQuery,
 } from "@/src/store/api/customer-api";
 import { CustomerShopPoliciesLinks } from "@/src/features/customer/customer-shop-policies";
 import { formatAddressBlock } from "@/src/features/customer/customer-shop-order-progress";
@@ -45,6 +47,65 @@ function useCountdown(expiresAt: Date | null) {
   return { ms, label: `${m}:${String(s).padStart(2, "0")}` };
 }
 
+type SchemeChoice = NonNullable<Parameters<ReturnType<typeof useCreateShopOrderMutation>[0]>[0]["schemePurchase"]>;
+
+function SchemePurchaseEstimate({ quoteId, placing, onPlace }: {
+  quoteId: string; placing: boolean; onPlace: (choice: SchemeChoice) => void;
+}) {
+  const schemes = useGetCustomerSchemesQuery();
+  const [schemeId, setSchemeId] = useState("");
+  const [basis, setBasis] = useState<"CASH_VALUE" | "GOLD_WEIGHT">("CASH_VALUE");
+  const [getPreview, preview] = useLazyGetShopSchemePurchasePreviewQuery();
+  const matured = (schemes.data ?? []).filter((scheme) => scheme.status === "MATURED");
+  if (!matured.length) return null;
+
+  const scheme = matured.find((item) => item.id === schemeId) ?? matured[0]!;
+  const selectedBasis = scheme.valueBasis === "GOLD_WEIGHT" ? basis : "CASH_VALUE";
+  const current = !preview.isFetching && preview.originalArgs?.schemeId === scheme.id && preview.originalArgs.basis === selectedBasis;
+  const estimate = current && !preview.error ? preview.currentData : undefined;
+  return (
+    <ShopPanel title="Preview matured scheme savings">
+      <p className="mb-3 text-sm text-muted-foreground">Select a matured scheme to calculate your contribution and any top-up.</p>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <label className="grid gap-1 text-sm">
+          Matured scheme
+          <select className="rounded-xl border bg-background p-2" value={scheme.id} onChange={(e) => setSchemeId(e.target.value)}>
+            {matured.map((item) => <option key={item.id} value={item.id}>{item.planName} · {item.schemeNumber}</option>)}
+          </select>
+        </label>
+        {scheme.valueBasis === "GOLD_WEIGHT" && <label className="grid gap-1 text-sm">
+          Settlement basis
+          <select className="rounded-xl border bg-background p-2" value={selectedBasis}
+            onChange={(e) => setBasis(e.target.value === "GOLD_WEIGHT" ? "GOLD_WEIGHT" : "CASH_VALUE")}>
+            <option value="CASH_VALUE">Cash value</option>
+            <option value="GOLD_WEIGHT">Gold weight</option>
+          </select>
+        </label>}
+      </div>
+      <Button type="button" variant="outline" className="mt-3" disabled={preview.isFetching}
+        onClick={() => void getPreview({ quoteId, schemeId: scheme.id, basis: selectedBasis })}>
+        {preview.isFetching ? "Calculating…" : "Calculate estimate"}
+      </Button>
+      {current && preview.error && <p role="alert" className="mt-3 text-sm text-destructive">
+        {parseApiError(preview.error, "Could not calculate scheme savings.").message}
+      </p>}
+      {estimate && <dl className="mt-4 grid grid-cols-2 gap-2 text-sm" aria-live="polite">
+        <dt>Making charges waived</dt><dd>{formatShopInr(estimate.makingChargeWaivedPaise, 2)}</dd>
+        <dt>Scheme value applied</dt><dd>{formatShopInr(estimate.appliedPaise, 2)}</dd>
+        <dt>Estimated top-up</dt><dd>{formatShopInr(estimate.topUpPaise, 2)}</dd>
+        <dt>Estimated scheme remainder</dt><dd>{selectedBasis === "GOLD_WEIGHT"
+          ? `${(estimate.remaining / 1000).toFixed(3)} g` : formatShopInr(estimate.remaining, 2)}</dd>
+      </dl>}
+      {estimate && (
+        <Button type="button" disabled={placing} className="mt-4" onClick={() => onPlace({
+          schemeId: scheme.id, basis: selectedBasis, applied: estimate.applied,
+          topUpPaise: estimate.topUpPaise, makingChargeWaivedPaise: estimate.makingChargeWaivedPaise,
+        })}>Place order with scheme</Button>
+      )}
+    </ShopPanel>
+  );
+}
+
 export function CustomerShopQuotePage({ quoteId }: { quoteId: string }) {
   const router = useRouter();
   const { tenantSlug } = useCustomerTenant();
@@ -53,6 +114,7 @@ export function CustomerShopQuotePage({ quoteId }: { quoteId: string }) {
   const [createOrder, createOrderState] = useCreateShopOrderMutation();
   // Keep the same key on an uncertain retry so a double click/network timeout cannot create another order.
   const orderIdempotencyKey = useRef<string>(newIdempotencyKey());
+  const schemeOrderKeys = useRef(new Map<string, string>());
   const expiresAt = quote.data?.expiresAt ? new Date(String(quote.data.expiresAt)) : null;
   const countdown = useCountdown(expiresAt);
 
@@ -82,13 +144,16 @@ export function CustomerShopQuotePage({ quoteId }: { quoteId: string }) {
           : "Place order (payment blocked)"
         : "Place order (unavailable)";
 
-  async function onPlaceOrder() {
+  async function onPlaceOrder(schemePurchase?: SchemeChoice) {
+    const purchaseKey = schemePurchase ? JSON.stringify(schemePurchase) : undefined;
+    if (purchaseKey && !schemeOrderKeys.current.has(purchaseKey)) schemeOrderKeys.current.set(purchaseKey, newIdempotencyKey());
     try {
       const order = await createOrder({
         quoteId,
-        idempotencyKey: orderIdempotencyKey.current,
+        idempotencyKey: purchaseKey ? schemeOrderKeys.current.get(purchaseKey)! : orderIdempotencyKey.current,
+        schemePurchase,
       }).unwrap();
-      toast.success(paymentMethod === "COD" ? "COD order placed" : "Order created — continue to payment");
+      toast.success(schemePurchase ? "Order submitted for approval" : paymentMethod === "COD" ? "COD order placed" : "Order created — continue to payment");
       router.push(customerShopOrderPath(tenantSlug, String(order.id)));
     } catch (err) {
       toastApiError(err);
@@ -157,6 +222,8 @@ export function CustomerShopQuotePage({ quoteId }: { quoteId: string }) {
               <p className={cn("mt-1 leading-6", SHOP_MUTED)}>You can review this price, but the jeweller has not enabled online checkout. Contact the store for availability.</p>
             </div>
           ) : null}
+
+          {live && q.schemePurchasePreviewEnabled === true && <SchemePurchaseEstimate key={quoteId} quoteId={quoteId} placing={createOrderState.isLoading} onPlace={(choice) => void onPlaceOrder(choice)} />}
 
           <ShopPanel title={`Items (${lines.length})`}>
             <ul className="divide-y divide-[#f0e6e0]">
@@ -234,7 +301,7 @@ export function CustomerShopQuotePage({ quoteId }: { quoteId: string }) {
               className="mt-5 h-12 w-full rounded-full text-[15px] text-white"
               style={customerBrandStyle.primaryBg}
               disabled={!canPlaceOrder || createOrderState.isLoading}
-              onClick={onPlaceOrder}
+              onClick={() => void onPlaceOrder()}
               title={
                 canPlaceOrder
                   ? paymentMethod === "COD" ? "Place your cash on delivery order" : "Create order and continue to payment"

@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
-import { buildPlanCreatePayload, buildPreviewScheduleBody, defaultPlanBuilderForm } from "./plan-builder-form";
+import { buildPlanCreatePayload, buildPlanPatchPayload, buildPreviewScheduleBody, defaultPlanBuilderForm, planDetailToForm } from "./plan-builder-form";
 import { PlanBuilderCustomerPreview } from "./plan-builder-ui";
 import { PlanSchedulePreviewPanel } from "./plan-preview-panel";
 import { buildPlanSchedulePreview } from "@/src/mocks/plan-preview-mock";
@@ -78,6 +78,22 @@ describe("scheme builder schedule previews", () => {
     expect(preview.schedule[0]?.amount.amountPaise).toBe(150000);
     expect(preview.summary.maturityDate).toBe("2028-11-30");
     expect(Boolean(preview.summary.estimatedMaturityValue)).toBe(valueBasis === "CASH");
+  });
+
+  it("round-trips structured online purchase rules without adding them to schedule previews", () => {
+    const form = defaultPlanBuilderForm();
+    form.valueBasis = "GOLD_WEIGHT";
+    form.allowedRedemptionModes = ["PURCHASE_ADJUSTMENT"];
+    form.schemePurchaseRules = {
+      channel: "BOTH",
+      settlementBases: ["CASH_VALUE", "GOLD_WEIGHT"],
+      makingChargeWaiver: { kind: "PERCENT", basisPoints: 7500 },
+      waiverCapPaise: 50000,
+    };
+    expect(planDetailToForm(buildPlanCreatePayload(form)).schemePurchaseRules).toEqual(form.schemePurchaseRules);
+    expect(buildPreviewScheduleBody(form, { startDate })).not.toHaveProperty("schemePurchaseRules");
+    expect(buildPlanPatchPayload({ ...form, schemePurchaseRules: undefined })).toMatchObject({ schemePurchaseRules: null });
+    expect(buildPlanPatchPayload({ ...form, editLocked: true })).not.toHaveProperty("schemePurchaseRules");
   });
 
   it("shows an actual request error instead of stale schedule data", () => {

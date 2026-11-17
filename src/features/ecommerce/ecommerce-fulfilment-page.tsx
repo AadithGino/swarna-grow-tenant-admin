@@ -72,6 +72,7 @@ export function EcommerceFulfilmentPage() {
   const [pincodesText, setPincodesText] = useExternalValueSync(
     ((query.data?.serviceablePincodes as string[]) ?? []).join("\n"),
   );
+  const [schemeCheckoutEnabled, setSchemeCheckoutEnabled] = useExternalValueSync(query.data?.schemeCheckoutEnabled === true);
   const [codEnabled, setCodEnabled] = useExternalValueSync(query.data?.codEnabled === true);
   const [codPincodesText, setCodPincodesText] = useExternalValueSync(
     ((query.data?.codPincodes as string[]) ?? []).join("\n"),
@@ -126,6 +127,7 @@ export function EcommerceFulfilmentPage() {
       saved.deliveryChargePaise != null ? String(Number(saved.deliveryChargePaise) / 100) : "",
     );
     setPincodesText(((saved.serviceablePincodes as string[]) ?? []).join("\n"));
+    setSchemeCheckoutEnabled(saved.schemeCheckoutEnabled === true);
     setCodEnabled(saved.codEnabled === true);
     setCodPincodesText(((saved.codPincodes as string[]) ?? []).join("\n"));
     setCheckoutForm(
@@ -168,6 +170,7 @@ export function EcommerceFulfilmentPage() {
         deliveryEnabled,
         deliveryChargePaise: deliveryChargePaise ?? undefined,
         serviceablePincodes,
+        schemeCheckoutEnabled,
         codEnabled,
         codPincodes: codEnabled ? codPincodes : [],
         requireCourierTrackingForShipped: requireCourierTracking,
@@ -324,6 +327,16 @@ export function EcommerceFulfilmentPage() {
                   onCheckedChange={setRequireCourierTracking}
                 />
 
+                <div className="border-t border-[#eaded9] pt-4">
+                  <EcommerceSettingsToggle
+                    id="scheme-checkout"
+                    title="Allow matured scheme checkout"
+                    description="Customers can use eligible matured schemes. Top-up payments open after staff approval."
+                    checked={schemeCheckoutEnabled}
+                    disabled={!access.canWrite}
+                    onCheckedChange={setSchemeCheckoutEnabled}
+                  />
+                </div>
                 <div className="border-t border-[#eaded9] pt-4">
                   <EcommerceSettingsToggle
                     id="cod-enabled"

@@ -80,7 +80,7 @@ function paymentUiState(order: Record<string, unknown>, attempt?: Record<string,
   const status = String(attempt?.status ?? "");
   if (status === "INITIATED" || status === "PENDING") {
     if (order.paymentAllowed === true && order.status === "PENDING_PAYMENT") {
-      return { canPay: true, detail: "Retry opens a fresh PhonePe checkout if needed." };
+      return { canPay: true, detail: "Resume your existing PhonePe checkout." };
     }
     return { canPay: false, detail: "Complete payment in the gateway." };
   }
@@ -113,6 +113,7 @@ export function CustomerShopOrderPage({ orderId }: { orderId: string }) {
   const [createCancellationRequest, requestState] = useCreateShopCancellationRequestMutation();
   const [cancelDialog, setCancelDialog] = useState<"direct" | "request" | null>(null);
   const [cancelReason, setCancelReason] = useState("");
+  const [returnQuantities, setReturnQuantities] = useState<Record<string, number>>({});
   const [returnReason, setReturnReason] = useState("");
   const [returnDialogOpen, setReturnDialogOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
@@ -136,7 +137,8 @@ export function CustomerShopOrderPage({ orderId }: { orderId: string }) {
   const serverAttemptId = serverAttempt?.id ? String(serverAttempt.id) : null;
   const polledAttemptId = polledAttempt?.id ? String(polledAttempt.id) : null;
   const pollAttemptId = serverAttemptId ?? polledAttemptId ?? storedAttemptId;
-  const effectiveAttempt = polledAttempt ?? serverAttempt;
+  const effectiveAttempt = serverAttempt && serverAttemptId !== polledAttemptId
+    ? serverAttempt : (polledAttempt ?? serverAttempt);
 
   const refreshAttempt = useCallback(async () => {
     if (!pollAttemptId) return;
@@ -174,6 +176,12 @@ export function CustomerShopOrderPage({ orderId }: { orderId: string }) {
   const o = order.data;
   if (!o) return null;
   const orderRow = o;
+  const returnableItems = orderReturn.data?.returnableItems ?? [];
+  const latestReturnStatus = String(orderReturn.data?.request?.status ?? "");
+  const returnEligibility = orderReturn.data?.returnEligibility;
+  const canRequestReturn = !!orderReturn.data && returnEligibility?.allowed !== false;
+  const canReturnRemaining = canRequestReturn && returnableItems.length > 0 && ["RESOLVED", "REJECTED"].includes(latestReturnStatus);
+  const purchase = (o.financialSnapshot as { schemePurchase?: Record<string, unknown> } | undefined)?.schemePurchase;
 
   const timeline = buildShopOrderTimeline(orderRow);
   const ui = paymentUiState(orderRow, effectiveAttempt);
@@ -259,10 +267,14 @@ export function CustomerShopOrderPage({ orderId }: { orderId: string }) {
       typeof window !== "undefined"
         ? `${window.location.origin}${customerShopOrderPath(tenantSlug, orderId)}`
         : `https://localhost${customerShopOrderPath(tenantSlug, orderId)}`;
-    const idempotencyKey = newIdempotencyKey();
+    const active = ["PENDING", "INITIATED"].includes(String(effectiveAttempt?.status))
+      ? effectiveAttempt : null;
+    const idempotencyKey = typeof active?.idempotencyKey === "string"
+      ? active.idempotencyKey : newIdempotencyKey();
+    const paymentRedirectUrl = typeof active?.redirectUrl === "string" ? active.redirectUrl : redirectUrl;
     saveShopPaymentIdempotencyKey(orderId, idempotencyKey);
     try {
-      const res = await createIntent({ orderId, idempotencyKey, redirectUrl }).unwrap();
+      const res = await createIntent({ orderId, idempotencyKey, redirectUrl: paymentRedirectUrl }).unwrap();
       const pi = res.paymentIntent;
       setPolledAttempt(pi);
       saveShopPaymentAttemptId(orderId, String(pi.id));
@@ -420,8 +432,16 @@ export function CustomerShopOrderPage({ orderId }: { orderId: string }) {
                 <dt className="text-[#7a6f72]">{delivery ? "Delivery" : "Pickup"}</dt>
                 <dd className="tabular-nums">{Number(o.fulfilmentChargePaise ?? 0) ? formatInr(Number(o.fulfilmentChargePaise)) : "Free"}</dd>
               </div>
+              {purchase && <>
+                <div className="flex justify-between"><dt>Making charges waived</dt><dd>{formatInr(Number(purchase.makingChargeWaivedPaise))}</dd></div>
+                <div className="flex justify-between"><dt>Order total</dt><dd>{formatInr(Number(purchase.grossPaise))}</dd></div>
+                <div className="flex justify-between"><dt>Scheme contribution</dt><dd>{formatInr(Number(purchase.appliedPaise))}</dd></div>
+                <div className="flex justify-between"><dt>Scheme balance after this order</dt><dd>{purchase.basis === "GOLD_WEIGHT"
+                  ? `${(Number(purchase.remaining) / 1000).toFixed(3)} g` : formatInr(Number(purchase.remaining))}</dd></div>
+                {purchase.approvalStatus === "PENDING" && o.status === "PENDING_PAYMENT" && <p>Awaiting jeweller approval.</p>}
+              </>}
               <div className="flex justify-between border-t border-[#ecdfd8] pt-2 text-base font-semibold text-[#221a1d]">
-                <dt>Total</dt>
+                <dt>{purchase ? "Cash top-up" : "Total"}</dt>
                 <dd className="tabular-nums text-[var(--customer-primary,#730321)]">{formatInr(Number(o.totalPaise ?? 0))}</dd>
               </div>
             </dl>
@@ -437,7 +457,7 @@ export function CustomerShopOrderPage({ orderId }: { orderId: string }) {
                   </p>
                   <p className="mt-1 text-xs text-[#7a6f72]">{String(orderReturn.data.request.reason ?? "")}</p>
                 </div>
-              ) : (
+              ) : canRequestReturn ? (
                 <>
                   <p className="text-sm text-[#7a6f72]">
                     Not quite right? Send a return or exchange request. The store approves it and confirms any refund separately.
@@ -446,7 +466,20 @@ export function CustomerShopOrderPage({ orderId }: { orderId: string }) {
                     Request return or exchange
                   </Button>
                 </>
+              ) : null}
+              {returnEligibility?.allowed === false && (
+                <p className="text-sm text-[#7a6f72]">
+                  {returnEligibility.code === "RETURN_WINDOW_EXPIRED"
+                    ? "The return window has closed." : "This order is no longer eligible for a return."}
+                </p>
               )}
+              {typeof o.refundedPaise === "number" && o.refundedPaise > 0 && (
+                <p className="text-sm text-[#4d4245]">
+                  {o.refundStatus === "PARTIALLY_REFUNDED" ? "Partial refund confirmed" : "Refund confirmed"}
+                  <strong className="ml-2">{formatInr(o.refundedPaise)}</strong>
+                </p>
+              )}
+              {canReturnRemaining && <Button type="button" variant="outline" onClick={() => setReturnDialogOpen(true)}>Return remaining items</Button>}
             </section>
           ) : null}
         </div>
@@ -587,6 +620,19 @@ export function CustomerShopOrderPage({ orderId }: { orderId: string }) {
             This sends a request to the store. Refunds and exchanges are confirmed separately — nothing is
             refunded automatically.
           </p>
+          {purchase && <div className="max-h-48 space-y-2 overflow-auto">
+            {returnableItems.map((item) => {
+              const id = item.productId;
+              const line = lines.find((entry) => entry.productId === id);
+              return <label key={id} className="flex items-center justify-between gap-3 text-sm">
+                <span>{String(line?.name ?? id)}</span>
+                <select className="rounded border p-1" value={returnQuantities[id] ?? 0}
+                  onChange={(event) => setReturnQuantities((current) => ({ ...current, [id]: Number(event.target.value) }))}>
+                  {Array.from({ length: item.quantity + 1 }, (_, qty) => <option key={qty} value={qty}>{qty}</option>)}
+                </select>
+              </label>;
+            })}
+          </div>}
           <Textarea
             value={returnReason}
             onChange={(e) => setReturnReason(e.target.value)}
@@ -599,11 +645,13 @@ export function CustomerShopOrderPage({ orderId }: { orderId: string }) {
             </Button>
             <Button
               type="button"
-              disabled={returnRequestState.isLoading || returnReason.trim().length < 8}
+              disabled={!canRequestReturn || returnRequestState.isLoading || returnReason.trim().length < 8 || (!!purchase && !Object.values(returnQuantities).some((qty) => qty > 0))}
               onClick={() =>
                 void createReturnRequest({
                   orderId,
                   reason: returnReason.trim(),
+                  ...(purchase ? { items: Object.entries(returnQuantities).filter(([, qty]) => qty > 0)
+                    .map(([productId, quantity]) => ({ productId, quantity })) } : {}),
                   idempotencyKey: newIdempotencyKey(),
                 })
                   .unwrap()
@@ -611,6 +659,7 @@ export function CustomerShopOrderPage({ orderId }: { orderId: string }) {
                     toast.success("Return request submitted");
                     setReturnDialogOpen(false);
                     setReturnReason("");
+                    setReturnQuantities({});
                     void orderReturn.refetch();
                   })
                   .catch(toastApiError)

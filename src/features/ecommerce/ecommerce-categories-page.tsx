@@ -35,6 +35,7 @@ type CategoryRow = {
   version: number;
   imageUploadId?: string | null;
   displayOrder?: number;
+  schemePurchaseAllowed?: boolean;
 };
 
 export function EcommerceCategoriesPage() {
@@ -51,6 +52,7 @@ export function EcommerceCategoriesPage() {
   const [name, setName] = useState("");
   const [slug, setSlug] = useState("");
   const [description, setDescription] = useState("");
+  const [schemePurchaseAllowed, setSchemePurchaseAllowed] = useState(false);
   const [displayOrder, setDisplayOrder] = useState("0");
   const [imageUploadId, setImageUploadId] = useState<string | null>(null);
   const [error, setError] = useState<string | undefined>();
@@ -72,6 +74,7 @@ export function EcommerceCategoriesPage() {
     setSlug("");
     setDescription("");
     setDisplayOrder("0");
+    setSchemePurchaseAllowed(false);
     setImageUploadId(null);
     setError(undefined);
     setDialogOpen(true);
@@ -83,6 +86,7 @@ export function EcommerceCategoriesPage() {
     setSlug(row.slug);
     setDescription(row.description ?? "");
     setDisplayOrder(String(row.displayOrder ?? 0));
+    setSchemePurchaseAllowed(row.schemePurchaseAllowed === true);
     setImageUploadId(row.imageUploadId ?? null);
     setError(undefined);
     setDialogOpen(true);
@@ -115,6 +119,7 @@ export function EcommerceCategoriesPage() {
       slug: slug.trim() || undefined,
       description,
       displayOrder: Number(displayOrder) || 0,
+      schemePurchaseAllowed,
       imageUploadId: imageUploadId ?? undefined,
     };
     try {
@@ -285,6 +290,10 @@ export function EcommerceCategoriesPage() {
             <FieldLabel>Display order</FieldLabel>
             <Input value={displayOrder} onChange={(e) => setDisplayOrder(e.target.value)} inputMode="numeric" />
           </div>
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" checked={schemePurchaseAllowed} onChange={(e) => setSchemePurchaseAllowed(e.target.checked)} />
+            Allow matured scheme purchases by default
+          </label>
           <div>
             <FieldLabel>Category image</FieldLabel>
             <Input

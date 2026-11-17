@@ -895,6 +895,12 @@ const dynamicBaseQuery: BaseQueryFn<
   return unwrapCustomerEnvelope(result);
 };
 
+type ShopOrderReturnStatus = {
+  request: Record<string, unknown> | null;
+  returnableItems?: { productId: string; quantity: number }[];
+  returnEligibility?: { allowed: boolean; code?: string };
+};
+
 export const customerApi = createApi({
   reducerPath: "customerApi",
   baseQuery: dynamicBaseQuery,
@@ -1587,6 +1593,16 @@ export const customerApi = createApi({
         return raw as Record<string, unknown>;
       },
     }),
+    getShopSchemePurchasePreview: builder.query<
+      { applied: number; appliedPaise: number; makingChargeWaivedPaise: number; topUpPaise: number; remaining: number },
+      { quoteId: string; schemeId: string; basis: "CASH_VALUE" | "GOLD_WEIGHT" }
+    >({
+      query: ({ quoteId, schemeId, basis }) => ({
+        url: `/app/shop/quotes/${encodeURIComponent(quoteId)}/scheme-preview`,
+        params: { schemeId, basis },
+      }),
+      transformResponse: (raw: { data: { applied: number; appliedPaise: number; makingChargeWaivedPaise: number; topUpPaise: number; remaining: number } }) => raw.data,
+    }),
     cancelShopQuote: builder.mutation<Record<string, any>, { quoteId: string; idempotencyKey: string }>({
       query: ({ quoteId, idempotencyKey }) => ({
         url: `/app/shop/quotes/${encodeURIComponent(quoteId)}/cancel`,
@@ -1603,12 +1619,15 @@ export const customerApi = createApi({
     }),
     createShopOrder: builder.mutation<
       Record<string, unknown>,
-      { quoteId: string; idempotencyKey: string }
+      { quoteId: string; idempotencyKey: string; schemePurchase?: {
+        schemeId: string; basis: "CASH_VALUE" | "GOLD_WEIGHT";
+        applied: number; topUpPaise: number; makingChargeWaivedPaise: number;
+      } }
     >({
-      query: ({ quoteId, idempotencyKey }) => ({
+      query: ({ quoteId, idempotencyKey, schemePurchase }) => ({
         url: "/app/shop/orders",
         method: "POST",
-        body: { quoteId },
+        body: { quoteId, ...(schemePurchase ? { schemePurchase } : {}) },
         headers: { "X-Idempotency-Key": idempotencyKey },
         mockKey: "createShopOrder",
       }),
@@ -1703,22 +1722,22 @@ export const customerApi = createApi({
         { type: "ShopCart", id: `order-${orderId}` },
       ],
     }),
-    getShopOrderReturn: builder.query<{ request: Record<string, unknown> | null }, string>({
+    getShopOrderReturn: builder.query<ShopOrderReturnStatus, string>({
       query: (orderId) => ({
         url: `/app/shop/orders/${encodeURIComponent(orderId)}/return`,
         mockKey: "shopOrderReturn",
       }),
       transformResponse: (raw: unknown) => {
         if (raw && typeof raw === "object" && "data" in raw) {
-          return (raw as { data: { request: Record<string, unknown> | null } }).data;
+          return (raw as { data: ShopOrderReturnStatus }).data;
         }
-        return raw as { request: Record<string, unknown> | null };
+        return raw as ShopOrderReturnStatus;
       },
       providesTags: (_r, _e, orderId) => [{ type: "ShopCart", id: `return-${orderId}` }],
     }),
     createShopReturnRequest: builder.mutation<
       { request: Record<string, unknown>; created: boolean },
-      { orderId: string; reason: string; idempotencyKey: string; kind?: "RETURN" | "EXCHANGE"; evidenceNote?: string }
+      { orderId: string; reason: string; idempotencyKey: string; kind?: "RETURN" | "EXCHANGE"; evidenceNote?: string; items?: { productId: string; quantity: number }[] }
     >({
       query: ({ orderId, idempotencyKey, ...body }) => ({
         url: `/app/shop/orders/${encodeURIComponent(orderId)}/return-requests`,
@@ -2516,6 +2535,7 @@ export const {
   useDeleteShopAddressMutation,
   useCreateShopQuoteMutation,
   useGetShopQuoteQuery,
+  useLazyGetShopSchemePurchasePreviewQuery,
   useCancelShopQuoteMutation,
   useCreateShopOrderMutation,
   useListShopOrdersQuery,

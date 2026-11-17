@@ -117,6 +117,8 @@ export type EcommerceWorkspaceSummary = {
 };
 
 export type EcommerceOrderReturnSummary = {
+  items?: { productId: string; quantity: number }[];
+  refundEntitlementPaise?: number;
   id: string;
   orderId?: string;
   kind?: string;
@@ -184,6 +186,7 @@ export type EcommerceOrderDetail = EcommerceOrderListItem & {
 };
 
 export type EcommerceOrderPaymentExceptionRefund = {
+  _id?: string;
   id?: string;
   status?: string;
   amountPaise?: number;

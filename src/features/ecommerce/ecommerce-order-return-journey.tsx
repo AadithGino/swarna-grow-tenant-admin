@@ -245,7 +245,7 @@ export function EcommerceOrderReturnJourney({
 
       {canFulfilmentOperate && status === "INSPECTED" ? (
         <div className="space-y-3 border-t pt-3">
-          {orderReturn.kind === "RETURN" && canRefundOperate ? (
+          {orderReturn.kind === "RETURN" && orderReturn.refundEntitlementPaise !== 0 && canRefundOperate ? (
             <div className="space-y-2 rounded-md border border-dashed p-3">
               <p className="text-xs text-muted-foreground">
                 Refund obligations stay separate from resolution. Online: refund case per capture. COD: manual proof once.

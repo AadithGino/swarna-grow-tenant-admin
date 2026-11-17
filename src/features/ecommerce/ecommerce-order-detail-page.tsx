@@ -171,6 +171,7 @@ export function EcommerceOrderDetailPage({ orderId }: { orderId: string }) {
   const o = query.data;
   if (!o) return null;
   const order: EcommerceOrderDetail = o;
+  const schemePurchase = (o.financialSnapshot as { schemePurchase?: Record<string, unknown> } | undefined)?.schemePurchase;
   const fulfilmentMode = String(order.fulfilmentMode ?? "BRANCH_PICKUP");
   const fulfilmentTargets = nextFulfilmentTargets(String(order.status ?? ""), fulfilmentMode);
   const lineItems = order.lines ?? [];
@@ -241,7 +242,9 @@ export function EcommerceOrderDetailPage({ orderId }: { orderId: string }) {
         toast.success("Ready for pickup — the customer can see their code in the shop app.");
       } else {
         await transitionFulfilment({ orderId, targetStatus, expectedVersion: version }).unwrap();
-        toast.success(`Order moved to ${targetStatus}`);
+        toast.success(schemePurchase?.approvalStatus === "PENDING"
+          ? targetStatus === "PAID" ? "Scheme purchase approved" : "Scheme purchase rejected"
+          : `Order moved to ${targetStatus}`);
       }
       query.refetch();
       orderEvents.refetch();
@@ -260,7 +263,7 @@ export function EcommerceOrderDetailPage({ orderId }: { orderId: string }) {
 
   async function onInitiateRefund() {
     try {
-      await initiateRefund(orderId).unwrap();
+      await initiateRefund({ orderId, refundId: refundRow?._id ?? refundRow?.id }).unwrap();
       toast.success("Refund initiated with provider");
       exceptionRefund.refetch();
       orderEvents.refetch();
@@ -273,6 +276,7 @@ export function EcommerceOrderDetailPage({ orderId }: { orderId: string }) {
     try {
       await recordManual({
         orderId,
+        refundId: refundRow?._id ?? refundRow?.id,
         providerRefundReference: manualRef.trim(),
         reason: manualReason.trim(),
         evidenceNote: manualEvidence.trim(),
@@ -388,6 +392,16 @@ export function EcommerceOrderDetailPage({ orderId }: { orderId: string }) {
 
         <TabsContent value="fulfilment" className={detailRecordTabContentClass}>
           <div className="space-y-5">
+      {schemePurchase?.approvalStatus === "PENDING" && o.status === "PENDING_PAYMENT" && canFulfilmentOperate && (
+        <div className="space-y-3 rounded-xl border p-4">
+          <h2 className="font-semibold">Scheme purchase approval</h2>
+          <p className="text-sm text-muted-foreground">Scheme {String(schemePurchase.schemeId)}. The customer can pay the top-up after approval.</p>
+          <div className="flex flex-wrap gap-2">
+            <Button disabled={transitionState.isLoading} onClick={() => void onFulfilment("PAID")}>Approve scheme purchase</Button>
+            <Button variant="outline" disabled={transitionState.isLoading} onClick={() => void onFulfilment("CANCELLED")}>Reject purchase</Button>
+          </div>
+        </div>
+      )}
       {o.paymentMethod === "COD" && canFulfilmentOperate ? (
         <Surface title="Cash on delivery">
           <div className="flex flex-wrap gap-2 p-5">
@@ -655,7 +669,7 @@ export function EcommerceOrderDetailPage({ orderId }: { orderId: string }) {
                     void recordReturnManualRefund({
                       returnRequestId: String(orderReturn.id),
                       expectedVersion: Number(orderReturn.version ?? 1),
-                      amountPaise: Number(o.totalPaise ?? 0),
+                      amountPaise: Number(orderReturn.refundEntitlementPaise ?? o.totalPaise ?? 0),
                       recipient: codRefundRecipient.trim(),
                       method: codRefundMethod.trim(),
                       reference: codRefundReference.trim(),

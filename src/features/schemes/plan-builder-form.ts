@@ -90,6 +90,7 @@ export type PlanBuilderFormState = {
   penaltyFlat: number;
   benefitTreatment: BenefitTreatment;
   allowedRedemptionModes: RedemptionMode[];
+  schemePurchaseRules?: SchemePurchaseRules;
   /** Gold-weight + CASH: how cash payout is computed (frozen at enrolment). */
   cashSettlementBasis: CashSettlementBasis;
   /** When basis is PAID_AMOUNT: add eligible monetary benefit to cash (default off). */
@@ -105,6 +106,13 @@ export type PlanBuilderFormState = {
   editLocked: boolean;
   /** Optimistic-lock version from GET plan (PATCH only). */
   planVersion: number;
+};
+
+export type SchemePurchaseRules = {
+  channel: "BRANCH" | "ONLINE" | "BOTH";
+  settlementBases: Array<"CASH_VALUE" | "GOLD_WEIGHT">;
+  makingChargeWaiver?: { kind: "FULL" } | { kind: "PERCENT"; basisPoints: number } | { kind: "FIXED"; amountPaise: number };
+  waiverCapPaise?: number;
 };
 
 export const defaultPlanBuilderForm = (): PlanBuilderFormState => ({
@@ -435,6 +443,12 @@ export function buildPlanCreatePayload(input: PlanBuilderFormState) {
         }
       : {}),
     benefit: benefitBlock(normalized),
+    ...(form.allowedRedemptionModes.includes("PURCHASE_ADJUSTMENT") && form.schemePurchaseRules ? {
+      schemePurchaseRules: {
+        ...form.schemePurchaseRules,
+        settlementBases: form.valueBasis === "GOLD_WEIGHT" ? form.schemePurchaseRules.settlementBases : ["CASH_VALUE"],
+      },
+    } : {}),
     redemptionRules: {
       prematureClosureAllowed: form.prematureClosureAllowed,
       lockInMonths: form.oneTimeRules && !form.prematureClosureAllowed ? 0 : form.lockInMonths,
@@ -554,6 +568,7 @@ export function buildPreviewScheduleBody(
   delete payload.displayName;
   delete payload.description;
   delete payload.termsText;
+  delete payload.schemePurchaseRules;
 
   // Settlement and publication settings are edited later and do not affect sample dates.
   payload.redemptionRules = {
@@ -650,6 +665,7 @@ export function planDetailToForm(detail: Record<string, unknown>): PlanBuilderFo
 
   return {
     ...base,
+    schemePurchaseRules: (detail.schemePurchaseRules ?? undefined) as SchemePurchaseRules | undefined,
     oneTimeRules: detail.oneTimeRules as OneTimeGoldRules | undefined,
     collectionRules,
     name: String(detail.name ?? base.name),
@@ -807,6 +823,7 @@ export function buildPlanPatchPayload(form: PlanBuilderFormState) {
   delete rest.status;
   if (!form.collectionRules) rest.collectionRules = null;
   if (!form.oneTimeRules) rest.oneTimeRules = null;
+  if (!rest.schemePurchaseRules) rest.schemePurchaseRules = null;
   if (form.benefitType !== "MATURITY_GOLD_CREDIT") {
     rest.benefit = { ...(rest.benefit as object), goldBonus: null };
   }
