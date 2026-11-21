@@ -813,6 +813,12 @@ function unwrapCustomerEnvelope(result: {
   return rtkDataResult(result.data, result.meta);
 }
 
+/** Booking endpoints answer `{ success, data }`; hand back just `data`. */
+function unwrapShopBookingData<T = Record<string, unknown>>(raw: unknown): T {
+  if (raw && typeof raw === "object" && "data" in raw) return (raw as { data: T }).data;
+  return raw as T;
+}
+
 const dynamicBaseQuery: BaseQueryFn<
   string | FetchArgs,
   unknown,
@@ -904,7 +910,7 @@ type ShopOrderReturnStatus = {
 export const customerApi = createApi({
   reducerPath: "customerApi",
   baseQuery: dynamicBaseQuery,
-  tagTypes: ["CustomerHome", "CustomerScheme", "CustomerPayableRange", "CustomerPayment", "CustomerProfile", "CustomerNotification", "CustomerGrievance", "CustomerDevice", "ShopCart", "ShopAddresses", "DigitalMetalsBuy", "DigitalMetalsSell", "DigitalMetalsRedemption", "DigitalMetalsDeliveryAddresses", "DigitalMetalsPortfolio", "DigitalMetalsPassbook"],
+  tagTypes: ["CustomerHome", "CustomerScheme", "CustomerPayableRange", "CustomerPayment", "CustomerProfile", "CustomerNotification", "CustomerGrievance", "CustomerDevice", "ShopCart", "ShopBooking", "ShopAddresses", "DigitalMetalsBuy", "DigitalMetalsSell", "DigitalMetalsRedemption", "DigitalMetalsDeliveryAddresses", "DigitalMetalsPortfolio", "DigitalMetalsPassbook"],
   endpoints: (builder) => ({
     resolveTenant: builder.query<
       { tenants: TenantBranding[]; resolvedBy?: string; tenantCode?: string | null },
@@ -1601,7 +1607,9 @@ export const customerApi = createApi({
         url: `/app/shop/quotes/${encodeURIComponent(quoteId)}/scheme-preview`,
         params: { schemeId, basis },
       }),
-      transformResponse: (raw: { data: { applied: number; appliedPaise: number; makingChargeWaivedPaise: number; topUpPaise: number; remaining: number } }) => raw.data,
+      // The base query already strips the { success, data } envelope; tolerate either shape.
+      transformResponse: (raw: unknown) =>
+        unwrapShopBookingData<{ applied: number; appliedPaise: number; makingChargeWaivedPaise: number; topUpPaise: number; remaining: number }>(raw),
     }),
     cancelShopQuote: builder.mutation<Record<string, any>, { quoteId: string; idempotencyKey: string }>({
       query: ({ quoteId, idempotencyKey }) => ({
@@ -1721,6 +1729,80 @@ export const customerApi = createApi({
         "ShopCart",
         { type: "ShopCart", id: `order-${orderId}` },
       ],
+    }),
+    listShopBookingAvailability: builder.query<Record<string, unknown>, { productId: string }>({
+      query: ({ productId }) => ({ url: "/app/shop/bookings/availability", params: { productId } }),
+      transformResponse: unwrapShopBookingData,
+    }),
+    previewShopBooking: builder.query<Record<string, unknown>, { productId: string; pickupBranchId: string }>({
+      query: ({ productId, pickupBranchId }) => ({
+        url: "/app/shop/bookings/preview",
+        params: { productId, pickupBranchId },
+      }),
+      transformResponse: unwrapShopBookingData,
+    }),
+    createShopBooking: builder.mutation<
+      Record<string, unknown>,
+      {
+        productId: string;
+        pickupBranchId: string;
+        acceptedPolicyVersionId: string;
+        acceptedAdvancePaise: number;
+        idempotencyKey: string;
+      }
+    >({
+      query: ({ idempotencyKey, ...body }) => ({
+        url: "/app/shop/bookings",
+        method: "POST",
+        body,
+        headers: { "X-Idempotency-Key": idempotencyKey },
+      }),
+      transformResponse: unwrapShopBookingData,
+      invalidatesTags: [{ type: "ShopBooking", id: "LIST" }],
+    }),
+    listShopBookings: builder.query<
+      { items: Record<string, unknown>[]; page?: { nextCursor?: string | null } },
+      { cursor?: string; limit?: number } | void
+    >({
+      query: (params) => ({ url: "/app/shop/bookings", params: params ?? {} }),
+      transformResponse: (raw: unknown) => normalizeShopOrdersListResponse(raw),
+      providesTags: [{ type: "ShopBooking", id: "LIST" }],
+    }),
+    getShopBooking: builder.query<Record<string, unknown>, string>({
+      query: (bookingId) => ({ url: `/app/shop/bookings/${encodeURIComponent(bookingId)}` }),
+      transformResponse: unwrapShopBookingData,
+      providesTags: (_res, _err, bookingId) => [{ type: "ShopBooking", id: bookingId }],
+    }),
+    cancelShopBooking: builder.mutation<Record<string, unknown>, { bookingId: string; reason?: string }>({
+      query: ({ bookingId, reason }) => ({
+        url: `/app/shop/bookings/${encodeURIComponent(bookingId)}/cancel`,
+        method: "POST",
+        body: reason ? { reason } : {},
+      }),
+      transformResponse: unwrapShopBookingData,
+      invalidatesTags: (_r, _e, { bookingId }) => [{ type: "ShopBooking", id: bookingId }, { type: "ShopBooking", id: "LIST" }],
+    }),
+    createShopBookingPaymentIntent: builder.mutation<
+      { paymentIntent: Record<string, unknown> },
+      { bookingId: string; redirectUrl: string; idempotencyKey: string; checkoutChannel?: string }
+    >({
+      query: ({ bookingId, redirectUrl, idempotencyKey, checkoutChannel }) => ({
+        url: `/app/shop/bookings/${encodeURIComponent(bookingId)}/payment-intents`,
+        method: "POST",
+        body: { redirectUrl, ...(checkoutChannel ? { checkoutChannel } : {}) },
+        headers: { "X-Idempotency-Key": idempotencyKey },
+      }),
+      transformResponse: unwrapShopBookingData as (raw: unknown) => { paymentIntent: Record<string, unknown> },
+      invalidatesTags: (_r, _e, { bookingId }) => [{ type: "ShopBooking", id: bookingId }],
+    }),
+    pollShopBookingPaymentIntent: builder.query<
+      { paymentIntent: Record<string, unknown> },
+      { bookingId: string; paymentAttemptId: string }
+    >({
+      query: ({ bookingId, paymentAttemptId }) => ({
+        url: `/app/shop/bookings/${encodeURIComponent(bookingId)}/payment-intents/${encodeURIComponent(paymentAttemptId)}`,
+      }),
+      transformResponse: unwrapShopBookingData as (raw: unknown) => { paymentIntent: Record<string, unknown> },
     }),
     getShopOrderReturn: builder.query<ShopOrderReturnStatus, string>({
       query: (orderId) => ({
@@ -2536,6 +2618,7 @@ export const {
   useCreateShopQuoteMutation,
   useGetShopQuoteQuery,
   useLazyGetShopSchemePurchasePreviewQuery,
+  useGetShopSchemePurchasePreviewQuery,
   useCancelShopQuoteMutation,
   useCreateShopOrderMutation,
   useListShopOrdersQuery,
@@ -2548,4 +2631,12 @@ export const {
   useCreateShopCancellationRequestMutation,
   useGetShopOrderReturnQuery,
   useCreateShopReturnRequestMutation,
+  useListShopBookingAvailabilityQuery,
+  usePreviewShopBookingQuery,
+  useCreateShopBookingMutation,
+  useListShopBookingsQuery,
+  useGetShopBookingQuery,
+  useCancelShopBookingMutation,
+  useCreateShopBookingPaymentIntentMutation,
+  useLazyPollShopBookingPaymentIntentQuery,
 } = customerApi;

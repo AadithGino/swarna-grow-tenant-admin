@@ -22,11 +22,11 @@ Re-running `npm run seed:demo` **replaces** all KAIRALI demo data. Existing refr
 
 ## Platform (super admin)
 
-| Field | Value |
-|--------|--------|
-| **URL** | `/platform/login` |
-| **Email** | `ops@platform.com` |
-| **Password** | `1234` |
+| Field        | Value              |
+| ------------ | ------------------ |
+| **URL**      | `/platform/login`  |
+| **Email**    | `ops@platform.com` |
+| **Password** | `1234`             |
 
 From `SEED_PLATFORM_EMAIL` / `SEED_PLATFORM_PASSWORD` in backend `.env` (defaults above).
 
@@ -34,20 +34,20 @@ From `SEED_PLATFORM_EMAIL` / `SEED_PLATFORM_PASSWORD` in backend `.env` (default
 
 ## Tenant admin (jeweller back office)
 
-| Field | Value |
-|--------|--------|
-| **URL** | `/login` |
-| **Tenant code** | `KAIRALI` |
-| **Password (all staff below)** | `2026` |
+| Field                          | Value     |
+| ------------------------------ | --------- |
+| **URL**                        | `/login`  |
+| **Tenant code**                | `KAIRALI` |
+| **Password (all staff below)** | `2026`    |
 
-| Role | Name | Mobile | Branch |
-|------|------|--------|--------|
-| Tenant owner | Rahul Nair | `image.png` | All branches |
-| Tenant admin | Divya Admin | `9847012347` | All branches |
-| Branch manager | Anu Menon | `9847012346` | Kochi (`KOC`) |
-| Branch staff | Priya K | `9847012350` | Mangalore HQ (`MGR`) |
-| Branch staff | Sanjay M | `9847012351` | Mangalore HQ (`MGR`) |
-| Branch staff | Reena K | `9847012353` | Kochi (`KOC`) |
+| Role           | Name        | Mobile       | Branch               |
+| -------------- | ----------- | ------------ | -------------------- |
+| Tenant owner   | Rahul Nair  | `image.png`  | All branches         |
+| Tenant admin   | Divya Admin | `9847012347` | All branches         |
+| Branch manager | Anu Menon   | `9847012346` | Kochi (`KOC`)        |
+| Branch staff   | Priya K     | `9847012350` | Mangalore HQ (`MGR`) |
+| Branch staff   | Sanjay M    | `9847012351` | Mangalore HQ (`MGR`) |
+| Branch staff   | Reena K     | `9847012353` | Kochi (`KOC`)        |
 
 **Branches:** `MGR` — MG Road Mangalore (HQ) · `KOC` — Kochi Showroom
 
@@ -55,13 +55,13 @@ From `SEED_PLATFORM_EMAIL` / `SEED_PLATFORM_PASSWORD` in backend `.env` (default
 
 ## Collection agent (field portal)
 
-| Field | Value |
-|--------|--------|
-| **URL** | `/agent/login` |
+| Field           | Value                                                           |
+| --------------- | --------------------------------------------------------------- |
+| **URL**         | `/agent/login`                                                  |
 | **Tenant code** | `KAIRALI` (optional if `NEXT_PUBLIC_AGENT_TENANT_CODE=KAIRALI`) |
-| **Mobile** | `9847012352` |
-| **Password** | `2026` |
-| **User** | Vijay Field — collection agent, Kochi (`KOC`) |
+| **Mobile**      | `9847012352`                                                    |
+| **Password**    | `2026`                                                          |
+| **User**        | Vijay Field — collection agent, Kochi (`KOC`)                   |
 
 Only users with role `COLLECTION_AGENT` and an assigned `branchId` can use this portal.
 
@@ -85,23 +85,23 @@ Customer path: `/customer/kairali/digital-metals`. If you see tax or stale-rate 
 
 ## Customer portal
 
-| Field | Value |
-|--------|--------|
-| **URL** | `/customer/kairali/login` |
+| Field           | Value                      |
+| --------------- | -------------------------- |
+| **URL**         | `/customer/kairali/login`  |
 | **Tenant slug** | `kairali` → code `KAIRALI` |
-| **Auth** | OTP (mock provider in dev) |
-| **Mock OTP** | `123456` |
+| **Auth**        | OTP (mock provider in dev) |
+| **Mock OTP**    | `123456`                   |
 
 ### Example customers (after `seed:demo`)
 
 Use **Sign in** → enter mobile → request OTP → enter `123456`.
 
-| Name | Mobile | Notes |
-|------|--------|--------|
-| Lakshmi Nair | `9847123456` | Fixed schemes, HQ |
-| Arjun Pillai | `9847234567` | Kochi |
-| Flexi Amal | `9847901234` | Flexible scheme |
-| Gold Hari | `9847934567` | Gold-weight scheme |
+| Name          | Mobile       | Notes                 |
+| ------------- | ------------ | --------------------- |
+| Lakshmi Nair  | `9847123456` | Fixed schemes, HQ     |
+| Arjun Pillai  | `9847234567` | Kochi                 |
+| Flexi Amal    | `9847901234` | Flexible scheme       |
+| Gold Hari     | `9847934567` | Gold-weight scheme    |
 | Sachu Sudhish | `7907753163` | Primary demo customer |
 
 Customers do **not** use the staff password `2026`. Registration is OTP-only unless the tenant enables password login in settings.
@@ -117,18 +117,18 @@ cd swarnagrow-backend
 npm run seed:noble-jewellery   # replaces tenant NOBLE if it exists
 ```
 
-| Field | Value |
-|--------|--------|
-| **URL** | `/login` |
-| **Tenant code** | `NOBLE` |
-| **Password (all staff below)** | `2026` |
+| Field                          | Value    |
+| ------------------------------ | -------- |
+| **URL**                        | `/login` |
+| **Tenant code**                | `NOBLE`  |
+| **Password (all staff below)** | `2026`   |
 
-| Role | Name | Mobile | Branch |
-|------|------|--------|--------|
-| Tenant owner | Rajesh Noble | `9847020100` | All branches |
-| Branch manager | Anu Noble | `9847020101` | Thrissur Main (`MAIN`) |
-| Branch staff | Priya Noble | `9847020102` | Thrissur Main (`MAIN`) |
-| Branch staff | Sanjay K | `9847020103` | Kochi (`KOC`) |
+| Role           | Name         | Mobile       | Branch                 |
+| -------------- | ------------ | ------------ | ---------------------- |
+| Tenant owner   | Rajesh Noble | `9847020100` | All branches           |
+| Branch manager | Anu Noble    | `9847020101` | Thrissur Main (`MAIN`) |
+| Branch staff   | Priya Noble  | `9847020102` | Thrissur Main (`MAIN`) |
+| Branch staff   | Sanjay K     | `9847020103` | Kochi (`KOC`)          |
 
 **Plans:** Swarna (3m), Akshaya (6m), Tritiya (12m) — fixed gold weight only (STARTER tier; no flex / ecommerce / digital metals).
 
@@ -148,18 +148,18 @@ npm run patch:evoluxe-rates         # today's scheme + shop + digital gold/silve
 
 `PHONEPE_BOOTSTRAP_CLIENT_ID=... PHONEPE_BOOTSTRAP_CLIENT_SECRET=... npm run configure:evoluxe-phonepe`
 
-| Field | Value |
-|--------|--------|
-| **Tenant code** | `EVOLUXE` |
-| **Password (all staff below)** | `2026` |
-| **Admin URL** | `/login` |
-| **Customer URL** | `/customer/evoluxe/login` |
+| Field                          | Value                     |
+| ------------------------------ | ------------------------- |
+| **Tenant code**                | `EVOLUXE`                 |
+| **Password (all staff below)** | `2026`                    |
+| **Admin URL**                  | `/login`                  |
+| **Customer URL**               | `/customer/evoluxe/login` |
 
-| Role | Name | Mobile |
-|------|------|--------|
-| Tenant owner | Arjun Evo | `9847030100` |
-| Branch manager | Neha Luxe | `9847030101` |
-| Branch staff | Ravi Counter | `9847030102` |
+| Role           | Name         | Mobile       |
+| -------------- | ------------ | ------------ |
+| Tenant owner   | Arjun Evo    | `9847030100` |
+| Branch manager | Neha Luxe    | `9847030101` |
+| Branch staff   | Ravi Counter | `9847030102` |
 
 **Hero customer (OTP `123456` in mock):** Meera Evo · `9847030200` · passbook `EVO-PB-0001`
 
@@ -167,23 +167,43 @@ Includes: active cash scheme (5/11 paid), matured + redeemed scheme, shop orders
 
 ---
 
+## My Dream Diamond (`MYDREAM`)
+
+Seeded with `npm run seed:my-dream-diamond` (backend).
+
+| Field             | Value                                                    |
+| ----------------- | -------------------------------------------------------- |
+| **Tenant code**   | `MYDREAM`                                                |
+| **Owner mobile**  | `9847033300`                                             |
+| **Password**      | `2026`                                                   |
+| **Scheme plan**   | `MDD5K11P1` — fixed **₹5,000/month** × 11 + 1 free month |
+| **Customer shop** | `/customer/mydream/shop`                                 |
+
+**Demo customers (OTP in dev):** `9847033301`–`9847033312` — each models a different scheme lifecycle (pending, active, overdue, matured, redeemed, etc.).
+
+**Ecommerce:** 9 jewellery products with real JPEG catalog images, 3 categories. **Promo banners:** 6 AI hero images on home “Offers for you” + shop carousel (`npm run seed:mydream-banners` to refresh).
+
+**PhonePe + customer OTP:** Same as EVOLUXE — copied via `npm run patch:mydream-integrations-from-evoluxe` (re-run after re-seeding MYDREAM). Customer login `/customer/mydream/login`; use Message Central live OTP or mock `123456` per backend `OTP_PROVIDER` / `PROVIDER_MODE`.
+
+---
+
 ## Quick reference
 
-| Portal | Login URL | Identifier | Secret |
-|--------|-----------|------------|--------|
-| Platform | `/platform/login` | `ops@platform.com` | `1234` |
-| Tenant | `/login` | Tenant `KAIRALI` or `EVOLUXE` + mobile | `2026` |
-| Agent | `/agent/login` | `9847012352` | `2026` |
-| Customer | `/customer/kairali/login` or `/customer/evoluxe/login` | Mobile (see tables) | OTP `123456` |
+| Portal   | Login URL                                              | Identifier                             | Secret       |
+| -------- | ------------------------------------------------------ | -------------------------------------- | ------------ |
+| Platform | `/platform/login`                                      | `ops@platform.com`                     | `1234`       |
+| Tenant   | `/login`                                               | Tenant `KAIRALI` or `EVOLUXE` + mobile | `2026`       |
+| Agent    | `/agent/login`                                         | `9847012352`                           | `2026`       |
+| Customer | `/customer/kairali/login` or `/customer/evoluxe/login` | Mobile (see tables)                    | OTP `123456` |
 
 ---
 
 ## API base
 
-| Service | Default |
-|---------|---------|
+| Service     | Default                                                                                          |
+| ----------- | ------------------------------------------------------------------------------------------------ |
 | Backend API | `http://localhost:4050/api/v1` (local) · `https://swarnagrow-backend.vercel.app/api/v1` (Vercel) |
-| Frontend | `http://localhost:5173` (local vinext) · `https://swarnagrow-tenant-admin.vercel.app` (Vercel) |
+| Frontend    | `http://localhost:5173` (local vinext) · `https://swarnagrow-tenant-admin.vercel.app` (Vercel)   |
 
 **Vercel frontend redeploy tip:** this app uses vinext + Nitro. Prefer local `pnpm run build:vercel` then `vercel deploy --prebuilt --prod` if a remote Vercel build returns 500.
 

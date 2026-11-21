@@ -183,6 +183,7 @@ const groups: NavGroup[] = [
       { label: "Products", href: "/ecommerce/catalog", icon: Gem, match: ["/ecommerce/products"] },
       { label: "Categories", href: "/ecommerce/categories", icon: Layers3 },
       { label: "Inventory", href: "/ecommerce/inventory", icon: Package },
+      { label: "Bookings", href: "/ecommerce/bookings", icon: CalendarClock, match: ["/ecommerce/booking-policies"] },
       { label: "Banners", href: "/ecommerce/banners", icon: ImageIcon },
       { label: "Push campaigns", href: "/ecommerce/campaigns", icon: Megaphone },
       { label: "Courier cash", href: "/ecommerce/courier-cod", icon: Truck },

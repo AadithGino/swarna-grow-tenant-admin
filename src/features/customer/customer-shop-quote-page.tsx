@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { AlertTriangle, ArrowLeft, Banknote, Clock3, CreditCard, MapPin, Store, Truck } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Banknote, Clock3, CreditCard, Loader2, MapPin, PiggyBank, Store, Truck } from "lucide-react";
+import type { SchemeCard } from "@/src/types/customer";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -19,7 +20,7 @@ import {
   useCreateShopOrderMutation,
   useGetShopQuoteQuery,
   useGetCustomerSchemesQuery,
-  useLazyGetShopSchemePurchasePreviewQuery,
+  useGetShopSchemePurchasePreviewQuery,
 } from "@/src/store/api/customer-api";
 import { CustomerShopPoliciesLinks } from "@/src/features/customer/customer-shop-policies";
 import { formatAddressBlock } from "@/src/features/customer/customer-shop-order-progress";
@@ -49,60 +50,139 @@ function useCountdown(expiresAt: Date | null) {
 
 type SchemeChoice = NonNullable<Parameters<ReturnType<typeof useCreateShopOrderMutation>[0]>[0]["schemePurchase"]>;
 
-function SchemePurchaseEstimate({ quoteId, placing, onPlace }: {
-  quoteId: string; placing: boolean; onPlace: (choice: SchemeChoice) => void;
+function schemeValueLabel(scheme: SchemeCard): string {
+  if (scheme.valueBasis === "GOLD_WEIGHT") {
+    const w = scheme.goldAccumulated ?? scheme.goldAccrued;
+    if (w?.weightDisplay) return w.weightDisplay;
+  }
+  return (scheme.currentValuation ?? scheme.totalPaid)?.amountDisplay ?? "";
+}
+
+function SchemePurchaseEstimate({ quoteId, totalPaise, placing, onPlace }: {
+  quoteId: string; totalPaise: number; placing: boolean; onPlace: (choice: SchemeChoice) => void;
 }) {
   const schemes = useGetCustomerSchemesQuery();
   const [schemeId, setSchemeId] = useState("");
   const [basis, setBasis] = useState<"CASH_VALUE" | "GOLD_WEIGHT">("CASH_VALUE");
-  const [getPreview, preview] = useLazyGetShopSchemePurchasePreviewQuery();
   const matured = (schemes.data ?? []).filter((scheme) => scheme.status === "MATURED");
-  if (!matured.length) return null;
+  const scheme = matured.find((item) => item.id === schemeId) ?? matured[0];
+  const activeId = scheme?.id ?? "";
+  const selectedBasis = scheme?.valueBasis === "GOLD_WEIGHT" ? basis : "CASH_VALUE";
 
-  const scheme = matured.find((item) => item.id === schemeId) ?? matured[0]!;
-  const selectedBasis = scheme.valueBasis === "GOLD_WEIGHT" ? basis : "CASH_VALUE";
-  const current = !preview.isFetching && preview.originalArgs?.schemeId === scheme.id && preview.originalArgs.basis === selectedBasis;
+  // The split is worked out as soon as a scheme is picked; the customer should not have to ask for it.
+  const preview = useGetShopSchemePurchasePreviewQuery({ quoteId, schemeId: activeId, basis: selectedBasis }, { skip: !activeId });
+
+  if (!scheme) return null;
+  const current = !preview.isFetching;
   const estimate = current && !preview.error ? preview.currentData : undefined;
   return (
-    <ShopPanel title="Preview matured scheme savings">
-      <p className="mb-3 text-sm text-muted-foreground">Select a matured scheme to calculate your contribution and any top-up.</p>
-      <div className="grid gap-3 sm:grid-cols-2">
-        <label className="grid gap-1 text-sm">
-          Matured scheme
-          <select className="rounded-xl border bg-background p-2" value={scheme.id} onChange={(e) => setSchemeId(e.target.value)}>
-            {matured.map((item) => <option key={item.id} value={item.id}>{item.planName} · {item.schemeNumber}</option>)}
-          </select>
-        </label>
-        {scheme.valueBasis === "GOLD_WEIGHT" && <label className="grid gap-1 text-sm">
-          Settlement basis
-          <select className="rounded-xl border bg-background p-2" value={selectedBasis}
-            onChange={(e) => setBasis(e.target.value === "GOLD_WEIGHT" ? "GOLD_WEIGHT" : "CASH_VALUE")}>
-            <option value="CASH_VALUE">Cash value</option>
-            <option value="GOLD_WEIGHT">Gold weight</option>
-          </select>
-        </label>}
+    <section className="overflow-hidden rounded-[1.4rem] border border-[#e6d3a8] bg-white">
+      <div className="flex items-start gap-3 bg-gradient-to-br from-[#fbf3df] to-[#fffaf0] px-5 py-4">
+        <span className="grid size-10 shrink-0 place-items-center rounded-2xl bg-white text-[#8a6a24] shadow-sm ring-1 ring-[#eadbb8]"><PiggyBank className="size-5" /></span>
+        <div>
+          <h2 className={cn("text-[15px] font-semibold", SHOP_INK)}>Pay with your matured scheme</h2>
+          <p className={cn("mt-0.5 text-sm", SHOP_MUTED)}>Use your savings for this order. You only pay the difference.</p>
+        </div>
       </div>
-      <Button type="button" variant="outline" className="mt-3" disabled={preview.isFetching}
-        onClick={() => void getPreview({ quoteId, schemeId: scheme.id, basis: selectedBasis })}>
-        {preview.isFetching ? "Calculating…" : "Calculate estimate"}
-      </Button>
-      {current && preview.error && <p role="alert" className="mt-3 text-sm text-destructive">
-        {parseApiError(preview.error, "Could not calculate scheme savings.").message}
-      </p>}
-      {estimate && <dl className="mt-4 grid grid-cols-2 gap-2 text-sm" aria-live="polite">
-        <dt>Making charges waived</dt><dd>{formatShopInr(estimate.makingChargeWaivedPaise, 2)}</dd>
-        <dt>Scheme value applied</dt><dd>{formatShopInr(estimate.appliedPaise, 2)}</dd>
-        <dt>Estimated top-up</dt><dd>{formatShopInr(estimate.topUpPaise, 2)}</dd>
-        <dt>Estimated scheme remainder</dt><dd>{selectedBasis === "GOLD_WEIGHT"
-          ? `${(estimate.remaining / 1000).toFixed(3)} g` : formatShopInr(estimate.remaining, 2)}</dd>
-      </dl>}
-      {estimate && (
-        <Button type="button" disabled={placing} className="mt-4" onClick={() => onPlace({
-          schemeId: scheme.id, basis: selectedBasis, applied: estimate.applied,
-          topUpPaise: estimate.topUpPaise, makingChargeWaivedPaise: estimate.makingChargeWaivedPaise,
-        })}>Place order with scheme</Button>
-      )}
-    </ShopPanel>
+      <div className="space-y-4 p-5">
+        <div role="radiogroup" aria-label="Matured scheme" className="grid gap-2.5 sm:grid-cols-2">
+          {matured.map((item) => {
+            const on = item.id === scheme.id;
+            return (
+              <button
+                key={item.id}
+                type="button"
+                role="radio"
+                aria-checked={on}
+                onClick={() => setSchemeId(item.id)}
+                className={cn(
+                  "flex items-start gap-3 rounded-2xl border p-3.5 text-left transition-colors",
+                  on ? "border-[var(--customer-primary,#730321)] bg-[#fdf6f4] ring-1 ring-[var(--customer-primary,#730321)]" : "border-[#ecdfd8] hover:border-[#d9c3b8]",
+                )}
+              >
+                <span className={cn("mt-0.5 grid size-4 shrink-0 place-items-center rounded-full border-2", on ? "border-[var(--customer-primary,#730321)]" : "border-stone-300")}>
+                  {on ? <span className="size-2 rounded-full bg-[var(--customer-primary,#730321)]" /> : null}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className={cn("block truncate text-sm font-semibold", SHOP_INK)}>{item.planName}</span>
+                  <span className={cn("block text-xs", SHOP_MUTED)}>{item.schemeNumber}</span>
+                </span>
+                <span className={cn("shrink-0 text-sm font-bold tabular-nums", SHOP_INK)}>{schemeValueLabel(item)}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        {scheme.valueBasis === "GOLD_WEIGHT" ? (
+          <div>
+            <p className={cn("mb-1.5 text-xs font-medium", SHOP_MUTED)}>Use this scheme as</p>
+            <div role="radiogroup" aria-label="Settlement basis" className="inline-flex rounded-full bg-[#f4ece7] p-1 text-sm">
+              {(["GOLD_WEIGHT", "CASH_VALUE"] as const).map((value) => (
+                <button
+                  key={value}
+                  type="button"
+                  role="radio"
+                  aria-checked={selectedBasis === value}
+                  onClick={() => setBasis(value)}
+                  className={cn("rounded-full px-4 py-1.5 font-semibold", selectedBasis === value ? "bg-white text-[#221a1d] shadow-sm" : "text-[#7a6f72]")}
+                >
+                  {value === "GOLD_WEIGHT" ? "Gold weight" : "Cash value"}
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : null}
+
+        {current && preview.error ? (
+          <div role="alert" className="flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-800">
+            <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+            <span className="flex-1">{parseApiError(preview.error, "Could not calculate scheme savings.").message}</span>
+            <button type="button" className="font-semibold underline" onClick={() => void preview.refetch()}>Try again</button>
+          </div>
+        ) : null}
+
+        <div className="rounded-2xl bg-[#faf6f2] p-4" aria-live="polite">
+          {estimate ? (
+            <>
+              <dl className="space-y-2 text-sm">
+                <div className="flex justify-between gap-4"><dt className={SHOP_MUTED}>Order total</dt><dd className={cn("tabular-nums", SHOP_INK)}>{formatShopInr(totalPaise, 2)}</dd></div>
+                {estimate.makingChargeWaivedPaise > 0 ? (
+                  <div className="flex justify-between gap-4"><dt className="text-[var(--ck-ok,#1f6b4c)]">Making charges waived</dt><dd className="tabular-nums text-[var(--ck-ok,#1f6b4c)]">− {formatShopInr(estimate.makingChargeWaivedPaise, 2)}</dd></div>
+                ) : null}
+                <div className="flex justify-between gap-4"><dt className="text-[var(--ck-ok,#1f6b4c)]">From your scheme</dt><dd className="tabular-nums text-[var(--ck-ok,#1f6b4c)]">− {formatShopInr(estimate.appliedPaise, 2)}</dd></div>
+              </dl>
+              <div className="mt-3 flex items-baseline justify-between gap-4 border-t border-dashed border-[#e3d6cf] pt-3">
+                <span className={cn("font-semibold", SHOP_INK)}>You pay</span>
+                <span className="text-2xl font-extrabold tabular-nums text-[var(--customer-primary,#730321)]">{formatShopInr(estimate.topUpPaise, 2)}</span>
+              </div>
+              {estimate.remaining > 0 ? (
+                <p className={cn("mt-2 text-xs", SHOP_MUTED)}>
+                  Left in your scheme after this order: {selectedBasis === "GOLD_WEIGHT" ? `${(estimate.remaining / 1000).toFixed(3)} g` : formatShopInr(estimate.remaining, 2)}
+                </p>
+              ) : null}
+            </>
+          ) : (
+            <p className={cn("flex items-center gap-2 text-sm", SHOP_MUTED)}>
+              {preview.isFetching ? <><Loader2 className="size-4 animate-spin" /> Working out your savings…</> : "Pick a scheme to see what you pay."}
+            </p>
+          )}
+        </div>
+
+        <Button
+          type="button"
+          disabled={placing || !estimate}
+          className="h-12 w-full rounded-full text-[15px] font-bold text-white"
+          style={customerBrandStyle.primaryBg}
+          onClick={() => estimate && onPlace({
+            schemeId: scheme.id, basis: selectedBasis, applied: estimate.applied,
+            topUpPaise: estimate.topUpPaise, makingChargeWaivedPaise: estimate.makingChargeWaivedPaise,
+          })}
+        >
+          {placing ? "Placing order…" : estimate ? `Place order with scheme · pay ${formatShopInr(estimate.topUpPaise, 2)}` : "Place order with scheme"}
+        </Button>
+        <p className={cn("text-center text-xs", SHOP_MUTED)}>The store confirms your scheme before the order goes ahead.</p>
+      </div>
+    </section>
   );
 }
 
@@ -223,7 +303,7 @@ export function CustomerShopQuotePage({ quoteId }: { quoteId: string }) {
             </div>
           ) : null}
 
-          {live && q.schemePurchasePreviewEnabled === true && <SchemePurchaseEstimate key={quoteId} quoteId={quoteId} placing={createOrderState.isLoading} onPlace={(choice) => void onPlaceOrder(choice)} />}
+          {live && q.schemePurchasePreviewEnabled === true && <SchemePurchaseEstimate key={quoteId} quoteId={quoteId} totalPaise={Number(q.totalPaise ?? 0)} placing={createOrderState.isLoading} onPlace={(choice) => void onPlaceOrder(choice)} />}
 
           <ShopPanel title={`Items (${lines.length})`}>
             <ul className="divide-y divide-[#f0e6e0]">

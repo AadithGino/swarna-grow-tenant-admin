@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { parseCustomerSlug } from "@/src/lib/customer-tenant";
+import { resolveCustomerNotificationHref } from "@/src/lib/customer-notification-display";
 import {
+  customerShopBookingPath,
+  customerShopBookingsPath,
   customerShopOrderPath,
   customerShopOrdersPath,
   customerShopQuotePath,
@@ -38,5 +41,23 @@ describe("customer shop routes", () => {
       id: "order",
       extra: "order_123",
     });
+  });
+
+  it("opens a booking at shop/booking/<id>, not as a product slug", () => {
+    const path = customerShopBookingPath("kairali", "bkg_123");
+    expect(path).toBe("/customer/kairali/shop/booking/bkg_123");
+    expect(parseCustomerSlug(path.split("/").filter(Boolean))).toEqual({
+      tenantSlug: "kairali",
+      section: "shop",
+      id: "booking",
+      extra: "bkg_123",
+    });
+    expect(customerShopBookingsPath("kairali")).toBe("/customer/kairali/shop/bookings");
+  });
+
+  it("turns the booking reminder's deep link into that same route", () => {
+    expect(resolveCustomerNotificationHref("/shop/booking/bkg_123", "kairali")).toBe(
+      customerShopBookingPath("kairali", "bkg_123"),
+    );
   });
 });

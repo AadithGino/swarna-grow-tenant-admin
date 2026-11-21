@@ -7,6 +7,7 @@ import {
   BarChart,
   CartesianGrid,
   Cell,
+  LabelList,
   Legend,
   Pie,
   PieChart,
@@ -87,15 +88,20 @@ export function ChartSliceLegend({
   );
 }
 
-/** Short label on pie slices when the segment is large enough to read. */
+/** Rupee amount on a pie slice when the segment is large enough to read. */
 export function pieSliceLabel(props: {
-  name?: string;
+  value?: number;
   percent?: number;
 }) {
-  const name = props.name ?? "";
   const pct = (props.percent ?? 0) * 100;
-  if (pct < 6 || !name) return null;
-  return `${name} ${pct.toFixed(0)}%`;
+  const value = Number(props.value ?? 0);
+  if (pct < 7 || !value) return null;
+  return compactMoney(value);
+}
+
+function rupeePointLabel(value: unknown) {
+  const amount = Number(value ?? 0);
+  return amount ? compactMoney(amount) : "";
 }
 
 export function CollectionTrendChart({ data }: { data: any[] }) {
@@ -105,7 +111,7 @@ export function CollectionTrendChart({ data }: { data: any[] }) {
     <ResponsiveContainer width="100%" height="100%">
       <AreaChart
         data={data}
-        margin={{ left: 4, right: 12, top: 12, bottom: 4 }}
+        margin={{ left: 4, right: 12, top: 28, bottom: 4 }}
       >
         <defs>
           <linearGradient id="cashFill" x1="0" y1="0" x2="0" y2="1">
@@ -152,7 +158,14 @@ export function CollectionTrendChart({ data }: { data: any[] }) {
           stroke={wine}
           strokeWidth={3}
           fill="url(#cashFill)"
-        />
+        >
+          <LabelList
+            dataKey="cash"
+            position="top"
+            formatter={rupeePointLabel}
+            style={{ fontSize: 10, fontWeight: 600, fill: "#5c4a4e" }}
+          />
+        </Area>
         <Area
           type="monotone"
           dataKey="digital"
@@ -160,7 +173,14 @@ export function CollectionTrendChart({ data }: { data: any[] }) {
           stroke={rose}
           strokeWidth={3}
           fill="transparent"
-        />
+        >
+          <LabelList
+            dataKey="digital"
+            position="top"
+            formatter={rupeePointLabel}
+            style={{ fontSize: 10, fontWeight: 600, fill: "#5c4a4e" }}
+          />
+        </Area>
         <Legend
           verticalAlign="bottom"
           iconType="circle"
@@ -216,7 +236,7 @@ export function DonutChart({
               outerRadius="80%"
               paddingAngle={usePadding ? 2 : 0}
               label={showSliceLabels ? pieSliceLabel : false}
-              labelLine={false}
+              labelLine={showSliceLabels}
               stroke="#fff"
               strokeWidth={1}
             >
@@ -272,7 +292,14 @@ export function BranchBarChart({
           formatter={(v) => money(Number(v))}
           contentStyle={{ borderRadius: 12, borderColor: "#e4d7d2" }}
         />
-        <Bar dataKey="value" fill={wine} radius={[0, 8, 8, 0]} barSize={32} />
+        <Bar dataKey="value" fill={wine} radius={[0, 8, 8, 0]} barSize={32}>
+          <LabelList
+            dataKey="value"
+            position="right"
+            formatter={rupeePointLabel}
+            style={{ fontSize: 11, fontWeight: 600, fill: "#5c4a4e" }}
+          />
+        </Bar>
       </BarChart>
     </ResponsiveContainer>
   );
@@ -299,15 +326,21 @@ export function AgingChart({ data }: { data: any[] }) {
           formatter={(v) => money(Number(v))}
           contentStyle={{ borderRadius: 12, borderColor: "#e4d7d2" }}
         />
-        <Bar stackId="a" dataKey="due" name="Due" fill={green} />
-        <Bar stackId="a" dataKey="grace" name="Grace" fill={gold} />
+        <Bar stackId="a" dataKey="due" name="Due" fill={green}>
+          <LabelList dataKey="due" position="center" formatter={rupeePointLabel} style={{ fontSize: 10, fontWeight: 600, fill: "#fff" }} />
+        </Bar>
+        <Bar stackId="a" dataKey="grace" name="Grace" fill={gold}>
+          <LabelList dataKey="grace" position="center" formatter={rupeePointLabel} style={{ fontSize: 10, fontWeight: 600, fill: "#2e181d" }} />
+        </Bar>
         <Bar
           stackId="a"
           dataKey="overdue"
           name="Overdue"
           fill="#c2281c"
           radius={[6, 6, 0, 0]}
-        />
+        >
+          <LabelList dataKey="overdue" position="center" formatter={rupeePointLabel} style={{ fontSize: 10, fontWeight: 600, fill: "#fff" }} />
+        </Bar>
         <Legend
           verticalAlign="bottom"
           iconType="square"

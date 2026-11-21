@@ -40,6 +40,9 @@ export const ALL_PERMISSION_KEYS = [
   "ecommerce.payment.operate",
   "ecommerce.refund.operate",
   "ecommerce.fulfilment.operate",
+  "ecommerce.booking.operate",
+  "ecommerce.booking.policy.publish",
+  "ecommerce.booking.fee.waive",
   "ecommerce.assisted.order",
 ] as const;
 
@@ -83,6 +86,9 @@ const PERMISSION_LABELS: Record<string, string> = {
   "ecommerce.payment.operate": "Reconcile ecommerce payments and clear operational alerts",
   "ecommerce.refund.operate": "Initiate and record ecommerce payment exception refunds",
   "ecommerce.fulfilment.operate": "Update paid order fulfilment status",
+  "ecommerce.booking.operate": "View, bill, cancel and refund advance ornament bookings",
+  "ecommerce.booking.policy.publish": "Publish booking policies and choose where they apply",
+  "ecommerce.booking.fee.waive": "Waive the cancellation fee on an advance booking (owner grants this to named staff)",
   "ecommerce.assisted.order": "Place store orders for customers at the counter",
   "digital-metals.assisted.trade": "Buy and sell Digi Gold for customers at the counter",
 };

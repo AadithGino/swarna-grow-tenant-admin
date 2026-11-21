@@ -11,3 +11,11 @@ export function customerShopOrderPath(tenantSlug: string | null, orderId: string
 export function customerShopOrdersPath(tenantSlug: string | null): string {
   return customerPath(tenantSlug, "shop", "orders");
 }
+
+export function customerShopBookingPath(tenantSlug: string | null, bookingId: string): string {
+  return customerPath(tenantSlug, "shop", "booking", bookingId);
+}
+
+export function customerShopBookingsPath(tenantSlug: string | null): string {
+  return customerPath(tenantSlug, "shop", "bookings");
+}

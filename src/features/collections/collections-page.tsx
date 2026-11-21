@@ -622,6 +622,7 @@ export function CollectionsPage() {
               data={donutData}
               centre={money(s.collected ?? 0)}
               showLegend
+              showSliceLabels
             />
           </div>
         </Surface>

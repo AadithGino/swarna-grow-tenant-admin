@@ -158,6 +158,7 @@ export function CustomerShopCartPage() {
   };
   const delivery = fulfilment.data?.delivery as {
     enabled?: boolean;
+    allPincodes?: boolean;
     serviceablePincodes?: string[];
     supportedDestinationStates?: string[];
     deliveryChargePaise?: number | null;
@@ -257,8 +258,10 @@ export function CustomerShopCartPage() {
         ? String(selectedRow?.pincode ?? "").trim()
         : pincode.trim();
       const serviceable = delivery?.serviceablePincodes ?? [];
+      const deliveryAllPincodes = delivery?.allPincodes === true;
       if (
-        serviceable.length > 0
+        !deliveryAllPincodes
+        && serviceable.length > 0
         && pinForCheck
         && !serviceable.includes(pinForCheck)
       ) {

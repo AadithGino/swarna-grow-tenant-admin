@@ -7,6 +7,7 @@ import {
   BarChart,
   CartesianGrid,
   Cell,
+  LabelList,
   Legend,
   Line,
   LineChart,
@@ -269,8 +270,13 @@ export function ChartSeriesView({
                 innerRadius={innerRadius}
                 outerRadius="76%"
                 paddingAngle={usePadding ? 2 : 0}
-                label={false}
-                labelLine={false}
+                label={(props: { percent?: number; payload?: { display?: string } }) => {
+                  const pct = (props.percent ?? 0) * 100;
+                  const display = props.payload?.display;
+                  if (pct < 7 || !display) return null;
+                  return display;
+                }}
+                labelLine
                 stroke="#fff"
                 strokeWidth={1}
               >
@@ -306,7 +312,7 @@ export function ChartSeriesView({
     return (
       <div className="h-[280px] w-full">
       <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={rows} margin={{ left: -8, right: 12, top: 8, bottom: 4 }}>
+        <LineChart data={rows} margin={{ left: -8, right: 12, top: 28, bottom: 4 }}>
           <CartesianGrid vertical={false} stroke="#eadfda" strokeDasharray="4 4" />
           <XAxis
             dataKey="x"
@@ -348,7 +354,17 @@ export function ChartSeriesView({
                 fill: "#fff",
               }}
               activeDot={{ r: 5 }}
-            />
+            >
+              <LabelList
+                dataKey={s.key}
+                position="top"
+                formatter={(value: unknown) => {
+                  const amount = Number(value ?? 0);
+                  return amount ? yFormat(yAxis, amount) : "";
+                }}
+                style={{ fontSize: 10, fontWeight: 600, fill: "#5c4a4e" }}
+              />
+            </Line>
           ))}
           <Legend
             verticalAlign="bottom"
@@ -367,7 +383,7 @@ export function ChartSeriesView({
     return (
       <div className="h-[280px] w-full">
       <ResponsiveContainer width="100%" height="100%">
-        <AreaChart data={rows} margin={{ left: -8, right: 12, top: 8, bottom: 4 }}>
+        <AreaChart data={rows} margin={{ left: -8, right: 12, top: 28, bottom: 4 }}>
           <CartesianGrid vertical={false} stroke="#eadfda" strokeDasharray="4 4" />
           <XAxis
             dataKey="x"
@@ -400,7 +416,17 @@ export function ChartSeriesView({
               stroke={palette[i % palette.length]}
               fill={palette[i % palette.length]}
               fillOpacity={0.15}
-            />
+            >
+              <LabelList
+                dataKey={s.key}
+                position="top"
+                formatter={(value: unknown) => {
+                  const amount = Number(value ?? 0);
+                  return amount ? yFormat(yAxis, amount) : "";
+                }}
+                style={{ fontSize: 10, fontWeight: 600, fill: "#5c4a4e" }}
+              />
+            </Area>
           ))}
           <Legend
             verticalAlign="bottom"
@@ -552,8 +578,8 @@ export function ChartSeriesView({
         layout={verticalLayout ? "vertical" : "horizontal"}
         margin={{
           left: verticalLayout ? 4 : 4,
-          right: 12,
-          top: 8,
+          right: verticalLayout ? 56 : 12,
+          top: verticalLayout ? 8 : 24,
           bottom: hideBarLegend ? 12 : tiltXLabels ? 4 : 28,
         }}
       >
@@ -637,7 +663,19 @@ export function ChartSeriesView({
             barSize={
               verticalLayout ? (grouped ? 10 : 28) : undefined
             }
-          />
+          >
+            {stacked ? null : (
+              <LabelList
+                dataKey={s.key}
+                position={verticalLayout ? "right" : "top"}
+                formatter={(value: unknown) => {
+                  const amount = Number(value ?? 0);
+                  return amount ? axisTickFormat(yAxis, amount) : "";
+                }}
+                style={{ fontSize: 10, fontWeight: 600, fill: "#5c4a4e" }}
+              />
+            )}
+          </Bar>
         ))}
         {!hideBarLegend ? (
           <Legend

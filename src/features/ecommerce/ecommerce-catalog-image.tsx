@@ -30,9 +30,10 @@ export function EcommerceCatalogImage({
   className?: string;
   fill?: boolean;
 }) {
+  const directHttps = viewUrl?.startsWith("https://") ? viewUrl : null;
   const resolvedId = uploadId ?? uploadIdFromCatalogRef(viewUrl);
   const adminQuery = useGetEcommerceUploadDownloadQuery(resolvedId as string, {
-    skip: !resolvedId || channel !== "admin",
+    skip: !resolvedId || channel !== "admin" || Boolean(directHttps),
     pollingInterval: REFRESH_MS,
   });
   const customerQuery = useGetCustomerUploadDownloadQuery(resolvedId as string, {

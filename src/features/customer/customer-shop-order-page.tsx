@@ -1,5 +1,6 @@
 "use client";
 
+import { returnFlowCopy } from "@/src/lib/customer-shop-return-copy";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -182,6 +183,7 @@ export function CustomerShopOrderPage({ orderId }: { orderId: string }) {
   const canRequestReturn = !!orderReturn.data && returnEligibility?.allowed !== false;
   const canReturnRemaining = canRequestReturn && returnableItems.length > 0 && ["RESOLVED", "REJECTED"].includes(latestReturnStatus);
   const purchase = (o.financialSnapshot as { schemePurchase?: Record<string, unknown> } | undefined)?.schemePurchase;
+  const returnCopy = returnFlowCopy(Boolean(purchase));
 
   const timeline = buildShopOrderTimeline(orderRow);
   const ui = paymentUiState(orderRow, effectiveAttempt);
@@ -449,7 +451,7 @@ export function CustomerShopOrderPage({ orderId }: { orderId: string }) {
 
           {String(o.status) === "DELIVERED" ? (
             <section className={cn(card, "space-y-3")}>
-              <h2 className={sectionTitle}>Returns & exchanges</h2>
+              <h2 className={sectionTitle}>{returnCopy.heading}</h2>
               {orderReturn.data?.request ? (
                 <div className="text-sm text-[#4d4245]">
                   <p>
@@ -460,10 +462,10 @@ export function CustomerShopOrderPage({ orderId }: { orderId: string }) {
               ) : canRequestReturn ? (
                 <>
                   <p className="text-sm text-[#7a6f72]">
-                    Not quite right? Send a return or exchange request. The store approves it and confirms any refund separately.
+                    {returnCopy.intro}
                   </p>
                   <Button type="button" variant="outline" className="h-10 rounded-full" onClick={() => setReturnDialogOpen(true)}>
-                    Request return or exchange
+                    {returnCopy.button}
                   </Button>
                 </>
               ) : null}
@@ -614,11 +616,10 @@ export function CustomerShopOrderPage({ orderId }: { orderId: string }) {
       <Dialog open={returnDialogOpen} onOpenChange={setReturnDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Return or exchange request</DialogTitle>
+            <DialogTitle>{returnCopy.dialogTitle}</DialogTitle>
           </DialogHeader>
           <p className="text-sm text-muted-foreground">
-            This sends a request to the store. Refunds and exchanges are confirmed separately — nothing is
-            refunded automatically.
+            {returnCopy.dialogNote}
           </p>
           {purchase && <div className="max-h-48 space-y-2 overflow-auto">
             {returnableItems.map((item) => {

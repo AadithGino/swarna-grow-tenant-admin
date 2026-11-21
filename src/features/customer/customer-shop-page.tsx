@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight, Package, Search, ShoppingBag, Store } from "lucide-react";
+import { CalendarCheck, ChevronLeft, ChevronRight, Package, Search, ShoppingBag, Store } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -11,6 +11,7 @@ import { useDebouncedValue } from "@/src/hooks/use-debounced-value";
 import {
   useGetCustomerProfileQuery,
   useGetShopAvailabilityQuery,
+  useListShopBookingsQuery,
   useGetShopBannersQuery,
   useGetShopCategoriesQuery,
   useGetShopProductQuery,
@@ -26,9 +27,10 @@ import { EcommerceCatalogImage } from "@/src/features/ecommerce/ecommerce-catalo
 import { useCustomerTenant } from "@/src/components/customer/customer-tenant-context";
 import { CustomerBrand } from "@/src/components/customer/customer-ui";
 import { customerPath } from "@/src/lib/customer-tenant";
-import { customerShopOrdersPath } from "@/src/lib/customer-shop-paths";
+import { customerShopBookingsPath, customerShopOrdersPath } from "@/src/lib/customer-shop-paths";
 import { customerBrandStyle } from "@/src/lib/customer-brand-styles";
 import { customerBannerHref } from "@/src/lib/customer-banner-routing";
+import { BookWithAdvance } from "@/src/features/customer/customer-shop-booking-start";
 import { CustomerShopPoliciesLinks } from "@/src/features/customer/customer-shop-policies";
 import {
   CustomerShopCatalogToolbar,
@@ -221,6 +223,7 @@ export function CustomerShopPage() {
   const initialCategoryId = searchParams.get("categoryId") ?? undefined;
   const openSearchOnLoad = searchParams.get("search") === "1";
   const availability = useGetShopAvailabilityQuery();
+  const bookingsQuery = useListShopBookingsQuery({ limit: 1 });
   const { data: profile } = useGetCustomerProfileQuery();
   const shopBanners = useGetShopBannersQuery(undefined, {
     skip: !availability.data?.available,
@@ -316,6 +319,8 @@ export function CustomerShopPage() {
   const slug = tenantSlug ?? "";
   const bestsellers = (featuredQuery.data?.items ?? []).slice(0, 4);
   const hasOrders = availability.data?.hasOrderHistory === true;
+  // Only customers who have booked something see the shortcut; a store without bookings shows nothing.
+  const hasBookings = (bookingsQuery.data?.items?.length ?? 0) > 0;
 
   const renderCard = (p: Record<string, unknown>) => (
     <CustomerShopProductCard
@@ -397,6 +402,18 @@ export function CustomerShopPage() {
         )}
       </div>
 
+      {hasBookings ? (
+        <Link href={customerShopBookingsPath(slug)} className="mt-6 flex items-center gap-3 rounded-[1.15rem] border border-[var(--ck-line,#ebe2d7)] bg-white p-3.5">
+          <span className="grid size-10 place-items-center rounded-xl bg-[var(--ck-gold-soft,#f6eedf)] text-[#8a6a24]">
+            <CalendarCheck className="size-5" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-[0.9rem] font-semibold text-[var(--ck-ink,#1d1417)]">My bookings</span>
+            <span className="block text-xs text-[var(--ck-muted,#87787c)]">Pay advance or balance, track pieces you reserved</span>
+          </span>
+          <ChevronRight className="size-4 text-[#ad9fa2]" />
+        </Link>
+      ) : null}
       {hasOrders ? (
         <Link href={customerShopOrdersPath(slug)} className="mt-6 flex items-center gap-3 rounded-[1.15rem] border border-[var(--ck-line,#ebe2d7)] bg-white p-3.5">
           <span className="grid size-10 place-items-center rounded-xl bg-[var(--ck-gold-soft,#f6eedf)] text-[#8a6a24]">
@@ -628,6 +645,8 @@ export function CustomerShopProductPage({ slug }: { slug: string }) {
               <span className="block text-xs text-[var(--ck-muted,#87787c)]">Choose at checkout · options depend on your pincode</span>
             </span>
           </div>
+
+          {priceReady ? <BookWithAdvance productId={String(p.id)} className="mt-3" /> : null}
 
           {!priceReady ? (
             <p className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-900">The price is being refreshed. You can add this piece once it shows a price.</p>

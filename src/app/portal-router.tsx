@@ -281,6 +281,27 @@ const EcommerceBannersPage = dynamic(
     ),
   options,
 );
+const EcommerceBookingsPage = dynamic(
+  () =>
+    import("@/src/features/ecommerce/ecommerce-bookings-page").then(
+      (m) => m.EcommerceBookingsPage,
+    ),
+  { loading: () => <PageSkeleton cards={3} /> },
+);
+const EcommerceBookingDetailPage = dynamic(
+  () =>
+    import("@/src/features/ecommerce/ecommerce-booking-detail-page").then(
+      (m) => m.EcommerceBookingDetailPage,
+    ),
+  { loading: () => <PageSkeleton cards={3} /> },
+);
+const EcommerceBookingPoliciesPage = dynamic(
+  () =>
+    import("@/src/features/ecommerce/ecommerce-booking-policies-page").then(
+      (m) => m.EcommerceBookingPoliciesPage,
+    ),
+  { loading: () => <PageSkeleton cards={3} /> },
+);
 const EcommerceGoldRatesPage = dynamic(
   () =>
     import("@/src/features/ecommerce/ecommerce-gold-rates-page").then(
@@ -593,6 +614,10 @@ export function PortalRouter({ slug }: { slug: string[] }) {
       else if (id === "orders" && action)
         page = <EcommerceOrderDetailPage orderId={action} />;
       else if (id === "orders") page = <EcommerceOrdersPage />;
+      else if (id === "bookings" && action)
+        page = <EcommerceBookingDetailPage bookingId={action} />;
+      else if (id === "bookings") page = <EcommerceBookingsPage />;
+      else if (id === "booking-policies") page = <EcommerceBookingPoliciesPage />;
       else if (id === "courier-cod")
         page = <EcommerceCourierCodWorkspacePage />;
       else if (id === "payment-exceptions")

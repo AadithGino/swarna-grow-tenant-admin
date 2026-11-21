@@ -3137,6 +3137,7 @@ export const adminApi = createApi({
       {
         includePricing?: boolean;
         status?: string;
+        q?: string;
         limit?: number;
         cursor?: string;
       } | void
@@ -3194,6 +3195,137 @@ export const adminApi = createApi({
         return { items: payload?.items ?? [] };
       },
       providesTags: ["Ecommerce"],
+    }),
+    // ---- Advance ornament booking ----
+    getEcommerceBookings: builder.query<
+      { items: Record<string, any>[]; meta: { nextCursor: string | null; hasMore: boolean; limit: number } },
+      Record<string, unknown> | void
+    >({
+      query: (params) => ({
+        url: "/admin/ecommerce/bookings",
+        params: params ?? {},
+        mockKey: "ecommerceBookings",
+      }),
+      transformResponse: (raw) => {
+        const payload = contractPayload(raw);
+        const meta = contractMeta(raw) as { nextCursor?: string | null; hasMore?: boolean; limit?: number } | undefined;
+        const items = Array.isArray(payload) ? payload : ((payload as { items?: unknown[] })?.items ?? []);
+        return {
+          items: items as Record<string, any>[],
+          meta: { nextCursor: meta?.nextCursor ?? null, hasMore: Boolean(meta?.hasMore), limit: Number(meta?.limit ?? 20) },
+        };
+      },
+      providesTags: ["Ecommerce"],
+    }),
+    getEcommerceBooking: builder.query<Record<string, any>, string>({
+      query: (bookingId) => ({
+        url: `/admin/ecommerce/bookings/${encodeURIComponent(bookingId)}`,
+        mockKey: "ecommerceBooking",
+      }),
+      transformResponse: (raw) => (contractPayload(raw) as Record<string, any>) ?? {},
+      providesTags: ["Ecommerce"],
+    }),
+    billEcommerceBooking: builder.mutation<Record<string, any>, { bookingId: string }>({
+      query: ({ bookingId }) => ({
+        url: `/admin/ecommerce/bookings/${encodeURIComponent(bookingId)}/bill`,
+        method: "POST",
+        mockKey: "billEcommerceBooking",
+      }),
+      transformResponse: (raw) => (contractPayload(raw) as Record<string, any>) ?? {},
+      invalidatesTags: ["Ecommerce"],
+    }),
+    requoteEcommerceBooking: builder.mutation<Record<string, any>, { bookingId: string; reason: string }>({
+      query: ({ bookingId, reason }) => ({
+        url: `/admin/ecommerce/bookings/${encodeURIComponent(bookingId)}/requote`,
+        method: "POST",
+        body: { reason },
+        mockKey: "requoteEcommerceBooking",
+      }),
+      transformResponse: (raw) => (contractPayload(raw) as Record<string, any>) ?? {},
+      invalidatesTags: ["Ecommerce"],
+    }),
+    cancelEcommerceBooking: builder.mutation<
+      Record<string, any>,
+      { bookingId: string; reason: string; waiveFee: boolean }
+    >({
+      query: ({ bookingId, reason, waiveFee }) => ({
+        url: `/admin/ecommerce/bookings/${encodeURIComponent(bookingId)}/cancel`,
+        method: "POST",
+        body: { reason, waiveFee },
+        mockKey: "cancelEcommerceBooking",
+      }),
+      transformResponse: (raw) => (contractPayload(raw) as Record<string, any>) ?? {},
+      invalidatesTags: ["Ecommerce"],
+    }),
+    recordEcommerceBookingManualRefund: builder.mutation<
+      Record<string, any>,
+      { bookingId: string; refundId: string; providerRefundReference: string; reason: string; evidenceNote: string }
+    >({
+      query: ({ bookingId, refundId, ...body }) => ({
+        url: `/admin/ecommerce/bookings/${encodeURIComponent(bookingId)}/refunds/${encodeURIComponent(refundId)}/manual`,
+        method: "POST",
+        body,
+        mockKey: "recordEcommerceBookingManualRefund",
+      }),
+      transformResponse: (raw) => (contractPayload(raw) as Record<string, any>) ?? {},
+      invalidatesTags: ["Ecommerce"],
+    }),
+    retryEcommerceBookingRefund: builder.mutation<
+      Record<string, any>,
+      { bookingId: string; refundId: string }
+    >({
+      query: ({ bookingId, refundId }) => ({
+        url: `/admin/ecommerce/bookings/${encodeURIComponent(bookingId)}/refunds/${encodeURIComponent(refundId)}/retry`,
+        method: "POST",
+        mockKey: "retryEcommerceBookingRefund",
+      }),
+      transformResponse: (raw) => (contractPayload(raw) as Record<string, any>) ?? {},
+      invalidatesTags: ["Ecommerce"],
+    }),
+    getEcommerceBookingPolicies: builder.query<{ versions: Record<string, any>[] }, void>({
+      query: () => ({ url: "/admin/ecommerce/booking-policies", mockKey: "ecommerceBookingPolicies" }),
+      transformResponse: (raw) => {
+        const payload = contractPayload(raw) as { versions?: Record<string, any>[] };
+        return { versions: payload?.versions ?? [] };
+      },
+      providesTags: ["Ecommerce"],
+    }),
+    getEcommerceBookingPolicyAssignments: builder.query<{ assignments: Record<string, any>[] }, void>({
+      query: () => ({ url: "/admin/ecommerce/booking-policy-assignments", mockKey: "ecommerceBookingPolicyAssignments" }),
+      transformResponse: (raw) => {
+        const payload = contractPayload(raw) as { assignments?: Record<string, any>[] };
+        return { assignments: payload?.assignments ?? [] };
+      },
+      providesTags: ["Ecommerce"],
+    }),
+    createEcommerceBookingPolicyDraft: builder.mutation<Record<string, any>, Record<string, unknown>>({
+      query: (body) => ({
+        url: "/admin/ecommerce/booking-policies",
+        method: "POST",
+        body,
+        mockKey: "createEcommerceBookingPolicyDraft",
+      }),
+      transformResponse: (raw) => (contractPayload(raw) as Record<string, any>) ?? {},
+      invalidatesTags: ["Ecommerce"],
+    }),
+    publishEcommerceBookingPolicy: builder.mutation<Record<string, any>, { policyVersionId: string }>({
+      query: ({ policyVersionId }) => ({
+        url: `/admin/ecommerce/booking-policies/${encodeURIComponent(policyVersionId)}/publish`,
+        method: "POST",
+        mockKey: "publishEcommerceBookingPolicy",
+      }),
+      transformResponse: (raw) => (contractPayload(raw) as Record<string, any>) ?? {},
+      invalidatesTags: ["Ecommerce"],
+    }),
+    setEcommerceBookingPolicyAssignment: builder.mutation<Record<string, any>, Record<string, unknown>>({
+      query: (body) => ({
+        url: "/admin/ecommerce/booking-policy-assignments",
+        method: "PUT",
+        body,
+        mockKey: "setEcommerceBookingPolicyAssignment",
+      }),
+      transformResponse: (raw) => (contractPayload(raw) as Record<string, any>) ?? {},
+      invalidatesTags: ["Ecommerce"],
     }),
     getEcommerceTaxSettings: builder.query<Record<string, any>, void>({
       query: () => ({
@@ -3286,7 +3418,7 @@ export const adminApi = createApi({
     }),
     getEcommerceCategories: builder.query<
       { items: Record<string, any>[]; meta?: Record<string, unknown> },
-      { limit?: number; cursor?: string; activeOnly?: boolean } | void
+      { limit?: number; cursor?: string; activeOnly?: boolean; q?: string } | void
     >({
       query: (params) => ({
         url: "/admin/ecommerce/categories",
@@ -6597,6 +6729,18 @@ export const {
   usePreviewEcommerceProductPriceQuery,
   useLazyPreviewEcommerceProductPriceQuery,
   useSetEcommerceGoldRateMutation,
+  useGetEcommerceBookingsQuery,
+  useGetEcommerceBookingQuery,
+  useBillEcommerceBookingMutation,
+  useRequoteEcommerceBookingMutation,
+  useCancelEcommerceBookingMutation,
+  useRecordEcommerceBookingManualRefundMutation,
+  useRetryEcommerceBookingRefundMutation,
+  useGetEcommerceBookingPoliciesQuery,
+  useGetEcommerceBookingPolicyAssignmentsQuery,
+  useCreateEcommerceBookingPolicyDraftMutation,
+  usePublishEcommerceBookingPolicyMutation,
+  useSetEcommerceBookingPolicyAssignmentMutation,
   usePutEcommerceTaxSettingsMutation,
   useGetEcommerceInventoryQuery,
   usePatchEcommerceInventoryProductMutation,

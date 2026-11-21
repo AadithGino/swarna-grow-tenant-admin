@@ -63,6 +63,8 @@ export const NAV_PERMISSIONS: Record<string, string[]> = {
   "/ecommerce/fulfilment": ["ecommerce.read"],
   "/ecommerce/orders": ["ecommerce.read"],
   "/ecommerce/payment-exceptions": ["ecommerce.read"],
+  "/ecommerce/bookings": ["ecommerce.booking.operate"],
+  "/ecommerce/booking-policies": ["ecommerce.booking.operate"],
   "/ecommerce/courier-cod": ["ecommerce.read"],
   "/digital-metals": ["digital-metals.read"],
   "/digital-metals/purchases": ["digital-metals.read"],

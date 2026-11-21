@@ -331,7 +331,7 @@ export function EcommerceFulfilmentPage() {
                   <EcommerceSettingsToggle
                     id="scheme-checkout"
                     title="Allow matured scheme checkout"
-                    description="Customers can use eligible matured schemes. Top-up payments open after staff approval."
+                    description="Customers can use eligible matured schemes. Top-up payments open after staff approval. Turning this off stops new schemes entering online checkout; a scheme already partly used online stays spendable there, so its balance is never stranded."
                     checked={schemeCheckoutEnabled}
                     disabled={!access.canWrite}
                     onCheckedChange={setSchemeCheckoutEnabled}
