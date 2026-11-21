@@ -95,23 +95,13 @@ function readUseMocks(): boolean {
   return true;
 }
 
+/**
+ * Off by default: portal routes switch in-page on every host (see src/lib/spa/spa-navigate.ts).
+ * NEXT_PUBLIC_PORTAL_HARD_NAV=true brings back full page loads as an emergency switch.
+ */
 function readPortalHardNav(): boolean {
   const raw = process.env.NEXT_PUBLIC_PORTAL_HARD_NAV?.trim().toLowerCase();
-  if (raw === "false" || raw === "0" || raw === "no") return false;
-  if (raw === "true" || raw === "1" || raw === "yes") return true;
-  // Static Netlify deploy: live HTTPS API builds default to full-page sidebar nav.
-  if (isProductionBundle() && !skipProductionGuard()) {
-    const mode = parseApiMode(process.env.NEXT_PUBLIC_USE_MOCKS);
-    const api = process.env.NEXT_PUBLIC_API_BASE_URL?.trim() ?? "";
-    if (
-      mode === "live" &&
-      api.startsWith("https://") &&
-      !LOCAL_HOST_SUBSTRINGS.some((h) => api.includes(h.replace(/[\[\]]/g, "")))
-    ) {
-      return true;
-    }
-  }
-  return false;
+  return raw === "true" || raw === "1" || raw === "yes";
 }
 
 function readPhonePeEnvironment(): "SANDBOX" | "PRODUCTION" {
@@ -127,7 +117,7 @@ export const env = {
   apiBaseUrl:
     process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000/api/v1",
   useMocks: readUseMocks(),
-  /** Full page loads for portal sidebar links (required on vinext static / Netlify). */
+  /** Emergency switch only: full page loads for portal links. Default off. */
   portalHardNav: readPortalHardNav(),
   /** Must match backend `PHONEPE_ENV` when opening hosted PhonePe checkout in the browser. */
   phonePeEnvironment: readPhonePeEnvironment(),

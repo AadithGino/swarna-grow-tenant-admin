@@ -2,52 +2,52 @@
 
 import { useEffect } from "react";
 import { env } from "@/src/config/env";
+import { resolveSpaUrl, spaNavigate } from "@/src/lib/spa/spa-navigate";
 
-function normalizePath(pathname: string): string {
-  if (!pathname || pathname === "/") return "/";
-  return pathname.replace(/\/+$/, "") || "/";
-}
-
-/** Full document load only when the path changes — never for `?query` sync (Orders filters, etc.). */
-function hardPathDestination(href: string): string | null {
-  let url: URL;
-  try {
-    url = new URL(href, window.location.href);
-  } catch {
-    return null;
-  }
-  if (url.origin !== window.location.origin) return null;
-  if (normalizePath(url.pathname) === normalizePath(window.location.pathname)) return null;
-  return `${url.pathname}${url.search}${url.hash}`;
+function findAnchor(event: MouseEvent): HTMLAnchorElement | null {
+  if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return null;
+  const target = event.target;
+  if (!(target instanceof Element)) return null;
+  const anchor = target.closest("a[href]");
+  if (!(anchor instanceof HTMLAnchorElement)) return null;
+  const tgt = anchor.getAttribute("target");
+  if ((tgt && tgt !== "_self") || anchor.hasAttribute("download")) return null;
+  if (anchor.dataset.hardNav !== undefined || anchor.getAttribute("rel")?.includes("external")) return null;
+  const href = anchor.getAttribute("href");
+  if (!href || href.startsWith("#") || /^(mailto:|tel:|javascript:|sms:|whatsapp:)/i.test(href)) return null;
+  return anchor;
 }
 
 /**
- * Vinext soft navigation does not swap pages on a static Netlify host.
- * Same-origin link clicks that change the path become real document loads.
- * History / router.replace for query-only updates stay in-page on purpose.
+ * Plain `<a href="/...">` links (not next/link) would load a whole new document.
+ * This keeps same-origin portal links in-page. next/link already handles its own clicks
+ * (it calls preventDefault), so those are skipped here.
+ *
+ * Escape hatch: NEXT_PUBLIC_PORTAL_HARD_NAV=true turns every path change back into a
+ * full page load (old Netlify behaviour). Add `data-hard-nav` to a link to force a load.
  */
 export function StaticHardNav() {
   useEffect(() => {
-    if (!env.portalHardNav) return;
-
     const onClick = (event: MouseEvent) => {
-      if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-      const target = event.target;
-      if (!(target instanceof Element)) return;
-      if (target.closest("button, input, textarea, select, label")) return;
-      const anchor = target.closest("a[href]");
+      if (event.defaultPrevented) return;
+      const anchor = findAnchor(event);
       if (!anchor) return;
-      if (anchor.getAttribute("target") === "_blank" || anchor.hasAttribute("download")) return;
-      const href = anchor.getAttribute("href");
-      if (!href || href.startsWith("#") || /^(mailto:|tel:|javascript:)/i.test(href)) return;
-      const dest = hardPathDestination(href);
-      if (!dest) return;
+      const href = anchor.getAttribute("href")!;
+      const url = resolveSpaUrl(href);
+      if (!url) return;
       event.preventDefault();
-      window.location.assign(dest);
+      if (env.portalHardNav) {
+        if (url.pathname.replace(/\/+$/, "") !== window.location.pathname.replace(/\/+$/, "")) {
+          const dest = url.href;
+          window.location.assign(dest);
+        } else spaNavigate(href);
+        return;
+      }
+      spaNavigate(href);
     };
 
-    document.addEventListener("click", onClick, true);
-    return () => document.removeEventListener("click", onClick, true);
+    document.addEventListener("click", onClick);
+    return () => document.removeEventListener("click", onClick);
   }, []);
 
   return null;

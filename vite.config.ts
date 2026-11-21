@@ -42,6 +42,34 @@ const localBindingConfig = {
     : [],
 };
 
+/**
+ * App code gets in-page navigation: `next/navigation` (useRouter) and `next/link` resolve to
+ * src/lib/spa/*, which switch routes with history.pushState instead of asking the host for
+ * an RSC payload. Static hosts (S3 + CloudFront, Netlify) cannot serve those payloads, so
+ * vinext fell back to a full page reload on every link. Only files in this project are
+ * redirected; vinext itself and the spa shims keep the real modules. Server components
+ * (rsc environment) are left alone.
+ */
+const SPA_NAV_SHIMS: Record<string, string> = {
+  "next/navigation": path.join(rootDir, "src/lib/spa/next-navigation.ts"),
+  "next/link": path.join(rootDir, "src/lib/spa/next-link.tsx"),
+};
+const spaNavigation = {
+  name: "swarna-spa-navigation",
+  enforce: "pre" as const,
+  resolveId(this: { environment?: { name?: string } }, source: string, importer?: string) {
+    const shim = SPA_NAV_SHIMS[source];
+    if (!shim || !importer) return null;
+    if (this.environment?.name === "rsc") return null;
+    const from = importer.replace(/\\/g, "/").split("?")[0];
+    const projectRoot = rootDir.replace(/\\/g, "/");
+    if (!from.startsWith(projectRoot) || from.includes("/node_modules/") || from.includes("/src/lib/spa/")) {
+      return null;
+    }
+    return shim;
+  },
+};
+
 export default defineConfig(async () => {
   const previewPluginPath = new URL("./build/sites-vite-plugin.ts", import.meta.url);
   if (managedLinux && !existsSync(previewPluginPath)) throw new Error("Managed preview requires its checkout-local Sites plugin.");
@@ -83,7 +111,7 @@ export default defineConfig(async () => {
       },
     };
     return {
-      plugins: [patchVinextLink, vinext(), ...previewPlugins, nitro()],
+      plugins: [spaNavigation, patchVinextLink, vinext(), ...previewPlugins, nitro()],
     };
   }
 
@@ -111,6 +139,7 @@ export default defineConfig(async () => {
         : {}),
     },
     plugins: [
+      spaNavigation,
       vinext(),
       ...previewPlugins,
       cloudflare({

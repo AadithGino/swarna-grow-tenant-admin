@@ -3,6 +3,7 @@ import { Inter } from "next/font/google";
 import Script from "next/script";
 import { Providers } from "@/src/app/providers";
 import {
+  SPA_POPSTATE_GUARD,
   VINEXT_STATIC_LOCATION_BOOTSTRAP,
   VINEXT_STATIC_LOCATION_BOOTSTRAP_LATE,
 } from "@/src/lib/vinext-static-location-bootstrap";
@@ -25,6 +26,9 @@ export default function RootLayout({
       <body className={`${inter.variable} antialiased`}>
         <Script id="sg-static-location-bootstrap" strategy="beforeInteractive">
           {VINEXT_STATIC_LOCATION_BOOTSTRAP}
+        </Script>
+        <Script id="sg-spa-popstate-guard" strategy="beforeInteractive">
+          {SPA_POPSTATE_GUARD}
         </Script>
         <Providers>{children}</Providers>
         <Toaster richColors position="top-right" />
