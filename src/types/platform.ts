@@ -296,3 +296,53 @@ export type DemoInstanceListResponse = {
   rows: DemoInstance[];
   meta: { total?: number; limit?: number; nextCursor?: string | null };
 };
+
+export type LandingDemoRequestStatus = "NEW" | "CONTACTED" | "ARCHIVED";
+
+export type LandingDemoProvisionStatus = "PENDING" | "RUNNING" | "READY" | "FAILED" | "SKIPPED";
+
+export type LandingDemoRequest = {
+  id: string;
+  status: LandingDemoRequestStatus;
+  source: string;
+  showroom: string;
+  brandName: string;
+  location: string;
+  phone: string;
+  customers: string;
+  planTag: string;
+  planPrice: string;
+  setupFee: string;
+  logoFileName: string;
+  logoDataUrl: string;
+  pageUrl: string;
+  whatsappOptIn: boolean;
+  notes: string;
+  demoSent: boolean;
+  demoSentAt: string | null;
+  provisionStatus: LandingDemoProvisionStatus;
+  provisionError: string | null;
+  demoInstanceId: string | null;
+  demoPublicId: string | null;
+  demoTemplateId: string | null;
+  demoInstanceStatus: string | null;
+  autoPrimaryColor: string | null;
+  autoAccentColor: string | null;
+  autoSplashBackgroundColor: string | null;
+  logoUploadId: string | null;
+  submittedAt: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+export type LandingDemoShareLink = {
+  publicId: string;
+  linkSecret: string;
+  sharePath: string;
+  shareUrl: string;
+};
+
+export type LandingDemoRequestListResponse = {
+  rows: LandingDemoRequest[];
+  meta: { total?: number; limit?: number; offset?: number };
+};

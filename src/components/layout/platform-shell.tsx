@@ -16,7 +16,7 @@ import {
   useGetPlatformDashboardQuery,
   usePlatformLogoutMutation,
 } from "@/src/store/api/platform-api";
-import { Building2, ChevronDown, CreditCard, FileClock, LayoutDashboard, Menu, Search, Settings2, ShieldCheck, Sparkles, Tags, Webhook } from "lucide-react";
+import { Building2, ChevronDown, CreditCard, FileClock, Inbox, LayoutDashboard, Menu, Search, Settings2, ShieldCheck, Sparkles, Tags, Webhook } from "lucide-react";
 import { BrandMark } from "@/src/components/brand/brand-mark";
 import {
   PlatformGlobalSearchDialog,
@@ -36,6 +36,7 @@ const nav = [
   { label: "Subscription plans", href: "/platform/plans", icon: Tags },
   { label: "Template registry", href: "/platform/templates", icon: CreditCard },
   { label: "Demo Builder", href: "/platform/demos", icon: Sparkles },
+  { label: "Demo requests", href: "/platform/demos/requests", icon: Inbox },
   { label: "Monitoring", href: "/platform/monitoring", icon: Webhook },
   { label: "Audit trail", href: "/platform/audit", icon: FileClock },
 ];
@@ -157,7 +158,7 @@ export function PlatformShell({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="min-h-screen bg-[#fbf8f5] lg:grid lg:grid-cols-[17.5rem_minmax(0,1fr)]">
+    <div className="min-h-screen bg-[#fbf8f5]">
       <PlatformGlobalSearchDialog
         open={searchOpen}
         onOpenChange={setSearchOpen}
@@ -167,8 +168,8 @@ export function PlatformShell({ children }: { children: React.ReactNode }) {
       <div className="fixed inset-y-0 left-0 z-40 hidden lg:block">
         <PlatformSidebar monitoringCount={monitoringCount} />
       </div>
-      <div className="min-w-0 lg:col-start-2">
-        <header className="sticky top-0 z-30 flex h-[5.125rem] items-center gap-3 border-b border-[#e8dcd8] bg-white/95 px-4 backdrop-blur md:px-6">
+      <div className="flex min-h-screen min-w-0 flex-col lg:pl-[17.5rem]">
+        <header className="sticky top-0 z-30 flex h-[5.125rem] shrink-0 items-center gap-3 border-b border-[#e8dcd8] bg-white/95 px-4 backdrop-blur md:px-6">
           <Sheet open={open} onOpenChange={setOpen}>
             <SheetTrigger asChild>
               <Button variant="outline" size="icon" className="lg:hidden">
@@ -231,7 +232,7 @@ export function PlatformShell({ children }: { children: React.ReactNode }) {
             </DropdownMenuContent>
           </DropdownMenu>
         </header>
-        <main className="min-h-[calc(100vh-5.125rem)] bg-[linear-gradient(#8f6c5c0a_1px,transparent_1px),linear-gradient(90deg,#8f6c5c0a_1px,transparent_1px)] bg-[size:2.75rem_2.75rem] p-4 md:p-7 lg:p-8">
+        <main className="min-h-[calc(100vh-5.125rem)] flex-1 bg-[linear-gradient(#8f6c5c0a_1px,transparent_1px),linear-gradient(90deg,#8f6c5c0a_1px,transparent_1px)] bg-[size:2.75rem_2.75rem] p-4 md:p-7 lg:p-8">
           <div className="mx-auto max-w-[105rem] space-y-7">{children}</div>
         </main>
       </div>

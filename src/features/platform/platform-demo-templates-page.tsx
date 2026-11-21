@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { Rocket, Sparkles, UploadCloud } from "lucide-react";
+import { Inbox, Rocket, Sparkles, UploadCloud } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -98,6 +98,12 @@ export function PlatformDemoTemplatesPage() {
         description="Register an approved tenant as a demo master, then publish a snapshot before creating prospect demo links."
         actions={
           <div className="flex gap-2">
+            <Button variant="outline" asChild>
+              <Link href="/platform/demos/requests">
+                <Inbox />
+                Landing demo requests
+              </Link>
+            </Button>
             <Button variant="outline" asChild>
               <Link href="/platform/demos/instances">View demo instances</Link>
             </Button>

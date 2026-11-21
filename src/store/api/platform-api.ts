@@ -39,6 +39,9 @@ import type {
   DemoTemplateVersion,
   RegisterDemoTemplateResult,
   RotateDemoLinkResult,
+  LandingDemoRequest,
+  LandingDemoRequestListResponse,
+  LandingDemoShareLink,
 } from "@/src/types/platform";
 
 export type PlatformAuditLogsResult = {
@@ -278,6 +281,15 @@ const baseQuery: BaseQueryFn<
         result.meta,
       );
     }
+    if (url === "/platform/landing-demo-requests" && body.meta) {
+      return rtkDataResult(
+        {
+          rows: (body.data as LandingDemoRequest[]).map((row) => withEntityId(row)),
+          meta: body.meta,
+        } satisfies LandingDemoRequestListResponse,
+        result.meta,
+      );
+    }
     if (url === "/platform/audit-logs") {
       const rows = (Array.isArray(body.data) ? body.data : []) as AuditLog[];
       const limit = Number((args.params as { limit?: number })?.limit) || 20;
@@ -295,7 +307,7 @@ const baseQuery: BaseQueryFn<
 };
 
 export const platformApi = createApi({
-  reducerPath: "platformApi", baseQuery, tagTypes: ["PlatformDashboard", "PlatformTenant", "PlatformTenantList", "PlatformPlan", "PlatformTemplate", "PlatformInvoice", "PlatformOps", "PlatformDigitalMetals", "PlatformDemoTemplate", "PlatformDemoTemplateList", "PlatformDemoInstance", "PlatformDemoInstanceList"],
+  reducerPath: "platformApi", baseQuery, tagTypes: ["PlatformDashboard", "PlatformTenant", "PlatformTenantList", "PlatformPlan", "PlatformTemplate", "PlatformInvoice", "PlatformOps", "PlatformDigitalMetals", "PlatformDemoTemplate", "PlatformDemoTemplateList", "PlatformDemoInstance", "PlatformDemoInstanceList", "PlatformLandingDemoRequest", "PlatformLandingDemoRequestList"],
   endpoints: (builder) => ({
     platformLogin: builder.mutation<any, { email: string; password: string }>({ query: (body) => ({ url: "/platform/auth/login", method: "POST", body, mockKey: "login" }) }),
     refreshPlatformToken: builder.mutation<any, { refreshToken: string }>({ query: (body) => ({ url: "/platform/auth/refresh", method: "POST", body, mockKey: "refresh" }) }),
@@ -662,7 +674,61 @@ export const platformApi = createApi({
       transformResponse: (response: unknown) => withEntityId(response as DemoInstance),
       invalidatesTags: (_r, _e, id) => [{ type: "PlatformDemoInstance", id }, "PlatformDemoInstanceList"],
     }),
+    getLandingDemoRequests: builder.query<
+      LandingDemoRequestListResponse,
+      { status?: string; demoSent?: string; limit?: number; offset?: number } | void
+    >({
+      query: (params) => ({
+        url: "/platform/landing-demo-requests",
+        params: params ?? undefined,
+      }),
+      transformResponse: (response: unknown) => {
+        const payload = response as LandingDemoRequestListResponse;
+        return {
+          rows: (payload?.rows ?? []).map((row) => withEntityId(row)),
+          meta: payload?.meta ?? { total: 0 },
+        };
+      },
+      providesTags: ["PlatformLandingDemoRequestList"],
+    }),
+    getLandingDemoRequest: builder.query<LandingDemoRequest, string>({
+      query: (requestId) => ({ url: `/platform/landing-demo-requests/${requestId}` }),
+      transformResponse: (response: unknown) => withEntityId(response as LandingDemoRequest),
+      providesTags: (_r, _e, id) => [{ type: "PlatformLandingDemoRequest", id }],
+    }),
+    patchLandingDemoRequest: builder.mutation<
+      LandingDemoRequest,
+      { requestId: string; body: { status?: string; notes?: string; demoSent: boolean } }
+    >({
+      query: ({ requestId, body }) => ({
+        url: `/platform/landing-demo-requests/${requestId}`,
+        method: "PATCH",
+        body,
+      }),
+      transformResponse: (response: unknown) => withEntityId(response as LandingDemoRequest),
+      invalidatesTags: (_r, _e, a) => [
+        { type: "PlatformLandingDemoRequest", id: a.requestId },
+        "PlatformLandingDemoRequestList",
+      ],
+    }),
+    getLandingDemoShareLink: builder.query<LandingDemoShareLink, string>({
+      query: (requestId) => ({
+        url: `/platform/landing-demo-requests/${requestId}/share-link`,
+      }),
+    }),
+    retryLandingDemoProvision: builder.mutation<LandingDemoRequest, string>({
+      query: (requestId) => ({
+        url: `/platform/landing-demo-requests/${requestId}/retry-provision`,
+        method: "POST",
+        body: {},
+      }),
+      transformResponse: (response: unknown) => withEntityId(response as LandingDemoRequest),
+      invalidatesTags: (_r, _e, id) => [
+        { type: "PlatformLandingDemoRequest", id },
+        "PlatformLandingDemoRequestList",
+      ],
+    }),
   }),
 });
 
-export const { usePlatformLoginMutation, usePlatformLogoutMutation, useGetPlatformDashboardQuery, useGetPlatformChartQuery, useGetPlatformPlansQuery, useGetPlatformPlanQuery, useSavePlatformPlanMutation, useDeprecatePlatformPlanMutation, useGetPlatformTenantsQuery, useGetPlatformTenantQuery, useCreatePlatformTenantMutation, useUpdatePlatformTenantMutation, useSuspendPlatformTenantMutation, useReactivatePlatformTenantMutation, useGoLivePlatformTenantMutation, useResetOwnerCredentialsMutation, useGetPlatformUsageQuery, useGetPlatformFlagsQuery, useSavePlatformFlagsMutation, usePausePlatformDigitalMetalsMutation, useGetPlatformDigitalMetalsStatusQuery, useApprovePlatformDigitalMetalsTaxMutation, usePublishPlatformDigitalMetalsTermsMutation, useSavePaymentIntegrationMutation, useVerifyPaymentIntegrationMutation, useSaveMessageCentralIntegrationMutation, useVerifyMessageCentralIntegrationMutation, useChangeTenantPlanMutation, useUpdateTenantLimitsMutation, useExtendTenantSubscriptionMutation, useCancelTenantSubscriptionMutation, useGetTenantInvoicesQuery, useCreateTenantInvoiceMutation, useMarkPlatformInvoicePaidMutation, useGetPlatformAuditLogsQuery, useGetWebhookFailuresQuery, useLazyGetWebhookFailuresQuery, useRetryWebhookFailureMutation, useGetPlatformErrorLogsQuery, useGetPlatformLivenessHealthQuery, useGetPlatformReadinessHealthQuery, useRegisterDemoTemplateMutation, useGetDemoTemplatesQuery, useGetDemoTemplateQuery, useGetDemoTemplateVersionsQuery, usePublishDemoTemplateVersionMutation, useCreateDemoInstanceMutation, usePresignDemoLogoUploadMutation, useCompleteDemoLogoUploadMutation, useGetDemoInstancesQuery, useGetDemoInstanceQuery, useUpdateDemoInstanceMutation, useRotateDemoInstanceLinkMutation, useCopyDemoInstanceLinkMutation, useDisableDemoInstanceMutation, useReactivateDemoInstanceMutation } = platformApi;
+export const { usePlatformLoginMutation, usePlatformLogoutMutation, useGetPlatformDashboardQuery, useGetPlatformChartQuery, useGetPlatformPlansQuery, useGetPlatformPlanQuery, useSavePlatformPlanMutation, useDeprecatePlatformPlanMutation, useGetPlatformTenantsQuery, useGetPlatformTenantQuery, useCreatePlatformTenantMutation, useUpdatePlatformTenantMutation, useSuspendPlatformTenantMutation, useReactivatePlatformTenantMutation, useGoLivePlatformTenantMutation, useResetOwnerCredentialsMutation, useGetPlatformUsageQuery, useGetPlatformFlagsQuery, useSavePlatformFlagsMutation, usePausePlatformDigitalMetalsMutation, useGetPlatformDigitalMetalsStatusQuery, useApprovePlatformDigitalMetalsTaxMutation, usePublishPlatformDigitalMetalsTermsMutation, useSavePaymentIntegrationMutation, useVerifyPaymentIntegrationMutation, useSaveMessageCentralIntegrationMutation, useVerifyMessageCentralIntegrationMutation, useChangeTenantPlanMutation, useUpdateTenantLimitsMutation, useExtendTenantSubscriptionMutation, useCancelTenantSubscriptionMutation, useGetTenantInvoicesQuery, useCreateTenantInvoiceMutation, useMarkPlatformInvoicePaidMutation, useGetPlatformAuditLogsQuery, useGetWebhookFailuresQuery, useLazyGetWebhookFailuresQuery, useRetryWebhookFailureMutation, useGetPlatformErrorLogsQuery, useGetPlatformLivenessHealthQuery, useGetPlatformReadinessHealthQuery, useRegisterDemoTemplateMutation, useGetDemoTemplatesQuery, useGetDemoTemplateQuery, useGetDemoTemplateVersionsQuery, usePublishDemoTemplateVersionMutation, useCreateDemoInstanceMutation, usePresignDemoLogoUploadMutation, useCompleteDemoLogoUploadMutation, useGetDemoInstancesQuery, useGetDemoInstanceQuery, useUpdateDemoInstanceMutation, useRotateDemoInstanceLinkMutation, useCopyDemoInstanceLinkMutation, useDisableDemoInstanceMutation, useReactivateDemoInstanceMutation, useGetLandingDemoRequestsQuery, useGetLandingDemoRequestQuery, usePatchLandingDemoRequestMutation, useLazyGetLandingDemoShareLinkQuery, useRetryLandingDemoProvisionMutation } = platformApi;

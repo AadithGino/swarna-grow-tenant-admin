@@ -2,6 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { PageSkeleton } from "@/src/components/common/query-state";
+import { useTenantAdminSessionGate } from "@/src/hooks/use-tenant-admin-session-ready";
 import { isKnownPortalSection } from "@/src/lib/portal-routes";
 import { CustomerRouter } from "./customer-router";
 import { AgentRouter } from "./agent-router";
@@ -467,9 +468,28 @@ const PlatformDemoInstanceDetailPage = dynamic(
     ),
   options,
 );
+const PlatformLandingDemoRequestsPage = dynamic(
+  () =>
+    import("@/src/features/platform/platform-landing-demo-requests-page").then(
+      (m) => m.PlatformLandingDemoRequestsPage,
+    ),
+  options,
+);
+const PlatformLandingDemoRequestDetailPage = dynamic(
+  () =>
+    import("@/src/features/platform/platform-landing-demo-request-detail-page").then(
+      (m) => m.PlatformLandingDemoRequestDetailPage,
+    ),
+  options,
+);
 const DemoEntryPage = dynamic(
   () => import("@/src/features/demo/demo-entry-page").then((m) => m.DemoEntryPage),
   options,
+);
+// Public marketing page: no admin skeleton while it loads.
+const LandingPage = dynamic(
+  () => import("@/src/features/landing/landing-page").then((m) => m.LandingPage),
+  { loading: () => null },
 );
 
 function PlatformRouter({ slug }: { slug: string[] }) {
@@ -490,6 +510,10 @@ function PlatformRouter({ slug }: { slug: string[] }) {
   if (section === "plans") return <PlatformPlansPage />;
   if (section === "templates") return <PortalNotFoundPage path={slug.join("/")} />;
   if (section === "demos") {
+    if (id === "requests") {
+      if (detail) return <PlatformLandingDemoRequestDetailPage requestId={detail} />;
+      return <PlatformLandingDemoRequestsPage />;
+    }
     if (id === "templates" && detail) return <PlatformDemoTemplateDetailPage templateId={detail} />;
     if (id === "instances") {
       if (detail && detail !== "new") return <PlatformDemoInstanceDetailPage instanceId={detail} />;
@@ -504,10 +528,18 @@ function PlatformRouter({ slug }: { slug: string[] }) {
 }
 
 export function PortalRouter({ slug }: { slug: string[] }) {
+  const tenantSession = useTenantAdminSessionGate();
+
+  if (slug.length === 0) {
+    if (tenantSession === "pending") return null;
+    if (tenantSession === "signed-out") return <LandingPage />;
+  }
+
   if (slug[0] === "customer") return <CustomerRouter slug={slug} />;
   if (slug[0] === "agent") return <AgentRouter slug={slug} />;
   if (slug[0] === "platform") return <PlatformRouter slug={slug} />;
   if (slug[0] === "demo" && slug[1]) return <DemoEntryPage publicId={slug[1]} />;
+  if (slug[0] === "landing") return <LandingPage />;
   if (slug[0] === "pay" && slug[1])
     return <CustomerLegacyPayRedirect linkToken={slug[1]} />;
   const [section = "dashboard", id, action] = slug;

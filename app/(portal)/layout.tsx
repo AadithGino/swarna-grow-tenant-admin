@@ -10,6 +10,7 @@ import { CustomerIdentityProvider } from "@/src/components/customer/customer-ide
 import { CustomerTenantProvider } from "@/src/components/customer/customer-tenant-context";
 import { AgentShell } from "@/src/components/agent/agent-shell";
 import { CUSTOMER_ROUTE_SECTIONS } from "@/src/lib/customer-tenant";
+import { useTenantAdminSessionGate } from "@/src/hooks/use-tenant-admin-session-ready";
 
 function customerTenantSlugFromPath(pathname: string): string | null {
   const parts = pathname.split("/").filter(Boolean);
@@ -50,14 +51,19 @@ export default function PortalLayout({
   children: React.ReactNode;
 }) {
   const pathname = useBrowserPathname();
+  const tenantSession = useTenantAdminSessionGate();
   useEffect(() => {
     ensureCustomerIdentityLifecycle();
   }, []);
   if (pathname === "/login") return children;
+  // Signed-out home is the public marketing landing (no admin chrome).
+  if (pathname === "/" && tenantSession !== "signed-in") return children;
   if (pathname === "/platform/login") return children;
   if (pathname === "/agent/login") return children;
   // Public Demo Builder share links — branded splash, no admin/customer shell.
   if (pathname === "/demo" || pathname.startsWith("/demo/")) return children;
+  // Public marketing landing page — full-bleed, no admin/customer shell.
+  if (pathname === "/landing" || pathname.startsWith("/landing/")) return children;
   // Public payment deep links (no tenant/admin session required).
   if (pathname === "/pay" || pathname.startsWith("/pay/")) return children;
   if (pathname === "/payment-return" || pathname.startsWith("/payment-return/")) return children;
