@@ -250,6 +250,7 @@ type CustomerCollectionPreview = {
     firstDueDate: string;
     maturityDate: string;
     maturityDateProvisional?: boolean;
+    oneTimeSchedule?: Array<{ period: number; dueDate: string }>;
   } | null;
 };
 
@@ -264,6 +265,7 @@ export function adaptCustomerCollectionPreview(raw: unknown) {
       firstDueDate: preview.firstDueDate,
       maturityDate: preview.maturityDate,
       maturityDateProvisional: preview.maturityDateProvisional,
+      oneTimeSchedule: preview.oneTimeSchedule,
     } : undefined,
   };
 }

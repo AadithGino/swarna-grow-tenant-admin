@@ -4,6 +4,7 @@
  * Scheme detail page laid out per the approved v2 plan:
  * hero → pay card → schedule / recent contributions → at maturity → Passbook · Download · Plan rules.
  */
+import { OneTimeGoldProgressPanel } from "@/src/components/common/one-time-gold-progress";
 import { useState } from "react";
 import { Check, Download, FileText, Gem, Gift, BadgePercent, BookOpen, Info, LockKeyhole, ScrollText } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -88,7 +89,7 @@ function NextPayCard({
     <CkCard className="mt-3 flex items-center gap-3 p-3.5">
       <div className="min-w-0 flex-1">
         <p className="truncate text-xs text-[var(--ck-muted)]">
-          {schemeIsGold ? "Next contribution" : "Next instalment"}
+          {scheme.oneTimeProgress ? "Upfront payment" : schemeIsGold ? "Next contribution" : "Next instalment"}
           {due ? ` · due ${due}` : ""}
         </p>
         <p className="mt-0.5 text-[1.5rem] font-bold leading-tight tracking-[-0.03em] tabular-nums text-[var(--ck-ink)]">{amount}</p>
@@ -438,6 +439,14 @@ function AtMaturity({
           <p className="text-[0.7rem] text-[var(--ck-muted)]">Maturity benefit</p>
           <p className="text-[0.9rem] font-semibold leading-snug text-[var(--ck-ink)]">{maturityBenefit.title || scheme.benefitLabel}</p>
           <p className="text-xs text-[var(--ck-ink-2)]">On {formatCustomerDate(scheme.maturityDate)}</p>
+          {scheme.collectionBonus?.status === "CREDITED" && (
+            <p className="text-xs font-semibold">{(scheme.collectionBonus.weightMg / 1000).toFixed(3)} g credited</p>
+          )}
+          {scheme.collectionBonus?.status === "PENDING" && scheme.collectionBonus.estimatedWeightMg != null && (
+            <p className="text-xs">Estimated bonus {(scheme.collectionBonus.estimatedWeightMg / 1000).toFixed(3)} g</p>
+          )}
+          {scheme.collectionBonus?.status === "PENDING_RATE" && <p className="text-xs">Bonus awaiting gold rate</p>}
+          {scheme.collectionBonus?.status === "INELIGIBLE" && <p className="text-xs">Maturity bonus criteria not met</p>}
         </div>
       </CkCard>
       <CkCard className="mt-2 flex items-center gap-3 p-3.5">
@@ -534,11 +543,12 @@ export function SchemeDetailPlanView({
 
   return (
     <>
-      {mode === "FIXED" ? <FixedHero scheme={scheme} schemeIsGold={schemeIsGold} /> : null}
+      {scheme.oneTimeProgress ? <OneTimeGoldProgressPanel progress={scheme.oneTimeProgress} />
+        : mode === "FIXED" ? <FixedHero scheme={scheme} schemeIsGold={schemeIsGold} /> : null}
       {mode === "FLEXIBLE_FREE_WINDOW" ? <FlexibleFreeHero scheme={scheme} /> : null}
       {mode === "FLEXIBLE_LOCK_WINDOW" ? <FlexibleLockedHero scheme={scheme} /> : null}
 
-      {mode === "FIXED" ? <NextPayCard scheme={scheme} schemeIsGold={schemeIsGold} onPay={() => onPay()} payEnabled={payEnabled} /> : null}
+      {mode === "FIXED" && !scheme.oneTimeProgress?.fundedOn ? <NextPayCard scheme={scheme} schemeIsGold={schemeIsGold} onPay={() => onPay()} payEnabled={payEnabled} /> : null}
       {mode === "FLEXIBLE_FREE_WINDOW" ? (
         <>
           <FreeWindowMonthCard scheme={scheme} onPay={onPay} payEnabled={payEnabled} />
@@ -568,7 +578,7 @@ export function SchemeDetailPlanView({
         </>
       ) : null}
 
-      {mode === "FIXED" ? (
+      {mode === "FIXED" && !scheme.oneTimeProgress ? (
         <ScheduleList scheme={scheme} schemeIsGold={schemeIsGold} onDownloadReceipt={onDownloadReceipt} />
       ) : (
         <RecentContributions payments={payments} onOpenPassbook={() => setSheet("passbook")} count={mode === "FLEXIBLE_LOCK_WINDOW" ? passbookCount : undefined} />
@@ -584,7 +594,7 @@ export function SchemeDetailPlanView({
         onRedeem={onRedeem}
         note={
           mode === "FIXED"
-            ? scheme.helperText
+            ? scheme.oneTimeProgress ? maturityBenefit.summary : scheme.helperText
             : mode === "FLEXIBLE_LOCK_WINDOW"
               ? "Final-cycle payments may be lower than your monthly cap so the scheme can close exactly at maturity balance."
               : null

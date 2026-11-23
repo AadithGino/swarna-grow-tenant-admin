@@ -25,7 +25,11 @@ function isGoldPlan(plan: SchemePlan) {
 function PlanExploreCard({ plan, tenantSlug }: { plan: SchemePlan; tenantSlug: string | null }) {
   const gold = isGoldPlan(plan);
   const typeBadge =
-    plan.model === "FLEXIBLE" ? (
+    plan.oneTimeRules ? (
+      <CkBadge tone="gold">One-time gold</CkBadge>
+    ) : plan.collectionRules ? (
+      <CkBadge tone="gold">Gold collection</CkBadge>
+    ) : plan.model === "FLEXIBLE" ? (
       <CkBadge tone="blue">Flexible</CkBadge>
     ) : gold ? (
       <CkBadge tone="gold">Gold benefit</CkBadge>
@@ -50,7 +54,7 @@ function PlanExploreCard({ plan, tenantSlug }: { plan: SchemePlan; tenantSlug: s
       <CkStats
         className="mt-3.5"
         items={[
-          { label: "Amount", value: <span className="whitespace-normal text-[0.85rem] leading-snug">{plan.amountSummary}</span> },
+          { label: plan.oneTimeRules ? "Upfront payment" : "Amount", value: <span className="whitespace-normal text-[0.85rem] leading-snug">{plan.amountSummary}</span> },
           { label: "Benefit", value: <span className="whitespace-normal text-[0.85rem] leading-snug">{plan.benefitSummary || "On completion"}</span> },
         ]}
       />

@@ -23,7 +23,9 @@ export function OneTimeGoldProgressPanel({ progress }: { progress: OneTimeGoldPr
             {progress.periods.map((period) => (
               <li key={period.period} className="flex flex-wrap justify-between gap-2 py-2">
                 <span>{period.dueDate}</span>
-                <span>{period.status === "CREDITED" ? grams(period.weightMg) : period.status.replaceAll("_", " ").toLowerCase()}</span>
+                <span>{period.status === "CREDITED" ? `${grams(period.weightMg)} credited`
+                  : period.status === "PENDING_RATE" ? "Awaiting gold rate"
+                    : period.status === "PENDING" ? "Scheduled" : period.status.toLowerCase()}</span>
               </li>
             ))}
           </ul>

@@ -1,5 +1,6 @@
 "use client";
 
+import { type SchemePlan } from "@/src/types/customer";
 import { oneTimeBonusLabel } from "@/src/types/one-time-gold";
 
 import Link from "next/link";
@@ -19,7 +20,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { EnrolFrequencyControl } from "@/src/components/common/enrol-frequency-control";
-import { MATURITY_GOLD_BASIS_LABELS, type CollectionFrequency } from "@/src/types/collection";
+import { COLLECTION_FREQUENCY_LABELS, MATURITY_GOLD_BASIS_LABELS, type CollectionFrequency } from "@/src/types/collection";
 import { EnrolAmountControl } from "@/src/components/common/enrol-amount-control";
 import { PageSkeleton, QueryError } from "@/src/components/common/query-state";
 import { useCustomerTenant } from "@/src/components/customer/customer-tenant-context";
@@ -64,11 +65,17 @@ function payoutLabel(benefitType?: string, valueBasisLabel?: string) {
   return valueBasisLabel || "Jewellery benefit";
 }
 
-function contributionStat(plan: { model: string; amountSummary: string; contributionDetail?: string }, amountRupee?: number) {
-  if (plan.model === "FIXED" && amountRupee != null && amountRupee > 0) {
-    return `${money(amountRupee)}/month`;
+function contributionStat(plan: SchemePlan, amountRupee?: number, frequency?: CollectionFrequency) {
+  if (amountRupee == null || amountRupee <= 0 || plan.model !== "FIXED") {
+    return plan.contributionDetail ?? plan.amountSummary;
   }
-  return plan.contributionDetail ?? plan.amountSummary;
+  const amount = preciseMoney(amountRupee);
+  if (plan.oneTimeRules) return `${amount} upfront`;
+  if (plan.collectionRules?.amountBasis === "TOTAL_TARGET") return `${amount} total`;
+  if (plan.collectionRules) {
+    return `${amount} per ${frequency ? COLLECTION_FREQUENCY_LABELS[frequency].toLowerCase() + " collection" : "collection"}`;
+  }
+  return `${amount}/month`;
 }
 
 function PlanDetailTopBar({ tenantSlug }: { tenantSlug: string | null }) {
@@ -226,20 +233,21 @@ export function CustomerPlanDetailPage({ id }: { id: string }) {
   if (isLoading || !plan) return <PageSkeleton cards={3} />;
   if (isError) return <QueryError onRetry={refetch} />;
 
+  const oneTime = plan.oneTimeRules;
   const contributionText = plan.contributionDetail ?? plan.amountSummary;
-  const benefitText = plan.benefitSummary || "Benefit follows plan rules shown at enrolment";
+  const benefitText = oneTime ? oneTimeBonusLabel(oneTime) : plan.benefitSummary || "Benefit follows plan rules shown at enrolment";
   const presetAmount = amountFieldLocked(enrolRules) || amountUsesSlabs(enrolRules);
   const amountValue = presetAmount ? (amount ?? defaultCustomerEnrolAmountRupee(plan)) : amount;
   const amountError = amountValue != null ? validateEnrolAmountRupee(plan, amountValue) : "Enter a valid amount";
   const hasValidAmount = amountValue != null && !amountError;
   const hardBlocked = !plan.canEnrol;
   const firstMode = resolvedFirstInstallmentMode(enrolRules, payNow ? "COLLECT_NOW" : "START_NEXT_CYCLE");
-  const showPayNowToggle = plan.firstInstallmentModeEditable !== false;
+  const showPayNowToggle = !oneTime && plan.firstInstallmentModeEditable !== false;
   const payNowLocked =
     plan.firstInstallmentModeEditable === false && plan.firstInstallmentModeDefault === "COLLECT_NOW";
   const payNowHidden =
     plan.firstInstallmentModeEditable === false && plan.firstInstallmentModeDefault === "START_NEXT_CYCLE";
-  const effectivePayNow = payNowHidden ? false : firstMode === "COLLECT_NOW";
+  const effectivePayNow = Boolean(oneTime) || (!payNowHidden && firstMode === "COLLECT_NOW");
   const showInstalmentTiles =
     amountValue != null &&
     amountValue > 0 &&
@@ -257,14 +265,14 @@ export function CustomerPlanDetailPage({ id }: { id: string }) {
   const scheduleBlocker = previewKey === currentPreviewKey ? scheduleState.data?.blockers?.[0]?.message : undefined;
   const nextDateLabel = collection ? (schedulePreview?.firstDueDate ?? "the first scheduled due date") : nextCyclePayDateLabel();
   const reviewSchedule = async () => {
-    if (!frequency || !hasValidAmount || amountValue == null) return;
+    if ((collection && !frequency) || !hasValidAmount || amountValue == null) return;
     setPreviewKey(currentPreviewKey);
     try {
       await validateSchedule({ planId: plan.id, installmentAmountPaise: Math.round(amountValue * 100),
-        payNow: effectivePayNow, collectionFrequency: frequency }).unwrap();
+        payNow: effectivePayNow, ...(collection ? { collectionFrequency: frequency } : {}) }).unwrap();
     } catch (err) {
       setPreviewKey("");
-      toast.error(parseApiError(err, "Could not preview the collection schedule.").message);
+      toast.error(parseApiError(err, "Could not preview the plan schedule.").message);
     }
   };
   const modelBadge = plan.model === "FLEXIBLE" ? "FLEXIBLE" : "FIXED";
@@ -357,7 +365,7 @@ export function CustomerPlanDetailPage({ id }: { id: string }) {
 
       <section className="customer-surface p-5">
         <span className="inline-flex rounded-md bg-[#f6edf0] px-2.5 py-1 text-[0.62rem] font-extrabold tracking-[0.12em] text-[var(--customer-primary,#730321)]">
-          {plan.oneTimeRules ? "ONE-TIME GOLD" : modelBadge}
+          {oneTime ? "ONE-TIME GOLD" : collection ? "GOLD COLLECTION" : modelBadge}
         </span>
         {plan.oneTimeRules && <p className="mt-2 text-sm">Pay once · {oneTimeBonusLabel(plan.oneTimeRules)}</p>}
         <h2 className="mt-3 text-xl font-black tracking-[-.02em] text-[#171722]">{plan.name}</h2>
@@ -374,9 +382,9 @@ export function CustomerPlanDetailPage({ id }: { id: string }) {
           <div className="rounded-xl bg-[#faf6f3] px-2 py-3">
             <Coins className="mx-auto size-5 text-[var(--customer-accent,#8b5f08)]" strokeWidth={2} />
             <p className="mt-2 text-xs font-bold leading-tight text-[#171722]">
-              {contributionStat(plan, amountValue ?? undefined)}
+              {contributionStat(plan, amountValue ?? undefined, frequency)}
             </p>
-            <p className="text-[10px] text-[#8a8490]">Contribution</p>
+            <p className="text-[10px] text-[#8a8490]">{oneTime ? "Upfront payment" : "Contribution"}</p>
           </div>
           <div className="rounded-xl bg-[#faf6f3] px-2 py-3">
             <Gift className="mx-auto size-5 text-[var(--customer-accent,#8b5f08)]" strokeWidth={2} />
@@ -387,7 +395,7 @@ export function CustomerPlanDetailPage({ id }: { id: string }) {
       </section>
 
       <section className="customer-surface mt-4 p-5">
-        <p className="text-sm font-bold text-[#171722]">Choose your contribution</p>
+        <p className="text-sm font-bold text-[#171722]">{oneTime ? "Upfront payment" : "Choose your contribution"}</p>
         {collection && (
           <div className="mt-4">
             <EnrolFrequencyControl
@@ -401,7 +409,7 @@ export function CustomerPlanDetailPage({ id }: { id: string }) {
         <div className={cn("mt-3", !collection && "[&_label]:sr-only")}>
           <EnrolAmountControl
             plan={enrolRules}
-            label={collection ? (collection.amountBasis === "TOTAL_TARGET" ? "Total collection target" : "Amount per collection") : undefined}
+            label={oneTime ? "Upfront payment" : collection ? (collection.amountBasis === "TOTAL_TARGET" ? "Total collection target" : "Amount per collection") : undefined}
             amount={amountValue}
             onAmountChange={setAmount}
             invalid={amountValue != null && Boolean(amountError)}
@@ -435,7 +443,32 @@ export function CustomerPlanDetailPage({ id }: { id: string }) {
             )}
           </div>
         )}
-        {lockedContribution && !collection ? (
+        {oneTime && (
+          <div className="mt-4 space-y-3">
+            <Button type="button" variant="outline" className="h-11 w-full rounded-xl"
+              onClick={reviewSchedule} disabled={!hasValidAmount || hardBlocked || scheduleState.isLoading}>
+              {scheduleState.isLoading ? "Loading schedule" : "Preview bonus credit dates"}
+            </Button>
+            {scheduleBlocker && <p role="alert" className="text-sm text-red-700">{scheduleBlocker}</p>}
+            {schedulePreview?.oneTimeSchedule?.length ? (
+              <div>
+                <p className="text-sm font-semibold">{oneTimeBonusLabel(oneTime)}</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Estimated maturity {formatIsoDate(schedulePreview.maturityDate)}. Dates start from the verified payment day.
+                </p>
+                <ul className="mt-2 max-h-48 divide-y overflow-auto text-sm">
+                  {schedulePreview.oneTimeSchedule.map(({ period, dueDate }) => (
+                    <li key={period} className="flex justify-between gap-2 py-2">
+                      <span>{oneTime.timing === "MONTHLY" ? `Month ${period}` : "At maturity"}</span>
+                      <span>{formatIsoDate(dueDate)}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+          </div>
+        )}
+        {lockedContribution && !collection && !oneTime ? (
           <p className="mt-2 text-xs text-[#777280]">This plan has a fixed monthly contribution.</p>
         ) : null}
         {!hasValidAmount && amountValue != null && amountError ? (
@@ -457,7 +490,7 @@ export function CustomerPlanDetailPage({ id }: { id: string }) {
               />
             </div>
           </div>
-        ) : payNowHidden ? (
+        ) : payNowHidden && !oneTime ? (
           <p className="mt-5 rounded-xl bg-[#faf6f3] px-3 py-2.5 text-xs leading-relaxed text-[#706b77]">
             Your first contribution is scheduled from the next billing cycle.
           </p>

@@ -43,6 +43,7 @@ export function schemeTypeBadges(scheme: SchemeCard) {
   const mode = normalizeMode(scheme.displayMode);
   const isGold = scheme.valueBasis === "GOLD_WEIGHT";
   if (mode === "FIXED") {
+    if (scheme.oneTimeRules) return [{ key: "type", label: "One-time gold", tone: "gold" as const }];
     if (scheme.collectionFrequency) return [{ key: "frequency", label: `${COLLECTION_FREQUENCY_LABELS[scheme.collectionFrequency]} collection`, tone: "gold" as const, dot: false }];
     return isGold
       ? [{ key: "type", label: "Gold weight", tone: "gold" as const }]
@@ -130,7 +131,7 @@ function homeCardLeft(scheme: SchemeCard, cappedLeft?: string) {
     return m && t ? `Month ${m} of ${t}` : scheme.progressLabel;
   }
   const count = parseOfCount(scheme.progressLabel);
-  if (!count) return scheme.progressLabel;
+  if (!count || scheme.oneTimeRules || scheme.collectionFrequency) return scheme.progressLabel;
   return scheme.valueBasis === "GOLD_WEIGHT" ? `${count.done} of ${count.total} months` : `${count.done} of ${count.total} paid`;
 }
 
@@ -177,7 +178,7 @@ export function CustomerSchemesActiveCard({ scheme }: { scheme: SchemeCard }) {
   const due = dueDate(scheme);
 
   const headline = gold?.weightDisplay ?? scheme.totalPaid?.amountDisplay ?? "₹0";
-  const side = gold ? `${scheme.totalPaid?.amountDisplay ?? "₹0"} contributed` : scheme.progressLabel;
+  const side = scheme.oneTimeRules ? scheme.progressLabel : gold ? `${scheme.totalPaid?.amountDisplay ?? "₹0"} contributed` : scheme.progressLabel;
 
   let footIcon = CalendarDays;
   let foot: React.ReactNode = <>Matures <b className="font-semibold text-[var(--ck-ink)]">{ckFormatDate(scheme.maturityDate)}</b></>;
@@ -187,6 +188,8 @@ export function CustomerSchemesActiveCard({ scheme }: { scheme: SchemeCard }) {
         Next <b className="font-semibold tabular-nums text-[var(--ck-ink)]">{scheme.nextActionAmount.amountDisplay}</b> due {due}
       </>
     );
+  } else if (scheme.oneTimeRules && scheme.nextActionLabel) {
+    foot = scheme.nextActionLabel;
   } else if (mode === "FLEXIBLE_FREE_WINDOW") {
     footIcon = Sparkles;
     foot = scheme.nextActionLabel || foot;

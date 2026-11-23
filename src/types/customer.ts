@@ -129,6 +129,7 @@ export type SchemeCardRecentPayment = {
 };
 
 export type SchemeCard = {
+  oneTimeRules?: OneTimeGoldRules;
   collectionFrequency?: CollectionFrequency;
   oneTimeProgress?: OneTimeGoldProgress;
   collectionBonus?: CollectionBonus;
