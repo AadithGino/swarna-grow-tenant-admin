@@ -6,11 +6,12 @@
  * Output: static-dist/            upload the CONTENTS of this folder to the bucket root
  *         static-deploy.zip       same files, zipped (unzip before uploading; S3 does not unzip)
  *
- * Every app route is rendered by one client router, so one HTML shell (index.html)
- * serves all paths. /payment-return is a separate Next route and gets its own shell.
+ * Every app route (including /payment-return) is rendered by one client router, so one
+ * HTML shell, index.html, serves all paths. On CloudFront that is done with custom error
+ * responses (403/404 -> /index.html, 200); see deploy/README.md.
  */
 import { spawn, spawnSync } from "node:child_process";
-import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -24,12 +25,27 @@ const envFile = process.argv.find((a) => a.startsWith("--env-file="))?.slice("--
 /** Shells to render. Key = request path, value = output file. */
 const SHELLS = {
   "/": "index.html",
-  "/payment-return": "payment-return/index.html",
 };
 
 if (!existsSync(clientDir)) {
   console.error("Missing dist/client. Run the build first.");
   process.exit(1);
+}
+
+// Guard: vinext's own <Link> cannot navigate on a static host (it needs an RSC server), so
+// links built with it do nothing when clicked. App code must get src/lib/spa/next-link.tsx
+// (swarna-spa-navigation plugin in vite.config.ts). Fail the build if vinext's Link slipped in.
+{
+  const chunksDir = join(clientDir, "_next", "static", "chunks");
+  const offenders = existsSync(chunksDir)
+    ? readdirSync(chunksDir).filter(
+        (f) => f.endsWith(".js") && readFileSync(join(chunksDir, f), "utf8").includes("skipLinkOnClick"),
+      )
+    : [];
+  if (offenders.length) {
+    console.error(`vinext <Link> found in ${offenders.join(", ")}: links would not be clickable on S3.`);
+    process.exit(1);
+  }
 }
 
 rmSync(outDir, { recursive: true, force: true });
@@ -86,16 +102,8 @@ try {
 }
 if (failed) process.exit(1);
 
-// Netlify fallback (ignored by S3/CloudFront, which use deploy/cloudfront/spa-rewrite.js).
-writeFileSync(
-  join(outDir, "_redirects"),
-  [
-    "/payment-return    /payment-return/index.html    200",
-    "/payment-return/*  /payment-return/index.html    200",
-    "/*                 /index.html                   200",
-    "",
-  ].join("\n"),
-);
+// Netlify equivalent of the CloudFront error responses (ignored by S3/CloudFront).
+writeFileSync(join(outDir, "_redirects"), "/*    /index.html    200\n");
 writeFileSync(
   join(outDir, "_headers"),
   [

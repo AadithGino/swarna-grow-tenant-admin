@@ -487,6 +487,15 @@ const DemoEntryPage = dynamic(
   options,
 );
 // Public marketing page: no admin skeleton while it loads.
+/** PhonePe return bridge. Also reachable here so one HTML shell serves every URL on static hosts. */
+const PaymentReturnBridgePage = dynamic(
+  () =>
+    import("@/src/features/customer/flutter-payment-return-bridge").then(
+      (m) => m.FlutterPaymentReturnBridgePage,
+    ),
+  { loading: () => null },
+);
+
 const LandingPage = dynamic(
   () => import("@/src/features/landing/landing-page").then((m) => m.LandingPage),
   { loading: () => null },
@@ -540,6 +549,7 @@ export function PortalRouter({ slug }: { slug: string[] }) {
   if (slug[0] === "platform") return <PlatformRouter slug={slug} />;
   if (slug[0] === "demo" && slug[1]) return <DemoEntryPage publicId={slug[1]} />;
   if (slug[0] === "landing") return <LandingPage />;
+  if (slug[0] === "payment-return") return <PaymentReturnBridgePage />;
   if (slug[0] === "pay" && slug[1])
     return <CustomerLegacyPayRedirect linkToken={slug[1]} />;
   const [section = "dashboard", id, action] = slug;

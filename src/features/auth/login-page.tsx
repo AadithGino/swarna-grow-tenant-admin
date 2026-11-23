@@ -133,8 +133,7 @@ export function LoginPage() {
   useEffect(() => {
     if (!mounted || !hydrated) return;
     if (session && realmHasStoredSession("tenant")) {
-      if (env.portalHardNav) window.location.replace(postLoginPath);
-      else router.replace(postLoginPath);
+      router.replace(postLoginPath);
     }
   }, [mounted, hydrated, session, router, postLoginPath]);
 

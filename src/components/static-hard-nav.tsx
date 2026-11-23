@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect } from "react";
-import { env } from "@/src/config/env";
 import { resolveSpaUrl, spaNavigate } from "@/src/lib/spa/spa-navigate";
 
 function findAnchor(event: MouseEvent): HTMLAnchorElement | null {
@@ -22,10 +21,37 @@ function findAnchor(event: MouseEvent): HTMLAnchorElement | null {
  * Plain `<a href="/...">` links (not next/link) would load a whole new document.
  * This keeps same-origin portal links in-page. next/link already handles its own clicks
  * (it calls preventDefault), so those are skipped here.
- *
- * Escape hatch: NEXT_PUBLIC_PORTAL_HARD_NAV=true turns every path change back into a
- * full page load (old Netlify behaviour). Add `data-hard-nav` to a link to force a load.
+ * Add `data-hard-nav` to a link to force a real page load for that link.
  */
+const STALE_RELOAD_KEY = "sg:stale-chunk-reload";
+const STALE_IMPORT = /dynamically imported module|Importing a module script failed|error loading dynamically imported module|Unable to preload CSS/i;
+
+/**
+ * After a new deploy, a tab still on the old build may ask for a JS file that is gone. With
+ * CloudFront error responses that request gets index.html instead, and the import fails.
+ * Reload once to pick up the new build (at most once a minute, so it can never loop).
+ */
+function reloadForNewBuild(event?: Event) {
+  try {
+    const last = Number(sessionStorage.getItem(STALE_RELOAD_KEY) || 0);
+    if (Date.now() - last < 60_000) return;
+    sessionStorage.setItem(STALE_RELOAD_KEY, String(Date.now()));
+  } catch {
+    /* storage blocked: still reload once */
+  }
+  event?.preventDefault();
+  window.location.reload();
+}
+
+function onStaleChunk(event: Event) {
+  reloadForNewBuild(event);
+}
+
+function onRejectedImport(event: PromiseRejectionEvent) {
+  const message = String((event.reason as { message?: string } | undefined)?.message ?? event.reason ?? "");
+  if (STALE_IMPORT.test(message)) reloadForNewBuild();
+}
+
 export function StaticHardNav() {
   useEffect(() => {
     const onClick = (event: MouseEvent) => {
@@ -36,18 +62,17 @@ export function StaticHardNav() {
       const url = resolveSpaUrl(href);
       if (!url) return;
       event.preventDefault();
-      if (env.portalHardNav) {
-        if (url.pathname.replace(/\/+$/, "") !== window.location.pathname.replace(/\/+$/, "")) {
-          const dest = url.href;
-          window.location.assign(dest);
-        } else spaNavigate(href);
-        return;
-      }
       spaNavigate(href);
     };
 
     document.addEventListener("click", onClick);
-    return () => document.removeEventListener("click", onClick);
+    window.addEventListener("vite:preloadError", onStaleChunk);
+    window.addEventListener("unhandledrejection", onRejectedImport);
+    return () => {
+      document.removeEventListener("click", onClick);
+      window.removeEventListener("vite:preloadError", onStaleChunk);
+      window.removeEventListener("unhandledrejection", onRejectedImport);
+    };
   }, []);
 
   return null;

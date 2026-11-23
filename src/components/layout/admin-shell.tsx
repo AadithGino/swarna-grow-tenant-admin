@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useBrowserPathname } from "@/src/hooks/use-browser-pathname";
-import { env } from "@/src/config/env";
 import { recordPortalNavigation } from "@/src/lib/portal-nav";
 import { memo, useCallback, useEffect, useState } from "react";
 import { useClientMounted } from "@/src/hooks/use-client-mounted";
@@ -297,11 +296,7 @@ function NavLink({
       onClick={(event) => {
         event.preventDefault();
         onNavigate?.();
-        if (env.portalHardNav) {
-          window.location.assign(item.href);
-          return;
-        }
-        // vinext Link soft-nav is unreliable on static/Nitro builds; router.push is the fallback.
+        // In-page navigation (src/lib/spa): no document reload on any host.
         router.push(item.href);
       }}
       data-tour={`nav:${item.href}`}
@@ -854,10 +849,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
     if (!hasTokens || !session) {
       if (pathname === "/login") return;
       const target = `/login?next=${encodeURIComponent(pathname || "/")}`;
-      if (env.portalHardNav) {
-        if (window.location.pathname.replace(/\/+$/, "") === "/login") return;
-        window.location.replace(target);
-      } else router.replace(target);
+      router.replace(target);
     }
   }, [mounted, hydrated, session, pathname, router]);
 

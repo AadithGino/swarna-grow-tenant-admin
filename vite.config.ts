@@ -58,7 +58,9 @@ const spaNavigation = {
   name: "swarna-spa-navigation",
   enforce: "pre" as const,
   resolveId(this: { environment?: { name?: string } }, source: string, importer?: string) {
-    const shim = SPA_NAV_SHIMS[source];
+    // vinext aliases next/link -> <vinext>/dist/shims/link before plugins run, so match both forms.
+    const aliased = /[\\/]vinext[\\/]dist[\\/]shims[\\/](link|navigation)(?:\.js)?$/.exec(source);
+    const shim = SPA_NAV_SHIMS[source] ?? (aliased ? SPA_NAV_SHIMS[`next/${aliased[1]}`] : undefined);
     if (!shim || !importer) return null;
     if (this.environment?.name === "rsc") return null;
     const from = importer.replace(/\\/g, "/").split("?")[0];
