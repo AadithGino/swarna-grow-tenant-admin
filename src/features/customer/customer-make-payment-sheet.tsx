@@ -33,6 +33,7 @@ import { money } from "@/src/lib/format";
 import type { CustomerSchemeDetail, PayableRangeTargetCycleOption } from "@/src/types/customer";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { toastApiError } from "@/src/lib/api-error";
 
 function formatCycleLabel(cycle: string | undefined, options?: PayableRangeTargetCycleOption[]) {
   if (!cycle) return "This cycle";
@@ -207,8 +208,11 @@ export function CustomerMakePaymentSheet({
           initiatePublicLink({ linkToken, redirectUrl: statusRedirectFull }).unwrap(),
         navigate: (path) => router.push(path),
       });
-    } catch {
-      toast.error("PhonePe could not be started. Your account was not charged.");
+    } catch (err) {
+      toastApiError(
+        err,
+        "Could not start payment. If the amount was blocked, refresh the scheme page and try again — nothing was charged.",
+      );
     }
   };
 

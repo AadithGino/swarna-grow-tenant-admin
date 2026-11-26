@@ -152,7 +152,14 @@ export function DemoEntryPage({ publicId }: { publicId: string }) {
           }),
         );
         const slug = result.tenant.tenantCode ? tenantCodeToSlug(result.tenant.tenantCode) : null;
-        router.replace(customerPath(slug));
+        const entrySchemeId = result.entrySchemeId?.trim();
+        const entryPlanId = result.entryPlanId?.trim();
+        const landing = entrySchemeId
+          ? customerPath(slug, "schemes", entrySchemeId)
+          : entryPlanId
+            ? customerPath(slug, "plans", entryPlanId)
+            : customerPath(slug);
+        router.replace(landing);
       } catch (err) {
         const message =
           (err as { data?: { error?: { message?: string } } })?.data?.error?.message

@@ -10,6 +10,11 @@ import { Check, Download, FileText, Gem, Gift, BadgePercent, BookOpen, Info, Loc
 import { cn } from "@/lib/utils";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { FormFieldError } from "@/src/components/common/form-field-error";
+import { payableQuoteBounds } from "@/src/lib/customer-payable-display";
+import { livePayableAmountError, paymentAmountReady } from "@/src/lib/payment-form-validation";
+import { money } from "@/src/lib/format";
 import { CustomerPayableSummary } from "@/src/components/customer/customer-payable-summary";
 import { formatCustomerDate } from "@/src/components/customer/customer-ui";
 import { CkBadge, CkBar, CkCard, CkIcon, CkNote } from "@/src/components/customer/customer-kit";
@@ -310,6 +315,16 @@ function FreeWindowMonthCard({
   const range = scheme.payableRange;
   const quick = range?.quickAmounts ?? [];
   const [pick, setPick] = useState<number | null>(range?.suggested?.amountPaise ?? quick[0]?.amountPaise ?? null);
+  const [customRupee, setCustomRupee] = useState("");
+  const [customTouched, setCustomTouched] = useState(false);
+  const quoteBounds = payableQuoteBounds(range);
+  const useCustom = customRupee.trim() !== "";
+  const numericCustom = useCustom ? Number(customRupee) : "";
+  const customError =
+    useCustom && (customTouched || customRupee !== "")
+      ? livePayableAmountError(numericCustom, quoteBounds)
+      : undefined;
+  const customReady = useCustom && paymentAmountReady(numericCustom, quoteBounds);
   const max = range?.remainingThisCycle ?? range?.maxPayable;
   const paidPaise = range?.cycleCap?.amountPaise ? Math.max(0, range.cycleCap.amountPaise - (range.remainingThisCycle?.amountPaise ?? 0)) : 0;
   const paidThisMonth = {
@@ -317,6 +332,12 @@ function FreeWindowMonthCard({
   };
   const pct = max && max.amountPaise + paidPaise > 0 ? (paidPaise / (paidPaise + max.amountPaise)) * 100 : 0;
   const pickDisplay = quick.find((q) => q.amountPaise === pick)?.amountDisplay;
+  const payPaise = customReady
+    ? Math.round(Number(customRupee) * 100)
+    : pick ?? undefined;
+  const payLabel = customReady
+    ? money(Number(customRupee))
+    : pickDisplay;
 
   return (
     <CkCard className="mt-3 p-4">
@@ -332,18 +353,47 @@ function FreeWindowMonthCard({
       {quick.length ? (
         <>
           <p className="mb-2 mt-4 text-[0.68rem] font-semibold uppercase tracking-[0.06em] text-[var(--ck-muted)]">Quick amounts</p>
-          <QuickAmounts amounts={quick} selected={pick} onPick={setPick} />
+          <QuickAmounts
+            amounts={quick}
+            selected={useCustom ? null : pick}
+            onPick={(paise) => {
+              setCustomRupee("");
+              setCustomTouched(false);
+              setPick(paise);
+            }}
+          />
         </>
+      ) : null}
+      {quoteBounds?.eligible ? (
+        <div className="mt-3">
+          <p className="mb-2 text-[0.68rem] font-semibold uppercase tracking-[0.06em] text-[var(--ck-muted)]">Or enter amount</p>
+          <Input
+            inputMode="decimal"
+            value={customRupee}
+            onChange={(e) => {
+              setCustomTouched(true);
+              setCustomRupee(e.target.value.replace(/[^0-9.]/g, ""));
+            }}
+            onBlur={() => setCustomTouched(true)}
+            placeholder={
+              range
+                ? `${range.minPayable.amountDisplay} – ${range.maxPayable.amountDisplay}`
+                : "Enter amount"
+            }
+            className={cn("h-11 rounded-xl border-[var(--ck-line)] bg-white text-base font-semibold tabular-nums", customError && "border-red-300")}
+          />
+          <FormFieldError message={customError} />
+        </div>
       ) : null}
       <button
         type="button"
-        disabled={!payEnabled}
-        onClick={() => onPay(pick ?? undefined)}
+        disabled={!payEnabled || (useCustom ? !customReady : !pick)}
+        onClick={() => onPay(payPaise)}
         className="mt-3.5 flex h-12 w-full items-center justify-center gap-2 rounded-[14px] text-[0.92rem] font-semibold text-white disabled:opacity-50"
         style={{ background: PRIMARY }}
       >
         <PeMark light />
-        {pickDisplay ? `Contribute ${pickDisplay} with PhonePe` : "Contribute with PhonePe"}
+        {payLabel ? `Contribute ${payLabel} with PhonePe` : "Contribute with PhonePe"}
       </button>
     </CkCard>
   );

@@ -64,7 +64,17 @@ import { EcommerceCatalogImage } from "@/src/features/ecommerce/ecommerce-catalo
 import { buildShopOrderTimeline } from "@/src/features/customer/customer-shop-order-progress";
 import { formatShopInr, productMeta, productOfferLabel, productPricePaise, productStock } from "@/src/features/customer/customer-shop-ui";
 import { CkBadge, CkCard, CkSection, CkTracker, type CkStepState, type CkTone } from "@/src/components/customer/customer-kit";
-import type { CustomerHome, CustomerProfile, SchemeCard } from "@/src/types/customer";
+import type { CustomerDisplayMode, CustomerHome, CustomerProfile, SchemeCard } from "@/src/types/customer";
+
+function normalizeHomeSchemeMode(mode: CustomerDisplayMode): CustomerDisplayMode {
+  return mode === "FLEXIBLE_CAPPED_WINDOW" ? "FLEXIBLE_LOCK_WINDOW" : mode;
+}
+
+/** Flexible free window: can pay online but there is no fixed “due” instalment amount for the home hero. */
+function isOptionalFlexContribute(scheme?: SchemeCard | null) {
+  if (!scheme?.canPay) return false;
+  return normalizeHomeSchemeMode(scheme.displayMode) === "FLEXIBLE_FREE_WINDOW";
+}
 
 function savingsCardIdentity(home: CustomerHome, profile?: CustomerProfile | null) {
   const passbook = home.customer.passbookNumber?.trim() || profile?.passbookNumber?.trim();
@@ -355,6 +365,7 @@ export function CustomerHomePage() {
   const mask = (value: string) => (amountsVisible ? value : "••••••");
 
   const dueAmount = actionScheme?.nextActionAmount;
+  const flexContribute = isOptionalFlexContribute(actionScheme) && customerAppPaymentsEnabled;
   const canBuyMetal = metalsOn && metalsCap?.canPlaceNewBuy === true;
   const due = dueParts(actionScheme?.nextActionLabel);
 
@@ -516,6 +527,15 @@ export function CustomerHomePage() {
               <IndianRupee className="size-4" />
               Pay {dueAmount.amountDisplay} due
             </Link>
+          ) : flexContribute ? (
+            <Link
+              href={`${payHref}?pay=1`}
+              className="flex h-11 items-center justify-center gap-1.5 rounded-xl text-[0.85rem] font-semibold"
+              style={{ background: "var(--customer-accent, #dcc08a)", color: "#2a0a10" }}
+            >
+              <IndianRupee className="size-4" />
+              Contribute
+            </Link>
           ) : (
             <Link href={customerPath(tenantSlug, "schemes")} className="flex h-11 items-center justify-center gap-1.5 rounded-xl text-[0.85rem] font-semibold" style={{ background: "var(--customer-accent, #dcc08a)", color: "#2a0a10" }}>
               <Layers3 className="size-4" />
@@ -613,6 +633,32 @@ export function CustomerHomePage() {
               />
             ))}
           </div>
+        </CkSection>
+      ) : null}
+
+      {flexContribute && actionScheme ? (
+        <CkSection title="Contribute">
+          <CkCard className="flex items-center gap-3 p-3.5">
+            <span
+              className="grid size-12 shrink-0 place-items-center rounded-xl text-lg"
+              style={{ background: "rgba(var(--customer-primary-rgb, 94, 22, 34), 0.08)", color: "var(--customer-primary, #5e1622)" }}
+              aria-hidden
+            >
+              ₹
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-xs text-[var(--ck-muted)]">{actionScheme.nextActionLabel ?? "Optional savings this month"}</p>
+              <p className="truncate text-[0.95rem] font-semibold text-[var(--ck-ink)]">{actionScheme.planName}</p>
+              <p className="truncate text-xs text-[var(--ck-muted)]">{actionScheme.progressLabel}</p>
+            </div>
+            <Link
+              href={`${customerPath(tenantSlug, "schemes", actionScheme.id)}?pay=1`}
+              className="shrink-0 rounded-xl px-4 py-2.5 text-[0.85rem] font-semibold text-white"
+              style={{ background: "var(--customer-primary, #5e1622)" }}
+            >
+              Pay
+            </Link>
+          </CkCard>
         </CkSection>
       ) : null}
 

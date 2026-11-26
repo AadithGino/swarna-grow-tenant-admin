@@ -31,6 +31,9 @@ export type DemoSessionExchangeResult = {
   sessionId?: string;
   tenant: DemoPublicBranding & { id: string };
   customer: { id: string; name: string; customerNumber: string };
+  /** Post-login route: open showcase flex scheme when set. */
+  entrySchemeId?: string | null;
+  entryPlanId?: string | null;
 };
 
 type DemoPublicArgs = FetchArgs & { mockKey: string; mockParams?: Record<string, unknown> };

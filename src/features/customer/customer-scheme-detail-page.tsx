@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { LoaderCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -37,6 +37,7 @@ import { toastApiError } from "@/src/lib/api-error";
 import { isGoldWeightScheme } from "@/src/lib/customer-gold-ui";
 export function CustomerSchemeDetailPage({ id }: { id: string }) {
   const { tenantSlug } = useCustomerTenant();
+  const searchParams = useSearchParams();
   const { customerAppPaymentsEnabled } = useCustomerPortalCapabilities();
   const { data: scheme, isLoading, isError, refetch } = useGetCustomerSchemeQuery(id);
   const passbook = useGetCustomerPassbookQuery(id);
@@ -59,6 +60,17 @@ export function CustomerSchemeDetailPage({ id }: { id: string }) {
     { schemeId: id, mode: effectiveRedemptionMode },
     { skip: !redeemOpen || !effectiveRedemptionMode },
   );
+
+  const payEnabledFromScheme =
+    scheme &&
+    customerAppPaymentsEnabled &&
+  (scheme.payButton?.enabled ?? scheme.canPay);
+
+  useEffect(() => {
+    if (searchParams.get("pay") !== "1" || !scheme) return;
+    if (!payEnabledFromScheme) return;
+    setPayOpen(true);
+  }, [searchParams, scheme, payEnabledFromScheme]);
 
   if (isLoading || !scheme) return <PageSkeleton cards={3} />;
   if (isError) return <QueryError onRetry={refetch} />;
