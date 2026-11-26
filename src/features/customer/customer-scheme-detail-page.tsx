@@ -146,6 +146,9 @@ export function CustomerSchemeDetailPage({ id }: { id: string }) {
         planRuleSections={planRuleSections}
         payments={payments}
         passbookRows={passbook.data?.rows}
+        passbookSpendRows={passbook.data?.spendRows ?? scheme.schemeSpend}
+        passbookSpendAttemptRows={passbook.data?.spendAttempts ?? scheme.schemeSpendAttempts}
+        passbookOnlineEncumbrance={passbook.data?.onlineEncumbrance ?? scheme.onlineEncumbrance}
         redemptionEligible={redemption.eligible}
         redemptionBlocker={redemption.blocker}
         redemptionModes={redemptionModeOptions.map((o) => o.label)}
@@ -228,6 +231,14 @@ export function CustomerSchemeDetailPage({ id }: { id: string }) {
               ) : null}
               {preview.data.valuationNote ? <p className="mt-3 text-xs text-muted-foreground">{preview.data.valuationNote}</p> : null}
               {preview.data.warningText ? <p className="mt-3 text-xs font-semibold text-amber-800">{preview.data.warningText}</p> : null}
+              {preview.data.ecommerceSchemeNotes?.length ? (
+                <div className="mt-3 space-y-1 text-xs text-muted-foreground">
+                  <p className="font-semibold text-[#730321]">Online shop</p>
+                  {preview.data.ecommerceSchemeNotes.map((note) => (
+                    <p key={note}>{note}</p>
+                  ))}
+                </div>
+              ) : null}
               {!preview.data.eligible ? (
                 <div className="mt-3 space-y-1 text-xs font-semibold text-red-700">
                   {preview.data.blockers.map((blocker) => <p key={blocker.code}>{blocker.message}</p>)}

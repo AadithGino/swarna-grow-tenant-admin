@@ -1600,7 +1600,16 @@ export const customerApi = createApi({
       },
     }),
     getShopSchemePurchasePreview: builder.query<
-      { applied: number; appliedPaise: number; makingChargeWaivedPaise: number; topUpPaise: number; remaining: number },
+      {
+        applied: number;
+        appliedPaise: number;
+        makingChargeWaivedPaise: number;
+        topUpPaise: number;
+        remaining: number;
+        availableBalance?: number;
+        balance?: number;
+        basis?: string;
+      },
       { quoteId: string; schemeId: string; basis: "CASH_VALUE" | "GOLD_WEIGHT" }
     >({
       query: ({ quoteId, schemeId, basis }) => ({
@@ -1609,7 +1618,16 @@ export const customerApi = createApi({
       }),
       // The base query already strips the { success, data } envelope; tolerate either shape.
       transformResponse: (raw: unknown) =>
-        unwrapShopBookingData<{ applied: number; appliedPaise: number; makingChargeWaivedPaise: number; topUpPaise: number; remaining: number }>(raw),
+        unwrapShopBookingData<{
+          applied: number;
+          appliedPaise: number;
+          makingChargeWaivedPaise: number;
+          topUpPaise: number;
+          remaining: number;
+          availableBalance?: number;
+          balance?: number;
+          basis?: string;
+        }>(raw),
     }),
     cancelShopQuote: builder.mutation<Record<string, any>, { quoteId: string; idempotencyKey: string }>({
       query: ({ quoteId, idempotencyKey }) => ({

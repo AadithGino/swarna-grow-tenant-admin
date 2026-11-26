@@ -7,6 +7,7 @@ import { QueryError } from "@/src/components/common/query-state";
 import { emptyPageMeta } from "@/src/lib/cursor-pagination";
 import { useCursorPagination } from "@/src/hooks/use-cursor-pagination";
 import { money } from "@/src/lib/format";
+import { formatSchemeRemaining } from "@/src/lib/scheme-purchase-display";
 import { useGetCustomerEcommerceOrdersQuery } from "@/src/store/api/admin-api";
 
 type Row = {
@@ -17,6 +18,10 @@ type Row = {
   totalPaise: number;
   status: string;
   attentionLabel?: string | null;
+  schemePurchaseLabel?: string | null;
+  schemeAppliedPaise?: number | null;
+  schemePurchaseBasis?: string | null;
+  schemeRemainingAfterOrder?: number | null;
 };
 
 export function CustomerEcommerceOrdersTab({ customerId }: { customerId: string }) {
@@ -103,7 +108,22 @@ export function CustomerEcommerceOrdersTab({ customerId }: { customerId: string 
           {
             key: "total",
             header: "Total",
-            render: (r) => money(r.totalPaise),
+            render: (r) => (
+              <div>
+                <p className="font-medium">{money(r.totalPaise)}</p>
+                {r.schemePurchaseLabel ? (
+                  <p className="text-xs text-muted-foreground">
+                    {r.schemePurchaseLabel}
+                    {r.schemeAppliedPaise != null
+                      ? ` · from scheme ${money(r.schemeAppliedPaise / 100)}`
+                      : ""}
+                    {r.schemeRemainingAfterOrder != null && r.schemeRemainingAfterOrder > 0
+                      ? ` · unused ${formatSchemeRemaining(r.schemePurchaseBasis ?? undefined, r.schemeRemainingAfterOrder)}`
+                      : ""}
+                  </p>
+                ) : null}
+              </div>
+            ),
           },
           {
             key: "status",

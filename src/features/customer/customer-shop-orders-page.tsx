@@ -17,6 +17,7 @@ import {
   ShopOrderProgressStepper,
 } from "@/src/features/customer/customer-shop-order-progress";
 import { formatShopInr, SHOP_HAIRLINE, SHOP_INK, SHOP_MUTED, ShopProductArt } from "@/src/features/customer/customer-shop-ui";
+import { formatSchemeRemaining, orderPayableLabel, orderSchemeBadge, type SchemePurchasePresentation } from "@/src/lib/scheme-purchase-display";
 
 const VIEWS = [
   { id: "all", label: "All" },
@@ -110,6 +111,9 @@ export function CustomerShopOrdersPage() {
               const lines = (row.lines as Record<string, unknown>[]) ?? [];
               const first = lines[0];
               const more = Math.max(0, lines.length - 1);
+              const purchase = (row.financialSnapshot as { schemePurchase?: Record<string, unknown> } | undefined)?.schemePurchase;
+              const presentation = row.schemePurchasePresentation as SchemePurchasePresentation | undefined;
+              const schemeBadge = orderSchemeBadge(purchase as Parameters<typeof orderSchemeBadge>[0], presentation);
               return (
                 <Link
                   key={id}
@@ -137,11 +141,21 @@ export function CustomerShopOrdersPage() {
                             {more > 0 ? <span className={cn("font-sans text-sm", SHOP_MUTED)}> and {more} more</span> : null}
                           </p>
                         </div>
-                        <p className={cn("shrink-0 font-semibold tabular-nums", SHOP_INK)}>{formatShopInr(Number(row.totalPaise ?? 0))}</p>
+                        <p className={cn("shrink-0 font-semibold tabular-nums", SHOP_INK)}>
+                          {orderPayableLabel(purchase as Parameters<typeof orderPayableLabel>[0], Number(row.totalPaise ?? 0))}
+                        </p>
                       </div>
                       <p className={cn("mt-1 text-xs", SHOP_MUTED)}>
-                        {String(row.orderNumber ?? id)} · {formatShopOrderDate(row.createdAt)} · {row.paymentMethod === "COD" ? "Cash on delivery" : "Online payment"}
+                        {String(row.orderNumber ?? id)} · {formatShopOrderDate(row.createdAt)} · {row.paymentMethod === "COD" ? "Cash on delivery" : schemeBadge ?? "Online payment"}
                       </p>
+                      {purchase && (purchase.appliedPaise as number) > 0 ? (
+                        <p className={cn("mt-1 text-[0.7rem]", SHOP_MUTED)}>
+                          Scheme {formatShopInr(Number(purchase.appliedPaise ?? 0), 2)}
+                          {(purchase.remaining as number) > 0
+                            ? ` · ${formatSchemeRemaining(String(purchase.basis ?? ""), Number(purchase.remaining))} unused`
+                            : ""}
+                        </p>
+                      ) : null}
                       <div className="mt-3 flex items-center gap-3">
                         <div className="flex-1">
                           <ShopOrderProgressStepper timeline={timeline} compact />

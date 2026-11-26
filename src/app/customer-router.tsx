@@ -40,6 +40,10 @@ const CustomerShopOrderPage = dynamic(() => import("@/src/features/customer/cust
 const CustomerShopBookingPage = dynamic(() => import("@/src/features/customer/customer-shop-booking-page").then((m) => m.CustomerShopBookingPage), options);
 const CustomerShopBookingsPage = dynamic(() => import("@/src/features/customer/customer-shop-bookings-page").then((m) => m.CustomerShopBookingsPage), options);
 const CustomerShopOrdersPage = dynamic(() => import("@/src/features/customer/customer-shop-orders-page").then((m) => m.CustomerShopOrdersPage), options);
+const CustomerShopActivityPage = dynamic(
+  () => import("@/src/features/customer/customer-shop-activity-page").then((m) => m.CustomerShopActivityPage),
+  options,
+);
 const CustomerDigitalMetalsPage = dynamic(() => import("@/src/features/customer/customer-digital-metals-page").then((m) => m.CustomerDigitalMetalsPage), options);
 const CustomerDigitalMetalsBuyPage = dynamic(() => import("@/src/features/customer/customer-digital-metals-buy-pages").then((m) => m.CustomerDigitalMetalsBuyPage), options);
 const CustomerDigitalMetalsBuyReviewPage = dynamic(() => import("@/src/features/customer/customer-digital-metals-buy-pages").then((m) => m.CustomerDigitalMetalsBuyReviewPage), options);
@@ -114,6 +118,7 @@ function CustomerRoutes({ slug }: { slug: string[] }) {
   if (section === "shop") {
     if (id === "cart") return <CustomerShopCartPage />;
     if (id === "orders") return <CustomerShopOrdersPage />;
+    if (id === "activity") return <CustomerShopActivityPage />;
     if (id === "bookings") return <CustomerShopBookingsPage />;
     if (id === "booking" && extra) return <CustomerShopBookingPage bookingId={extra} />;
     if (id === "quote" && extra) return <CustomerShopQuotePage quoteId={extra} />;

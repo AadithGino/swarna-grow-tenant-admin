@@ -435,11 +435,18 @@ export function CustomerShopOrderPage({ orderId }: { orderId: string }) {
                 <dd className="tabular-nums">{Number(o.fulfilmentChargePaise ?? 0) ? formatInr(Number(o.fulfilmentChargePaise)) : "Free"}</dd>
               </div>
               {purchase && <>
-                <div className="flex justify-between"><dt>Making charges waived</dt><dd>{formatInr(Number(purchase.makingChargeWaivedPaise))}</dd></div>
-                <div className="flex justify-between"><dt>Order total</dt><dd>{formatInr(Number(purchase.grossPaise))}</dd></div>
-                <div className="flex justify-between"><dt>Scheme contribution</dt><dd>{formatInr(Number(purchase.appliedPaise))}</dd></div>
-                <div className="flex justify-between"><dt>Scheme balance after this order</dt><dd>{purchase.basis === "GOLD_WEIGHT"
-                  ? `${(Number(purchase.remaining) / 1000).toFixed(3)} g` : formatInr(Number(purchase.remaining))}</dd></div>
+                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--customer-primary,#730321)]">Paid with matured scheme</p>
+                <div className="flex justify-between"><dt>Merchandise total</dt><dd>{formatInr(Number(purchase.grossPaise))}</dd></div>
+                {Number(purchase.makingChargeWaivedPaise) > 0 ? (
+                  <div className="flex justify-between"><dt>Making charges waived</dt><dd>{formatInr(Number(purchase.makingChargeWaivedPaise))}</dd></div>
+                ) : null}
+                <div className="flex justify-between text-emerald-800"><dt>From your scheme</dt><dd>− {formatInr(Number(purchase.appliedPaise))}</dd></div>
+                {Number(purchase.remaining) > 0 ? (
+                  <div className="flex justify-between"><dt>Unused scheme balance</dt><dd>{purchase.basis === "GOLD_WEIGHT"
+                    ? `${(Number(purchase.remaining) / 1000).toFixed(3)} g` : formatInr(Number(purchase.remaining))}</dd></div>
+                ) : (
+                  <p className="text-xs text-muted-foreground">Full scheme balance for this basis was applied to this order.</p>
+                )}
                 {purchase.approvalStatus === "PENDING" && o.status === "PENDING_PAYMENT" && <p>Awaiting jeweller approval.</p>}
               </>}
               <div className="flex justify-between border-t border-[#ecdfd8] pt-2 text-base font-semibold text-[#221a1d]">

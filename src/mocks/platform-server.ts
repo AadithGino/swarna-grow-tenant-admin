@@ -81,6 +81,33 @@ export async function platformMockRequest({ mockKey, params = {}, body = {} }: P
         digitalMetalsPlatformPauseReason: body.pause ? String(body.reason ?? "Paused by platform") : "",
       };
     }
+    case "playStoreReviewOtp": {
+      if (!tenant) throw new Error("Tenant not found");
+      const enabled = Boolean(body.enabled);
+      tenant.settings = { ...(tenant.settings ?? {}), playStoreReviewOtpEnabled: enabled };
+      return {
+        playStoreReviewOtpEnabled: enabled,
+        reviewOtpCode: enabled ? "123456" : null,
+        version: 1,
+      };
+    }
+    case "productModules": {
+      if (!tenant) throw new Error("Tenant not found");
+      const settings = { ...(tenant.settings ?? {}) };
+      if (body.enableAll === true) {
+        settings.ecommerceEnabled = true;
+        settings.ecommercePaymentsRolloutEnabled = true;
+        settings.digitalMetalsEnabled = true;
+      } else {
+        if (body.ecommerce !== undefined) settings.ecommerceEnabled = body.ecommerce === true;
+        if (body.ecommercePayments !== undefined) {
+          settings.ecommercePaymentsRolloutEnabled = body.ecommercePayments === true;
+        }
+        if (body.digitalMetals !== undefined) settings.digitalMetalsEnabled = body.digitalMetals === true;
+      }
+      tenant.settings = settings;
+      return { tenantId: params.tenantId, version: ++tenant.audit.version };
+    }
     case "saveGateway": { if (!tenant) throw new Error("Tenant not found"); tenant.integrations.paymentGateway = { configured: true, clientCredentialsConfigured: Boolean(body.clientId && body.clientSecret), provider: "PHONEPE", clientIdMasked: body.clientId ? `${String(body.clientId).slice(0, 4)}••••SDK` : null, environment: body.environment || "SANDBOX", verificationStatus: "PENDING", lastVerifiedAt: null }; tenant.provisioning.paymentGatewayConfigured = true; tenant.provisioning.readyToGoLive = true; return tenant.integrations.paymentGateway; }
     case "verifyGateway": { if (!tenant) throw new Error("Tenant not found"); tenant.integrations.paymentGateway.verificationStatus = "VERIFIED"; tenant.provisioning.paymentGatewayConfigured = true; return { verified: true, verificationStatus: "VERIFIED", verifiedAt: new Date().toISOString() }; }
     case "saveMessageCentral": {
@@ -272,6 +299,12 @@ export async function platformMockRequest({ mockKey, params = {}, body = {} }: P
       const uploadId = String(params.uploadId ?? `upl_demo_${Date.now()}`);
       return { uploadId, status: "UPLOADED", viewUrl: `/uploads/${uploadId}` };
     }
+    case "landingDemoRequests": return { rows: [], meta: { total: 0, limit: Number(params.limit) || 20, offset: Number(params.offset) || 0 } };
+    case "landingDemoRequest":
+    case "patchLandingDemoRequest":
+    case "landingDemoShareLink":
+    case "retryLandingDemoProvision":
+      throw new Error("Landing demo requests are not available in mock mode.");
     default: throw new Error(`Unknown platform mock request: ${mockKey}`);
   }
 }

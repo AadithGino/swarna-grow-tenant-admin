@@ -23,6 +23,7 @@ import type {
   WeightRef,
 } from "@/src/types/customer";
 import { useCustomerTenant } from "@/src/components/customer/customer-tenant-context";
+import { isDarkBrandColor } from "@/src/lib/customer-tenant-branding";
 import { customerPath } from "@/src/lib/customer-tenant";
 import { useGetPublicCustomerUploadDownloadQuery } from "@/src/store/api/customer-api";
 
@@ -46,12 +47,25 @@ export function CustomerBrand({ compact = false, subtitle }: { compact?: boolean
   const title = tenant?.appDisplayName ?? tenant?.displayName ?? "Kairali Gold Savings";
   const initial = title.slice(0, 1).toUpperCase();
   const showInitial = !logoSrc && (!logoUploadId || logoFailed);
+  const darkBrand = isDarkBrandColor(tenant?.primaryColor);
 
   return (
     <span className="inline-flex min-w-0 items-center gap-3">
       {logoSrc ? (
-        <span className="relative size-10 shrink-0 overflow-hidden rounded-[10px] bg-white ring-1 ring-black/5">
-          <Image src={logoSrc} alt="" fill sizes="40px" unoptimized className="object-contain p-1" />
+        <span
+          className={cn(
+            "relative flex size-11 shrink-0 items-center justify-center overflow-hidden rounded-[11px] ring-1",
+            darkBrand ? "bg-[var(--customer-primary,#0d0d0d)] ring-black/10" : "bg-white ring-black/8",
+          )}
+        >
+          <Image
+            src={logoSrc}
+            alt=""
+            width={128}
+            height={128}
+            unoptimized
+            className="h-auto max-h-10 w-auto max-w-10 object-contain"
+          />
         </span>
       ) : showInitial ? (
         <span

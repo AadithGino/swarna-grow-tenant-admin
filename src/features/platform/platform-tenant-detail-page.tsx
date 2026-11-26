@@ -58,6 +58,8 @@ import {
 } from "@/src/lib/platform-message-central-integration-form-validation";
 import type { PlatformTenantDetail } from "@/src/types/platform";
 import { PlatformTenantDigitalMetalsSection } from "@/src/features/platform/platform-tenant-digital-metals-section";
+import { PlatformTenantPlayStoreReviewOtpCard } from "@/src/features/platform/platform-tenant-playstore-review-otp-card";
+import { PlatformTenantProductModulesCard } from "@/src/features/platform/platform-tenant-product-modules-card";
 
 const label = fieldLabel;
 
@@ -417,9 +419,13 @@ function Info({ label: text, value, wide }: { label: string; value: string; wide
 
 function TenantSetup({ tenant }: { tenant: PlatformTenantDetail }) {
   return (
-    <div className="grid gap-5 xl:grid-cols-2">
-      <PhonePeCard tenant={tenant} />
-      <MessageCentralCard tenant={tenant} />
+    <div className="space-y-5">
+      <div className="grid gap-5 xl:grid-cols-2">
+        <PhonePeCard tenant={tenant} />
+        <MessageCentralCard tenant={tenant} />
+      </div>
+      <PlatformTenantProductModulesCard tenant={tenant} />
+      <PlatformTenantPlayStoreReviewOtpCard tenant={tenant} />
     </div>
   );
 }

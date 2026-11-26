@@ -4,6 +4,7 @@ import Link from "next/link";
 import { COLLECTION_FREQUENCY_LABELS } from "@/src/types/collection";
 import { CalendarDays, ChevronRight, CircleCheck, Info, Sparkles } from "lucide-react";
 import type { CustomerDisplayMode, CustomerPastScheme, CustomerSchemeDetail, SchemeCard } from "@/src/types/customer";
+import { SchemeShopBalanceLine } from "@/src/components/scheme-shop-balance";
 import { useCustomerTenant } from "@/src/components/customer/customer-tenant-context";
 import { customerPath } from "@/src/lib/customer-tenant";
 import { CkBadge, CkBar, CkCard, CkIcon, CkSegments } from "@/src/components/customer/customer-kit";
@@ -155,6 +156,7 @@ export function CustomerHomeSchemeCard({ scheme }: { scheme: SchemeCard; payment
         <p className="mt-2 text-[1.45rem] font-bold leading-none tracking-[-0.03em] tabular-nums text-[var(--ck-ink)]">
           {gold?.weightDisplay ?? scheme.totalPaid?.amountDisplay ?? "₹0"}
         </p>
+        <SchemeShopBalanceLine summary={scheme.shopBalanceSummary} className="mt-1.5" />
         <div className="mt-3">
           <SchemeTypeProgress scheme={scheme} />
         </div>
@@ -215,6 +217,7 @@ export function CustomerSchemesActiveCard({ scheme }: { scheme: SchemeCard }) {
           <p className="text-[1.6rem] font-bold leading-none tracking-[-0.03em] tabular-nums text-[var(--ck-ink)]">{headline}</p>
           <p className="truncate text-right text-xs text-[var(--ck-muted)]">{side}</p>
         </div>
+        <SchemeShopBalanceLine summary={scheme.shopBalanceSummary} className="mb-2" />
         <SchemeTypeProgress scheme={scheme} />
         {capped?.cap ? (
           <div className="mt-2.5 grid grid-cols-3 gap-1.5">

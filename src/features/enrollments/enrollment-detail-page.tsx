@@ -44,6 +44,8 @@ import {
 import { PaymentDialog } from "@/src/features/payments/payment-dialog";
 import { ReceiptLink } from "@/src/components/common/portal-entity-links";
 import { PortalBackLink } from "@/src/components/common/portal-back-link";
+import { SchemeShopBalancePanel } from "@/src/components/scheme-shop-balance";
+import { SchemeSpendList } from "@/src/features/customer/customer-scheme-detail-views";
 import { EntityAuditTab } from "@/src/features/audit/entity-audit-tab";
 import { goldLedgerColumns } from "@/src/components/common/gold-payment-columns";
 import { downloadJson } from "@/src/lib/download";
@@ -210,6 +212,17 @@ export function EnrollmentDetailPage({ id }: { id: string }) {
       {(inProgress || closedOut) && (
         <EnrollmentRedemptionStatus enrollment={row} />
       )}
+      {row.shopBalanceSummary ? (
+        <SchemeShopBalancePanel summary={row.shopBalanceSummary} variant="admin" />
+      ) : null}
+      {row.schemeSpend?.length || row.schemeSpendAttempts?.length ? (
+        <div className="rounded-2xl border bg-card p-5 shadow-sm">
+          <SchemeSpendList
+            rows={row.schemeSpend ?? []}
+            attemptRows={row.schemeSpendAttempts}
+          />
+        </div>
+      ) : null}
       <SectionHero
         icon={Landmark}
         eyebrow={`Enrollment ${row.enrollmentNo}`}

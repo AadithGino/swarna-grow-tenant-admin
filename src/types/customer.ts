@@ -161,6 +161,8 @@ export type SchemeCard = {
   canPay: boolean;
   benefitLabel: string;
   recentPayments?: SchemeCardRecentPayment[];
+  shopBalanceSummary?: import("@/src/lib/scheme-shop-balance").SchemeShopBalanceSummary | null;
+  onlineEncumbrance?: CustomerOnlineEncumbrance | null;
 };
 
 export type PayableRangeTargetCycleOption = {
@@ -227,6 +229,10 @@ export type CustomerSchemeDetail = SchemeCard & {
     blocker?: string;
   };
   lifecycleActions: string[] | Record<string, boolean>;
+  schemeSpend?: CustomerSchemeSpendRow[];
+  schemeSpendAttempts?: CustomerSchemeSpendRow[];
+  shopBalanceSummary?: import("@/src/lib/scheme-shop-balance").SchemeShopBalanceSummary | null;
+  onlineEncumbrance?: CustomerOnlineEncumbrance | null;
   planId?: string;
   valueBasis?: "CASH" | "GOLD_WEIGHT";
   uiStatus?: string;
@@ -333,9 +339,34 @@ export type CustomerPassbookRow = {
   goldAccrual?: PaymentGoldAccrual | null;
 };
 
+export type CustomerSchemeSpendRow = {
+  id: string;
+  orderId?: string;
+  orderNumber?: string | null;
+  occurredAt?: string;
+  appliedLabel?: string;
+  remainingLabel?: string | null;
+  redemptionStatus?: string;
+  orderStatus?: string | null;
+  basis?: string;
+  title?: string;
+  description?: string;
+  countsAsSpend?: boolean;
+  outcome?: string;
+  outcomeLabel?: string;
+  showAppliedAsDeduction?: boolean;
+};
+
+export type CustomerOnlineEncumbrance = {
+  summaryLines?: string[];
+};
+
 export type CustomerPassbook = {
   scheme: { id: string; schemeNumber: string; displayMode: CustomerDisplayMode };
   rows: CustomerPassbookRow[];
+  spendRows?: CustomerSchemeSpendRow[];
+  spendAttempts?: CustomerSchemeSpendRow[];
+  onlineEncumbrance?: CustomerOnlineEncumbrance;
   totals: Record<string, MoneyRef | number>;
 };
 
@@ -353,6 +384,7 @@ export type CustomerSettlementPreview = {
   modePreviews?: Record<string, Record<string, unknown>>;
   warningText?: string;
   valuationNote?: string;
+  ecommerceSchemeNotes?: string[];
   cashSettlementBasis?: "GOLD_VALUE" | "PAID_AMOUNT";
   paidAmountBenefitTreatment?: "EXCLUDE" | "INCLUDE_MONETARY";
   valuationRatePerGramPaise?: number;
@@ -447,6 +479,7 @@ export type CustomerHome = {
     totalPaid: MoneyRef;
     goldAccumulated?: WeightRef;
     currentValuation?: MoneyRef;
+    shopBalance?: import("@/src/lib/scheme-shop-balance").CustomerShopBalanceOverview;
   };
   goldRate: {
     ratePerGramPaise: number;

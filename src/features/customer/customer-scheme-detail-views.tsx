@@ -35,6 +35,7 @@ import type {
   CustomerMaturityBenefit,
   CustomerPlanRulesSection,
   CustomerPassbookRow,
+  CustomerSchemeSpendRow,
   CustomerSchemeDetail,
   PaymentListItem,
 } from "@/src/types/customer";
@@ -953,6 +954,78 @@ export function PassbookList({
         );
       })}
     </ul>
+  );
+}
+
+export function SchemeSpendList({
+  rows,
+  attemptRows,
+  embedded,
+}: {
+  rows: CustomerSchemeSpendRow[];
+  attemptRows?: CustomerSchemeSpendRow[];
+  embedded?: boolean;
+}) {
+  const completed = rows;
+  const other = (attemptRows ?? []).filter((r) => r.countsAsSpend === false || r.outcome === "FAILED" || r.outcome === "PENDING");
+  if (!completed.length && !other.length) return null;
+  return (
+    <div className={embedded ? "" : "mt-6 border-t border-[#ece6e0] pt-5"}>
+      {completed.length ? (
+        <>
+          <h3 className="text-sm font-black text-[var(--customer-primary,#730321)]">Scheme used for shop orders</h3>
+          <p className="mt-1 text-xs text-[#77727c]">Completed purchases where value left this enrolment. Unused balance stays for another order or in-store redemption.</p>
+          <ul className="mt-3 divide-y divide-[#ece6e0]">
+            {completed.map((row) => (
+              <li key={row.id} className="py-3.5">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-sm font-bold text-[#171722]">{row.orderNumber ?? row.title ?? "Shop order"}</p>
+                    <p className="mt-0.5 text-xs text-[#77727c]">
+                      {row.occurredAt ? formatCustomerDate(row.occurredAt) : "—"}
+                    </p>
+                  </div>
+                  <p className="shrink-0 text-sm font-black text-[#9a1b35]">− {row.appliedLabel ?? "—"}</p>
+                </div>
+                {row.remainingLabel ? (
+                  <p className="mt-2 rounded-lg bg-[#fbf6f0] px-2.5 py-1.5 text-xs text-[#5c5048]">{row.remainingLabel}</p>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        </>
+      ) : null}
+      {other.length ? (
+        <div className={completed.length ? "mt-5 border-t border-[#ece6e0] pt-4" : ""}>
+          <h3 className="text-sm font-bold text-[#5c5048]">Shop checkouts that did not complete</h3>
+          <p className="mt-1 text-xs text-[#77727c]">Expired, cancelled, or rejected — your scheme balance was not reduced.</p>
+          <ul className="mt-3 divide-y divide-[#ece6e0]">
+            {other.map((row) => (
+              <li key={row.id} className="py-3 opacity-90">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-[#5c5048] line-through decoration-[#c9bfb8]">
+                      {row.orderNumber ?? "Shop order"}
+                    </p>
+                    <p className="mt-0.5 text-xs text-[#77727c]">
+                      {row.occurredAt ? formatCustomerDate(row.occurredAt) : "—"}
+                    </p>
+                  </div>
+                  {row.showAppliedAsDeduction !== false && row.appliedLabel ? (
+                    <p className="shrink-0 text-xs text-[#9a8d90] line-through">{row.appliedLabel}</p>
+                  ) : (
+                    <p className="shrink-0 text-xs font-medium text-[#5c5048]">No deduction</p>
+                  )}
+                </div>
+                <p className="mt-2 rounded-lg bg-[#f5f3f1] px-2.5 py-1.5 text-xs text-[#5c5048]">
+                  {row.outcomeLabel ?? "Did not complete — balance unchanged"}
+                </p>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+    </div>
   );
 }
 

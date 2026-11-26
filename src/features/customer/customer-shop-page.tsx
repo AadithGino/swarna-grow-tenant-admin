@@ -2,8 +2,8 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useMemo, useState } from "react";
-import { CalendarCheck, ChevronLeft, ChevronRight, Package, Search, ShoppingBag, Store } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { ChevronLeft, ChevronRight, Package, Search, ShoppingBag, Store } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -18,6 +18,8 @@ import {
   useGetShopProductsQuery,
   useLazyGetShopProductsQuery,
   useGetShopCartQuery,
+  useGetCustomerDigitalMetalsRedemptionOrdersQuery,
+  useListShopOrdersQuery,
   usePutShopCartMutation,
 } from "@/src/store/api/customer-api";
 import { toastApiError } from "@/src/lib/api-error";
@@ -27,7 +29,11 @@ import { EcommerceCatalogImage } from "@/src/features/ecommerce/ecommerce-catalo
 import { useCustomerTenant } from "@/src/components/customer/customer-tenant-context";
 import { CustomerBrand } from "@/src/components/customer/customer-ui";
 import { customerPath } from "@/src/lib/customer-tenant";
-import { customerShopBookingsPath, customerShopOrdersPath } from "@/src/lib/customer-shop-paths";
+import { isOpenBooking, type CustomerBooking } from "@/src/lib/customer-shop-booking";
+import { mergeShopActivities } from "@/src/lib/customer-shop-activity";
+import { customerShopOrdersPath } from "@/src/lib/customer-shop-paths";
+import { ShopActivityStrip } from "@/src/features/customer/customer-shop-activity-ui";
+import { useCustomerDigitalMetalsVisible } from "@/src/lib/customer-digital-metals-visible";
 import { customerBrandStyle } from "@/src/lib/customer-brand-styles";
 import { customerBannerHref } from "@/src/lib/customer-banner-routing";
 import { BookWithAdvance } from "@/src/features/customer/customer-shop-booking-start";
@@ -147,17 +153,18 @@ function ShopBannerCarousel({ tenantSlug, items, tenantName }: { tenantSlug: str
   return (
     <section aria-label="Offers" className="relative">
       <div
-        className="-mx-4 flex snap-x snap-mandatory gap-2.5 overflow-x-auto px-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        className="customer-scroll-row flex snap-x snap-mandatory gap-2.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         onScroll={(e) => {
           const el = e.currentTarget;
-          const w = el.firstElementChild ? (el.firstElementChild as HTMLElement).offsetWidth + 10 : el.clientWidth;
-          setIndex(Math.round(el.scrollLeft / w));
+          const slide = el.firstElementChild as HTMLElement | null;
+          const w = slide ? slide.offsetWidth + 10 : el.clientWidth;
+          setIndex(Math.round(el.scrollLeft / Math.max(w, 1)));
         }}
       >
         {visible.map((banner) => {
           const href = customerBannerHref(tenantSlug, banner.destination ?? { type: "NONE" }, { shopAvailable: true });
           const card = (
-            <div className="relative h-[11rem] w-[calc(100vw-2rem)] max-w-[34rem] shrink-0 snap-start overflow-hidden rounded-[22px] bg-[#6a0f19] text-white">
+            <div className="relative h-[11rem] w-full overflow-hidden rounded-[22px] bg-[#6a0f19] text-white">
               {banner.imageUploadId ? (
                 <EcommerceCatalogImage uploadId={banner.imageUploadId} viewUrl={banner.imageUrl ?? undefined} channel="customer" alt="" fill className="object-cover object-right" />
               ) : null}
@@ -173,12 +180,13 @@ function ShopBannerCarousel({ tenantSlug, items, tenantName }: { tenantSlug: str
               </span>
             </div>
           );
+          const slideClass = "block w-full shrink-0 grow-0 basis-full snap-start";
           return href ? (
-            <Link key={banner.id} href={href} aria-label={banner.title} className="shrink-0">
+            <Link key={banner.id} href={href} aria-label={banner.title} className={slideClass}>
               {card}
             </Link>
           ) : (
-            <div key={banner.id} className="shrink-0">
+            <div key={banner.id} className={slideClass}>
               {card}
             </div>
           );
@@ -223,7 +231,16 @@ export function CustomerShopPage() {
   const initialCategoryId = searchParams.get("categoryId") ?? undefined;
   const openSearchOnLoad = searchParams.get("search") === "1";
   const availability = useGetShopAvailabilityQuery();
-  const bookingsQuery = useListShopBookingsQuery({ limit: 1 });
+  const shopOpen = availability.data?.available === true;
+  const { visible: metalsOn } = useCustomerDigitalMetalsVisible();
+  const bookingsQuery = useListShopBookingsQuery({ limit: 10 }, { skip: !shopOpen });
+  const shopOrdersQuery = useListShopOrdersQuery({ limit: 15 }, { skip: !shopOpen && !availability.data?.hasOrderHistory });
+  const dmRedemptionsQuery = useGetCustomerDigitalMetalsRedemptionOrdersQuery({ limit: 10 }, { skip: !metalsOn });
+  const [activityNow, setActivityNow] = useState(() => Date.now());
+  useEffect(() => {
+    const t = window.setInterval(() => setActivityNow(Date.now()), 30_000);
+    return () => window.clearInterval(t);
+  }, []);
   const { data: profile } = useGetCustomerProfileQuery();
   const shopBanners = useGetShopBannersQuery(undefined, {
     skip: !availability.data?.available,
@@ -267,6 +284,17 @@ export function CustomerShopPage() {
     () => catalogueRates([...(featuredQuery.data?.items ?? []), ...(products.data?.items ?? [])]),
     [featuredQuery.data?.items, products.data?.items],
   );
+
+  const activityItems = useMemo(() => {
+    const bookingRows = ((bookingsQuery.data?.items ?? []) as unknown as CustomerBooking[]).filter((b) => isOpenBooking(b.status));
+    return mergeShopActivities({
+      tenantSlug: tenantSlug ?? "",
+      bookings: bookingRows,
+      orders: (shopOrdersQuery.data?.items ?? []) as Record<string, unknown>[],
+      redemptions: metalsOn ? ((dmRedemptionsQuery.data?.items ?? []) as Record<string, unknown>[]) : [],
+      now: activityNow,
+    });
+  }, [bookingsQuery.data?.items, shopOrdersQuery.data?.items, dmRedemptionsQuery.data?.items, metalsOn, tenantSlug, activityNow]);
 
   function clearAllFilters() {
     setSearchInput("");
@@ -319,8 +347,6 @@ export function CustomerShopPage() {
   const slug = tenantSlug ?? "";
   const bestsellers = (featuredQuery.data?.items ?? []).slice(0, 4);
   const hasOrders = availability.data?.hasOrderHistory === true;
-  // Only customers who have booked something see the shortcut; a store without bookings shows nothing.
-  const hasBookings = (bookingsQuery.data?.items?.length ?? 0) > 0;
 
   const renderCard = (p: Record<string, unknown>) => (
     <CustomerShopProductCard
@@ -336,6 +362,8 @@ export function CustomerShopPage() {
     <div className="mx-auto max-w-lg pb-6 sm:max-w-none">
       <ShopHeader tenantSlug={slug} branchName={profile?.branch?.name} cartCount={cartCount} onSearch={() => setSearchKey((k) => k + 1)} />
       <ShopRateStrip rates={rates} />
+
+      {!hasActiveFilters ? <ShopActivityStrip tenantSlug={slug} items={activityItems} /> : null}
 
       {!hasActiveFilters ? (
         <div className="mt-3">
@@ -402,18 +430,6 @@ export function CustomerShopPage() {
         )}
       </div>
 
-      {hasBookings ? (
-        <Link href={customerShopBookingsPath(slug)} className="mt-6 flex items-center gap-3 rounded-[1.15rem] border border-[var(--ck-line,#ebe2d7)] bg-white p-3.5">
-          <span className="grid size-10 place-items-center rounded-xl bg-[var(--ck-gold-soft,#f6eedf)] text-[#8a6a24]">
-            <CalendarCheck className="size-5" />
-          </span>
-          <span className="min-w-0 flex-1">
-            <span className="block text-[0.9rem] font-semibold text-[var(--ck-ink,#1d1417)]">My bookings</span>
-            <span className="block text-xs text-[var(--ck-muted,#87787c)]">Pay advance or balance, track pieces you reserved</span>
-          </span>
-          <ChevronRight className="size-4 text-[#ad9fa2]" />
-        </Link>
-      ) : null}
       {hasOrders ? (
         <Link href={customerShopOrdersPath(slug)} className="mt-6 flex items-center gap-3 rounded-[1.15rem] border border-[var(--ck-line,#ebe2d7)] bg-white p-3.5">
           <span className="grid size-10 place-items-center rounded-xl bg-[var(--ck-gold-soft,#f6eedf)] text-[#8a6a24]">

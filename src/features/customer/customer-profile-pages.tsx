@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ChevronRight,
+  CalendarCheck,
   ClipboardList,
   FileText,
   Headphones,
@@ -17,7 +18,8 @@ import {
   Smartphone,
   UserRound,
 } from "lucide-react";
-import { customerShopOrdersPath } from "@/src/lib/customer-shop-paths";
+import { customerShopActivityPath, customerShopBookingsPath, customerShopOrdersPath } from "@/src/lib/customer-shop-paths";
+import { bookingProfileHint, type CustomerBooking } from "@/src/lib/customer-shop-booking";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -38,6 +40,8 @@ import { useCustomerDigitalMetalsVisible } from "@/src/lib/customer-digital-meta
 import {
   useGetCustomerDevicesQuery,
   useGetCustomerProfileQuery,
+  useGetShopAvailabilityQuery,
+  useListShopBookingsQuery,
   useRevokeCustomerDeviceMutation,
 } from "@/src/store/api/customer-api";
 import {
@@ -59,6 +63,18 @@ export function CustomerProfilePage() {
   const kycEnabled = useCustomerKycEnabled();
   const { visible: digitalMetalsVisible } = useCustomerDigitalMetalsVisible();
   const { data, isLoading, isError, refetch } = useGetCustomerProfileQuery();
+  const shopAvailability = useGetShopAvailabilityQuery();
+  const shopOn = shopAvailability.data?.available === true;
+  const bookingsQuery = useListShopBookingsQuery({ limit: 5 }, { skip: !shopOn });
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const t = window.setInterval(() => setNow(Date.now()), 30_000);
+    return () => window.clearInterval(t);
+  }, []);
+  const bookingHint = useMemo(() => {
+    const items = (bookingsQuery.data?.items ?? []) as unknown as CustomerBooking[];
+    return bookingProfileHint(items, now);
+  }, [bookingsQuery.data?.items, now]);
   const [logoutOpen, setLogoutOpen] = useState(false);
   const { signOut, isSigningOut } = useCustomerSignOut();
 
@@ -160,10 +176,18 @@ export function CustomerProfilePage() {
             />
           </>
         ) : null}
+        {shopOn ? (
+          <ProfileMenuRow
+            icon={CalendarCheck}
+            label="Advance bookings"
+            href={customerShopBookingsPath(tenantSlug)}
+            badge={bookingHint ?? undefined}
+          />
+        ) : null}
         <ProfileMenuRow
           icon={Package}
-          label="Shop orders & delivery"
-          href={customerShopOrdersPath(tenantSlug)}
+          label="Track deliveries & pickups"
+          href={shopOn ? customerShopActivityPath(tenantSlug) : customerShopOrdersPath(tenantSlug)}
         />
         <ProfileMenuRow
           icon={FileText}

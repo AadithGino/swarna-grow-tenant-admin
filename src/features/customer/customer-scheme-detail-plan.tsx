@@ -13,9 +13,12 @@ import { Button } from "@/components/ui/button";
 import { CustomerPayableSummary } from "@/src/components/customer/customer-payable-summary";
 import { formatCustomerDate } from "@/src/components/customer/customer-ui";
 import { CkBadge, CkBar, CkCard, CkIcon, CkNote } from "@/src/components/customer/customer-kit";
+import { SchemeOnlineEncumbrancePanel, SchemeShopBalancePanel } from "@/src/components/scheme-shop-balance";
+import type { CustomerOnlineEncumbrance } from "@/src/types/customer";
 import { buildFixedSchedule, type ScheduleRow } from "@/src/features/customer/customer-scheme-schedule";
 import {
   AuthoritativePassbookList,
+  SchemeSpendList,
   FixedHero,
   FlexibleFreeHero,
   FlexibleLockedHero,
@@ -26,6 +29,7 @@ import {
 import type {
   CustomerMaturityBenefit,
   CustomerPassbookRow,
+  CustomerSchemeSpendRow,
   CustomerPlanRulesSection,
   CustomerSchemeDetail,
   MoneyRef,
@@ -513,6 +517,9 @@ export function SchemeDetailPlanView({
   planRuleSections,
   payments,
   passbookRows,
+  passbookSpendRows,
+  passbookSpendAttemptRows,
+  passbookOnlineEncumbrance,
   redemptionEligible,
   redemptionBlocker,
   redemptionModes,
@@ -527,6 +534,9 @@ export function SchemeDetailPlanView({
   planRuleSections: CustomerPlanRulesSection[];
   payments: PaymentListItem[];
   passbookRows?: CustomerPassbookRow[];
+  passbookSpendRows?: CustomerSchemeSpendRow[];
+  passbookSpendAttemptRows?: CustomerSchemeSpendRow[];
+  passbookOnlineEncumbrance?: CustomerOnlineEncumbrance | null;
   redemptionEligible: boolean;
   redemptionBlocker?: string;
   redemptionModes: string[];
@@ -559,6 +569,18 @@ export function SchemeDetailPlanView({
           ) : null}
         </>
       ) : null}
+      {scheme.shopBalanceSummary ? (
+        <SchemeShopBalancePanel summary={scheme.shopBalanceSummary} variant="customer" className="mt-3" />
+      ) : null}
+      {passbookOnlineEncumbrance ? (
+        <SchemeOnlineEncumbrancePanel encumbrance={passbookOnlineEncumbrance} className="mt-3" />
+      ) : null}
+      {(passbookSpendRows?.length || passbookSpendAttemptRows?.length) ? (
+        <div className="mt-3 rounded-[1.25rem] border border-[var(--ck-line)] bg-white px-4 py-1">
+          <SchemeSpendList rows={passbookSpendRows ?? []} attemptRows={passbookSpendAttemptRows} embedded />
+        </div>
+      ) : null}
+
       {mode === "FLEXIBLE_LOCK_WINDOW" ? (
         <>
           <CappedCycleCard scheme={scheme} onPay={onPay} payEnabled={payEnabled} />
@@ -630,6 +652,12 @@ export function SchemeDetailPlanView({
             </DialogDescription>
           </DialogHeader>
           {passbookRows ? <AuthoritativePassbookList rows={passbookRows} /> : <PassbookList payments={payments} onDownloadReceipt={onDownloadReceipt} />}
+          {passbookOnlineEncumbrance ? (
+            <SchemeOnlineEncumbrancePanel encumbrance={passbookOnlineEncumbrance} className="mt-4" />
+          ) : null}
+          {(passbookSpendRows?.length || passbookSpendAttemptRows?.length) ? (
+            <SchemeSpendList rows={passbookSpendRows ?? []} attemptRows={passbookSpendAttemptRows} />
+          ) : null}
         </DialogContent>
       </Dialog>
       <Dialog open={sheet === "rules"} onOpenChange={(o) => setSheet(o ? "rules" : null)}>

@@ -69,6 +69,12 @@ export function buildDemoLead(input: {
   };
 }
 
+/** Pixel Lead event. Call only after the lead was saved, so failed submits are not counted. */
+export function trackLandingLeadPixel(): void {
+  if (typeof window === "undefined" || typeof window.fbq !== "function") return;
+  window.fbq("track", "Lead", { content_name: "landing-free-demo" });
+}
+
 /** Persists the lead in Mongo for the platform console (`/platform/demos/requests`). */
 export async function sendDemoLead(lead: DemoLead): Promise<void> {
   const res = await fetch(`${env.apiBaseUrl}/public/landing-demo-requests`, {

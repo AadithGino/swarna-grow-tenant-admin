@@ -5186,6 +5186,26 @@ export const adminApi = createApi({
         (contractPayload(raw) as Record<string, unknown>) ?? {},
       invalidatesTags: ["Ecommerce"],
     }),
+    releaseEcommerceSchemeBacking: builder.mutation<
+      Record<string, unknown>,
+      {
+        orderId: string;
+        reason: string;
+        expectedVersion: number;
+        idempotencyKey: string;
+        stockDisposition?: "RESTOCK_CONFIRMED" | "STOCK_EXCEPTION";
+      }
+    >({
+      query: ({ orderId, idempotencyKey, ...body }) => ({
+        url: `/admin/ecommerce/orders/${encodeURIComponent(orderId)}/scheme/release-backing`,
+        method: "POST",
+        body,
+        headers: { "X-Idempotency-Key": idempotencyKey },
+      }),
+      transformResponse: (raw) =>
+        (contractPayload(raw) as Record<string, unknown>) ?? {},
+      invalidatesTags: ["Ecommerce"],
+    }),
     recordEcommerceCodCancellationManualRefund: builder.mutation<
       Record<string, unknown>,
       {
@@ -6826,6 +6846,7 @@ export const {
   useGetEcommerceOrderCancellationQuery,
   useDecideEcommerceOrderCancellationMutation,
   useInitiateEcommerceOrderCancellationMutation,
+  useReleaseEcommerceSchemeBackingMutation,
   useRecordEcommerceCodCancellationManualRefundMutation,
   useGetEcommerceOrderPaymentAttemptsQuery,
   useGetEcommerceOrderPaymentAttemptEventsQuery,

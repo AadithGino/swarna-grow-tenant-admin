@@ -4,6 +4,11 @@ import { useEffect, useState } from "react";
 import Image from "next/image";
 import { useCustomerTenant } from "@/src/components/customer/customer-tenant-context";
 import { useGetPublicCustomerUploadDownloadQuery } from "@/src/store/api/customer-api";
+import {
+  buildCustomerSplashBackground,
+  CustomerSplashFiligree,
+  CustomerSplashLogo,
+} from "@/src/components/customer/customer-splash-shared";
 
 const SPLASH_MIN_MS = 2500;
 
@@ -11,27 +16,6 @@ function uploadIdFromPath(value?: string | null): string | null {
   if (!value) return null;
   const match = value.match(/\/uploads\/([^/?#]+)/);
   return match?.[1] ? decodeURIComponent(match[1]) : null;
-}
-
-function FiligreeCorner({
-  accent,
-  className,
-}: {
-  accent: string;
-  className?: string;
-}) {
-  return (
-    <svg
-      aria-hidden
-      className={className}
-      viewBox="0 0 80 80"
-      fill="none"
-    >
-      <path d="M4 30V4h26" stroke={accent} strokeWidth="1.2" />
-      <path d="M4 16V8h8" stroke={accent} strokeWidth="1.1" opacity="0.55" />
-      <circle cx="8" cy="8" r="1.55" fill={accent} />
-    </svg>
-  );
 }
 
 /**
@@ -48,9 +32,12 @@ export function CustomerBrandingSplash({
 
   const primary = tenant?.primaryColor ?? "#730321";
   const accent = tenant?.accentColor ?? "#C9A227";
+  const splashBase = tenant?.splashBackgroundColor?.trim() || null;
   const displayName = tenant?.appDisplayName ?? tenant?.displayName ?? "Gold savings";
   const tagline = tenant?.splashTagline?.trim() || "Crafted savings. Trusted jewellery.";
   const splashEnabled = tenant?.splashEnabled !== false;
+
+  const splashBackground = buildCustomerSplashBackground(primary, accent, splashBase);
 
   const logoUploadId = uploadIdFromPath(tenant?.logoUrl);
   const logoQuery = useGetPublicCustomerUploadDownloadQuery(logoUploadId as string, {
@@ -58,18 +45,20 @@ export function CustomerBrandingSplash({
   });
   const logoSrc = logoQuery.data?.downloadUrl ?? null;
   const logoSettled = !logoUploadId || logoQuery.isSuccess || logoQuery.isError;
+  const brandingReady = !loading && Boolean(tenant);
+  const readyToDismiss = brandingReady && logoSettled;
 
   useEffect(() => {
     if (notFound) {
       onDone();
       return;
     }
-    if (loading || !tenant) return;
+    if (!brandingReady) return;
     if (!splashEnabled) {
       onDone();
       return;
     }
-    if (!logoSettled) return;
+    if (!readyToDismiss) return;
 
     const hideTimer = window.setTimeout(() => {
       setFading(true);
@@ -77,20 +66,27 @@ export function CustomerBrandingSplash({
     }, SPLASH_MIN_MS);
 
     return () => window.clearTimeout(hideTimer);
-  }, [loading, tenant, notFound, splashEnabled, logoSettled, onDone]);
+  }, [brandingReady, readyToDismiss, notFound, splashEnabled, tenant?.tenantCode, onDone]);
 
   if (!splashEnabled || notFound) return null;
+
+  if (!brandingReady) {
+    return (
+      <div
+        className="fixed inset-0 z-[90] bg-[#0a0a0a]"
+        role="status"
+        aria-live="polite"
+        aria-label="Loading jeweller branding"
+      />
+    );
+  }
 
   return (
     <div
       className="fixed inset-0 z-[90] overflow-hidden transition-opacity duration-500 ease-out"
       style={{
         opacity: fading ? 0 : 1,
-        background: `
-          radial-gradient(ellipse 95% 58% at 50% -10%, ${accent}4d 0%, transparent 58%),
-          radial-gradient(ellipse 75% 42% at 50% 115%, ${accent}33 0%, transparent 52%),
-          linear-gradient(168deg, ${primary} 0%, #4a0216 46%, #1f0109 100%)
-        `,
+        background: splashBackground,
       }}
       role="status"
       aria-live="polite"
@@ -104,10 +100,10 @@ export function CustomerBrandingSplash({
         }}
       />
 
-      <FiligreeCorner accent={accent} className="pointer-events-none absolute left-5 top-5 h-[4.25rem] w-[4.25rem] opacity-75 sm:left-8 sm:top-8 sm:h-20 sm:w-20" />
-      <FiligreeCorner accent={accent} className="pointer-events-none absolute right-5 top-5 h-[4.25rem] w-[4.25rem] rotate-90 opacity-75 sm:right-8 sm:top-8 sm:h-20 sm:w-20" />
-      <FiligreeCorner accent={accent} className="pointer-events-none absolute bottom-5 left-5 h-[4.25rem] w-[4.25rem] -rotate-90 opacity-75 sm:bottom-8 sm:left-8 sm:h-20 sm:w-20" />
-      <FiligreeCorner accent={accent} className="pointer-events-none absolute bottom-5 right-5 h-[4.25rem] w-[4.25rem] rotate-180 opacity-75 sm:bottom-8 sm:right-8 sm:h-20 sm:w-20" />
+      <CustomerSplashFiligree accent={accent} className="pointer-events-none absolute left-5 top-5 h-[4.25rem] w-[4.25rem] opacity-75 sm:left-8 sm:top-8 sm:h-20 sm:w-20" />
+      <CustomerSplashFiligree accent={accent} className="pointer-events-none absolute right-5 top-5 h-[4.25rem] w-[4.25rem] rotate-90 opacity-75 sm:right-8 sm:top-8 sm:h-20 sm:w-20" />
+      <CustomerSplashFiligree accent={accent} className="pointer-events-none absolute bottom-5 left-5 h-[4.25rem] w-[4.25rem] -rotate-90 opacity-75 sm:bottom-8 sm:left-8 sm:h-20 sm:w-20" />
+      <CustomerSplashFiligree accent={accent} className="pointer-events-none absolute bottom-5 right-5 h-[4.25rem] w-[4.25rem] rotate-180 opacity-75 sm:bottom-8 sm:right-8 sm:h-20 sm:w-20" />
 
       <div className="customer-splash-rise relative z-10 flex h-full flex-col items-center justify-center px-8 text-center">
         <div className="mb-7 flex items-center gap-3" style={{ color: accent }}>
@@ -118,25 +114,13 @@ export function CustomerBrandingSplash({
           <span className="h-px w-11 bg-current opacity-70" />
         </div>
 
-        <div
-          className="mb-8 grid size-[7.5rem] place-items-center rounded-[2rem] sm:size-[8.25rem]"
-          style={{
-            background: "linear-gradient(155deg, #fffefb 0%, #fff4d8 100%)",
-            boxShadow: `0 30px 64px -30px ${accent}aa, 0 0 0 1px ${accent}66`,
-          }}
-        >
-          {logoSrc ? (
-            <span className="relative block h-[4.4rem] w-[5.7rem] sm:h-[4.85rem] sm:w-24">
-              <Image src={logoSrc} alt="" fill sizes="100px" unoptimized className="object-contain" />
-            </span>
-          ) : loading ? (
-            <span className="size-10 animate-pulse rounded-full bg-black/10" />
-          ) : (
-            <span className="font-serif text-4xl font-semibold tracking-tight" style={{ color: primary }}>
-              {displayName.slice(0, 1).toUpperCase()}
-            </span>
-          )}
-        </div>
+        <CustomerSplashLogo
+          logoSrc={logoSrc}
+          accent={accent}
+          primary={primary}
+          fallbackLetter={displayName.slice(0, 1).toUpperCase()}
+          loading={loading}
+        />
 
         <p className="mb-3 text-[0.68rem] font-semibold uppercase tracking-[0.36em]" style={{ color: accent }}>
           Jewellery savings

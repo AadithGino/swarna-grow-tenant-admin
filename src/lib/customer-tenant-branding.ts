@@ -1,5 +1,28 @@
 import type { TenantBranding } from "@/src/types/customer";
 
+function hexToRgbTriplet(hex: string): [number, number, number] | null {
+  const clean = hex.replace("#", "").trim();
+  if (clean.length !== 6 && clean.length !== 3) return null;
+  const full =
+    clean.length === 3
+      ? clean
+          .split("")
+          .map((c) => c + c)
+          .join("")
+      : clean;
+  const n = Number.parseInt(full, 16);
+  if (Number.isNaN(n)) return null;
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+
+/** True when brand primary (or splash) is dark enough for light logo / gold on dark UI. */
+export function isDarkBrandColor(hex: string | null | undefined): boolean {
+  const rgb = hexToRgbTriplet(String(hex ?? ""));
+  if (!rgb) return false;
+  const [r, g, b] = rgb;
+  return 0.299 * r + 0.587 * g + 0.114 * b < 88;
+}
+
 /** Flatten nested `branding` from API payloads into top-level tenant colour fields. */
 export function normalizeCustomerTenantBranding(
   tenant: Record<string, unknown> | null | undefined,

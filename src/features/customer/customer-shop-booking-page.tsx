@@ -27,6 +27,7 @@ import {
   bookingAttemptKey,
   bookingPayAction,
   bookingPaymentHint,
+  bookingTimeLeft,
   excessAdvanceLabel,
   bookingPollMs,
   bookingRefundNotice,
@@ -105,16 +106,6 @@ function Steps({ booking }: { booking: CustomerBooking }) {
       ))}
     </ol>
   );
-}
-
-function timeLeft(iso: string | null | undefined, now: number): string | null {
-  if (!iso) return null;
-  const ms = new Date(iso).getTime() - now;
-  if (!Number.isFinite(ms) || ms <= 0) return null;
-  const h = Math.floor(ms / 3_600_000);
-  if (h >= 48) return `${Math.floor(h / 24)} days left`;
-  if (h >= 1) return `${h} h ${Math.floor((ms % 3_600_000) / 60_000)} min left`;
-  return `${Math.max(1, Math.floor(ms / 60_000))} min left`;
 }
 
 type PollAttempt = ReturnType<typeof useLazyPollShopBookingPaymentIntentQuery>[0];
@@ -261,9 +252,9 @@ export function CustomerShopBookingPage({ bookingId }: { bookingId: string }) {
           <div className="p-5">
             <div className="flex items-start justify-between gap-3">
               <h2 className={sectionTitle}>{pay.kind === "ADVANCE" ? "Pay the advance to hold your piece" : "Pay the balance to complete your purchase"}</h2>
-              {timeLeft(pay.dueAt, now) ? (
+              {bookingTimeLeft(pay.dueAt, now) ? (
                 <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-amber-50 px-2.5 py-1 text-[11px] font-semibold text-amber-800">
-                  <Clock className="size-3.5" /> {timeLeft(pay.dueAt, now)}
+                  <Clock className="size-3.5" /> {bookingTimeLeft(pay.dueAt, now)}
                 </span>
               ) : null}
             </div>

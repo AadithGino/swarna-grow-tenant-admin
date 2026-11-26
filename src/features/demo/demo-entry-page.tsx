@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import Image from "next/image";
 import { ShieldAlert } from "lucide-react";
 import { customerPath, tenantCodeToSlug } from "@/src/lib/customer-tenant";
 import { customerApi } from "@/src/store/api/customer-api";
@@ -14,6 +13,11 @@ import {
   useGetDemoPublicBrandingQuery,
 } from "@/src/store/api/demo-public-api";
 import { useGetPublicCustomerUploadDownloadQuery } from "@/src/store/api/customer-api";
+import {
+  buildCustomerSplashBackground,
+  CustomerSplashFiligree,
+  CustomerSplashLogo,
+} from "@/src/components/customer/customer-splash-shared";
 
 const SPLASH_MIN_MS = 2400;
 
@@ -43,16 +47,6 @@ function useDemoLinkSecret(routerSecret: string): { secret: string; ready: boole
   const fromAddressBar = useSyncExternalStore(subscribeToLocation, readDemoSecret, () => "");
   const ready = useSyncExternalStore(subscribeToLocation, () => true, () => false);
   return { secret: fromAddressBar || routerSecret, ready };
-}
-
-function FiligreeCorner({ accent, className }: { accent: string; className?: string }) {
-  return (
-    <svg aria-hidden className={className} viewBox="0 0 80 80" fill="none">
-      <path d="M4 30V4h26" stroke={accent} strokeWidth="1.2" />
-      <path d="M4 16V8h8" stroke={accent} strokeWidth="1.1" opacity="0.55" />
-      <circle cx="8" cy="8" r="1.55" fill={accent} />
-    </svg>
-  );
 }
 
 /**
@@ -88,10 +82,13 @@ export function DemoEntryPage({ publicId }: { publicId: string }) {
     else if (waitingOnProvision) setPollBranding(true);
   }, [canExchange, waitingOnProvision, brandingQuery.isError, phase]);
 
-  const primaryColor = branding?.primaryColor ?? "#730321";
+  const brandingReady = Boolean(branding);
+  const primaryColor = branding?.primaryColor ?? "#460000";
   const accentColor = branding?.accentColor ?? "#C9A227";
+  const splashBase = branding?.splashBackgroundColor;
   const displayName = branding?.displayName ?? branding?.appDisplayName ?? "Gold savings demo";
   const tagline = branding?.splashTagline?.trim() || "Crafted savings. Trusted jewellery.";
+  const splashBackground = buildCustomerSplashBackground(primaryColor, accentColor, splashBase);
 
   const logoUploadId = uploadIdFromLogoUrl(branding?.logoUrl);
   const logoDownload = useGetPublicCustomerUploadDownloadQuery(logoUploadId as string, {
@@ -128,12 +125,20 @@ export function DemoEntryPage({ publicId }: { publicId: string }) {
           if (elapsed < SPLASH_MIN_MS) await sleep(SPLASH_MIN_MS - elapsed);
         }
         setPhase("handoff");
+        const handedTenantCode = result.tenant.tenantCode ?? "";
+        if (splashEnabled && handedTenantCode) {
+          try {
+            sessionStorage.setItem(`swarnagrow.customer.splashDone.${handedTenantCode}`, "1");
+          } catch {
+            /* private mode */
+          }
+        }
         const caps = customerPortalCapabilitiesFromTenant(result.tenant);
         dispatch(
           customerSignedIn({
             customerId: result.customer.id,
             tenantId: result.tenant.id,
-            tenantCode: result.tenant.tenantCode ?? "",
+            tenantCode: handedTenantCode,
             accessToken: result.accessToken,
             refreshToken: result.refreshToken,
             profileComplete: true,
@@ -186,16 +191,14 @@ export function DemoEntryPage({ publicId }: { publicId: string }) {
           ? "Opening your demo…"
           : tagline;
 
+  if (!brandingReady) {
+    return <div className="min-h-screen bg-[#0a0a0a]" role="status" aria-label="Loading demo" />;
+  }
+
   return (
     <div
       className="relative grid min-h-screen place-items-center overflow-hidden px-6"
-      style={{
-        background: `
-          radial-gradient(ellipse 95% 58% at 50% -10%, ${accentColor}4d 0%, transparent 58%),
-          radial-gradient(ellipse 75% 42% at 50% 115%, ${accentColor}33 0%, transparent 52%),
-          linear-gradient(168deg, ${primaryColor} 0%, #4a0216 46%, #1f0109 100%)
-        `,
-      }}
+      style={{ background: splashBackground }}
     >
       <div
         aria-hidden
@@ -205,10 +208,10 @@ export function DemoEntryPage({ publicId }: { publicId: string }) {
         }}
       />
 
-      <FiligreeCorner accent={accentColor} className="pointer-events-none absolute left-5 top-5 h-[4.25rem] w-[4.25rem] opacity-75 sm:left-8 sm:top-8 sm:h-20 sm:w-20" />
-      <FiligreeCorner accent={accentColor} className="pointer-events-none absolute right-5 top-5 h-[4.25rem] w-[4.25rem] rotate-90 opacity-75 sm:right-8 sm:top-8 sm:h-20 sm:w-20" />
-      <FiligreeCorner accent={accentColor} className="pointer-events-none absolute bottom-5 left-5 h-[4.25rem] w-[4.25rem] -rotate-90 opacity-75 sm:bottom-8 sm:left-8 sm:h-20 sm:w-20" />
-      <FiligreeCorner accent={accentColor} className="pointer-events-none absolute bottom-5 right-5 h-[4.25rem] w-[4.25rem] rotate-180 opacity-75 sm:bottom-8 sm:right-8 sm:h-20 sm:w-20" />
+      <CustomerSplashFiligree accent={accentColor} className="pointer-events-none absolute left-5 top-5 h-[4.25rem] w-[4.25rem] opacity-75 sm:left-8 sm:top-8 sm:h-20 sm:w-20" />
+      <CustomerSplashFiligree accent={accentColor} className="pointer-events-none absolute right-5 top-5 h-[4.25rem] w-[4.25rem] rotate-90 opacity-75 sm:right-8 sm:top-8 sm:h-20 sm:w-20" />
+      <CustomerSplashFiligree accent={accentColor} className="pointer-events-none absolute bottom-5 left-5 h-[4.25rem] w-[4.25rem] -rotate-90 opacity-75 sm:bottom-8 sm:left-8 sm:h-20 sm:w-20" />
+      <CustomerSplashFiligree accent={accentColor} className="pointer-events-none absolute bottom-5 right-5 h-[4.25rem] w-[4.25rem] rotate-180 opacity-75 sm:bottom-8 sm:right-8 sm:h-20 sm:w-20" />
 
       <div className="customer-splash-rise relative z-10 flex w-full max-w-md flex-col items-center text-center">
         <div className="mb-7 flex items-center gap-3" style={{ color: accentColor }}>
@@ -219,23 +222,12 @@ export function DemoEntryPage({ publicId }: { publicId: string }) {
           <span className="h-px w-11 bg-current opacity-70" />
         </div>
 
-        <div
-          className="mb-8 grid size-[7.5rem] place-items-center rounded-[2rem] sm:size-[8.25rem]"
-          style={{
-            background: "linear-gradient(155deg, #fffefb 0%, #fff4d8 100%)",
-            boxShadow: `0 30px 64px -30px ${accentColor}aa, 0 0 0 1px ${accentColor}66`,
-          }}
-        >
-          {logoSrc ? (
-            <span className="relative block h-[4.4rem] w-[5.7rem] sm:h-[4.85rem] sm:w-24">
-              <Image src={logoSrc} alt="" fill sizes="100px" unoptimized className="object-contain" />
-            </span>
-          ) : (
-            <span className="font-serif text-4xl font-semibold tracking-tight" style={{ color: primaryColor }}>
-              {displayName.slice(0, 1).toUpperCase()}
-            </span>
-          )}
-        </div>
+        <CustomerSplashLogo
+          logoSrc={logoSrc}
+          accent={accentColor}
+          primary={primaryColor}
+          fallbackLetter={displayName.slice(0, 1).toUpperCase()}
+        />
 
         <p className="mb-3 text-[0.68rem] font-semibold uppercase tracking-[0.36em]" style={{ color: accentColor }}>
           Jewellery savings

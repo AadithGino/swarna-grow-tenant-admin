@@ -33,6 +33,7 @@ import {
   ShopPanel,
   ShopProductArt,
 } from "@/src/features/customer/customer-shop-ui";
+import { formatSchemeRemaining } from "@/src/lib/scheme-purchase-display";
 
 function useCountdown(expiresAt: Date | null) {
   const [now, setNow] = useState(() => Date.now());
@@ -145,6 +146,14 @@ function SchemePurchaseEstimate({ quoteId, totalPaise, placing, onPlace }: {
           {estimate ? (
             <>
               <dl className="space-y-2 text-sm">
+                {(estimate.availableBalance ?? estimate.balance) != null ? (
+                  <div className="flex justify-between gap-4 rounded-xl bg-white/80 px-3 py-2">
+                    <dt className={SHOP_MUTED}>Scheme balance available</dt>
+                    <dd className={cn("tabular-nums font-semibold", SHOP_INK)}>
+                      {formatSchemeRemaining(selectedBasis, estimate.availableBalance ?? estimate.balance ?? 0)}
+                    </dd>
+                  </div>
+                ) : null}
                 <div className="flex justify-between gap-4"><dt className={SHOP_MUTED}>Order total</dt><dd className={cn("tabular-nums", SHOP_INK)}>{formatShopInr(totalPaise, 2)}</dd></div>
                 {estimate.makingChargeWaivedPaise > 0 ? (
                   <div className="flex justify-between gap-4"><dt className="text-[var(--ck-ok,#1f6b4c)]">Making charges waived</dt><dd className="tabular-nums text-[var(--ck-ok,#1f6b4c)]">− {formatShopInr(estimate.makingChargeWaivedPaise, 2)}</dd></div>
@@ -156,10 +165,16 @@ function SchemePurchaseEstimate({ quoteId, totalPaise, placing, onPlace }: {
                 <span className="text-2xl font-extrabold tabular-nums text-[var(--customer-primary,#730321)]">{formatShopInr(estimate.topUpPaise, 2)}</span>
               </div>
               {estimate.remaining > 0 ? (
-                <p className={cn("mt-2 text-xs", SHOP_MUTED)}>
-                  Left in your scheme after this order: {selectedBasis === "GOLD_WEIGHT" ? `${(estimate.remaining / 1000).toFixed(3)} g` : formatShopInr(estimate.remaining, 2)}
-                </p>
-              ) : null}
+                <div className="mt-3 rounded-xl border border-[#e6d3a8] bg-[#fffaf0] px-3 py-2.5">
+                  <p className="text-xs font-semibold text-[#6b4f12]">Unused scheme balance after this order</p>
+                  <p className="mt-0.5 text-sm font-bold tabular-nums text-[#3d2e0a]">
+                    {formatSchemeRemaining(selectedBasis, estimate.remaining)}
+                  </p>
+                  <p className={cn("mt-1 text-[0.7rem]", SHOP_MUTED)}>You can use the rest on another shop order or redeem at the store.</p>
+                </div>
+              ) : (
+                <p className={cn("mt-2 text-xs", SHOP_MUTED)}>This order uses your full scheme balance for the selected basis.</p>
+              )}
             </>
           ) : (
             <p className={cn("flex items-center gap-2 text-sm", SHOP_MUTED)}>

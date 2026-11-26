@@ -368,6 +368,32 @@ export const platformApi = createApi({
       }),
       invalidatesTags: (_r, _e, a) => [{ type: "PlatformTenant", id: a.tenantId }, "PlatformDigitalMetals"],
     }),
+    setPlayStoreReviewOtp: builder.mutation<
+      { playStoreReviewOtpEnabled: boolean; reviewOtpCode: string | null; version: number },
+      { tenantId: string; enabled: boolean }
+    >({
+      query: ({ tenantId, enabled }) => ({
+        url: `/platform/tenants/${tenantId}/playstore-review-otp`,
+        method: "POST",
+        body: { enabled },
+        mockKey: "playStoreReviewOtp",
+        mockParams: { tenantId },
+      }),
+      invalidatesTags: (_r, _e, a) => [{ type: "PlatformTenant", id: a.tenantId }],
+    }),
+    setPlatformProductModules: builder.mutation<
+      Record<string, unknown>,
+      { tenantId: string; body: Record<string, boolean> }
+    >({
+      query: ({ tenantId, body }) => ({
+        url: `/platform/tenants/${tenantId}/product-modules`,
+        method: "POST",
+        body,
+        mockKey: "productModules",
+        mockParams: { tenantId },
+      }),
+      invalidatesTags: (_r, _e, a) => [{ type: "PlatformTenant", id: a.tenantId }],
+    }),
     getPlatformDigitalMetalsStatus: builder.query<Record<string, unknown>, string>({
       query: (tenantId) => ({
         url: `/platform/tenants/${tenantId}/digital-metals`,
@@ -681,6 +707,8 @@ export const platformApi = createApi({
       query: (params) => ({
         url: "/platform/landing-demo-requests",
         params: params ?? undefined,
+        mockKey: "landingDemoRequests",
+        mockParams: params ?? {},
       }),
       transformResponse: (response: unknown) => {
         const payload = response as LandingDemoRequestListResponse;
@@ -692,7 +720,7 @@ export const platformApi = createApi({
       providesTags: ["PlatformLandingDemoRequestList"],
     }),
     getLandingDemoRequest: builder.query<LandingDemoRequest, string>({
-      query: (requestId) => ({ url: `/platform/landing-demo-requests/${requestId}` }),
+      query: (requestId) => ({ url: `/platform/landing-demo-requests/${requestId}`, mockKey: "landingDemoRequest", mockParams: { requestId } }),
       transformResponse: (response: unknown) => withEntityId(response as LandingDemoRequest),
       providesTags: (_r, _e, id) => [{ type: "PlatformLandingDemoRequest", id }],
     }),
@@ -704,6 +732,8 @@ export const platformApi = createApi({
         url: `/platform/landing-demo-requests/${requestId}`,
         method: "PATCH",
         body,
+        mockKey: "patchLandingDemoRequest",
+        mockParams: { requestId },
       }),
       transformResponse: (response: unknown) => withEntityId(response as LandingDemoRequest),
       invalidatesTags: (_r, _e, a) => [
@@ -714,6 +744,8 @@ export const platformApi = createApi({
     getLandingDemoShareLink: builder.query<LandingDemoShareLink, string>({
       query: (requestId) => ({
         url: `/platform/landing-demo-requests/${requestId}/share-link`,
+        mockKey: "landingDemoShareLink",
+        mockParams: { requestId },
       }),
     }),
     retryLandingDemoProvision: builder.mutation<LandingDemoRequest, string>({
@@ -721,6 +753,8 @@ export const platformApi = createApi({
         url: `/platform/landing-demo-requests/${requestId}/retry-provision`,
         method: "POST",
         body: {},
+        mockKey: "retryLandingDemoProvision",
+        mockParams: { requestId },
       }),
       transformResponse: (response: unknown) => withEntityId(response as LandingDemoRequest),
       invalidatesTags: (_r, _e, id) => [
@@ -731,4 +765,4 @@ export const platformApi = createApi({
   }),
 });
 
-export const { usePlatformLoginMutation, usePlatformLogoutMutation, useGetPlatformDashboardQuery, useGetPlatformChartQuery, useGetPlatformPlansQuery, useGetPlatformPlanQuery, useSavePlatformPlanMutation, useDeprecatePlatformPlanMutation, useGetPlatformTenantsQuery, useGetPlatformTenantQuery, useCreatePlatformTenantMutation, useUpdatePlatformTenantMutation, useSuspendPlatformTenantMutation, useReactivatePlatformTenantMutation, useGoLivePlatformTenantMutation, useResetOwnerCredentialsMutation, useGetPlatformUsageQuery, useGetPlatformFlagsQuery, useSavePlatformFlagsMutation, usePausePlatformDigitalMetalsMutation, useGetPlatformDigitalMetalsStatusQuery, useApprovePlatformDigitalMetalsTaxMutation, usePublishPlatformDigitalMetalsTermsMutation, useSavePaymentIntegrationMutation, useVerifyPaymentIntegrationMutation, useSaveMessageCentralIntegrationMutation, useVerifyMessageCentralIntegrationMutation, useChangeTenantPlanMutation, useUpdateTenantLimitsMutation, useExtendTenantSubscriptionMutation, useCancelTenantSubscriptionMutation, useGetTenantInvoicesQuery, useCreateTenantInvoiceMutation, useMarkPlatformInvoicePaidMutation, useGetPlatformAuditLogsQuery, useGetWebhookFailuresQuery, useLazyGetWebhookFailuresQuery, useRetryWebhookFailureMutation, useGetPlatformErrorLogsQuery, useGetPlatformLivenessHealthQuery, useGetPlatformReadinessHealthQuery, useRegisterDemoTemplateMutation, useGetDemoTemplatesQuery, useGetDemoTemplateQuery, useGetDemoTemplateVersionsQuery, usePublishDemoTemplateVersionMutation, useCreateDemoInstanceMutation, usePresignDemoLogoUploadMutation, useCompleteDemoLogoUploadMutation, useGetDemoInstancesQuery, useGetDemoInstanceQuery, useUpdateDemoInstanceMutation, useRotateDemoInstanceLinkMutation, useCopyDemoInstanceLinkMutation, useDisableDemoInstanceMutation, useReactivateDemoInstanceMutation, useGetLandingDemoRequestsQuery, useGetLandingDemoRequestQuery, usePatchLandingDemoRequestMutation, useLazyGetLandingDemoShareLinkQuery, useRetryLandingDemoProvisionMutation } = platformApi;
+export const { usePlatformLoginMutation, usePlatformLogoutMutation, useGetPlatformDashboardQuery, useGetPlatformChartQuery, useGetPlatformPlansQuery, useGetPlatformPlanQuery, useSavePlatformPlanMutation, useDeprecatePlatformPlanMutation, useGetPlatformTenantsQuery, useGetPlatformTenantQuery, useCreatePlatformTenantMutation, useUpdatePlatformTenantMutation, useSuspendPlatformTenantMutation, useReactivatePlatformTenantMutation, useGoLivePlatformTenantMutation, useResetOwnerCredentialsMutation, useGetPlatformUsageQuery, useGetPlatformFlagsQuery, useSavePlatformFlagsMutation, usePausePlatformDigitalMetalsMutation, useSetPlayStoreReviewOtpMutation, useSetPlatformProductModulesMutation, useGetPlatformDigitalMetalsStatusQuery, useApprovePlatformDigitalMetalsTaxMutation, usePublishPlatformDigitalMetalsTermsMutation, useSavePaymentIntegrationMutation, useVerifyPaymentIntegrationMutation, useSaveMessageCentralIntegrationMutation, useVerifyMessageCentralIntegrationMutation, useChangeTenantPlanMutation, useUpdateTenantLimitsMutation, useExtendTenantSubscriptionMutation, useCancelTenantSubscriptionMutation, useGetTenantInvoicesQuery, useCreateTenantInvoiceMutation, useMarkPlatformInvoicePaidMutation, useGetPlatformAuditLogsQuery, useGetWebhookFailuresQuery, useLazyGetWebhookFailuresQuery, useRetryWebhookFailureMutation, useGetPlatformErrorLogsQuery, useGetPlatformLivenessHealthQuery, useGetPlatformReadinessHealthQuery, useRegisterDemoTemplateMutation, useGetDemoTemplatesQuery, useGetDemoTemplateQuery, useGetDemoTemplateVersionsQuery, usePublishDemoTemplateVersionMutation, useCreateDemoInstanceMutation, usePresignDemoLogoUploadMutation, useCompleteDemoLogoUploadMutation, useGetDemoInstancesQuery, useGetDemoInstanceQuery, useUpdateDemoInstanceMutation, useRotateDemoInstanceLinkMutation, useCopyDemoInstanceLinkMutation, useDisableDemoInstanceMutation, useReactivateDemoInstanceMutation, useGetLandingDemoRequestsQuery, useGetLandingDemoRequestQuery, usePatchLandingDemoRequestMutation, useLazyGetLandingDemoShareLinkQuery, useRetryLandingDemoProvisionMutation } = platformApi;

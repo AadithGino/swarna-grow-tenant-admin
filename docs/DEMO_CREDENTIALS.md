@@ -209,6 +209,8 @@ Seeded with `npm run seed:my-dream-diamond` (backend).
 
 ## Notes
 
+- **Play Store app review (jewellery customer apps):** Platform → jeweller → **Provisioning** → **Play Store app review OTP** toggle (or Mongo `operations.playStoreReviewOtpEnabled`). Customer apps unchanged; testers use **`123456`** on normal OTP verify. After **go-live**, the toggle is blocked unless backend has **`PLAYSTORE_REVIEW_OTP_ALLOW_AFTER_GO_LIVE=true`** (staging/dev only; production boot rejects it). Go-live still clears the tenant flag.
+- **Shop / booking / scheme checkout / digital metals:** Platform → jeweller → **Provisioning** → **Customer product modules** (or **Enable all**). Still needs PhonePe + env rollout where applicable.
 - Staff/agent passwords are **4-digit PINs** (`2026`), not `Swarna@2026` (outdated in some contract docs).
 - Platform password defaults to `1234` (min 4 chars in seed); override via `SEED_PLATFORM_PASSWORD`.
 - PhonePe and WhatsApp run in **mock mode** until configured per tenant / env.

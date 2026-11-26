@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   customerBannerQueryOptions,
   useCustomerBannerScheduleRefetch,
@@ -36,6 +36,7 @@ import {
   useGetShopAvailabilityQuery,
   useGetShopCategoriesQuery,
   useGetShopProductsQuery,
+  useListShopBookingsQuery,
   useListShopOrdersQuery,
 } from "@/src/store/api/customer-api";
 import type { CustomerPromoBanner } from "@/src/features/customer/customer-promo-banners";
@@ -43,7 +44,15 @@ import { CustomerActivityRow } from "@/src/features/customer/customer-activity-r
 import { useCustomerTenant } from "@/src/components/customer/customer-tenant-context";
 import { customerPath } from "@/src/lib/customer-tenant";
 import { customerBannerHref } from "@/src/lib/customer-banner-routing";
-import { customerShopOrderPath, customerShopOrdersPath } from "@/src/lib/customer-shop-paths";
+import {
+  bookingHomePollMs,
+  bookingPayAction,
+  isOpenBooking,
+  sortBookingsForHome,
+  type CustomerBooking,
+} from "@/src/lib/customer-shop-booking";
+import { customerShopBookingPath, customerShopBookingsPath, customerShopOrderPath, customerShopOrdersPath } from "@/src/lib/customer-shop-paths";
+import { BookingHighlightCard } from "@/src/features/customer/customer-shop-booking-highlight";
 import { customerDigitalMetalsOrdersHubHref } from "@/src/lib/customer-digital-metals-order-links";
 import { useCustomerGoldMetricsVisible } from "@/src/lib/customer-gold-ui";
 import { useCustomerPortalCapabilities } from "@/src/lib/customer-portal-capabilities";
@@ -76,6 +85,7 @@ function dueParts(label?: string | null) {
 }
 
 const RAIL = "customer-scroll-row -mx-4 flex gap-2.5 overflow-x-auto px-4 pb-0.5";
+const BANNER_RAIL = "customer-scroll-row flex gap-2.5 overflow-x-auto pb-0.5";
 
 /* ───────────────────────── Digital metals ───────────────────────── */
 
@@ -221,6 +231,19 @@ export function CustomerHomePage() {
   const featured = useGetShopProductsQuery({ featured: true, limit: 4 }, { skip: !shopOn });
   const newest = useGetShopProductsQuery({ limit: 12, sort: "newest" }, { skip: !shopOn });
   const shopOrders = useListShopOrdersQuery({ limit: 10 }, { skip: !shopOn && !shopAvailability?.hasOrderHistory });
+  const [bookingPollMs, setBookingPollMs] = useState(0);
+  const bookingsQuery = useListShopBookingsQuery(
+    { limit: 10 },
+    { skip: !shopOn, pollingInterval: bookingPollMs > 0 ? bookingPollMs : undefined },
+  );
+  const openBookings = useMemo(() => {
+    const items = (bookingsQuery.data?.items ?? []) as unknown as CustomerBooking[];
+    return sortBookingsForHome(items.filter((b) => isOpenBooking(b.status)));
+  }, [bookingsQuery.data?.items]);
+  useEffect(() => {
+    const next = bookingHomePollMs(openBookings);
+    if (next !== bookingPollMs) setBookingPollMs(next);
+  }, [openBookings, bookingPollMs]);
   const portfolio = useGetCustomerDigitalMetalsPortfolioQuery(undefined, { skip: !metalsOn });
   const redemptions = useGetCustomerDigitalMetalsRedemptionOrdersQuery({ limit: 10 }, { skip: !metalsOn });
 
@@ -394,6 +417,17 @@ export function CustomerHomePage() {
     tiles.push({ key: "due", icon: IndianRupee, label: "Next instalment", value: dueAmount.amountDisplay, note: actionScheme.planName });
   }
   if (tiles.length === 0) tiles.push({ key: "active", icon: Layers3, label: "Active schemes", value: String(schemes.length) });
+  const shopBalance = data.summary.shopBalance;
+  if (shopBalance?.summaryLine && !tiles.some((t) => t.key === "shop-scheme")) {
+    tiles.push({
+      key: "shop-scheme",
+      icon: ShoppingBag,
+      label: "Scheme shop use",
+      value: shopBalance.summaryLine.split(" · ")[0] ?? shopBalance.summaryLine,
+      note: shopBalance.summaryLine.includes(" · ") ? shopBalance.summaryLine.split(" · ").slice(1).join(" · ") : undefined,
+      href: shopOn ? customerPath(tenantSlug, "shop", "orders") : customerPath(tenantSlug, "schemes"),
+    });
+  }
 
   const shopLoading = shopOn && (categories.isLoading || featured.isLoading || newest.isLoading);
 
@@ -525,11 +559,11 @@ export function CustomerHomePage() {
 
       {banners.length ? (
         <CkSection title="Offers for you">
-          <div className={RAIL}>
+          <div className={BANNER_RAIL}>
             {banners.map((banner) => {
               const href = customerBannerHref(tenantSlug ?? "", banner.destination ?? { type: "NONE" }, { shopAvailable: shopOn });
               const card = (
-                <div className="relative h-[10.5rem] w-[19.5rem] shrink-0 snap-start overflow-hidden rounded-[1.1rem] bg-[#2a0a10] text-white">
+                <div className="relative h-[10.5rem] w-full overflow-hidden rounded-[1.1rem] bg-[#2a0a10] text-white">
                   {banner.imageUploadId ? (
                     <EcommerceCatalogImage uploadId={banner.imageUploadId} viewUrl={banner.imageUrl ?? undefined} channel="customer" alt="" fill className="object-cover object-[70%_30%]" />
                   ) : null}
@@ -546,16 +580,38 @@ export function CustomerHomePage() {
                   </span>
                 </div>
               );
+              const slideClass =
+                banners.length > 1
+                  ? "block w-[19.5rem] max-w-full shrink-0 grow-0 snap-start"
+                  : "block w-full shrink-0 grow-0 basis-full snap-start";
               return href ? (
-                <Link key={banner.id} href={href} aria-label={banner.title} className="shrink-0">
+                <Link key={banner.id} href={href} aria-label={banner.title} className={slideClass}>
                   {card}
                 </Link>
               ) : (
-                <div key={banner.id} className="shrink-0">
+                <div key={banner.id} className={slideClass}>
                   {card}
                 </div>
               );
             })}
+          </div>
+        </CkSection>
+      ) : null}
+
+      {shopOn && openBookings.length > 0 ? (
+        <CkSection
+          title={openBookings.some((b) => bookingPayAction(b)) ? "Booking due" : "Your reserved pieces"}
+          href={customerShopBookingsPath(tenantSlug)}
+          linkLabel="All bookings"
+        >
+          <div className="space-y-2.5">
+            {openBookings.slice(0, 3).map((booking) => (
+              <BookingHighlightCard
+                key={booking.id}
+                booking={booking}
+                href={customerShopBookingPath(tenantSlug, booking.id)}
+              />
+            ))}
           </div>
         </CkSection>
       ) : null}

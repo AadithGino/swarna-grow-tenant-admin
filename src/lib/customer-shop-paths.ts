@@ -19,3 +19,9 @@ export function customerShopBookingPath(tenantSlug: string | null, bookingId: st
 export function customerShopBookingsPath(tenantSlug: string | null): string {
   return customerPath(tenantSlug, "shop", "bookings");
 }
+
+export function customerShopActivityPath(tenantSlug: string | null, filter?: string): string {
+  const base = customerPath(tenantSlug, "shop", "activity");
+  if (!filter || filter === "all") return base;
+  return `${base}?filter=${encodeURIComponent(filter)}`;
+}

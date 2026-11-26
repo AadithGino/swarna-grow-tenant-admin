@@ -131,6 +131,7 @@ export type PlatformTenantDetail = PlatformTenantRow & {
   address: string;
   supportNumber: string;
   goLiveAt: string | null;
+  reviewOtpPolicy?: { allowAfterGoLive?: boolean };
   branding: { logoUrl: string | null; primaryColor: string; accentColor: string; displayName: string };
   settings: Record<string, boolean>;
   integrations: {

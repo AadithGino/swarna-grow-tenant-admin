@@ -200,6 +200,10 @@ export interface Enrollment {
     settlementPaise?: number;
     mode?: string;
     requestedAt?: string;
+    ecommerceOrderId?: string;
+    ecommerceOrderNumber?: string | null;
+    ecommerceSchemeRemaining?: number | null;
+    ecommerceSchemeAppliedPaise?: number | null;
   } | null;
   completedRedemption?: {
     id: string;
@@ -209,7 +213,23 @@ export interface Enrollment {
     mode?: string;
     completedAt?: string;
     requestedAt?: string;
+    ecommerceOrderId?: string;
+    ecommerceOrderNumber?: string | null;
+    ecommerceSchemeRemaining?: number | null;
   } | null;
+  shopBalanceSummary?: import("@/src/lib/scheme-shop-balance").SchemeShopBalanceSummary | null;
+  schemeSpend?: Array<{
+    id: string;
+    orderId?: string;
+    orderNumber?: string | null;
+    appliedLabel?: string;
+    remainingLabel?: string | null;
+    description?: string;
+    occurredAt?: string;
+    countsAsSpend?: boolean;
+    outcomeLabel?: string;
+  }>;
+  schemeSpendAttempts?: Enrollment["schemeSpend"];
   helperText?: string;
   payableMin?: number;
   payableMax?: number;
@@ -547,6 +567,8 @@ export interface SettlementPreview {
   /** Cash-value gold handover: settlement minus valued handover weight (paise as rupees). */
   roundingDelta?: number;
   handoverValue?: number;
+  /** Online shop checkouts: why maturity quote may differ from gross plan value. */
+  ecommerceSchemeNotes?: string[];
 }
 
 export interface RedemptionRecord {

@@ -1,14 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
-import { ArrowLeft, CalendarCheck, ChevronRight, Gem } from "lucide-react";
+import { useEffect, useState } from "react";
+import { ArrowLeft, CalendarCheck, ChevronRight, Clock, Gem } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PageSkeleton, QueryError } from "@/src/components/common/query-state";
 import { useCustomerTenant } from "@/src/components/customer/customer-tenant-context";
 import { customerPath } from "@/src/lib/customer-tenant";
 import { customerBrandStyle } from "@/src/lib/customer-brand-styles";
-import { bookingPayAction, bookingSteps, formatBookingWhen, type CustomerBooking } from "@/src/lib/customer-shop-booking";
+import { bookingPayAction, bookingSteps, bookingTimeLeft, formatBookingWhen, type CustomerBooking } from "@/src/lib/customer-shop-booking";
 import { customerShopBookingPath } from "@/src/lib/customer-shop-paths";
 import { formatShopInr, SHOP_MUTED } from "@/src/features/customer/customer-shop-ui";
 import { BookingStatusPill } from "@/src/features/customer/customer-shop-booking-page";
@@ -18,6 +18,11 @@ import { cn } from "@/lib/utils";
 export function CustomerShopBookingsPage() {
   const { tenantSlug } = useCustomerTenant();
   const [cursor, setCursor] = useState<string | undefined>(undefined);
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const t = window.setInterval(() => setNow(Date.now()), 30_000);
+    return () => window.clearInterval(t);
+  }, []);
   const bookings = useListShopBookingsQuery({ cursor, limit: 20 });
 
   if (bookings.isLoading && !bookings.data) return <PageSkeleton cards={2} />;
@@ -83,7 +88,11 @@ export function CustomerShopBookingsPage() {
                     <span className="flex items-center justify-between gap-3 border-t border-[#f3e8e2] bg-[#fdf6f3] px-4 py-3 text-sm">
                       <span className="min-w-0">
                         <span className="block font-semibold text-[#221a1d]">{action.label} · {formatShopInr(action.amountPaise, 2)}</span>
-                        {action.dueAt ? <span className={cn("block text-xs", SHOP_MUTED)}>by {formatBookingWhen(action.dueAt)}</span> : null}
+                        {action.dueAt ? (
+                          <span className={cn("mt-0.5 flex items-center gap-1 text-xs", bookingTimeLeft(action.dueAt, now) ? "font-semibold text-amber-800" : SHOP_MUTED)}>
+                            {bookingTimeLeft(action.dueAt, now) ? <><Clock className="size-3.5" /> {bookingTimeLeft(action.dueAt, now)}</> : <>by {formatBookingWhen(action.dueAt)}</>}
+                          </span>
+                        ) : null}
                       </span>
                       <span className="inline-flex shrink-0 items-center gap-1 rounded-full px-3.5 py-1.5 text-xs font-bold text-white" style={customerBrandStyle.primaryBg}>
                         Pay <ChevronRight className="size-3.5" />

@@ -127,7 +127,7 @@ function CustomerShellInner({ children }: { children: React.ReactNode }) {
 
   if (!splashDone) {
     return (
-      <div className="customer-theme min-h-screen bg-[#1f0109]">
+      <div className="customer-theme min-h-screen bg-[#0a0a0a]">
         <CustomerBrandingSplash onDone={onSplashDone} />
       </div>
     );

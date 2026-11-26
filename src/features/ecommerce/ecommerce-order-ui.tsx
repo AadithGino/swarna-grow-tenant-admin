@@ -9,6 +9,7 @@ import {
 import type { EcommerceOrderDetail, EcommerceOrderListItem } from "@/src/types/ecommerce-order";
 import { StatusBadge } from "@/src/components/common/status-badge";
 import { cn } from "@/lib/utils";
+import { formatSchemeRemaining } from "@/src/lib/scheme-purchase-display";
 
 export function formatOrderInr(paise: number) {
   return `₹${(paise / 100).toLocaleString("en-IN", { minimumFractionDigits: 2 })}`;
@@ -236,7 +237,19 @@ export function OrderSideCards({ order }: { order: EcommerceOrderDetail }) {
         <div className="mt-2 divide-y divide-[#f3eae7] border-t border-[#f3eae7]">
           {order.paidAt ? <SideRow label="Paid">{formatOrderWhen(order.paidAt)}</SideRow> : null}
           {order.expiresAt ? (
-            <SideRow label={order.status === "COD_PENDING_ACCEPTANCE" ? "Accept by" : "Pay by"}>{formatOrderWhen(order.expiresAt)}</SideRow>
+            <SideRow
+              label={
+                order.status === "COD_PENDING_ACCEPTANCE"
+                  ? "Accept by"
+                  : (() => {
+                      const snap = order.financialSnapshot as { schemePurchase?: { approvalStatus?: string } } | undefined;
+                      const pending = snap?.schemePurchase?.approvalStatus === "PENDING";
+                      return pending ? "Approve by" : "Pay by";
+                    })()
+              }
+            >
+              {formatOrderWhen(order.expiresAt)}
+            </SideRow>
           ) : null}
           {order.paymentMethod === "COD" ? (
             <SideRow label="Courier COD">{String(order.courierCodCollectionStatus ?? "PENDING").replaceAll("_", " ").toLowerCase()}</SideRow>
@@ -338,12 +351,23 @@ export function OrderAmountsGrid({ order }: { order: Record<string, unknown> }) 
     order.financialSnapshot && typeof order.financialSnapshot === "object"
       ? (order.financialSnapshot as Record<string, unknown>)
       : null;
+  const schemePurchase =
+    financialSnapshot?.schemePurchase && typeof financialSnapshot.schemePurchase === "object"
+      ? (financialSnapshot.schemePurchase as Record<string, unknown>)
+      : null;
   const taxComponentLines = (financialSnapshot?.taxComponentLines as Record<string, unknown>[]) ?? [];
   const amountRows: Array<[string, unknown]> = [
     ["Subtotal (before tax)", order.subtotalPaise],
     ["Tax", order.taxPaise],
     ["Delivery / handling", order.fulfilmentChargePaise],
   ];
+  const merchandisePaise = Number(
+    schemePurchase?.grossPaise
+      ?? Number(order.subtotalPaise ?? 0) + Number(order.taxPaise ?? 0) + Number(order.fulfilmentChargePaise ?? 0),
+  );
+  const topUpPaise = Number(schemePurchase?.topUpPaise ?? order.totalPaise ?? 0);
+  const appliedPaise = Number(schemePurchase?.appliedPaise ?? 0);
+  const schemeBasis = String(schemePurchase?.basis ?? "CASH_VALUE");
 
   return (
     <div className="space-y-3 px-5 py-4 text-sm">
@@ -354,9 +378,27 @@ export function OrderAmountsGrid({ order }: { order: Record<string, unknown> }) 
             <dd className="font-semibold tabular-nums text-[#28161a]">{formatOrderInr(Number(paise ?? 0))}</dd>
           </div>
         ))}
+        {schemePurchase ? (
+          <>
+            <div className="flex items-center justify-between border-t border-dashed border-[#e6dad6] pt-2">
+              <dt className="text-[#6f6265]">Merchandise total</dt>
+              <dd className="font-semibold tabular-nums text-[#28161a]">{formatOrderInr(merchandisePaise)}</dd>
+            </div>
+            <div className="flex items-center justify-between">
+              <dt className="text-[#6f6265]">From matured scheme</dt>
+              <dd className="font-semibold tabular-nums text-emerald-800">
+                − {schemeBasis === "GOLD_WEIGHT" && Number(schemePurchase.applied ?? 0) > 0
+                  ? formatSchemeRemaining("GOLD_WEIGHT", Number(schemePurchase.applied))
+                  : formatOrderInr(appliedPaise)}
+              </dd>
+            </div>
+          </>
+        ) : null}
         <div className="flex items-center justify-between border-t border-dashed border-[#e6dad6] pt-3">
-          <dt className="font-bold text-[#28161a]">Total charged</dt>
-          <dd className="text-lg font-extrabold tabular-nums text-[#5e0a20]">{formatOrderInr(Number(order.totalPaise ?? 0))}</dd>
+          <dt className="font-bold text-[#28161a]">{schemePurchase ? "Customer pays online" : "Total charged"}</dt>
+          <dd className="text-lg font-extrabold tabular-nums text-[#5e0a20]">
+            {schemePurchase && topUpPaise === 0 ? "₹0.00 (scheme only)" : formatOrderInr(topUpPaise)}
+          </dd>
         </div>
       </dl>
       {taxComponentLines.length > 0 ? (

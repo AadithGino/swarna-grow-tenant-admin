@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useLanding } from "./landing-context";
 import { CUSTOMER_RANGES, LP, PLAN_FEATURES, SETUP_FEE, whatsappLink } from "./landing-config";
 import { ChevronDownIcon, WhatsAppIcon } from "./landing-icons";
-import { buildDemoLead, cleanPhoneDigits, sendDemoLead, validPhone, type DemoLead } from "./demo-lead";
+import { buildDemoLead, cleanPhoneDigits, sendDemoLead, trackLandingLeadPixel, validPhone, type DemoLead } from "./demo-lead";
 import { prepareLogo } from "./demo-logo";
 import { BrandOverlay } from "./landing-top";
 import { seededRandom } from "./landing-hooks";
@@ -246,6 +246,7 @@ export function DemoModal() {
       setNote({ text: "Could not submit right now. Please check your connection and try again.", err: true });
       return;
     }
+    trackLandingLeadPixel();
     window.setTimeout(() => {
       setSubmitting(false);
       setNote({ text: DEFAULT_NOTE, err: false });

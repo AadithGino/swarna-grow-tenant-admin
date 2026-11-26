@@ -511,6 +511,7 @@ export function adaptEnrollmentList(
       paidAmountBenefitTreatment:
         item.planSnapshot?.redemptionRules?.paidAmountBenefitTreatment ??
         plan.redemptionRules?.paidAmountBenefitTreatment,
+      shopBalanceSummary: item.shopBalanceSummary ?? null,
     };
   }) as Enrollment[];
 }
@@ -635,6 +636,11 @@ export function adaptEnrollment(raw: any): Enrollment {
     pendingRedemption: item.pendingRedemption ?? row.pendingRedemption ?? null,
     completedRedemption:
       item.completedRedemption ?? row.completedRedemption ?? null,
+    schemeSpend: Array.isArray(item.schemeSpend) ? item.schemeSpend : row.schemeSpend ?? [],
+    schemeSpendAttempts: Array.isArray(item.schemeSpendAttempts)
+      ? item.schemeSpendAttempts
+      : row.schemeSpendAttempts ?? [],
+    shopBalanceSummary: item.shopBalanceSummary ?? row.shopBalanceSummary ?? null,
     payableMin: rupees(payable.min),
     payableMax: rupees(payable.max),
     payableSuggested: payable.suggested ? rupees(payable.suggested) : null,
@@ -926,6 +932,7 @@ export function adaptEnrollments(raw: any): {
   total: number;
   summary: ReturnType<typeof enrollmentSummaryFromItems>;
   page: ListPageMeta;
+  shopBalanceOverview?: import("@/src/lib/scheme-shop-balance").CustomerShopBalanceOverview | null;
 } {
   if (raw?.items && Array.isArray(raw.items)) {
     if (raw.items.length === 0) {
@@ -949,11 +956,17 @@ export function adaptEnrollments(raw: any): {
   const items = adaptEnrollmentList(raw);
   const meta = contractMeta(raw);
   const total = meta?.total ?? raw.total ?? items.length;
+  const payload = contractPayload(raw) ?? raw;
   return {
     items,
     total,
     summary: enrollmentSummaryFromMeta(meta?.summary, items),
     page: mergePageMeta(meta ?? raw, { total }),
+    shopBalanceOverview:
+      payload?.shopBalanceOverview
+      ?? raw?.shopBalanceOverview
+      ?? meta?.shopBalanceOverview
+      ?? null,
   };
 }
 
@@ -3508,6 +3521,9 @@ export function adaptSettlementPreview(
       approvalReason: payload.approvalReason,
       warningText: payload.warningText,
       valuationNote: payload.valuationNote,
+      ecommerceSchemeNotes: Array.isArray(payload.ecommerceSchemeNotes)
+        ? (payload.ecommerceSchemeNotes as string[])
+        : undefined,
       ...settlementPreviewMetaFields(payload),
       handoverValue:
         payload.handoverValuePaise != null

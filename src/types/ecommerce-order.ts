@@ -183,6 +183,13 @@ export type EcommerceOrderDetail = EcommerceOrderListItem & {
   courierCodCollectionStatus?: string | null;
   courierCodRemittanceStatus?: string | null;
   codBankRemittanceReconciled?: boolean | null;
+  schemeBackingRelease?: {
+    eligible: boolean;
+    reason?: string;
+    schemeStatus?: string;
+    schemeNumber?: string;
+    code?: string;
+  };
 };
 
 export type EcommerceOrderPaymentExceptionRefund = {

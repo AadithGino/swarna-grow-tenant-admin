@@ -15,6 +15,7 @@ import {
 } from "@/src/components/common/page-parts";
 import { PageSkeleton, QueryError } from "@/src/components/common/query-state";
 import {
+  formatOrderInr,
   formatOrderWhen,
   OrderAmountsGrid,
   OrderEventTimeline,
@@ -22,6 +23,7 @@ import {
   OrderProgress,
   OrderSideCards,
 } from "@/src/features/ecommerce/ecommerce-order-ui";
+import { formatSchemeRemaining } from "@/src/lib/scheme-purchase-display";
 import { StatusBadge } from "@/src/components/common/status-badge";
 import { Download } from "lucide-react";
 import {
@@ -46,6 +48,7 @@ import {
   useGetEcommerceOrderCancellationQuery,
   useDecideEcommerceOrderCancellationMutation,
   useInitiateEcommerceOrderCancellationMutation,
+  useReleaseEcommerceSchemeBackingMutation,
   useRecordEcommerceCodCancellationManualRefundMutation,
   usePatchEcommerceOrderDeliveryTrackingMutation,
   useDecideEcommerceReturnRequestMutation,
@@ -62,7 +65,9 @@ import {
   codDeliveredFulfilmentLabel,
   nextFulfilmentTargets,
   orderListPrimaryAction,
+  orderPaymentPresentation,
 } from "@/src/lib/ecommerce-order-presenters";
+import { cn } from "@/lib/utils";
 import {
   ordersListBackHref,
   parseOrdersListFiltersFromSearchParams,
@@ -126,6 +131,7 @@ export function EcommerceOrderDetailPage({ orderId }: { orderId: string }) {
   const cancellation = useGetEcommerceOrderCancellationQuery(orderId, { skip: !canRead });
   const [decideCancellation, decideState] = useDecideEcommerceOrderCancellationMutation();
   const [initiateCancellation, initiateCancelState] = useInitiateEcommerceOrderCancellationMutation();
+  const [releaseSchemeBacking, releaseSchemeState] = useReleaseEcommerceSchemeBackingMutation();
   const [recordCodRefund, recordCodRefundState] = useRecordEcommerceCodCancellationManualRefundMutation();
   const [codRefundRecipient, setCodRefundRecipient] = useState("");
   const [codRefundMethod, setCodRefundMethod] = useState("");
@@ -334,14 +340,31 @@ export function EcommerceOrderDetailPage({ orderId }: { orderId: string }) {
             <StatusBadge
               status={String(order.status ?? "")}
               label={
-                order.status === "COD_PENDING_ACCEPTANCE"
+                order.statusLabel
+                ?? (order.status === "COD_PENDING_ACCEPTANCE"
                   ? "COD to accept"
-                  : codDeliveredFulfilmentLabel(order)
+                  : codDeliveredFulfilmentLabel(order))
               }
             />
-            <span className="rounded-full bg-[#f6efec] px-2.5 py-0.5 text-xs font-semibold text-[#5c4a4e]">
-              {order.paymentMethod === "COD" ? "Cash on delivery" : "Paid online"}
-            </span>
+            {(() => {
+              const pay = orderPaymentPresentation(order);
+              return (
+                <span
+                  className={cn(
+                    "rounded-full px-2.5 py-0.5 text-xs font-semibold",
+                    pay.tone === "success"
+                      ? "bg-emerald-50 text-emerald-900"
+                      : pay.tone === "warning"
+                        ? "bg-amber-50 text-amber-950"
+                        : pay.tone === "danger"
+                          ? "bg-red-50 text-red-900"
+                          : "bg-[#f6efec] text-[#5c4a4e]",
+                  )}
+                >
+                  {pay.methodLabel}: {pay.stateLabel}
+                </span>
+              );
+            })()}
             {order.paymentExceptionStatus ? (
               <StatusBadge status="FAILED" label={String(order.paymentExceptionStatus).replaceAll("_", " ").toLowerCase()} />
             ) : null}
@@ -392,6 +415,54 @@ export function EcommerceOrderDetailPage({ orderId }: { orderId: string }) {
 
         <TabsContent value="fulfilment" className={detailRecordTabContentClass}>
           <div className="space-y-5">
+      {schemePurchase ? (
+        <div className="space-y-2 rounded-xl border border-amber-200 bg-amber-50/40 p-4">
+          <h2 className="font-semibold">Matured scheme payment</h2>
+          <dl className="grid gap-2 text-sm sm:grid-cols-2">
+            <div><dt className="text-muted-foreground">Order merchandise total</dt><dd className="font-medium">{formatOrderInr(Number(schemePurchase.grossPaise ?? 0))}</dd></div>
+            <div><dt className="text-muted-foreground">From scheme</dt><dd className="font-medium text-emerald-800">− {formatOrderInr(Number(schemePurchase.appliedPaise ?? 0))}</dd></div>
+            <div><dt className="text-muted-foreground">Customer top-up</dt><dd className="font-medium">{formatOrderInr(Number(schemePurchase.topUpPaise ?? 0))}</dd></div>
+            {Number(schemePurchase.remaining ?? 0) > 0 ? (
+              <div className="sm:col-span-2"><dt className="text-muted-foreground">Unused scheme balance after this order</dt><dd className="font-medium">{formatSchemeRemaining(String(schemePurchase.basis ?? "CASH_VALUE"), Number(schemePurchase.remaining))} stays on enrolment {String(schemePurchase.schemeId ?? "")}</dd></div>
+            ) : null}
+          </dl>
+        </div>
+      ) : null}
+      {order.schemeBackingRelease?.eligible && canFulfilmentOperate ? (
+        <div className="space-y-3 rounded-xl border border-red-200 bg-red-50/50 p-4">
+          <h2 className="font-semibold text-red-950">Scheme backing issue</h2>
+          <p className="text-sm text-red-900/90">
+            {order.schemeBackingRelease.reason
+              ?? "The enrolment may no longer back this order. Release the scheme hold and cancel to refund any top-up."}
+            {order.schemeBackingRelease.schemeNumber
+              ? ` (${order.schemeBackingRelease.schemeNumber})`
+              : null}
+          </p>
+          <Button
+            type="button"
+            variant="destructive"
+            disabled={releaseSchemeState.isLoading}
+            onClick={() =>
+              void releaseSchemeBacking({
+                orderId,
+                expectedVersion: Number(order.version ?? 1),
+                reason: "Scheme backing invalid — release scheme hold and cancel order.",
+                idempotencyKey: newIdempotencyKey(),
+                stockDisposition: "RESTOCK_CONFIRMED",
+              })
+                .unwrap()
+                .then(() => {
+                  toast.success("Scheme hold released; cancellation started");
+                  query.refetch();
+                  orderEvents.refetch();
+                })
+                .catch(toastApiError)
+            }
+          >
+            Release scheme hold &amp; cancel order
+          </Button>
+        </div>
+      ) : null}
       {schemePurchase?.approvalStatus === "PENDING" && o.status === "PENDING_PAYMENT" && canFulfilmentOperate && (
         <div className="space-y-3 rounded-xl border p-4">
           <h2 className="font-semibold">Scheme purchase approval</h2>

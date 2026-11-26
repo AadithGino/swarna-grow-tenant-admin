@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { parseCustomerSlug } from "@/src/lib/customer-tenant";
 import { resolveCustomerNotificationHref } from "@/src/lib/customer-notification-display";
 import {
+  customerShopActivityPath,
   customerShopBookingPath,
   customerShopBookingsPath,
   customerShopOrderPath,
@@ -40,6 +41,17 @@ describe("customer shop routes", () => {
       section: "shop",
       id: "order",
       extra: "order_123",
+    });
+  });
+
+  it("opens unified tracking at shop/activity", () => {
+    const path = customerShopActivityPath("kairali", "delivery");
+    expect(path).toBe("/customer/kairali/shop/activity?filter=delivery");
+    expect(parseCustomerSlug(path.split("?")[0].split("/").filter(Boolean))).toEqual({
+      tenantSlug: "kairali",
+      section: "shop",
+      id: "activity",
+      extra: undefined,
     });
   });
 

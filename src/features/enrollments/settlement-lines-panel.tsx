@@ -318,6 +318,17 @@ export function SettlementLinesPanel({
         </div>
       ) : null}
 
+      {preview.ecommerceSchemeNotes?.length ? (
+        <div className="space-y-2 rounded-2xl border border-[#e4d7d2] bg-[#faf7f5] px-4 py-3 text-sm leading-6 text-[#5c4f52]">
+          <p className="font-semibold text-[#730321]">Online shop &amp; this quote</p>
+          <ul className="list-disc space-y-1 pl-5">
+            {preview.ecommerceSchemeNotes.map((note) => (
+              <li key={note}>{note}</li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
       <SettlementCashBasisPanel preview={preview} mode={redemptionMode} />
 
       {preview.textBenefits.map((benefit) => (

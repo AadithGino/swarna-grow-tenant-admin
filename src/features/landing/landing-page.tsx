@@ -23,6 +23,7 @@ import {
   LandingPricing,
 } from "./landing-bottom";
 import { DemoModal } from "./demo-modal";
+import { LandingMetaPixelNoscript, useLandingMetaPixel } from "./landing-meta-pixel";
 
 /** Sets the page title and meta tags while the landing page is mounted, then restores them. */
 function useDocumentMeta() {
@@ -69,6 +70,7 @@ function LandingContent() {
   const [barOn, setBarOn] = useState(false);
 
   useDocumentMeta();
+  useLandingMetaPixel();
   useRevealOnScroll(rootRef);
 
   // `?demo=1` (or `#book-demo`) opens the demo form straight away; `&brand=` prefills it.
@@ -114,6 +116,7 @@ function LandingContent() {
 
   return (
     <div className={rootClass} ref={rootRef}>
+      <LandingMetaPixelNoscript />
       <script
         type="application/ld+json"
         // Structured data for search engines; static content, no user input.

@@ -206,7 +206,14 @@ function validateSettlementPayload(payload: Record<string, unknown>): boolean {
     const mode = (modeRow as { mode?: unknown }).mode;
     if (typeof mode !== "string" || !mode.trim()) return false;
   }
-  if (payload.eligible && (finalRaw as MoneyRef).amountPaise <= 0) return false;
+  const hasBlockers = Array.isArray(payload.blockers) && payload.blockers.length > 0;
+  if (
+    payload.eligible
+    && (finalRaw as MoneyRef).amountPaise <= 0
+    && !hasBlockers
+  ) {
+    return false;
+  }
   return true;
 }
 
@@ -246,6 +253,9 @@ export function adaptCustomerSettlementPreview(raw: unknown): CustomerSettlement
     modePreviews: payload.modePreviews as CustomerSettlementPreview["modePreviews"],
     warningText: typeof payload.warningText === "string" ? payload.warningText : undefined,
     valuationNote: typeof payload.valuationNote === "string" ? payload.valuationNote : undefined,
+    ecommerceSchemeNotes: Array.isArray(payload.ecommerceSchemeNotes)
+      ? (payload.ecommerceSchemeNotes as string[])
+      : undefined,
     cashSettlementBasis: payload.cashSettlementBasis as CustomerSettlementPreview["cashSettlementBasis"],
     paidAmountBenefitTreatment:
       payload.paidAmountBenefitTreatment as CustomerSettlementPreview["paidAmountBenefitTreatment"],

@@ -87,14 +87,24 @@ export function EnrollmentRedemptionStatus({
                     <strong className="text-[#730321]">{settlement}</strong>
                   </>
                 ) : null}
-                {payout ? <> · {payout}</> : null}. Collections and a new
-                initiate are blocked until this request is finished.
+                {payout ? <> · {payout}</> : null}
+                {pending.mode === "PURCHASE_ADJUSTMENT" && pending.ecommerceOrderNumber ? (
+                  <>
+                    {" "}
+                    · Linked shop order{" "}
+                    <strong>{pending.ecommerceOrderNumber}</strong>
+                    {pending.ecommerceSchemeRemaining != null && pending.ecommerceSchemeRemaining > 0 ? (
+                      <> · Unused balance kept on scheme ({money((pending.ecommerceSchemeRemaining as number) / 100)})</>
+                    ) : null}
+                  </>
+                ) : null}
+                . Collections and a new initiate are blocked until this request is finished.
               </p>
             </div>
           </div>
           <Button variant="outline" className="shrink-0 bg-white" asChild>
-            <Link href={`/maturity?review=${pending.id}`}>
-              Review in queue
+            <Link href={pending.ecommerceOrderId ? `/ecommerce/orders/${pending.ecommerceOrderId}` : `/maturity?review=${pending.id}`}>
+              {pending.ecommerceOrderId ? "View shop order" : "Review in queue"}
               <ArrowRight className="size-4" />
             </Link>
           </Button>
@@ -152,8 +162,27 @@ export function EnrollmentRedemptionStatus({
                   <strong className="text-[#730321]">{settlement}</strong>
                 </>
               ) : null}
-              {payout ? <> · {payout}</> : null}. This enrollment is closed.
+              {payout ? <> · {payout}</> : null}
+              {completed?.mode === "PURCHASE_ADJUSTMENT" && completed.ecommerceOrderNumber ? (
+                <>
+                  {" "}
+                  · Shop order{" "}
+                  <strong>{completed.ecommerceOrderNumber}</strong>
+                  {completed.ecommerceSchemeRemaining != null && completed.ecommerceSchemeRemaining > 0 ? (
+                    <> · Unused balance kept on scheme ({money((completed.ecommerceSchemeRemaining as number) / 100)})</>
+                  ) : null}
+                </>
+              ) : null}
+              . This enrollment is closed.
             </p>
+            {completed?.mode === "PURCHASE_ADJUSTMENT" && completed.ecommerceOrderId ? (
+              <Link
+                href={`/ecommerce/orders/${completed.ecommerceOrderId}`}
+                className="mt-2 inline-flex items-center gap-1 text-sm font-semibold text-[#730321]"
+              >
+                View shop order <ArrowRight className="size-4" />
+              </Link>
+            ) : null}
             {completed?.completedAt ? (
               <p className="mt-2 text-xs font-medium text-[#776a6d]">
                 Completed{" "}

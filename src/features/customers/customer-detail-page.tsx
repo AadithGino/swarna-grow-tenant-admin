@@ -11,6 +11,7 @@ import {
   Scale,
   Send,
   ShieldCheck,
+  ShoppingBag,
   UserRound,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -49,6 +50,7 @@ import {
   ReceiptLink,
 } from "@/src/components/common/portal-entity-links";
 import { PortalBackLink } from "@/src/components/common/portal-back-link";
+import { SchemeShopBalanceLine } from "@/src/components/scheme-shop-balance";
 import { downloadBlobUrl, downloadText } from "@/src/lib/download";
 import { goldLedgerColumns } from "@/src/components/common/gold-payment-columns";
 import { idempotencyKey, money } from "@/src/lib/format";
@@ -190,6 +192,7 @@ export function CustomerDetailPage({ id }: { id: string }) {
     );
   const customer = customerQuery.data;
   const schemesOverview = schemesOverviewQuery.data?.items ?? [];
+  const shopBalanceOverview = schemesOverviewQuery.data?.shopBalanceOverview;
   const schemes = schemesQuery.data?.items ?? [];
   const payments = paymentsQuery.data?.items ?? [];
   const showGoldLedger = payments.some((p) => paymentHasGoldAccrual(p));
@@ -387,6 +390,14 @@ export function CustomerDetailPage({ id }: { id: string }) {
           detail={`Across ${schemesOverview.length} enrollment${schemesOverview.length === 1 ? "" : "s"} (all time)`}
           tone="wine"
         />
+        {shopBalanceOverview?.summaryLine ? (
+          <StatCard
+            icon={ShoppingBag}
+            label="Scheme shop use"
+            value={shopBalanceOverview.summaryLine.split(" · ")[0] ?? shopBalanceOverview.summaryLine}
+            detail={shopBalanceOverview.summaryLine.includes(" · ") ? shopBalanceOverview.summaryLine.split(" · ").slice(1).join(" · ") : `${shopBalanceOverview.orderCount ?? 0} order(s)`}
+          />
+        ) : null}
         <StatCard
           icon={IndianRupee}
           label="Due now"
@@ -645,6 +656,10 @@ export function CustomerDetailPage({ id }: { id: string }) {
                       className="mt-2"
                       value={(scheme.progress / scheme.tenure) * 100}
                     />
+                    <SchemeShopBalanceLine
+                      summary={scheme.shopBalanceSummary}
+                      className="mt-2 text-left text-xs text-[#730321]"
+                    />
                   </button>
                 ))}
               </div>
@@ -699,6 +714,16 @@ export function CustomerDetailPage({ id }: { id: string }) {
                   render: (r) => `${r.progress} / ${r.tenure}`,
                 },
                 { key: "paid", header: "Paid", render: (r) => money(r.paid) },
+                {
+                  key: "shop",
+                  header: "Shop use",
+                  render: (r) =>
+                    r.shopBalanceSummary?.summaryLine ? (
+                      <span className="text-xs text-muted-foreground">{r.shopBalanceSummary.summaryLine}</span>
+                    ) : (
+                      "—"
+                    ),
+                },
                 { key: "next", header: "Next due", render: (r) => r.nextDue },
                 {
                   key: "maturity",

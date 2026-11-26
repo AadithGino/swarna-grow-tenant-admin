@@ -45,6 +45,25 @@ export function codDeliveredFulfilmentLabel(order: {
   return "Delivered · Payment unconfirmed.";
 }
 
+type SchemePurchaseSnap = {
+  approvalStatus?: string;
+  topUpPaise?: number;
+  appliedPaise?: number;
+};
+
+function schemePurchaseSnap(order: {
+  financialSnapshot?: unknown;
+  schemePurchasePresentation?: unknown;
+}): SchemePurchaseSnap | null {
+  const snap =
+    order.financialSnapshot && typeof order.financialSnapshot === "object"
+      ? (order.financialSnapshot as { schemePurchase?: SchemePurchaseSnap }).schemePurchase
+      : null;
+  if (snap) return snap;
+  const pres = order.schemePurchasePresentation;
+  return pres && typeof pres === "object" ? (pres as SchemePurchaseSnap) : null;
+}
+
 export function orderPaymentPresentation(order: Pick<
   EcommerceOrderListItem,
   | "paymentMethod"
@@ -53,8 +72,13 @@ export function orderPaymentPresentation(order: Pick<
   | "courierCodCollectionStatus"
   | "paymentExceptionStatus"
   | "paymentCompleted"
->): OrderPaymentPresentation {
+> & {
+  financialSnapshot?: unknown;
+  schemePurchasePresentation?: unknown;
+  statusLabel?: string;
+}): OrderPaymentPresentation {
   const method = String(order.paymentMethod ?? "ONLINE");
+  const scheme = schemePurchaseSnap(order);
   if (order.paymentExceptionStatus) {
     return {
       methodLabel: method === "COD" ? "Cash on delivery" : "Online",
@@ -92,6 +116,61 @@ export function orderPaymentPresentation(order: Pick<
     };
   }
   const paid = Boolean(order.paidAt) || order.paymentCompleted === true;
+  const topUp = Number(scheme?.topUpPaise ?? 0);
+  if (scheme) {
+    const approval = String(scheme.approvalStatus ?? "PENDING");
+    if (order.status === "PENDING_PAYMENT" && approval === "PENDING") {
+      return {
+        methodLabel: "Matured scheme",
+        stateLabel: "Awaiting jeweller approval",
+        collected: false,
+        tone: "warning",
+        helper: "Scheme value is reserved until you approve or reject this purchase.",
+      };
+    }
+    if (order.status === "PENDING_PAYMENT" && approval === "APPROVED" && topUp > 0) {
+      return {
+        methodLabel: "Scheme + online",
+        stateLabel: "Awaiting customer top-up",
+        collected: false,
+        tone: "warning",
+        helper: `${formatOrderInr(topUp)} due online after scheme adjustment.`,
+      };
+    }
+    if (order.status === "PAYMENT_EXPIRED" || order.status === "PAYMENT_FAILED") {
+      return {
+        methodLabel: "Matured scheme",
+        stateLabel: order.statusLabel ?? (order.status === "PAYMENT_EXPIRED" ? "Checkout expired" : "Payment failed"),
+        collected: false,
+        tone: "neutral",
+        helper: approval === "PENDING"
+          ? "Approval did not complete before the checkout window ended."
+          : topUp > 0
+            ? "Customer did not pay the remaining amount in time."
+            : "This scheme checkout did not complete.",
+      };
+    }
+    if (paid || order.status === "PAID" || (approval === "APPROVED" && topUp === 0)) {
+      return {
+        methodLabel: "Matured scheme",
+        stateLabel: topUp > 0 ? "Scheme + online top-up received" : "Paid with scheme",
+        collected: true,
+        tone: "success",
+        helper: topUp > 0
+          ? "Scheme adjustment and customer payment are recorded."
+          : "No online charge — the order was fully covered by the enrolment.",
+      };
+    }
+    if (approval === "REJECTED") {
+      return {
+        methodLabel: "Matured scheme",
+        stateLabel: "Scheme purchase rejected",
+        collected: false,
+        tone: "danger",
+        helper: "Scheme reservation was released.",
+      };
+    }
+  }
   if (order.status === "PENDING_PAYMENT") {
     return {
       methodLabel: "Online",

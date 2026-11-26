@@ -34,6 +34,7 @@ export const BOOKING_STATUS_LABEL: Record<string, string> = {
 };
 
 const CLOSED = new Set(["CONVERTED", "CANCELLED", "EXPIRED"]);
+const OPEN = new Set(["PENDING_ADVANCE", "CONFIRMED", "BALANCE_PENDING"]);
 
 export const bookingStatusLabel = (status: unknown) => BOOKING_STATUS_LABEL[String(status)] ?? "In progress";
 
@@ -105,6 +106,64 @@ export function bookingPollMs(b: Pick<CustomerBooking, "status" | "refundStatus"
 }
 
 export const isBookingClosed = (status: unknown) => CLOSED.has(String(status));
+
+export const isOpenBooking = (status: unknown) => OPEN.has(String(status));
+
+/** Human countdown for a due time, or null when past or missing. */
+export function bookingTimeLeft(iso: string | null | undefined, now: number): string | null {
+  if (!iso) return null;
+  const ms = new Date(iso).getTime() - now;
+  if (!Number.isFinite(ms) || ms <= 0) return null;
+  const h = Math.floor(ms / 3_600_000);
+  if (h >= 48) return `${Math.floor(h / 24)} days left`;
+  if (h >= 1) return `${h} h ${Math.floor((ms % 3_600_000) / 60_000)} min left`;
+  return `${Math.max(1, Math.floor(ms / 60_000))} min left`;
+}
+
+export function bookingUrgencyMinutesLeft(dueAt: string | null | undefined, now: number): number | null {
+  if (!dueAt) return null;
+  const ms = new Date(dueAt).getTime() - now;
+  if (!Number.isFinite(ms) || ms <= 0) return null;
+  return Math.floor(ms / 60_000);
+}
+
+export function sortBookingsForHome(items: CustomerBooking[]): CustomerBooking[] {
+  return [...items].sort((a, b) => {
+    const pa = bookingPayAction(a);
+    const pb = bookingPayAction(b);
+    if (pa && !pb) return -1;
+    if (!pa && pb) return 1;
+    const da = pa?.dueAt ? new Date(pa.dueAt).getTime() : Number.POSITIVE_INFINITY;
+    const db = pb?.dueAt ? new Date(pb.dueAt).getTime() : Number.POSITIVE_INFINITY;
+    if (da !== db) return da - db;
+    return String(b.createdAt ?? "").localeCompare(String(a.createdAt ?? ""));
+  });
+}
+
+export function openBookingsSummary(items: CustomerBooking[]) {
+  const open = items.filter((b) => isOpenBooking(b.status));
+  return { total: open.length, needsPay: open.filter((b) => bookingPayAction(b)).length };
+}
+
+/** Poll home / shop while an advance or balance is still open. */
+export function bookingHomePollMs(items: CustomerBooking[]): number {
+  if (items.some((b) => bookingPayAction(b))) return 30_000;
+  if (items.some((b) => isOpenBooking(b.status))) return 60_000;
+  return 0;
+}
+
+/** One line for the profile menu when bookings need attention. */
+export function bookingProfileHint(items: CustomerBooking[], now: number): string | null {
+  const open = items.filter((b) => isOpenBooking(b.status));
+  if (!open.length) return null;
+  const prioritized = sortBookingsForHome(open);
+  const action = bookingPayAction(prioritized[0]);
+  if (action) {
+    const left = bookingTimeLeft(action.dueAt, now);
+    return left ? `${action.label} · ${left}` : action.label;
+  }
+  return `${open.length} reserved piece${open.length === 1 ? "" : "s"}`;
+}
 
 /** "12 Jan, 4:30 pm" for a due time; empty when there is none. */
 export function formatBookingWhen(iso: unknown): string {
